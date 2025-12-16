@@ -27,13 +27,6 @@ export function ProjectCard({ project, currentUserId, onProjectUpdate }: Project
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [optimisticProject, setOptimisticProject] = useState<Project>(project)
-  
-  // Sync editedName when project name changes externally
-  useEffect(() => {
-    if (!isEditingName) {
-      setEditedName(displayProject.name)
-    }
-  }, [displayProject.name, isEditingName])
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const hasPrefetchedRef = useRef(false)
 
@@ -44,6 +37,13 @@ export function ProjectCard({ project, currentUserId, onProjectUpdate }: Project
 
   // Use optimistic project for display
   const displayProject = optimisticProject
+  
+  // Sync editedName when project name changes externally
+  useEffect(() => {
+    if (!isEditingName) {
+      setEditedName(displayProject.name)
+    }
+  }, [displayProject.name, isEditingName])
   const isOwner = currentUserId && displayProject.ownerId === currentUserId
   const thumbnailUrl = displayProject.thumbnailUrl || null
 
