@@ -49,6 +49,7 @@ model Project {
   members  ProjectMember[]
 
   @@index([ownerId])
+  @@index([isShared, ownerId])
   @@map("projects")
 }
 
@@ -103,6 +104,7 @@ model Generation {
   @@index([sessionId])
   @@index([userId])
   @@index([sessionId, userId]) // Composite index for the query
+  @@index([sessionId, status])
   @@map("generations")
 }
 
@@ -137,6 +139,7 @@ model Output {
   bookmarks  Bookmark[]
 
   @@index([generationId])
+  @@index([generationId, fileType])
   @@map("outputs")
 }
 

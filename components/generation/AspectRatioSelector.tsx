@@ -28,7 +28,7 @@ const AspectRatioIcon = ({ ratio }: { ratio: string }) => {
 
   return (
     <div className="flex flex-col items-center gap-1">
-      <div className={`${width} ${height} bg-current rounded-sm`} />
+      <div className={`${width} ${height} bg-current`} />
       <span className="text-[10px] font-medium">{ratio}</span>
     </div>
   )

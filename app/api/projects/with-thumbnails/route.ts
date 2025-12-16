@@ -57,39 +57,50 @@ export async function GET() {
       },
     })
 
-    // Get owner profiles for all projects
+    // Prepare IDs for parallel queries
     const ownerIds = Array.from(new Set(projects.map(p => p.ownerId)))
-    const owners = await prisma.profile.findMany({
-      where: {
-        id: { in: ownerIds },
-      },
-      select: {
-        id: true,
-        displayName: true,
-        username: true,
-      },
-    })
+    const projectIds = projects.map(p => p.id)
+
+    // Run independent queries in parallel (all depend only on projects)
+    const [owners, sessions, sessionCounts] = await Promise.all([
+      // Get owner profiles for all projects
+      prisma.profile.findMany({
+        where: {
+          id: { in: ownerIds },
+        },
+        select: {
+          id: true,
+          displayName: true,
+          username: true,
+        },
+      }),
+      // Get sessions for all projects
+      prisma.session.findMany({
+        where: {
+          projectId: { in: projectIds },
+        },
+        select: {
+          id: true,
+          projectId: true,
+          type: true,
+        },
+      }),
+      // Get session counts
+      prisma.session.groupBy({
+        by: ['projectId'],
+        where: {
+          projectId: { in: projectIds },
+        },
+        _count: true,
+      }),
+    ])
 
     const ownerMap = new Map(owners.map(o => [o.id, o]))
+    const sessionCountMap = new Map(sessionCounts.map(s => [s.projectId, s._count]))
 
-    // Get latest thumbnail for each project using efficient query
-    const projectIds = projects.map(p => p.id)
-    
-    // Get sessions for all projects
-    const sessions = await prisma.session.findMany({
-      where: {
-        projectId: { in: projectIds },
-      },
-      select: {
-        id: true,
-        projectId: true,
-        type: true,
-      },
-    })
-
-    // Get latest generation with image output for each project
+    // Get latest generation with image output for each project (depends on sessions)
     const sessionIds = sessions.map(s => s.id)
-    
+
     const latestGenerations = await prisma.generation.findMany({
       where: {
         sessionId: { in: sessionIds },
@@ -119,10 +130,10 @@ export async function GET() {
 
     // Map session -> project
     const sessionToProject = new Map(sessions.map(s => [s.id, s.projectId]))
-    
+
     // Find latest image for each project
     const projectThumbnails = new Map<string, string>()
-    
+
     for (const gen of latestGenerations) {
       if (gen.outputs.length > 0) {
         const projectId = sessionToProject.get(gen.sessionId)
@@ -131,17 +142,6 @@ export async function GET() {
         }
       }
     }
-
-    // Get session counts
-    const sessionCounts = await prisma.session.groupBy({
-      by: ['projectId'],
-      where: {
-        projectId: { in: projectIds },
-      },
-      _count: true,
-    })
-
-    const sessionCountMap = new Map(sessionCounts.map(s => [s.projectId, s._count]))
 
     // Build final response
     const projectsWithThumbnails = projects.map(project => ({
@@ -155,7 +155,11 @@ export async function GET() {
       sessionCount: sessionCountMap.get(project.id) || 0,
     }))
 
-    return NextResponse.json(projectsWithThumbnails)
+    return NextResponse.json(projectsWithThumbnails, {
+      headers: {
+        'Cache-Control': 'private, max-age=60',
+      },
+    })
   } catch (error) {
     console.error('Error fetching projects with thumbnails:', error)
     return NextResponse.json(
