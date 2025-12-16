@@ -60,6 +60,25 @@ Set `GENERATION_QUEUE_ENABLED=false` locally if you prefer the legacy fire-and-f
 NEXT_PUBLIC_APP_URL=https://loopvesper.vercel.app
 ```
 
+### 5. Internal API Secret (Optional but Recommended)
+
+For secure server-to-server API calls (e.g., background processing):
+
+```
+INTERNAL_API_SECRET=your-random-secret-string-here
+```
+
+**To generate a secure secret:**
+```bash
+# Generate a random 32-character secret
+openssl rand -hex 32
+```
+
+**What it does:**
+- Allows `/api/generate/process` to be called internally without requiring user authentication
+- Improves security by preventing unauthorized access to background processing endpoints
+- If not set, the endpoint will still work but will require user authentication for all calls
+
 ## How to Check Current Variables in Vercel
 
 1. Go to [Vercel Dashboard](https://vercel.com/dashboard)

@@ -205,23 +205,23 @@ export class GeminiAdapter extends BaseModelAdapter {
     }
     
     try {
-      // Gen AI SDK structure: For Vertex AI, the client might have a different structure
-      // Try to get the model using the correct API pattern
+      // @google/genai SDK structure: Use models.getGenerativeModel()
+      // For Vertex AI, the client has a 'models' property
       let model: any
       
-      // Check if it's genAiClient.getGenerativeModel (standard pattern)
-      if (typeof genAiClient.getGenerativeModel === 'function') {
-        model = genAiClient.getGenerativeModel({
-          model: 'gemini-3-pro-image-preview',
-        })
-      }
-      // Check if it's genAiClient.models.getGenerativeModel (alternative pattern)
-      else if (genAiClient.models && typeof genAiClient.models.getGenerativeModel === 'function') {
+      // Check if it's genAiClient.models.getGenerativeModel (correct pattern for @google/genai)
+      if (genAiClient.models && typeof genAiClient.models.getGenerativeModel === 'function') {
         model = genAiClient.models.getGenerativeModel({
           model: 'gemini-3-pro-image-preview',
         })
       }
-      // Fallback: try accessing directly
+      // Fallback: try direct getGenerativeModel (for backward compatibility)
+      else if (typeof genAiClient.getGenerativeModel === 'function') {
+        model = genAiClient.getGenerativeModel({
+          model: 'gemini-3-pro-image-preview',
+        })
+      }
+      // If neither works, log available methods and throw
       else {
         console.error('[Gen AI SDK] Available methods:', Object.keys(genAiClient))
         throw new Error('Gen AI SDK getGenerativeModel method not found. Client structure: ' + JSON.stringify(Object.keys(genAiClient)))
@@ -233,14 +233,36 @@ export class GeminiAdapter extends BaseModelAdapter {
       })
 
       // Extract image from response
-      // Gen AI SDK response structure: result.response contains the response object
-      const response = result.response || result
-      const imagePart = response.candidates?.[0]?.content?.parts?.find(
+      // @google/genai SDK response structure can vary:
+      // - result.response.candidates (if wrapped)
+      // - result.candidates (if direct)
+      // - result.text (for text responses)
+      let response: any = result
+      
+      // Check if response is wrapped
+      if (result.response) {
+        response = result.response
+      }
+      
+      // Handle different response structures
+      const candidates = response.candidates || (response.candidate ? [response.candidate] : [])
+      if (candidates.length === 0) {
+        console.error('Gen AI SDK response missing candidates:', JSON.stringify(result, null, 2))
+        throw new Error('No candidates in response')
+      }
+      
+      const content = candidates[0]?.content
+      if (!content || !content.parts) {
+        console.error('Gen AI SDK response missing content parts:', JSON.stringify(result, null, 2))
+        throw new Error('No content parts in response')
+      }
+      
+      const imagePart = content.parts.find(
         (part: any) => part.inlineData?.mimeType?.startsWith('image/')
       )
 
       if (!imagePart?.inlineData?.data) {
-        console.error('Gen AI SDK response missing image data:', JSON.stringify(response, null, 2))
+        console.error('Gen AI SDK response missing image data:', JSON.stringify(result, null, 2))
         throw new Error('No image data in response')
       }
 

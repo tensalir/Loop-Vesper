@@ -426,6 +426,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(body, { status })
   }
   
+  // Allow internal calls via secret header OR authenticated users
+  // This endpoint can be called from:
+  // 1. Server-side (internal) with secret header
+  // 2. Authenticated users (frontend fallback)
+  const internalSecret = request.headers.get('x-internal-secret')
+  const expectedSecret = process.env.INTERNAL_API_SECRET
+  
+  // If internal secret is provided and matches, skip auth check
+  const isInternalCall = internalSecret && expectedSecret && internalSecret === expectedSecret
+  
+  // If no internal secret or it doesn't match, check auth (for frontend calls)
+  if (!isInternalCall) {
+    try {
+      const { createRouteHandlerClient } = await import('@supabase/auth-helpers-nextjs')
+      const { cookies } = await import('next/headers')
+      const supabase = createRouteHandlerClient({ cookies })
+      const { data: { session }, error: authError } = await supabase.auth.getSession()
+      
+      if (authError || !session) {
+        return respond({ error: 'Unauthorized' }, 401)
+      }
+    } catch (authCheckError) {
+      // If auth check fails and no valid internal secret, deny access
+      if (!isInternalCall) {
+        return respond({ error: 'Unauthorized' }, 401)
+      }
+    }
+  }
+  
   try {
     requestBody = await request.json().catch(() => ({}))
     if (requestBody && Object.keys(requestBody).length > 0) {
