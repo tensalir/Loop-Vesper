@@ -451,6 +451,10 @@ export class GeminiAdapter extends BaseModelAdapter {
       console.error(`[Vertex AI]   Error type: ${error?.constructor?.name || typeof error}`)
       console.error(`[Vertex AI]   Error message: ${error?.message || String(error)}`)
       
+      // Extract error message and string for error handling
+      const errorMessage = error?.message || String(error)
+      const errorString = String(error)
+      
       // Check for 404 - model not found (might not be available via Vertex AI SDK)
       if (error?.code === 404 || error?.status === 404 || errorMessage.includes('404') || errorMessage.includes('was not found')) {
         console.error('[Vertex AI] ⚠️  Model not found (404) - gemini-3-pro-image-preview may not be available via Vertex AI SDK yet')
@@ -465,8 +469,6 @@ export class GeminiAdapter extends BaseModelAdapter {
       }
       
       // Check if error is an HTML response (authentication/configuration issue)
-      const errorMessage = error?.message || String(error)
-      const errorString = String(error)
       
       if (errorMessage.includes('<!DOCTYPE') || errorMessage.includes('Unexpected token') || errorString.includes('<!DOCTYPE')) {
         console.error('[Vertex AI] ⚠️  Received HTML response instead of JSON - authentication/configuration issue detected')
