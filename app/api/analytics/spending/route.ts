@@ -60,7 +60,7 @@ export async function GET() {
     }, 0)
 
     // Group by provider
-    const byProvider: Record<string, { cost: number; count: number; models: Record<string, number> }> = {}
+    const byProvider: Record<string, { cost: number; count: number; models: Record<string, { cost: number; count: number; modelId: string }> }> = {}
 
     for (const gen of generations) {
       const cost = gen.cost ? Number(gen.cost) : 0
@@ -86,9 +86,10 @@ export async function GET() {
       const modelName = model?.getConfig().name || gen.modelId
 
       if (!byProvider[provider].models[modelName]) {
-        byProvider[provider].models[modelName] = 0
+        byProvider[provider].models[modelName] = { cost: 0, count: 0, modelId: gen.modelId }
       }
-      byProvider[provider].models[modelName] += cost
+      byProvider[provider].models[modelName].cost += cost
+      byProvider[provider].models[modelName].count += 1
     }
 
     // Convert to array format
@@ -96,15 +97,10 @@ export async function GET() {
       provider,
       totalCost: data.cost,
       generationCount: data.count,
-      models: Object.entries(data.models).map(([modelName, cost]) => ({
+      models: Object.entries(data.models).map(([modelName, modelData]) => ({
         modelName,
-        cost,
-        generationCount: generations.filter(
-          (g) =>
-            (g.modelId.startsWith('gemini-') || g.modelId.includes('veo') ? provider === 'Gemini' : false) ||
-            (g.modelId.startsWith('replicate-') ? provider === 'Replicate' : false) ||
-            (g.modelId.startsWith('fal-') ? provider === 'FAL.ai' : false)
-        ).length,
+        cost: modelData.cost,
+        generationCount: modelData.count,
       })),
     }))
 

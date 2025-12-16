@@ -9,6 +9,7 @@ import { Settings, Sun, Moon, Bookmark } from 'lucide-react'
 import { SessionSidebar } from '@/components/sessions/SessionSidebar'
 import { GenerationInterface } from '@/components/generation/GenerationInterface'
 import { useSessions } from '@/hooks/useSessions'
+import { SpendingTracker } from '@/components/navbar/SpendingTracker'
 import type { Session } from '@/types/project'
 
 export default function ProjectPage() {
@@ -17,6 +18,7 @@ export default function ProjectPage() {
   const [projectName, setProjectName] = useState('Loading...')
   const [projectOwnerId, setProjectOwnerId] = useState<string>('')
   const [currentUserId, setCurrentUserId] = useState<string>('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const [activeSession, setActiveSession] = useState<Session | null>(null)
   const [generationType, setGenerationType] = useState<'image' | 'video'>('image')
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
@@ -71,6 +73,13 @@ export default function ProjectPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         setCurrentUserId(user.id)
+        
+        // Fetch user profile to check admin status
+        const profileResponse = await fetch('/api/profile')
+        if (profileResponse.ok) {
+          const profile = await profileResponse.json()
+          setIsAdmin(profile.role === 'admin')
+        }
       }
 
       // Fetch project details
@@ -211,6 +220,7 @@ export default function ProjectPage() {
 
           {/* Right side */}
           <div className="flex items-center gap-2 flex-1 justify-end">
+            <SpendingTracker isAdmin={isAdmin} />
             <Button 
               variant="ghost" 
               size="icon"
