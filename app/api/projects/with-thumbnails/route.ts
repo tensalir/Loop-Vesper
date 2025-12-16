@@ -160,10 +160,14 @@ export async function GET() {
         'Cache-Control': 'private, max-age=60',
       },
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching projects with thumbnails:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch projects' },
+      { 
+        error: 'Failed to fetch projects',
+        details: error.message,
+        code: error.code
+      },
       { status: 500 }
     )
   }

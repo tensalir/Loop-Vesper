@@ -6,14 +6,15 @@ if (!databaseUrl) {
   throw new Error('DATABASE_URL is not set. Configure it in .env.local and Vercel before running the app.')
 }
 
+// Validate connection string for serverless environments
 const usesSessionPooler = /pooler\.supabase\.com:5432/i.test(databaseUrl)
 if (usesSessionPooler) {
-  throw new Error(
-    'DATABASE_URL points to the Supabase session pooler (port 5432). Switch to the transaction pooler (port 6543) with ?pgbouncer=true&connection_limit=1. See CRITICAL_DATABASE_FIX.md.'
+  console.warn(
+    'DATABASE_URL points to the Supabase session pooler (port 5432). Consider using the transaction pooler (port 6543) with ?pgbouncer=true&connection_limit=1 for better serverless stability.'
   )
 }
 
-if (!/connection_limit=/i.test(databaseUrl)) {
+if (!/connection_limit=/i.test(databaseUrl) && /pooler\.supabase\.com/i.test(databaseUrl)) {
   console.warn('DATABASE_URL missing connection_limit parameter. Add ?connection_limit=1 for serverless stability.')
 }
 
