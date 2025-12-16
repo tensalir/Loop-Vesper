@@ -205,32 +205,82 @@ export class GeminiAdapter extends BaseModelAdapter {
     }
     
     try {
-      // @google/genai SDK structure: Use models.getGenerativeModel()
-      // For Vertex AI, the client has a 'models' property
-      let model: any
-      
-      // Check if it's genAiClient.models.getGenerativeModel (correct pattern for @google/genai)
-      if (genAiClient.models && typeof genAiClient.models.getGenerativeModel === 'function') {
-        model = genAiClient.models.getGenerativeModel({
-          model: 'gemini-3-pro-image-preview',
-        })
-      }
-      // Fallback: try direct getGenerativeModel (for backward compatibility)
-      else if (typeof genAiClient.getGenerativeModel === 'function') {
-        model = genAiClient.getGenerativeModel({
-          model: 'gemini-3-pro-image-preview',
-        })
-      }
-      // If neither works, log available methods and throw
-      else {
-        console.error('[Gen AI SDK] Available methods:', Object.keys(genAiClient))
-        throw new Error('Gen AI SDK getGenerativeModel method not found. Client structure: ' + JSON.stringify(Object.keys(genAiClient)))
-      }
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3',location:'lib/models/adapters/gemini.ts:generateImageGenAI',message:'genai client surface',data:{clientKeys:Object.keys(genAiClient||{}).slice(0,30),modelsType:typeof genAiClient?.models,modelsKeys:genAiClient?.models?Object.keys(genAiClient.models).slice(0,30):[],hasModelsGetGenerativeModel:typeof genAiClient?.models?.getGenerativeModel==='function',hasModelsGenerateContent:typeof genAiClient?.models?.generateContent==='function',hasModelsGenerateContentStream:typeof genAiClient?.models?.generateContentStream==='function',hasClientGetGenerativeModel:typeof genAiClient?.getGenerativeModel==='function'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
-      const result = await model.generateContent({
-        contents: payload.contents,
-        generationConfig: payload.generationConfig,
-      })
+      let model: any
+      let result: any
+      let selectedMethod:
+        | 'models.generateContent'
+        | 'models.getGenerativeModel'
+        | 'client.getGenerativeModel'
+        | 'none' = 'none'
+
+      // Prefer @google/genai modern API: models.generateContent({ model, contents, config })
+      if (genAiClient.models && typeof genAiClient.models.generateContent === 'function') {
+        selectedMethod = 'models.generateContent'
+
+        const gc = payload.generationConfig || {}
+        const config: any = {
+          ...(typeof gc.temperature === 'number' ? { temperature: gc.temperature } : {}),
+          ...(gc.imageConfig ? { imageConfig: gc.imageConfig } : {}),
+        }
+
+        // Normalize responseModalities to uppercase (SDK examples use "IMAGE"/"TEXT")
+        if (Array.isArray(gc.responseModalities)) {
+          config.responseModalities = gc.responseModalities.map((m: any) =>
+            typeof m === 'string' ? m.toUpperCase() : m
+          )
+        }
+
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4',location:'lib/models/adapters/gemini.ts:generateImageGenAI',message:'using models.generateContent',data:{hasConfig:Boolean(Object.keys(config||{}).length),configKeys:Object.keys(config||{}),responseModalities:config.responseModalities},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+
+        result = await genAiClient.models.generateContent({
+          model: 'gemini-3-pro-image-preview',
+          contents: payload.contents,
+          config,
+        })
+      } else {
+        // Legacy pattern: models.getGenerativeModel() -> model.generateContent()
+
+        // Check if it's genAiClient.models.getGenerativeModel (older pattern)
+        if (genAiClient.models && typeof genAiClient.models.getGenerativeModel === 'function') {
+          selectedMethod = 'models.getGenerativeModel'
+          model = genAiClient.models.getGenerativeModel({
+            model: 'gemini-3-pro-image-preview',
+          })
+        }
+        // Fallback: try direct getGenerativeModel (for backward compatibility)
+        else if (typeof genAiClient.getGenerativeModel === 'function') {
+          selectedMethod = 'client.getGenerativeModel'
+          model = genAiClient.getGenerativeModel({
+            model: 'gemini-3-pro-image-preview',
+          })
+        }
+        // If neither works, log available methods and throw
+        else {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3',location:'lib/models/adapters/gemini.ts:generateImageGenAI',message:'genai model getter missing',data:{selectedMethod,clientKeys:Object.keys(genAiClient||{}).slice(0,30),modelsKeys:genAiClient?.models?Object.keys(genAiClient.models).slice(0,30):[]},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+          console.error('[Gen AI SDK] Available methods:', Object.keys(genAiClient))
+          console.error('[Gen AI SDK] Available model methods:', genAiClient?.models ? Object.keys(genAiClient.models) : [])
+          throw new Error('Gen AI SDK getGenerativeModel method not found. Client structure: ' + JSON.stringify(Object.keys(genAiClient)))
+        }
+      }
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3',location:'lib/models/adapters/gemini.ts:generateImageGenAI',message:'genai method selected',data:{selectedMethod},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+
+      if (!result) {
+        result = await model.generateContent({
+          contents: payload.contents,
+          generationConfig: payload.generationConfig,
+        })
+      }
 
       // Extract image from response
       // @google/genai SDK response structure can vary:

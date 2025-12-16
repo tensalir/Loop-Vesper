@@ -436,6 +436,10 @@ export async function POST(request: NextRequest) {
   // If internal secret is provided and matches, skip auth check
   const isInternalCall = internalSecret && expectedSecret && internalSecret === expectedSecret
   
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H1',location:'app/api/generate/process/route.ts:authGate',message:'process auth gate',data:{hasInternalSecretHeader:Boolean(internalSecret),expectedSecretConfigured:Boolean(expectedSecret),isInternalCall:Boolean(isInternalCall)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  
   // If no internal secret or it doesn't match, check auth (for frontend calls)
   if (!isInternalCall) {
     try {
@@ -443,6 +447,10 @@ export async function POST(request: NextRequest) {
       const { cookies } = await import('next/headers')
       const supabase = createRouteHandlerClient({ cookies })
       const { data: { session }, error: authError } = await supabase.auth.getSession()
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H1',location:'app/api/generate/process/route.ts:authCheck',message:'process supabase session check',data:{hasAuthError:Boolean(authError),hasSession:Boolean(session)},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       
       if (authError || !session) {
         return respond({ error: 'Unauthorized' }, 401)

@@ -204,6 +204,10 @@ export async function POST(request: NextRequest) {
             const processUrl = `${baseUrl}/api/generate/process`
             console.log(`[${generation.id}] Attempt ${i + 1}: Calling ${processUrl}`)
             
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H1',location:'app/api/generate/route.ts:triggerProcessing',message:'internal trigger fetch',data:{generationId:generation.id,baseUrl,processUrl,hasInternalApiSecret:Boolean(process.env.INTERNAL_API_SECRET)},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
+            
             const response = await fetch(processUrl, {
               method: 'POST',
               headers: {

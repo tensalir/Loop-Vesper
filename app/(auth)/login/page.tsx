@@ -32,6 +32,9 @@ export default function LoginPage() {
       if (error) throw error
       router.push('/projects')
     } catch (error: any) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H5',location:'app/(auth)/login/page.tsx:handleLogin',message:'login failed',data:{errorName:error?.name,errorMessage:error?.message,errorType:typeof error,isTypeError:Boolean(error && error.name==='TypeError'),origin:typeof window!=='undefined'?window.location.origin:undefined},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       setError(error.message || 'An error occurred during login')
     } finally {
       setLoading(false)

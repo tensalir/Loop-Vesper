@@ -28,40 +28,88 @@ const getPublicStorageUrl = (bucket: string, path: string): string | null => {
   return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`
 }
 
-// Helper to extract reference image URL from generation parameters
-const getReferenceImageUrl = (generation: GenerationWithOutputs): string | null => {
+const normalizeReferenceImageUrl = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null
+  if (value.startsWith('http') || value.startsWith('data:')) return value
+  return null
+}
+
+// Helper to extract reference image URLs from generation parameters
+const getReferenceImageUrls = (generation: GenerationWithOutputs): string[] => {
   const params = generation.parameters as any
+  const urls: string[] = []
   
-  // Check for referenceImageUrl directly
-  if (params.referenceImageUrl) {
-    return params.referenceImageUrl
-  }
-  
-  // Check for referenceImages array (multiple images - take first)
-  if (params.referenceImages && Array.isArray(params.referenceImages) && params.referenceImages.length > 0) {
-    const firstImage = params.referenceImages[0]
-    // Accept both HTTP URLs and data URLs for display
-    if (typeof firstImage === 'string' && (firstImage.startsWith('http') || firstImage.startsWith('data:'))) {
-      return firstImage
+  // Prefer referenceImages array (multiple images)
+  if (Array.isArray(params.referenceImages) && params.referenceImages.length > 0) {
+    for (const candidate of params.referenceImages) {
+      const normalized = normalizeReferenceImageUrl(candidate)
+      if (normalized) urls.push(normalized)
     }
   }
 
+  // Fallback: referenceImageUrl directly (single image)
+  if (urls.length === 0 && params.referenceImageUrl) {
+    const normalized = normalizeReferenceImageUrl(params.referenceImageUrl)
+    if (normalized) urls.push(normalized)
+  }
+
   // If we have a persisted path, we can construct the public URL
-  if (params.referenceImagePath) {
+  if (urls.length === 0 && params.referenceImagePath) {
     const bucket = params.referenceImageBucket || 'generated-images'
-    return getPublicStorageUrl(bucket, params.referenceImagePath)
+    const constructed = getPublicStorageUrl(bucket, params.referenceImagePath)
+    if (constructed) urls.push(constructed)
   }
   
   // Check for referenceImageId - would need to construct URL
-  if (params.referenceImageId) {
+  if (urls.length === 0 && params.referenceImageId) {
     const bucket = params.referenceImageBucket || 'generated-images'
     const mime: string | undefined = params.referenceImageMimeType
     const ext = typeof mime === 'string' && mime.includes('png') ? 'png' : 'jpg'
     const path = `references/${generation.userId}/${params.referenceImageId}.${ext}`
-    return getPublicStorageUrl(bucket, path)
+    const constructed = getPublicStorageUrl(bucket, path)
+    if (constructed) urls.push(constructed)
   }
   
-  return null
+  return urls
+}
+
+const ReferenceImageThumbnail = ({ generation }: { generation: GenerationWithOutputs }) => {
+  const urls = getReferenceImageUrls(generation)
+  if (urls.length === 0) return null
+
+  const label = urls.length > 1 ? 'Reference Images:' : 'Reference Image:'
+  const visibleUrls = urls.slice(0, 4)
+  const remaining = urls.length - visibleUrls.length
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border/50">
+      <div className="text-xs text-muted-foreground/70 mb-1.5">{label}</div>
+
+      {urls.length === 1 ? (
+        <div className="w-20 h-20 rounded-lg overflow-hidden border border-border/50">
+          <img src={urls[0]} alt="Reference" className="w-full h-full object-cover" />
+        </div>
+      ) : (
+        <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-border/50 bg-muted/10 p-0.5">
+          <div className="grid grid-cols-2 grid-rows-2 gap-0.5 w-full h-full">
+            {visibleUrls.map((url, index) => (
+              <img
+                key={`${generation.id}-ref-${index}`}
+                src={url}
+                alt={`Reference ${index + 1}`}
+                className="w-full h-full object-cover rounded-[4px]"
+              />
+            ))}
+          </div>
+          {remaining > 0 && (
+            <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded-md">
+              +{remaining}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 interface GenerationGalleryProps {
@@ -356,24 +404,7 @@ export function GenerationGallery({
                     </div>
                     
                     {/* Reference Image Thumbnail */}
-                    {(() => {
-                      const refImageUrl = getReferenceImageUrl(generation)
-                      if (refImageUrl) {
-                        return (
-                          <div className="mt-3 pt-3 border-t border-border/50">
-                            <div className="text-xs text-muted-foreground/70 mb-1.5">Reference Image:</div>
-                            <div className="w-20 h-20 rounded-lg overflow-hidden border border-border/50">
-                              <img
-                                src={refImageUrl}
-                                alt="Reference"
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          </div>
-                        )
-                      }
-                      return null
-                    })()}
+                    <ReferenceImageThumbnail generation={generation} />
                   </div>
                 </div>
 
@@ -422,24 +453,7 @@ export function GenerationGallery({
                     </div>
                     
                     {/* Reference Image Thumbnail */}
-                    {(() => {
-                      const refImageUrl = getReferenceImageUrl(generation)
-                      if (refImageUrl) {
-                        return (
-                          <div className="mt-3 pt-3 border-t border-border/50">
-                            <div className="text-xs text-muted-foreground/70 mb-1.5">Reference Image:</div>
-                            <div className="w-20 h-20 rounded-lg overflow-hidden border border-border/50">
-                              <img
-                                src={refImageUrl}
-                                alt="Reference"
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          </div>
-                        )
-                      }
-                      return null
-                    })()}
+                    <ReferenceImageThumbnail generation={generation} />
                   </div>
                 </div>
 
@@ -591,24 +605,7 @@ export function GenerationGallery({
                   </div>
 
                   {/* Reference Image Thumbnail */}
-                  {(() => {
-                    const refImageUrl = getReferenceImageUrl(generation)
-                    if (refImageUrl) {
-                      return (
-                        <div className="mt-3 pt-3 border-t border-border/50">
-                          <div className="text-xs text-muted-foreground/70 mb-1.5">Reference Image:</div>
-                          <div className="w-20 h-20 rounded-lg overflow-hidden border border-border/50">
-                            <img
-                              src={refImageUrl}
-                              alt="Reference"
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        </div>
-                      )
-                    }
-                    return null
-                  })()}
+                  <ReferenceImageThumbnail generation={generation} />
                 </div>
               </div>
 
