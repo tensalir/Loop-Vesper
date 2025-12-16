@@ -518,8 +518,8 @@ export class GeminiAdapter extends BaseModelAdapter {
       
       console.log('[Veo 3.1] Generation started', {
         operation: operationName,
-        referenceImageAttached: Boolean(cleanInstance.image),
-        referenceMetadata: uploadedReferenceMeta,
+        referenceImageAttached: Boolean(cleanInstance.referenceImages && cleanInstance.referenceImages.length > 0),
+        referenceImageFormat: cleanInstance.referenceImages?.[0] ? 'inline-base64' : 'none',
       })
       
       // Poll operation until complete (max 5 minutes)
@@ -553,7 +553,7 @@ export class GeminiAdapter extends BaseModelAdapter {
           console.log('[Veo 3.1] Video ready', {
             videoUri,
             operation: operationName,
-            referenceImageAttached: Boolean(cleanInstance.image),
+            referenceImageAttached: Boolean(cleanInstance.referenceImages && cleanInstance.referenceImages.length > 0),
           })
           
           // Return the video URI - it will be downloaded by the background processor
