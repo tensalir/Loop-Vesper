@@ -432,7 +432,6 @@ export class GeminiAdapter extends BaseModelAdapter {
         
         uploadedReferenceMeta = {
           name: fileResourceName,
-          uri: fileUri,
           contentType,
           byteLength: imageBytes.length,
         }
