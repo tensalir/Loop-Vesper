@@ -71,10 +71,14 @@ export async function GET() {
     })
 
     return NextResponse.json(projects)
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching projects:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch projects' },
+      { 
+        error: 'Failed to fetch projects',
+        details: error.message,
+        code: error.code
+      },
       { status: 500 }
     )
   }
@@ -142,7 +146,8 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { 
         error: 'Failed to create project',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        details: error.message,
+        code: error.code
       },
       { status: 500 }
     )
