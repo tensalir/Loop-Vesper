@@ -72,6 +72,33 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // SECURITY: Verify user has access to this session via project ownership or membership
+    const sessionRecord = await prisma.session.findFirst({
+      where: {
+        id: sessionId,
+        project: {
+          OR: [
+            { ownerId: user.id }, // User owns the project
+            {
+              members: {
+                some: {
+                  userId: user.id, // User is a member of the project
+                },
+              },
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    })
+
+    if (!sessionRecord) {
+      return respond(
+        { error: 'Session not found or unauthorized' },
+        403
+      )
+    }
+
     // Verify model exists
     const model = getModel(modelId)
     if (!model) {

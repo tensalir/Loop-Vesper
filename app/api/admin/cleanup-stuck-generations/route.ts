@@ -23,6 +23,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // SECURITY: Require admin role to clean up all stuck generations
+    const profile = await prisma.profile.findUnique({
+      where: { id: session.user.id },
+      select: { role: true },
+    })
+
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden - admin access required' }, { status: 403 })
+    }
+
     // Find generations stuck > 2 minutes (Vercel Pro timeout is 60s, so 2min is definitely stuck)
     const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000)
     

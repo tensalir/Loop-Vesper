@@ -21,11 +21,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // SECURITY: Only show user's own stuck generations
     // Find generations stuck in processing for more than 5 minutes
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
     
     const stuckGenerations = await prisma.generation.findMany({
       where: {
+        userId: session.user.id, // Only own generations
         status: 'processing',
         createdAt: {
           lt: fiveMinutesAgo,

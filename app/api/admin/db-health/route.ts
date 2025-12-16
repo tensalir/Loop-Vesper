@@ -23,6 +23,18 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // SECURITY: Require admin role for admin endpoints
+    const profile = await prisma.profile.findUnique({
+      where: { id: session.user.id },
+      select: { role: true },
+    })
+
+    if (!profile || profile.role !== 'admin') {
+      metricStatus = 'error'
+      statusCode = 403
+      return NextResponse.json({ error: 'Forbidden - admin access required' }, { status: 403 })
+    }
+
     await prisma.$queryRaw`SELECT 1`
 
     return NextResponse.json({
