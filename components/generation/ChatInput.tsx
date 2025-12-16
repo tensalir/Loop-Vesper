@@ -77,9 +77,24 @@ export function ChatInput({
         updates.aspectRatio = modelConfig.defaultAspectRatio || supportedAspectRatios[0]
       }
       
-      // Check resolution
-      if (parameters.resolution > maxResolution) {
+      // Check resolution - get valid resolution options from model config
+      const resolutionParam = modelParameters.find(p => p.name === 'resolution')
+      const validResolutions = resolutionParam?.options?.map((opt: any) => opt.value) || []
+      if (validResolutions.length > 0 && !validResolutions.includes(parameters.resolution)) {
+        // Use default from model config or first available option
+        updates.resolution = resolutionParam?.default || validResolutions[0]
+      } else if (parameters.resolution > maxResolution) {
         updates.resolution = maxResolution
+      }
+      
+      // Enforce numOutputs based on model config
+      const numOutputsParam = modelParameters.find(p => p.name === 'numOutputs')
+      const allowedNumOutputs = numOutputsParam?.options?.map((opt: any) => opt.value) || []
+      if (allowedNumOutputs.length === 1 && allowedNumOutputs[0] === 1) {
+        // Model only allows 1 image (like Nano Banana Pro)
+        if (parameters.numOutputs !== 1) {
+          updates.numOutputs = 1
+        }
       }
       
       // Clear reference images if switching to a model that doesn't support editing
@@ -99,7 +114,7 @@ export function ChatInput({
         onParametersChange({ ...parameters, ...updates })
       }
     }
-  }, [modelConfig, selectedModel])
+  }, [modelConfig, selectedModel, modelParameters])
 
   const handleSubmit = async () => {
     if (!prompt.trim()) return
@@ -508,6 +523,27 @@ export function ChatInput({
             </div>
           </PopoverContent>
         </Popover>
+
+        {/* Resolution Selector - Only show if model supports resolution options */}
+        {resolutionOptions.length > 0 && (
+          <Select
+            value={String(parameters.resolution)}
+            onValueChange={(value) =>
+              onParametersChange({ ...parameters, resolution: parseInt(value) })
+            }
+          >
+            <SelectTrigger className="h-8 w-[70px] text-xs px-2 rounded-lg">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {resolutionOptions.map((option: any) => (
+                <SelectItem key={option.value} value={String(option.value)}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
         {/* Keyboard Shortcut */}
         <span className="text-xs text-muted-foreground ml-auto hidden lg:inline-flex items-center gap-1">

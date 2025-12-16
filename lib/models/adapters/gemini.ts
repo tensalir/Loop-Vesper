@@ -287,16 +287,21 @@ export class GeminiAdapter extends BaseModelAdapter {
       },
     }
 
-    // Add aspect ratio configuration if provided
-    if (request.aspectRatio) {
+    // Add aspect ratio and resolution configuration if provided
+    if (request.aspectRatio || request.resolution) {
       payload.generationConfig.imageConfig = {
-        aspectRatio: request.aspectRatio,
+        ...(request.aspectRatio && { aspectRatio: request.aspectRatio }),
+        // Convert resolution number to imageSize string (1K, 2K, 4K) for Gemini 3 Pro Image
+        // Resolution values: 1024 -> "1K", 2048 -> "2K", 4096 -> "4K"
+        ...(request.resolution && {
+          imageSize: request.resolution === 4096 ? '4K' : request.resolution === 2048 ? '2K' : '1K'
+        }),
       }
     }
 
-    // Use Gen AI SDK (Vertex AI) if available, otherwise fall back to Gemini API
-    if (this.useGenAI && genAiClient) {
-      return await this.generateImageGenAI(request, payload)
+    // Use Vertex AI if available, otherwise fall back to Gemini API
+    if (this.useGenAI && vertexAiClient) {
+      return await this.generateImageVertexAI(request, payload)
     } else {
       return await this.generateImageGeminiAPI(endpoint, payload)
     }
@@ -742,6 +747,17 @@ export const NANO_BANANA_CONFIG: ModelConfig = {
       default: 1,
       options: [
         { label: '1 image', value: 1 },
+      ],
+    },
+    {
+      name: 'resolution',
+      type: 'select',
+      label: 'Resolution',
+      default: 1024,
+      options: [
+        { label: '1K', value: 1024 },
+        { label: '2K', value: 2048 },
+        { label: '4K', value: 4096 },
       ],
     },
   ],

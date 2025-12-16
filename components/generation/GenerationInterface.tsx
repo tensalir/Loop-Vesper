@@ -104,23 +104,38 @@ export function GenerationInterface({
   // Use React Query mutation for generating
   const generateMutation = useGenerateMutation()
 
-  // Set numOutputs based on generationType
+  // Set numOutputs based on generationType and model config
   useEffect(() => {
-    const defaultNumOutputs = generationType === 'image' ? 4 : 1
-    if (parameters.numOutputs !== defaultNumOutputs) {
-      setParameters({ numOutputs: defaultNumOutputs })
-    }
-    // Enforce model type per view: image sessions -> image models, video sessions -> video models
     const all = getAllModels()
     const current = all.find(m => m.id === selectedModel)
     const requiredType = generationType
+    
+    // Enforce model type per view: image sessions -> image models, video sessions -> video models
     if (!current || current.type !== requiredType) {
       const fallback = getModelsByType(requiredType)[0]
       if (fallback) {
         setSelectedModel(fallback.id)
       }
+      return
     }
-  }, [generationType])
+    
+    // Get numOutputs options from model config
+    const numOutputsParam = current.parameters?.find(p => p.name === 'numOutputs')
+    const allowedNumOutputs = numOutputsParam?.options?.map((opt: any) => opt.value) || []
+    
+    // If model only allows 1 image (like Nano Banana Pro), enforce it
+    if (allowedNumOutputs.length === 1 && allowedNumOutputs[0] === 1) {
+      if (parameters.numOutputs !== 1) {
+        setParameters({ numOutputs: 1 })
+      }
+    } else {
+      // Otherwise use default based on generation type
+      const defaultNumOutputs = generationType === 'image' ? 4 : 1
+      if (parameters.numOutputs !== defaultNumOutputs) {
+        setParameters({ numOutputs: defaultNumOutputs })
+      }
+    }
+  }, [generationType, selectedModel])
 
   // Auto-scroll to bottom when:
   // 1. Session changes (user opened a different session)
