@@ -330,8 +330,8 @@ export function GenerationGallery({
             return (
               <div key={generation.id} className="flex gap-6 items-start">
                 {/* Left Side: Prompt Display with Error State */}
-                <div className="w-96 h-64 flex-shrink-0 bg-destructive/10 rounded-xl p-6 border border-destructive/50 flex flex-col">
-                  <div className="flex-1 overflow-hidden hover:overflow-y-auto transition-all group relative">
+                <div className="w-96 flex-shrink-0 bg-destructive/10 rounded-xl p-6 border border-destructive/50 flex flex-col" style={{ minHeight: '320px' }}>
+                  <div className="flex-1 overflow-hidden hover:overflow-y-auto transition-all group relative" style={{ maxHeight: '200px' }}>
                     <p 
                       className="text-base font-normal leading-relaxed text-foreground/90 cursor-pointer hover:text-primary transition-colors"
                       onClick={() => handleCopyPrompt(generation.prompt)}
@@ -400,8 +400,8 @@ export function GenerationGallery({
             return (
               <div key={generation.id} className="flex gap-6 items-start">
                 {/* Left Side: Prompt Display - same styling as images */}
-                <div className="w-96 h-64 flex-shrink-0 bg-muted/30 rounded-xl p-6 border border-border/50 flex flex-col">
-                  <div className="flex-1 overflow-hidden hover:overflow-y-auto transition-all group relative">
+                <div className="w-96 flex-shrink-0 bg-muted/30 rounded-xl p-6 border border-border/50 flex flex-col" style={{ minHeight: '320px' }}>
+                  <div className="flex-1 overflow-hidden hover:overflow-y-auto transition-all group relative" style={{ maxHeight: '200px' }}>
                     <p 
                       className="text-base font-normal leading-relaxed text-foreground/90 cursor-pointer hover:text-primary transition-colors"
                       onClick={() => handleCopyPrompt(generation.prompt)}
@@ -445,19 +445,20 @@ export function GenerationGallery({
 
                 {/* Right Side: Single video container */}
                 <div className="flex-1 grid grid-cols-1 gap-3 max-w-4xl">
-                  {(generation.outputs || []).map((output) => {
-                    const aspectRatio = (generation.parameters as any)?.aspectRatio || '16:9'
-                    return (
-                      <div
-                        key={output.id}
-                        className="group relative bg-muted rounded-xl overflow-hidden border border-border/50 hover:border-primary/50 hover:shadow-lg transition-all duration-200"
-                        style={{ aspectRatio: getAspectRatioStyle(aspectRatio) }}
-                      >
-                        <video
-                          src={output.fileUrl}
-                          className="w-full h-full object-cover"
-                          controls
-                        />
+                  {generation.outputs && generation.outputs.length > 0 ? (
+                    generation.outputs.map((output) => {
+                      const aspectRatio = (generation.parameters as any)?.aspectRatio || '16:9'
+                      return (
+                        <div
+                          key={output.id}
+                          className="group relative bg-muted rounded-xl overflow-hidden border border-border/50 hover:border-primary/50 hover:shadow-lg transition-all duration-200"
+                          style={{ aspectRatio: getAspectRatioStyle(aspectRatio) }}
+                        >
+                          <video
+                            src={output.fileUrl}
+                            className="w-full h-full object-cover"
+                            controls
+                          />
 
                         {/* Hover Overlay with Actions (no convert-to-video button in video view) */}
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
@@ -518,8 +519,26 @@ export function GenerationGallery({
                           </div>
                         </div>
                       </div>
-                    )
-                  })}
+                      )
+                    })
+                  ) : (
+                    // Fallback: Show error message if video generation has no outputs
+                    <div className="flex-1 max-w-2xl">
+                      <div className="bg-destructive/10 rounded-xl p-6 border border-destructive/50">
+                        <h3 className="text-lg font-semibold text-destructive mb-2">No Video Generated</h3>
+                        <p className="text-sm text-foreground/80 mb-4">
+                          This video generation completed but produced no outputs. This may indicate a failure during processing.
+                        </p>
+                        <button
+                          onClick={() => onReuseParameters(generation)}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                          Try Again
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )
@@ -528,9 +547,9 @@ export function GenerationGallery({
           // Image layout: Original layout with prompt on left
           return (
             <div key={generation.id} className="flex gap-6 items-start">
-              {/* Left Side: Prompt Display - Fixed Height with Scroll on Hover */}
-              <div className="w-96 flex-shrink-0 bg-muted/30 rounded-xl p-6 border border-border/50 flex flex-col" style={{ minHeight: '256px' }}>
-                <div className="flex-1 overflow-hidden hover:overflow-y-auto transition-all group relative">
+              {/* Left Side: Prompt Display - Increased Height with Scroll on Hover */}
+              <div className="w-96 flex-shrink-0 bg-muted/30 rounded-xl p-6 border border-border/50 flex flex-col" style={{ minHeight: '320px' }}>
+                <div className="flex-1 overflow-hidden hover:overflow-y-auto transition-all group relative" style={{ maxHeight: '200px' }}>
                   <p 
                     className="text-base font-normal leading-relaxed text-foreground/90 cursor-pointer hover:text-primary transition-colors"
                     onClick={() => handleCopyPrompt(generation.prompt)}
@@ -714,13 +733,13 @@ export function GenerationGallery({
           return (
             <div key={procGen.id} className="flex gap-6 items-start mb-6">
               {/* Left Side: Prompt and metadata */}
-              <div className={`w-96 h-64 flex-shrink-0 bg-muted/30 rounded-xl p-6 border flex flex-col relative group ${
+              <div className={`w-96 flex-shrink-0 bg-muted/30 rounded-xl p-6 border flex flex-col relative group ${
                 procGen.status === 'cancelled' 
                   ? 'border-destructive/50' 
                   : isStuck
                   ? 'border-destructive/50 border-destructive'
                   : 'border-border/50 border-primary/30'
-              }`}>
+              }`} style={{ minHeight: '320px' }}>
                 {/* Cancel button - top left, only visible on hover when processing */}
                 {procGen.status === 'processing' && (
                   <button
@@ -746,7 +765,7 @@ export function GenerationGallery({
                   </div>
                 )}
                 
-                <div className="flex-1 mb-4 scrollable-prompt">
+                <div className="flex-1 mb-4 overflow-hidden hover:overflow-y-auto transition-all group relative" style={{ maxHeight: '200px' }}>
                   <p className="text-base font-normal leading-relaxed text-foreground/90">
                     {procGen.prompt}
                   </p>

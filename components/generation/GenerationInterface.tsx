@@ -384,9 +384,9 @@ export function GenerationInterface({
   // Get video sessions
   const videoSessions = allSessions.filter(s => s.type === 'video')
   
-  // Get all processing generations (in-progress) - exclude cancelled as they shouldn't show progress
+  // Get all processing generations (in-progress) - exclude cancelled and failed as they shouldn't show progress
   const processingGenerations = generations.filter(g => 
-    g.status === 'processing'
+    g.status === 'processing' && g.status !== 'failed' && g.status !== 'cancelled'
   )
   
   // Get cancelled generations separately (they will be shown in the gallery but without progress)
@@ -394,7 +394,12 @@ export function GenerationInterface({
     g.status === 'cancelled'
   )
   
+  // Ensure failed generations are always included in the main generations list
+  // This prevents them from disappearing during status transitions
+  const failedGenerations = generations.filter(g => g.status === 'failed')
+  
   console.log('🟡 Processing generations:', processingGenerations.length, processingGenerations.map(g => ({ id: g.id, status: g.status })))
+  console.log('🔴 Failed generations:', failedGenerations.length, failedGenerations.map(g => ({ id: g.id, status: g.status })))
   
   // Get model name for pending generation display
   const allModels = getAllModels()
