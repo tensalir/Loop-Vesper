@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 
 // Force dynamic rendering since we use cookies
 export const dynamic = 'force-dynamic'
+
+// Create admin client for auth operations
+function getSupabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing Supabase admin credentials')
+  }
+  
+  return createClient(supabaseUrl, supabaseServiceKey)
+}
 
 /**
  * Cleanup endpoint for stuck generations
@@ -43,6 +56,15 @@ export async function POST(request: NextRequest) {
           lt: twoMinutesAgo,
         },
       },
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            username: true,
+          },
+        },
+      },
     })
 
     if (stuckGenerations.length === 0) {
@@ -54,6 +76,8 @@ export async function POST(request: NextRequest) {
 
     // Mark each as failed individually to preserve their parameters
     const cleanedIds: string[] = []
+    const cleanedByUser: Record<string, { userId: string; userEmail: string; count: number }> = {}
+    
     for (const gen of stuckGenerations) {
       try {
         await prisma.generation.update({
@@ -68,6 +92,30 @@ export async function POST(request: NextRequest) {
           },
         })
         cleanedIds.push(gen.id)
+        
+        // Track by user
+        const userId = gen.userId
+        if (!cleanedByUser[userId]) {
+          // Try to get email from Supabase Auth using admin client
+          let userEmail = 'unknown'
+          try {
+            const supabaseAdmin = getSupabaseAdmin()
+            const { data: { user }, error } = await supabaseAdmin.auth.admin.getUserById(userId)
+            if (user?.email && !error) {
+              userEmail = user.email
+            }
+          } catch (error) {
+            // User might not exist in auth
+            console.warn(`Could not fetch email for user ${userId}:`, error)
+          }
+          
+          cleanedByUser[userId] = {
+            userId,
+            userEmail,
+            count: 0,
+          }
+        }
+        cleanedByUser[userId].count++
       } catch (error) {
         console.error(`Failed to cleanup generation ${gen.id}:`, error)
       }
@@ -77,6 +125,7 @@ export async function POST(request: NextRequest) {
       message: `Cleaned up ${cleanedIds.length} stuck generation(s)`,
       cleaned: cleanedIds.length,
       generationIds: cleanedIds,
+      byUser: Object.values(cleanedByUser),
     })
   } catch (error: any) {
     console.error('Error cleaning up stuck generations:', error)

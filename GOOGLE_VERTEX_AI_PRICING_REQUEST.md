@@ -18,7 +18,7 @@ These tools are critical to our content creation workflow and will be used daily
 
 ## Current Usage
 
-We're actively using Vertex AI Gemini APIs in production and expect to scale usage significantly as we roll out these tools to our full creative team.
+We're actively using Vertex AI Gemini APIs in production and expect to scale usage significantly as we roll out these tools to our full creative team.image.png
 
 ## Request
 

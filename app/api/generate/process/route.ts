@@ -326,19 +326,27 @@ async function processGenerationById(
     }
 
     if (result.status === 'failed') {
+      const errorContext = {
+        message: result.error || 'Generation failed',
+        type: 'ModelGenerationError',
+        timestamp: new Date().toISOString(),
+        userId: generation.userId,
+      }
+      
       await prisma.generation.update({
         where: { id: generation.id },
         data: {
           status: 'failed',
           parameters: {
             ...(generation.parameters as any),
-            error: result.error || 'Generation failed',
+            error: errorContext.message,
+            errorContext, // Store full error context for debugging
           },
         },
       })
 
-      console.log(`[${generationId}] Generation failed:`, result.error)
-      await appendLog('process:failed', { error: result.error })
+      console.log(`[${generationId}] Generation failed for user ${generation.userId}:`, errorContext.message)
+      await appendLog('process:failed', { error: result.error, userId: generation.userId })
 
       return {
         id: generation.id,
@@ -362,16 +370,28 @@ async function processGenerationById(
       })
 
       if (generation) {
+        const errorContext = {
+          message: error.message || 'Generation failed',
+          type: error.name || 'UnknownError',
+          stack: error.stack || undefined,
+          timestamp: new Date().toISOString(),
+          userId: generation.userId,
+        }
+        
         await prisma.generation.update({
           where: { id: generationId },
           data: {
             status: 'failed',
             parameters: {
               ...(generation.parameters as any),
-              error: error.message || 'Generation failed',
+              error: errorContext.message,
+              errorContext, // Store full error context for debugging
             },
           },
         })
+        
+        // Log with user context for easier debugging
+        console.error(`[${generationId}] Generation failed for user ${generation.userId}:`, errorContext)
       }
     } catch (updateError) {
       console.error('Failed to update generation status:', updateError)
