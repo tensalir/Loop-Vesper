@@ -165,7 +165,7 @@ export function GenerationInterface({
 
   const handleGenerate = async (
     prompt: string,
-    options?: { referenceImage?: File; referenceImageId?: string }
+    options?: { referenceImage?: File; referenceImages?: File[]; referenceImageId?: string }
   ) => {
     if (!session || !prompt.trim()) return
 
@@ -173,11 +173,10 @@ export function GenerationInterface({
     const pendingId = `pending-${Date.now()}`
 
     try {
-      // Convert referenceImage File to base64 data URL if provided
+      // Convert reference images File(s) to base64 data URL(s) if provided
       // COMPRESS to prevent HTTP 413 errors (Vercel limit: 4.5MB)
-      let referenceImageData: string | undefined
-      if (options?.referenceImage) {
-        referenceImageData = await new Promise<string>((resolve, reject) => {
+      const compressImage = (file: File): Promise<string> => {
+        return new Promise<string>((resolve, reject) => {
           const reader = new FileReader()
           reader.onload = () => {
             const dataUrl = reader.result as string
@@ -221,8 +220,20 @@ export function GenerationInterface({
             img.src = dataUrl
           }
           reader.onerror = reject
-          reader.readAsDataURL(options.referenceImage!)
+          reader.readAsDataURL(file)
         })
+      }
+
+      // Handle multiple images (preferred) or single image (backward compatibility)
+      let referenceImageData: string | undefined
+      let referenceImagesData: string[] | undefined
+      
+      if (options?.referenceImages && options.referenceImages.length > 0) {
+        // Multiple images
+        referenceImagesData = await Promise.all(options.referenceImages.map(compressImage))
+      } else if (options?.referenceImage) {
+        // Single image (backward compatibility)
+        referenceImageData = await compressImage(options.referenceImage)
       }
 
       const result = await generateMutation.mutateAsync({
