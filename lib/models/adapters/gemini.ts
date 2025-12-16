@@ -3,10 +3,19 @@ import { BaseModelAdapter, GenerationRequest, GenerationResponse, ModelConfig } 
 /**
  * Google Gemini/Vertex AI Adapter
  * Supports Gemini 3 Pro Image (Nano banana pro) and Veo 3.1
- * Uses Gen AI SDK with Vertex AI when credentials are available (better rate limits), falls back to Gemini API
+ * 
+ * Fallback chain for image generation:
+ * 1. Vertex AI SDK (best rate limits, requires service account)
+ * 2. Gemini API REST (AI Studio, limited free quota)
+ * 3. Replicate API (google/nano-banana-pro, paid per-use)
  */
 
 let vertexAiClient: any = null
+
+// Replicate API key for fallback
+const REPLICATE_API_KEY = typeof window === 'undefined'
+  ? (process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_API_KEY)
+  : null
 
 // Configuration for rate limiting and retries
 const IMAGE_GENERATION_DELAY_MS = Number(process.env.IMAGE_GENERATION_DELAY_MS || '2000')
@@ -287,9 +296,21 @@ export class GeminiAdapter extends BaseModelAdapter {
         lastError = error
         
         // Check if it's a quota exhaustion error (limit: 0, daily quota)
-        // Fail fast - don't retry on true quota exhaustion
+        // Try Replicate fallback instead of failing
         if (isQuotaExhaustedError(error)) {
-          console.error(`Nano banana pro: Quota exhausted (limit: 0 or daily quota). Failing fast.`)
+          console.error(`Nano banana pro: Quota exhausted (limit: 0 or daily quota).`)
+          
+          // Try Replicate fallback if available
+          if (REPLICATE_API_KEY) {
+            console.log(`Nano banana pro: Attempting Replicate fallback (google/nano-banana-pro)...`)
+            try {
+              return await this.generateImageReplicate(request)
+            } catch (replicateError: any) {
+              console.error(`Nano banana pro: Replicate fallback also failed:`, replicateError.message)
+              throw new Error('All APIs exhausted (Vertex AI, Gemini API, Replicate). Please try again later.')
+            }
+          }
+          
           throw new Error('Quota exhausted. Please check your API quota limits or try again later.')
         }
         
@@ -509,8 +530,17 @@ export class GeminiAdapter extends BaseModelAdapter {
         console.error(`[Vertex AI]   Stack trace:`, error.stack)
       }
       
-      // Fail fast on quota exhaustion - don't fallback to another API with zero quota
+      // On quota exhaustion, try Replicate as final fallback
       if (isQuotaExhaustedError(error)) {
+        console.log('[Vertex AI] Quota exhausted, trying Replicate fallback...')
+        if (REPLICATE_API_KEY) {
+          try {
+            return await this.generateImageReplicate(request)
+          } catch (replicateError: any) {
+            console.error('[Vertex AI] Replicate fallback also failed:', replicateError.message)
+            throw new Error('All APIs exhausted (Vertex AI, Gemini API, Replicate). Please try again later.')
+          }
+        }
         throw new Error('Quota exhausted. Please check your API quota limits or try again later.')
       }
       
@@ -521,8 +551,17 @@ export class GeminiAdapter extends BaseModelAdapter {
         try {
           return await this.generateImageGeminiAPI(endpoint, payload)
         } catch (fallbackError: any) {
-          // If fallback also has quota issues, fail fast
+          // If Gemini API also has quota issues, try Replicate as final fallback
           if (isQuotaExhaustedError(fallbackError)) {
+            console.log('[Gemini API] Quota exhausted, trying Replicate fallback...')
+            if (REPLICATE_API_KEY) {
+              try {
+                return await this.generateImageReplicate(request)
+              } catch (replicateError: any) {
+                console.error('[Gemini API] Replicate fallback also failed:', replicateError.message)
+                throw new Error('All APIs exhausted (Vertex AI, Gemini API, Replicate). Please try again later.')
+              }
+            }
             throw new Error('Quota exhausted on both Vertex AI and Gemini API. Please check your quota limits.')
           }
           throw fallbackError
@@ -594,6 +633,163 @@ export class GeminiAdapter extends BaseModelAdapter {
       url: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
       width: dimensions.width,
       height: dimensions.height,
+    }
+  }
+
+  /**
+   * Third fallback: Replicate API (google/nano-banana-pro)
+   * Used when both Vertex AI and Gemini API fail with quota/availability issues
+   * Docs: https://replicate.com/google/nano-banana-pro
+   */
+  private async generateImageReplicate(request: GenerationRequest): Promise<any> {
+    if (!REPLICATE_API_KEY) {
+      throw new Error('Replicate API key not configured. Cannot use Replicate fallback.')
+    }
+
+    console.log('[Nano Banana Pro] Using Replicate fallback (google/nano-banana-pro)')
+
+    const baseUrl = 'https://api.replicate.com/v1'
+
+    // Map aspect ratio to Replicate format
+    const aspectRatio = request.aspectRatio || '1:1'
+
+    // Build input for Replicate
+    const input: any = {
+      prompt: request.prompt,
+      aspect_ratio: aspectRatio,
+      output_format: 'png',
+      safety_tolerance: 2, // 1-6, higher = more permissive
+    }
+
+    // Add reference images if provided
+    const referenceImages = request.referenceImages || (request.referenceImage ? [request.referenceImage] : [])
+    if (referenceImages.length > 0) {
+      // Nano Banana Pro on Replicate supports up to 14 reference images
+      input.image = referenceImages[0] // Primary reference image
+      if (referenceImages.length > 1) {
+        input.images = referenceImages // Multiple reference images
+      }
+      console.log(`[Replicate Fallback] Using ${referenceImages.length} reference image(s)`)
+    }
+
+    // Resolution mapping
+    if (request.resolution) {
+      const outputQuality = request.resolution === 4096 ? 'highest' : request.resolution === 2048 ? 'high' : 'standard'
+      input.output_quality = outputQuality
+    }
+
+    try {
+      // First, fetch the latest version for the model
+      const modelResponse = await fetch(`${baseUrl}/models/google/nano-banana-pro`, {
+        headers: {
+          'Authorization': `Token ${REPLICATE_API_KEY}`,
+        },
+      })
+
+      if (!modelResponse.ok) {
+        const errorText = await modelResponse.text()
+        throw new Error(`Failed to fetch Replicate model info: ${errorText}`)
+      }
+
+      const modelData = await modelResponse.json()
+      const versionHash = modelData.latest_version?.id
+
+      if (!versionHash) {
+        throw new Error('Could not determine latest version for google/nano-banana-pro')
+      }
+
+      console.log(`[Replicate Fallback] Using version: ${versionHash}`)
+
+      // Submit prediction
+      const response = await fetch(`${baseUrl}/predictions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${REPLICATE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          version: versionHash,
+          input,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || errorData.error || `Replicate API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      const predictionId = data.id
+
+      console.log(`[Replicate Fallback] Prediction started: ${predictionId}`)
+
+      // Poll for results (max 5 minutes)
+      let attempts = 0
+      const maxAttempts = 60
+
+      while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 5000)) // Wait 5 seconds
+
+        const statusResponse = await fetch(`${baseUrl}/predictions/${predictionId}`, {
+          headers: {
+            'Authorization': `Token ${REPLICATE_API_KEY}`,
+          },
+        })
+
+        if (!statusResponse.ok) {
+          throw new Error(`Failed to check prediction status: ${statusResponse.status}`)
+        }
+
+        const statusData = await statusResponse.json()
+        console.log(`[Replicate Fallback] Status: ${statusData.status} (attempt ${attempts + 1})`)
+
+        if (statusData.status === 'succeeded') {
+          let outputUrl: string | null = null
+
+          if (Array.isArray(statusData.output) && statusData.output.length > 0) {
+            outputUrl = statusData.output[0]
+          } else if (typeof statusData.output === 'string') {
+            outputUrl = statusData.output
+          }
+
+          if (!outputUrl) {
+            throw new Error('No image URL in Replicate response')
+          }
+
+          console.log(`[Replicate Fallback] ✅ Image generated successfully`)
+
+          // Determine dimensions based on aspect ratio
+          const aspectRatioDimensions: Record<string, { width: number; height: number }> = {
+            '1:1': { width: 1024, height: 1024 },
+            '2:3': { width: 832, height: 1248 },
+            '3:2': { width: 1248, height: 832 },
+            '3:4': { width: 864, height: 1184 },
+            '4:3': { width: 1184, height: 864 },
+            '4:5': { width: 896, height: 1152 },
+            '5:4': { width: 1152, height: 896 },
+            '9:16': { width: 768, height: 1344 },
+            '16:9': { width: 1344, height: 768 },
+            '21:9': { width: 1536, height: 672 },
+          }
+
+          const dimensions = aspectRatioDimensions[aspectRatio] || { width: 1024, height: 1024 }
+
+          return {
+            url: outputUrl,
+            width: dimensions.width,
+            height: dimensions.height,
+          }
+        } else if (statusData.status === 'failed' || statusData.status === 'canceled') {
+          throw new Error(`Replicate generation failed: ${statusData.error || 'Unknown error'}`)
+        }
+
+        attempts++
+      }
+
+      throw new Error('Replicate generation timeout')
+    } catch (error: any) {
+      console.error('[Replicate Fallback] Error:', error.message)
+      throw error
     }
   }
 

@@ -77,6 +77,21 @@ if (error?.code === 404 || errorMessage.includes('was not found')) {
   - Service account: loop-vesper-vertex@...
 ```
 
+### ✅ Added: Replicate Fallback (Third Fallback)
+```typescript
+// Fallback chain:
+// 1. Vertex AI SDK → 404 or quota error
+// 2. Gemini API (AI Studio) → 429 quota exhausted
+// 3. Replicate (google/nano-banana-pro) → final fallback
+
+if (isQuotaExhaustedError(error) && REPLICATE_API_KEY) {
+  console.log('Trying Replicate fallback (google/nano-banana-pro)...')
+  return await this.generateImageReplicate(request)
+}
+```
+
+The same Nano Banana Pro model is now available via Replicate as a paid-per-use fallback when Google APIs hit quota limits.
+
 ## Remaining Issues
 
 ### 🔴 Quota Management
