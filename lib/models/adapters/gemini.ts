@@ -299,6 +299,9 @@ export class GeminiAdapter extends BaseModelAdapter {
         // Try Replicate fallback instead of failing
         if (isQuotaExhaustedError(error)) {
           console.error(`Nano banana pro: Quota exhausted (limit: 0 or daily quota).`)
+          // #region agent log
+          console.log('[DEBUG:gemini:quotaExhausted]', JSON.stringify({hasRefImage:!!request.referenceImage,hasRefImages:!!(request.referenceImages?.length),resolution:request.resolution,hasReplicateKey:!!REPLICATE_API_KEY}));
+          // #endregion
           
           // Try Replicate fallback if available
           if (REPLICATE_API_KEY) {
@@ -339,6 +342,9 @@ export class GeminiAdapter extends BaseModelAdapter {
   }
 
   private async generateSingleImage(endpoint: string, request: GenerationRequest): Promise<any> {
+    // #region agent log
+    console.log('[DEBUG:gemini:generateSingleImage] Entry', JSON.stringify({resolution:request.resolution,aspectRatio:request.aspectRatio,hasRefImage:!!request.referenceImage,hasRefImages:!!(request.referenceImages?.length),refImagesCount:request.referenceImages?.length||0}));
+    // #endregion
     const parts: any[] = []
     
     // Add text prompt
@@ -391,6 +397,9 @@ export class GeminiAdapter extends BaseModelAdapter {
       }
     }
 
+    // #region agent log
+    console.log('[DEBUG:gemini:apiChoice]', JSON.stringify({useGenAI:this.useGenAI,hasVertexClient:!!vertexAiClient,imageSize:payload.generationConfig?.imageConfig?.imageSize,resolution:request.resolution}));
+    // #endregion
     // Use Vertex AI if available, otherwise fall back to Gemini API
     if (this.useGenAI && vertexAiClient) {
       return await this.generateImageVertexAI(request, payload)
@@ -572,6 +581,9 @@ export class GeminiAdapter extends BaseModelAdapter {
   }
 
   private async generateImageGeminiAPI(endpoint: string, payload: any): Promise<any> {
+    // #region agent log
+    console.log('[DEBUG:gemini:GeminiAPI:entry]', JSON.stringify({imageSize:payload.generationConfig?.imageConfig?.imageSize,aspectRatio:payload.generationConfig?.imageConfig?.aspectRatio,partsCount:payload.contents?.[0]?.parts?.length||0}));
+    // #endregion
     console.log('Nano banana pro: Using Gemini API (AI Studio)')
     
     const response = await fetch(`${endpoint}?key=${this.apiKey}`, {
@@ -586,6 +598,9 @@ export class GeminiAdapter extends BaseModelAdapter {
 
     if (!response.ok) {
       const error = await response.json()
+      // #region agent log
+      console.log('[DEBUG:gemini:GeminiAPI:error]', JSON.stringify({status:response.status,errorCode:error.error?.code,errorMsg:error.error?.message?.substring(0,200),imageSize:payload.generationConfig?.imageConfig?.imageSize}));
+      // #endregion
       console.error('Gemini API error:', error)
       console.error('Request payload (redacted):', JSON.stringify(redactLargeStrings(payload), null, 2))
       
@@ -642,6 +657,9 @@ export class GeminiAdapter extends BaseModelAdapter {
    * Docs: https://replicate.com/google/nano-banana-pro
    */
   private async generateImageReplicate(request: GenerationRequest): Promise<any> {
+    // #region agent log
+    console.log('[DEBUG:gemini:Replicate:entry]', JSON.stringify({hasRefImage:!!request.referenceImage,hasRefImages:!!(request.referenceImages?.length),refImagesCount:request.referenceImages?.length||0,refImageLen:request.referenceImage?.length||0,resolution:request.resolution,aspectRatio:request.aspectRatio}));
+    // #endregion
     if (!REPLICATE_API_KEY) {
       throw new Error('Replicate API key not configured. Cannot use Replicate fallback.')
     }
@@ -663,6 +681,9 @@ export class GeminiAdapter extends BaseModelAdapter {
 
     // Add reference images if provided
     const referenceImages = request.referenceImages || (request.referenceImage ? [request.referenceImage] : [])
+    // #region agent log
+    console.log('[DEBUG:gemini:Replicate:refImages]', JSON.stringify({refImagesCount:referenceImages.length,firstImageType:referenceImages[0]?.substring(0,30)||'none',firstImageLen:referenceImages[0]?.length||0}));
+    // #endregion
     if (referenceImages.length > 0) {
       // Nano Banana Pro on Replicate supports up to 14 reference images
       input.image = referenceImages[0] // Primary reference image

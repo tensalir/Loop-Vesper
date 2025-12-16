@@ -83,6 +83,9 @@ async function resolveJobHandle(handle: QueueJobHandle, result: GenerationProces
 async function processGenerationById(
   generationId: string
 ): Promise<GenerationProcessResult> {
+  // #region agent log
+  console.log('[DEBUG:route:processGeneration:entry]', JSON.stringify({generationId}));
+  // #endregion
   let heartbeatTimer: NodeJS.Timeout | null = null
   let stopHeartbeatRef: (() => void) | null = null
   const stopHeartbeat = () => {
@@ -271,6 +274,9 @@ async function processGenerationById(
       parameters: otherParameters,
       ...otherParameters,
     }
+    // #region agent log
+    console.log('[DEBUG:route:buildRequest]', JSON.stringify({modelId:generation.modelId,resolution:otherParameters?.resolution,aspectRatio:otherParameters?.aspectRatio,hasInlineRef:!!inlineReferenceImage,hasRefUrl:!!referenceImageUrl,hasMultipleImages,refImagesCount:hasMultipleImages?referenceImages.length:0}));
+    // #endregion
 
     // Add reference images - handle both single and multiple
     if (hasMultipleImages) {
