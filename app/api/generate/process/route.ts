@@ -83,9 +83,6 @@ async function resolveJobHandle(handle: QueueJobHandle, result: GenerationProces
 async function processGenerationById(
   generationId: string
 ): Promise<GenerationProcessResult> {
-  // #region agent log
-  console.log('[DEBUG:route:processGeneration:entry]', JSON.stringify({generationId}));
-  // #endregion
   let heartbeatTimer: NodeJS.Timeout | null = null
   let stopHeartbeatRef: (() => void) | null = null
   const stopHeartbeat = () => {
@@ -274,9 +271,6 @@ async function processGenerationById(
       parameters: otherParameters,
       ...otherParameters,
     }
-    // #region agent log
-    console.log('[DEBUG:route:buildRequest]', JSON.stringify({modelId:generation.modelId,resolution:otherParameters?.resolution,aspectRatio:otherParameters?.aspectRatio,hasInlineRef:!!inlineReferenceImage,hasRefUrl:!!referenceImageUrl,hasMultipleImages,refImagesCount:hasMultipleImages?referenceImages.length:0}));
-    // #endregion
 
     // Add reference images - handle both single and multiple
     if (hasMultipleImages) {
@@ -498,10 +492,6 @@ export async function POST(request: NextRequest) {
   // If internal secret is provided and matches, skip auth check
   const isInternalCall = internalSecret && expectedSecret && internalSecret === expectedSecret
   
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H1',location:'app/api/generate/process/route.ts:authGate',message:'process auth gate',data:{hasInternalSecretHeader:Boolean(internalSecret),expectedSecretConfigured:Boolean(expectedSecret),isInternalCall:Boolean(isInternalCall)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-  
   // If no internal secret or it doesn't match, check auth (for frontend calls)
   if (!isInternalCall) {
     try {
@@ -509,10 +499,6 @@ export async function POST(request: NextRequest) {
       const { cookies } = await import('next/headers')
       const supabase = createRouteHandlerClient({ cookies })
       const { data: { session }, error: authError } = await supabase.auth.getSession()
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H1',location:'app/api/generate/process/route.ts:authCheck',message:'process supabase session check',data:{hasAuthError:Boolean(authError),hasSession:Boolean(session)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       
       if (authError || !session) {
         return respond({ error: 'Unauthorized' }, 401)
