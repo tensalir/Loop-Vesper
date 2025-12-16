@@ -31,7 +31,7 @@ export const useUIStore = create<UIState>()(
     persist(
       (set) => ({
         // Initial state
-        selectedModel: 'gemini-nano-banana',
+        selectedModel: 'gemini-nano-banana-pro',
         parameters: defaultParameters,
 
         // Actions

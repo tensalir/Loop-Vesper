@@ -2,7 +2,7 @@ import { BaseModelAdapter, GenerationRequest, GenerationResponse, ModelConfig } 
 
 /**
  * Google Gemini API Adapter
- * Supports Gemini 2.5 Flash Image (Nano Banana) and Veo 3.1
+ * Supports Gemini 3 Pro Image (Nano banana pro) and Veo 3.1
  */
 
 export class GeminiAdapter extends BaseModelAdapter {
@@ -37,11 +37,11 @@ export class GeminiAdapter extends BaseModelAdapter {
   }
 
   private async generateImage(request: GenerationRequest): Promise<GenerationResponse> {
-    console.log('Nano Banana: Starting image generation')
-    console.log('Nano Banana: Prompt:', request.prompt)
-    console.log('Nano Banana: Has reference image:', !!request.referenceImage)
-    // Gemini 2.5 Flash Image (Nano Banana) endpoint
-    const endpoint = `${this.baseUrl}/models/gemini-2.5-flash-image:generateContent`
+    console.log('Nano banana pro: Starting image generation')
+    console.log('Nano banana pro: Prompt:', request.prompt)
+    console.log('Nano banana pro: Has reference image:', !!request.referenceImage)
+    // Gemini 3 Pro Image (Nano banana pro) endpoint
+    const endpoint = `${this.baseUrl}/models/gemini-3-pro-image-preview:generateContent`
 
     const numImages = request.numOutputs || 1
     
@@ -116,7 +116,7 @@ export class GeminiAdapter extends BaseModelAdapter {
       }
     }
 
-    console.log('Nano Banana: Sending request to Gemini API')
+    console.log('Nano banana pro: Sending request to Gemini API')
     const response = await fetch(`${endpoint}?key=${this.apiKey}`, {
       method: 'POST',
       headers: {
@@ -125,7 +125,7 @@ export class GeminiAdapter extends BaseModelAdapter {
       body: JSON.stringify(payload),
     })
 
-    console.log('Nano Banana: Response status:', response.status)
+    console.log('Nano banana pro: Response status:', response.status)
 
     if (!response.ok) {
       const error = await response.json()
@@ -134,7 +134,7 @@ export class GeminiAdapter extends BaseModelAdapter {
       throw new Error(error.error?.message || 'Image generation failed')
     }
     
-    console.log('Nano Banana: Response OK, parsing data')
+    console.log('Nano banana pro: Response OK, parsing data')
 
     const data = await response.json()
 
@@ -467,11 +467,11 @@ export class GeminiAdapter extends BaseModelAdapter {
 // Model configurations based on official Gemini API docs
 // https://ai.google.dev/gemini-api/docs/image-generation
 export const NANO_BANANA_CONFIG: ModelConfig = {
-  id: 'gemini-nano-banana',
-  name: 'Nano Banana',
+  id: 'gemini-nano-banana-pro',
+  name: 'Nano banana pro',
   provider: 'Google',
   type: 'image',
-  description: 'Gemini 2.5 Flash Image - Highly effective and precise image generation',
+  description: 'Gemini 3 Pro Image - Advanced image generation with superior quality',
   maxResolution: 1536, // Max dimension from 21:9 (1536x672)
   defaultAspectRatio: '1:1',
   // All 10 supported aspect ratios from official Gemini API documentation

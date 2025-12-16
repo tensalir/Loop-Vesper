@@ -85,11 +85,11 @@ Enhance this for an image-to-video workflow (inspired by Veo best practices):
 - If audio ambiance is desired, mention it briefly; otherwise omit
 
 Return ONLY the enhanced video prompt.`
-      } else if (modelId === 'gemini-nano-banana') {
+      } else if (modelId === 'gemini-nano-banana-pro') {
         requestContent = `User wants to edit an image. Their instruction: "${prompt}"
 Reference image will be provided.
 
-IMPORTANT: For Nano Banana image editing:
+IMPORTANT: For Nano banana pro image editing:
 - Describe ONLY the specific changes to make
 - Use precise, action-oriented language
 - Reference the provided image as "the provided image" or "this image"
