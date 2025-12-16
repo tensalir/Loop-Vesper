@@ -685,18 +685,17 @@ export class GeminiAdapter extends BaseModelAdapter {
     console.log('[DEBUG:gemini:Replicate:refImages]', JSON.stringify({refImagesCount:referenceImages.length,firstImageType:referenceImages[0]?.substring(0,30)||'none',firstImageLen:referenceImages[0]?.length||0}));
     // #endregion
     if (referenceImages.length > 0) {
-      // Nano Banana Pro on Replicate supports up to 14 reference images
-      input.image = referenceImages[0] // Primary reference image
-      if (referenceImages.length > 1) {
-        input.images = referenceImages // Multiple reference images
-      }
-      console.log(`[Replicate Fallback] Using ${referenceImages.length} reference image(s)`)
+      // Nano Banana Pro on Replicate uses 'image_input' parameter (array, up to 14 images)
+      // Same as Seedream 4.5 - NOT 'image' or 'images'
+      input.image_input = referenceImages
+      console.log(`[Replicate Fallback] Using ${referenceImages.length} reference image(s) via image_input`)
     }
 
-    // Resolution mapping
+    // Resolution mapping - Nano Banana Pro uses "1K", "2K", "4K" strings
     if (request.resolution) {
-      const outputQuality = request.resolution === 4096 ? 'highest' : request.resolution === 2048 ? 'high' : 'standard'
-      input.output_quality = outputQuality
+      const resolution = request.resolution === 4096 ? '4K' : request.resolution === 2048 ? '2K' : '1K'
+      input.resolution = resolution
+      console.log(`[Replicate Fallback] Using resolution: ${resolution}`)
     }
 
     try {
