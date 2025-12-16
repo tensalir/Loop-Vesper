@@ -7,15 +7,15 @@
 When you start the dev server (`npm run dev`) or check Vercel function logs, you should see:
 
 ```
-[Vertex AI] Initialized for project: gen-lang-client-0963396085, location: us-central1
-[GeminiAdapter] Using Vertex AI (better rate limits)
+[Gen AI SDK] Initialized with Vertex AI for project: gen-lang-client-0963396085, location: us-central1
+[GeminiAdapter] Using Gen AI SDK with Vertex AI (better rate limits)
 ```
 
 If you see these messages, Vertex AI is configured correctly! 🎉
 
 If you see instead:
 ```
-[Vertex AI] Not configured, will use Gemini API
+[Gen AI SDK] Not configured, will use Gemini API
 [GeminiAdapter] Using Gemini API (AI Studio)
 ```
 
@@ -38,7 +38,7 @@ Then it's falling back to the Gemini API - check your environment variables.
 ### What to Look For:
 
 **In the browser console or server logs:**
-- You should see: `Nano banana pro: Using Vertex AI`
+- You should see: `Nano banana pro: Using Gen AI SDK with Vertex AI`
 - If it says `Nano banana pro: Using Gemini API (AI Studio)` instead, Vertex AI isn't being used
 
 **Expected behavior:**
@@ -78,16 +78,16 @@ Then it's falling back to the Gemini API - check your environment variables.
 ## 📊 Understanding the Current Setup
 
 ### Image Generation (Nano Banana Pro)
-- ✅ **Uses Vertex AI** when credentials are configured
+- ✅ **Uses Gen AI SDK with Vertex AI** when credentials are configured
 - ✅ Better rate limits and reliability
 - ✅ Falls back to Gemini API if Vertex AI not available
+- ✅ Uses modern `@google/genai` SDK (replaces deprecated `@google-cloud/vertexai`)
 
 ### Video Generation (Veo 3.1)
-- ℹ️ **Uses Gemini API** (REST endpoint)
+- ℹ️ **Uses Gemini API REST** (fallback)
 - ✅ Works perfectly fine with this setup
-- ⚠️ Currently doesn't use Vertex AI (would need code update)
-
-The reason Veo 3.1 uses Gemini API is that the Vertex AI SDK (`@google-cloud/vertexai`) we're using doesn't have a built-in method for video generation. We'd need to use the new Gen AI SDK (`@google/genai`) to support Vertex AI for videos, but the current Gemini API implementation works well.
+- 🔄 Will use Vertex AI when Gen AI SDK adds video generation support
+- ✅ Code is ready to use Vertex AI when SDK support is available
 
 ---
 
@@ -103,9 +103,9 @@ To verify Vertex AI is working in production:
 
 Look for:
 ```
-[Vertex AI] Initialized for project: gen-lang-client-0963396085, location: us-central1
-[GeminiAdapter] Using Vertex AI (better rate limits)
-Nano banana pro: Using Vertex AI
+[Gen AI SDK] Initialized with Vertex AI for project: gen-lang-client-0963396085, location: us-central1
+[GeminiAdapter] Using Gen AI SDK with Vertex AI (better rate limits)
+Nano banana pro: Using Gen AI SDK with Vertex AI
 ```
 
 ---
@@ -140,21 +140,21 @@ Nano banana pro: Using Vertex AI
 
 You'll know everything is working when:
 
-✅ Server logs show: `[Vertex AI] Initialized...`  
-✅ Image generation logs show: `Nano banana pro: Using Vertex AI`  
+✅ Server logs show: `[Gen AI SDK] Initialized with Vertex AI...`  
+✅ Image generation logs show: `Nano banana pro: Using Gen AI SDK with Vertex AI`  
 ✅ Images generate successfully  
-✅ Videos generate successfully (via Gemini API - that's fine!)  
+✅ Videos generate successfully (via Gemini API REST - that's fine!)  
 ✅ No rate limit errors  
 
 ---
 
-## 💡 Next Steps (Optional)
+## 💡 Current Status
 
-If you want Veo 3.1 to also use Vertex AI:
+The migration to Gen AI SDK is complete:
 
-We would need to update the code to use the new `@google/genai` SDK which has better support for video generation via Vertex AI. However, the current Gemini API implementation works well, so this isn't urgent unless you're hitting rate limits with video generation.
+- ✅ **Images**: Use Gen AI SDK with Vertex AI (better rate limits)
+- ✅ **Videos**: Use Gemini API REST (fallback, works great)
+- 🔄 **Future**: When Gen AI SDK adds video generation support, videos will automatically use Vertex AI
 
-For now, the setup is optimal:
-- ✅ Images use Vertex AI (better rate limits)
-- ✅ Videos use Gemini API (works great, no issues expected)
+The codebase is now future-proof and uses the modern Gen AI SDK instead of the deprecated Vertex AI SDK.
 

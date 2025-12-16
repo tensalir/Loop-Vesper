@@ -6,7 +6,7 @@ This guide explains how to configure Vertex AI for Google Gemini (Nano Banana Pr
 
 You already have:
 - ✅ `GOOGLE_CLOUD_PROJECT_ID=gen-lang-client-0963396085`
-- ✅ `@google-cloud/vertexai` package installed
+- ✅ `@google/genai` package installed (Gen AI SDK)
 
 You need to add:
 - 🔑 Service account JSON credentials
@@ -94,16 +94,17 @@ npm run dev
 
 You should see in the console:
 ```
-[Vertex AI] Initialized for project: gen-lang-client-0963396085, location: us-central1
-[GeminiAdapter] Using Vertex AI (better rate limits)
+[Gen AI SDK] Initialized with Vertex AI for project: gen-lang-client-0963396085, location: us-central1
+[GeminiAdapter] Using Gen AI SDK with Vertex AI (better rate limits)
 ```
 
 ## What This Enables
 
 - ✅ **Better Rate Limits**: Vertex AI has higher rate limits than the Gemini API
-- ✅ **Nano Banana Pro**: Image generation via Vertex AI
-- ✅ **Veo 3.1**: Video generation via Vertex AI (when implemented)
+- ✅ **Nano Banana Pro**: Image generation via Gen AI SDK with Vertex AI
+- ✅ **Veo 3.1**: Video generation (currently uses Gemini API REST, Vertex AI support coming)
 - ✅ **Production Ready**: More reliable for production workloads
+- ✅ **Future-Proof**: Uses modern Gen AI SDK (replaces deprecated Vertex AI SDK)
 
 ## Fallback Behavior
 

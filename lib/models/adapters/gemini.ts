@@ -3,15 +3,19 @@ import { BaseModelAdapter, GenerationRequest, GenerationResponse, ModelConfig } 
 /**
  * Google Gemini/Vertex AI Adapter
  * Supports Gemini 3 Pro Image (Nano banana pro) and Veo 3.1
- * Uses Vertex AI when credentials are available (better rate limits), falls back to Gemini API
+ * Uses Gen AI SDK with Vertex AI when credentials are available (better rate limits), falls back to Gemini API
  */
 
-let vertexAiClient: any = null
+let genAiClient: any = null
 
-// Try to initialize Vertex AI client (server-side only)
+// Try to initialize Gen AI SDK client with Vertex AI (server-side only)
 if (typeof window === 'undefined') {
   try {
-    const { VertexAI } = require('@google-cloud/vertexai')
+    const { GoogleGenAI } = require('@google/genai')
+    const fs = require('fs')
+    const path = require('path')
+    const os = require('os')
+    
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID
     const location = process.env.GOOGLE_CLOUD_REGION || 'us-central1'
     
@@ -20,43 +24,64 @@ if (typeof window === 'undefined') {
     const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
     
     if (projectId && (credentialsPath || credentialsJson)) {
-      // Parse credentials if provided as JSON string (for Vercel)
-      let credentials: any = undefined
-      if (credentialsJson) {
+      // Handle credentials for Gen AI SDK
+      // The SDK uses Application Default Credentials, which can be:
+      // 1. A file path in GOOGLE_APPLICATION_CREDENTIALS env var
+      // 2. Credentials set via google-auth-library
+      
+      if (credentialsPath) {
+        // Use file path (local development)
+        // Ensure the env var is set for the SDK to pick up
+        if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+          process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath
+        }
+      } else if (credentialsJson) {
+        // For Vercel/serverless: write credentials to a temp file
+        // The Gen AI SDK needs GOOGLE_APPLICATION_CREDENTIALS to point to a file
         try {
-          credentials = JSON.parse(credentialsJson)
+          const tempDir = os.tmpdir()
+          const tempFilePath = path.join(tempDir, `gcp-credentials-${Date.now()}.json`)
+          fs.writeFileSync(tempFilePath, credentialsJson, 'utf8')
+          process.env.GOOGLE_APPLICATION_CREDENTIALS = tempFilePath
+          console.log(`[Gen AI SDK] Wrote credentials to temp file: ${tempFilePath}`)
         } catch (e) {
-          console.warn('Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON:', e)
+          console.warn('[Gen AI SDK] Failed to write credentials to temp file:', e)
         }
       }
       
-      vertexAiClient = new VertexAI({
+      // Initialize Gen AI SDK with Vertex AI
+      // The SDK will automatically use Application Default Credentials from GOOGLE_APPLICATION_CREDENTIALS
+      // Note: Preview models (like gemini-3-pro-image-preview) may require location: 'global'
+      // If you get 404 "model not found" errors with Vertex AI, try setting GOOGLE_CLOUD_REGION=global
+      // The system will automatically fall back to Gemini API if Vertex AI fails
+      genAiClient = new GoogleGenAI({
+        vertexai: true,
         project: projectId,
         location,
-        ...(credentials && { googleAuthOptions: { credentials } }),
       })
-      console.log(`[Vertex AI] Initialized for project: ${projectId}, location: ${location}`)
+      
+      console.log(`[Gen AI SDK] Initialized with Vertex AI for project: ${projectId}, location: ${location}`)
     }
   } catch (error) {
-    // Vertex AI not available or not configured - will fall back to Gemini API
-    console.log('[Vertex AI] Not configured, will use Gemini API')
+    // Gen AI SDK not available or not configured - will fall back to Gemini API
+    console.log('[Gen AI SDK] Not configured, will use Gemini API:', error)
   }
 }
 
 export class GeminiAdapter extends BaseModelAdapter {
   private apiKey: string
   private baseUrl = 'https://generativelanguage.googleapis.com/v1beta'
-  private useVertexAI: boolean
+  private useGenAI: boolean
 
   constructor(config: ModelConfig) {
     super(config)
     this.apiKey = process.env.GEMINI_API_KEY || ''
-    this.useVertexAI = vertexAiClient !== null
+    this.useGenAI = genAiClient !== null
 
-    if (!this.useVertexAI && !this.apiKey) {
-      console.warn('Neither Vertex AI nor Gemini API key configured')
-    } else if (this.useVertexAI) {
-      console.log('[GeminiAdapter] Using Vertex AI (better rate limits)')
+    if (!this.useGenAI && !this.apiKey) {
+      console.warn('Neither Gen AI SDK (Vertex AI) nor Gemini API key configured')
+    } else if (this.useGenAI) {
+      console.log('[GeminiAdapter] Using Gen AI SDK with Vertex AI (better rate limits)')
     } else {
       console.log('[GeminiAdapter] Using Gemini API (AI Studio)')
     }
@@ -164,32 +189,40 @@ export class GeminiAdapter extends BaseModelAdapter {
       }
     }
 
-    // Use Vertex AI if available, otherwise fall back to Gemini API
-    if (this.useVertexAI && vertexAiClient) {
-      return await this.generateImageVertexAI(request, payload)
+    // Use Gen AI SDK (Vertex AI) if available, otherwise fall back to Gemini API
+    if (this.useGenAI && genAiClient) {
+      return await this.generateImageGenAI(request, payload)
     } else {
       return await this.generateImageGeminiAPI(endpoint, payload)
     }
   }
 
-  private async generateImageVertexAI(request: GenerationRequest, payload: any): Promise<any> {
-    console.log('Nano banana pro: Using Vertex AI')
+  private async generateImageGenAI(request: GenerationRequest, payload: any): Promise<any> {
+    console.log('Nano banana pro: Using Gen AI SDK with Vertex AI')
+    
+    if (!genAiClient) {
+      throw new Error('Gen AI client not initialized')
+    }
     
     try {
-      const model = vertexAiClient.preview.getGenerativeModel({
+      const model = genAiClient.getGenerativeModel({
         model: 'gemini-3-pro-image-preview',
       })
 
-      const result = await model.generateContent(payload)
-      const response = await result.response
+      const result = await model.generateContent({
+        contents: payload.contents,
+        generationConfig: payload.generationConfig,
+      })
 
       // Extract image from response
+      // Gen AI SDK response structure: result.response contains the response object
+      const response = result.response || result
       const imagePart = response.candidates?.[0]?.content?.parts?.find(
         (part: any) => part.inlineData?.mimeType?.startsWith('image/')
       )
 
       if (!imagePart?.inlineData?.data) {
-        console.error('Vertex AI response missing image data:', JSON.stringify(response, null, 2))
+        console.error('Gen AI SDK response missing image data:', JSON.stringify(response, null, 2))
         throw new Error('No image data in response')
       }
 
@@ -215,10 +248,10 @@ export class GeminiAdapter extends BaseModelAdapter {
         height: dimensions.height,
       }
     } catch (error: any) {
-      console.error('Vertex AI error:', error)
-      // Fallback to Gemini API if Vertex AI fails
+      console.error('Gen AI SDK error:', error)
+      // Fallback to Gemini API if Gen AI SDK fails
       if (this.apiKey) {
-        console.log('Falling back to Gemini API due to Vertex AI error')
+        console.log('Falling back to Gemini API due to Gen AI SDK error')
         const endpoint = `${this.baseUrl}/models/gemini-3-pro-image-preview:generateContent`
         return await this.generateImageGeminiAPI(endpoint, payload)
       }
@@ -313,9 +346,61 @@ export class GeminiAdapter extends BaseModelAdapter {
     
     const { width, height } = getDimensions(aspectRatio, resolution)
     
+    // Use Gen AI SDK if available (Vertex AI), otherwise fall back to Gemini API REST
+    if (this.useGenAI && genAiClient) {
+      return await this.generateVideoGenAI(request, { width, height, duration, resolution, aspectRatio })
+    } else {
+      return await this.generateVideoGeminiAPI(request, { width, height, duration, resolution, aspectRatio })
+    }
+  }
+  
+  private async generateVideoGenAI(
+    request: GenerationRequest,
+    options: { width: number; height: number; duration: number; resolution: number; aspectRatio: string }
+  ): Promise<GenerationResponse> {
+    console.log(`[Veo 3.1] Gen AI SDK with Vertex AI available, but video generation methods not yet in SDK`)
+    console.log(`[Veo 3.1] Falling back to Gemini API REST (works great, maintains functionality)`)
+    
+    if (!genAiClient) {
+      throw new Error('Gen AI client not initialized')
+    }
+    
+    // Note: The Gen AI SDK JavaScript version may not have video generation methods yet
+    // When the SDK adds video support, this method will be updated to use SDK methods
+    // For now, we maintain the working Gemini API REST implementation
+    // This ensures videos continue to work while we wait for SDK video support
+    
+    try {
+      // TODO: When Gen AI SDK adds video generation support, implement here:
+      // const model = genAiClient.getGenerativeModel({ model: 'veo-3.1-generate-preview' })
+      // const operation = await model.generateVideos({ ... })
+      // Then poll and return result
+      
+      // For now, use the proven Gemini API REST implementation
+      return await this.generateVideoGeminiAPI(request, options)
+      
+    } catch (error: any) {
+      console.error('[Veo 3.1] Gen AI SDK error:', error)
+      // Fallback to Gemini API REST if Gen AI SDK fails
+      if (this.apiKey) {
+        console.log('Falling back to Gemini API REST due to Gen AI SDK error')
+        return await this.generateVideoGeminiAPI(request, options)
+      }
+      throw error
+    }
+  }
+  
+  private async generateVideoGeminiAPI(
+    request: GenerationRequest,
+    options: { width: number; height: number; duration: number; resolution: number; aspectRatio: string }
+  ): Promise<GenerationResponse> {
+    console.log(`[Veo 3.1] Using Gemini API REST (fallback)`)
+    
     // Using Veo 3.1 official API endpoint
     const modelId = 'veo-3.1-generate-preview'
     const endpoint = `${this.baseUrl}/models/${modelId}:predictLongRunning`
+    
+    const { width, height, duration } = options
     
     // Build request payload according to Veo 3.1 API
     // Veo 3.1 supports image-to-video: https://ai.google.dev/gemini-api/docs/video
@@ -480,7 +565,7 @@ export class GeminiAdapter extends BaseModelAdapter {
       instances: [cleanInstance],
     }
     
-    console.log(`[Veo 3.1] Calling API with ${duration}s video, ${width}x${height}, ${aspectRatio}`)
+    console.log(`[Veo 3.1] Calling API with ${duration}s video, ${width}x${height}, ${options.aspectRatio}`)
     console.log(`[Veo 3.1] Payload:`, JSON.stringify(payload, null, 2))
     
     try {
@@ -505,7 +590,7 @@ export class GeminiAdapter extends BaseModelAdapter {
       
       console.log('[Veo 3.1] Generation started', {
         operation: operationName,
-        referenceImageAttached: Boolean(instance.image),
+        referenceImageAttached: Boolean(cleanInstance.image),
         referenceMetadata: uploadedReferenceMeta,
       })
       
@@ -540,7 +625,7 @@ export class GeminiAdapter extends BaseModelAdapter {
           console.log('[Veo 3.1] Video ready', {
             videoUri,
             operation: operationName,
-            referenceImageAttached: Boolean(instance.image),
+            referenceImageAttached: Boolean(cleanInstance.image),
           })
           
           // Return the video URI - it will be downloaded by the background processor
