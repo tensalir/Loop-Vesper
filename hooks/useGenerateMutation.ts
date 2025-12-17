@@ -162,30 +162,55 @@ export function useGenerateMutation() {
       // If status is 'processing', trigger the background process endpoint from frontend
       // This is a fallback in case the server-side trigger fails (Vercel limitation)
       if (data.status === 'processing') {
-        // Trigger background process after a short delay to ensure generation is in DB
-        setTimeout(() => {
-          console.log(`[${data.id}] Frontend fallback: Triggering background process`)
-          fetch('/api/generate/process', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              generationId: data.id,
-            }),
-          })
-          .then(async (res) => {
-            if (res.ok) {
-              console.log(`[${data.id}] Frontend trigger successful`)
-            } else {
-              const errorText = await res.text()
-              console.warn(`[${data.id}] Frontend trigger failed: ${res.status} ${errorText}`)
+        // Trigger background process with retry logic
+        const triggerWithRetry = async (retries = 3, delay = 500) => {
+          for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+              await new Promise(resolve => setTimeout(resolve, delay * attempt))
+              console.log(`[${data.id}] Frontend fallback: Triggering background process (attempt ${attempt}/${retries})`)
+              
+              const res = await fetch('/api/generate/process', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                credentials: 'include', // Ensure cookies are sent
+                body: JSON.stringify({
+                  generationId: data.id,
+                }),
+              })
+              
+              if (res.ok) {
+                console.log(`[${data.id}] Frontend trigger successful`)
+                return // Success, exit retry loop
+              } else {
+                const errorText = await res.text()
+                console.warn(`[${data.id}] Frontend trigger failed (attempt ${attempt}): ${res.status} ${errorText}`)
+                
+                // If it's a 401, the session might have expired - don't retry
+                if (res.status === 401 && attempt < retries) {
+                  console.error(`[${data.id}] Authentication failed - session may have expired`)
+                  return
+                }
+                
+                // Retry on other errors
+                if (attempt < retries) {
+                  continue
+                }
+              }
+            } catch (err) {
+              console.error(`[${data.id}] Frontend trigger error (attempt ${attempt}):`, err)
+              if (attempt === retries) {
+                console.error(`[${data.id}] All frontend trigger attempts failed`)
+              }
             }
-          })
-          .catch((err) => {
-            console.error(`[${data.id}] Frontend trigger error:`, err)
-          })
-        }, 500) // Wait 500ms for DB to be ready
+          }
+        }
+        
+        // Start the retry process (don't await - fire and forget)
+        triggerWithRetry().catch((err) => {
+          console.error(`[${data.id}] Frontend trigger retry process failed:`, err)
+        })
       }
       
       // Helper to create the updated generation object

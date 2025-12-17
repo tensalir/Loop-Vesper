@@ -489,6 +489,15 @@ export async function POST(request: NextRequest) {
   const internalSecret = request.headers.get('x-internal-secret')
   const expectedSecret = process.env.INTERNAL_API_SECRET
   
+  // Debug: Log auth check details
+  const receivedPreview = internalSecret 
+    ? `${internalSecret.substring(0, 4)}...${internalSecret.substring(internalSecret.length - 4)}`
+    : 'NOT RECEIVED'
+  const expectedPreview = expectedSecret 
+    ? `${expectedSecret.substring(0, 4)}...${expectedSecret.substring(expectedSecret.length - 4)}`
+    : 'NOT SET'
+  console.log(`[process] Auth check - received: ${receivedPreview}, expected: ${expectedPreview}, match: ${internalSecret === expectedSecret}`)
+  
   // If internal secret is provided and matches, skip auth check
   const isInternalCall = internalSecret && expectedSecret && internalSecret === expectedSecret
   
@@ -500,13 +509,22 @@ export async function POST(request: NextRequest) {
       const supabase = createRouteHandlerClient({ cookies })
       const { data: { session }, error: authError } = await supabase.auth.getSession()
       
-      if (authError || !session) {
-        return respond({ error: 'Unauthorized' }, 401)
+      if (authError) {
+        console.error(`[process] Auth error: ${authError.message}`)
+        return respond({ error: 'Unauthorized', details: authError.message }, 401)
       }
-    } catch (authCheckError) {
+      
+      if (!session) {
+        console.warn(`[process] No session found - cookies may not be available`)
+        return respond({ error: 'Unauthorized', details: 'No active session' }, 401)
+      }
+      
+      console.log(`[process] Auth successful - user: ${session.user.id}`)
+    } catch (authCheckError: any) {
       // If auth check fails and no valid internal secret, deny access
+      console.error(`[process] Auth check exception:`, authCheckError?.message || authCheckError)
       if (!isInternalCall) {
-        return respond({ error: 'Unauthorized' }, 401)
+        return respond({ error: 'Unauthorized', details: authCheckError?.message || 'Auth check failed' }, 401)
       }
     }
   }

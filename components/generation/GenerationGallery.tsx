@@ -113,7 +113,7 @@ const ReferenceImageThumbnail = ({ generation }: { generation: GenerationWithOut
 }
 
 interface GenerationGalleryProps {
-  /** 
+  /**
    * All generations to display in a single unified list.
    * Status transitions (processing → completed) happen in-place without moving items.
    */
@@ -125,6 +125,11 @@ interface GenerationGalleryProps {
   onCreateVideoSession?: ((type: 'image' | 'video', name: string) => Promise<Session | null>) | undefined
   currentGenerationType?: 'image' | 'video'
   currentUser?: { displayName: string | null } | null
+  /**
+   * Callback to dismiss/remove a stuck generation from the UI cache.
+   * Used when a generation is stuck and doesn't exist in the database.
+   */
+  onDismissGeneration?: (generationId: string, clientId?: string) => void
 }
 
 export function GenerationGallery({
@@ -136,6 +141,7 @@ export function GenerationGallery({
   onCreateVideoSession,
   currentGenerationType = 'image',
   currentUser,
+  onDismissGeneration,
 }: GenerationGalleryProps) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -458,13 +464,24 @@ export function GenerationGallery({
                         This generation has been processing for {Math.round(ageMinutes)} minutes and appears to be stuck. 
                         The cleanup process will mark it as failed shortly.
                       </p>
-                      <button
-                        onClick={() => onReuseParameters(generation)}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                        Try Again
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => onReuseParameters(generation)}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                          Try Again
+                        </button>
+                        {onDismissGeneration && (
+                          <button
+                            onClick={() => onDismissGeneration(generation.id, generation.clientId)}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 transition-colors text-sm font-medium"
+                          >
+                            <X className="h-4 w-4" />
+                            Dismiss
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ) : (

@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import dynamic from 'next/dynamic'
+import { useQueryClient, InfiniteData } from '@tanstack/react-query'
 import { ChatInput } from './ChatInput'
 import type { Session } from '@/types/project'
 import type { GenerationWithOutputs } from '@/types/generation'
@@ -12,6 +13,12 @@ import { useUIStore } from '@/store/uiStore'
 import { useToast } from '@/components/ui/use-toast'
 import { getAllModels, getModelsByType } from '@/lib/models/registry'
 import { createClient } from '@/lib/supabase/client'
+
+interface PaginatedGenerationsResponse {
+  data: GenerationWithOutputs[]
+  nextCursor?: string
+  hasMore: boolean
+}
 
 const GenerationGallery = dynamic(
   () => import('./GenerationGallery').then((mod) => mod.GenerationGallery),
@@ -48,6 +55,7 @@ export function GenerationInterface({
   onSessionSwitch,
 }: GenerationInterfaceProps) {
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const loadOlderRef = useRef<HTMLDivElement | null>(null) // Sentinel at TOP for loading older items
   const [prompt, setPrompt] = useState('')
@@ -62,6 +70,50 @@ export function GenerationInterface({
   const [showNewItemsIndicator, setShowNewItemsIndicator] = useState(false)
   const previousGenerationsCountRef = useRef(0)
   const scrollHeightBeforeLoadRef = useRef<number | null>(null)
+  
+  /**
+   * Dismiss/remove a stuck generation from the UI cache.
+   * Used when a generation is stuck in 'processing' state but doesn't exist in the database.
+   */
+  const handleDismissGeneration = useCallback((generationId: string, clientId?: string) => {
+    console.log('Dismissing stuck generation:', generationId, clientId)
+    
+    // Remove from regular generations cache
+    queryClient.setQueryData<GenerationWithOutputs[]>(
+      ['generations', session?.id],
+      (old) => {
+        if (!old) return []
+        return old.filter(gen => 
+          gen.id !== generationId && 
+          (!clientId || gen.clientId !== clientId)
+        )
+      }
+    )
+    
+    // Remove from infinite generations cache
+    queryClient.setQueryData(
+      ['generations', 'infinite', session?.id],
+      (old: InfiniteData<PaginatedGenerationsResponse> | undefined) => {
+        if (!old) return undefined
+        
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            data: page.data.filter(gen => 
+              gen.id !== generationId && 
+              (!clientId || gen.clientId !== clientId)
+            ),
+          })),
+        }
+      }
+    )
+    
+    toast({
+      title: 'Generation dismissed',
+      description: 'The stuck generation has been removed from the view.',
+    })
+  }, [queryClient, session?.id, toast])
   
   // Get current user for realtime subscriptions
   useEffect(() => {
@@ -589,6 +641,7 @@ export function GenerationInterface({
                 onCreateVideoSession={onSessionCreate}
                 currentGenerationType={generationType}
                 currentUser={currentUser}
+                onDismissGeneration={handleDismissGeneration}
               />
             </div>
           </div>
