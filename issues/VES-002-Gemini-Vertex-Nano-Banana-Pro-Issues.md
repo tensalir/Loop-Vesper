@@ -97,8 +97,25 @@ Key log evidence:
 * `3995b76` - Add debug logging for resolution and reference image issues
 * `dee155c` - Fix: Use correct 'image_input' parameter for Nano Banana Pro on Replicate
 
+## Update (Dec 17, 2025): Temporary Direct Replicate Mode
+
+Due to persistent issues with Vertex AI (404) and Gemini API (quota 0), we've temporarily configured Nano Banana Pro to **skip** Vertex AI and Gemini API entirely and go directly to Replicate.
+
+### Changes Made:
+1. **`USE_REPLICATE_DIRECTLY = true`** in `lib/models/adapters/gemini.ts`
+2. **`vercel.json`** added with `maxDuration: 300` (5 min timeout) for `/api/generate/process`
+3. **Increased polling timeout** from 5 min to 10 min (matching Seedream adapter)
+
+### To Re-enable Vertex AI/Gemini:
+Set `USE_REPLICATE_DIRECTLY = false` in `lib/models/adapters/gemini.ts` once quota/access is restored.
+
+### Additional Commits:
+* `255222d` - Temp: Use Replicate directly for Nano Banana Pro
+* `17a4c71` - Fix: Increase function timeout for generation processing
+
 ## Notes
 
 - Vertex AI SDK still returns 404 for `gemini-3-pro-image-preview` (Google hasn't made it available yet)
 - Gemini API (AI Studio) has quota limits that reset daily
 - Replicate fallback is paid-per-use but works reliably with reference images
+- **Important**: Vercel Pro plan required for 300s timeout (Hobby is limited to 10s)
