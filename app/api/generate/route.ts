@@ -181,20 +181,9 @@ export async function POST(request: NextRequest) {
     if (!GENERATION_QUEUE_ENABLED) {
       // Trigger background processing asynchronously (fire and forget)
       // Don't await - this allows us to return immediately
-      // Use retry logic for serverless environments where internal fetches can fail
-      // In Vercel, use VERCEL_URL for internal calls, but ensure it has protocol
-      let baseUrl: string
-      if (process.env.VERCEL_URL) {
-        baseUrl = process.env.VERCEL_URL.startsWith('http') 
-          ? process.env.VERCEL_URL 
-          : `https://${process.env.VERCEL_URL}`
-      } else if (process.env.NEXT_PUBLIC_VERCEL_URL) {
-        baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL.startsWith('http')
-          ? process.env.NEXT_PUBLIC_VERCEL_URL
-          : `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-      } else {
-        baseUrl = request.nextUrl.origin
-      }
+      // TIER 2 FIX: Use request origin as default to avoid URL mismatches with custom domains
+      // This prevents redirects that can strip headers and cause 401 errors
+      const baseUrl = request.nextUrl.origin
       
       console.log(`[${generation.id}] Triggering background process at: ${baseUrl}/api/generate/process`)
       
@@ -202,11 +191,7 @@ export async function POST(request: NextRequest) {
         for (let i = 0; i < retries; i++) {
           try {
             const processUrl = `${baseUrl}/api/generate/process`
-            console.log(`[${generation.id}] Attempt ${i + 1}: Calling ${processUrl}`)
-            
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H1',location:'app/api/generate/route.ts:triggerProcessing',message:'internal trigger fetch',data:{generationId:generation.id,baseUrl,processUrl,hasInternalApiSecret:Boolean(process.env.INTERNAL_API_SECRET)},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
+            console.log(`[${generation.id}] Attempt ${i + 1}/${retries}: Calling ${processUrl}`)
             
             // Debug: Log whether secret is available
             const hasSecret = Boolean(process.env.INTERNAL_API_SECRET)
@@ -228,7 +213,20 @@ export async function POST(request: NextRequest) {
                 generationId: generation.id,
               }),
               signal: AbortSignal.timeout(10000),
+              // Detect unexpected redirects instead of silently following them
+              redirect: 'manual',
             })
+            
+            // Check for redirects (which can strip headers and cause auth failures)
+            if (response.status >= 300 && response.status < 400) {
+              const location = response.headers.get('location')
+              console.warn(`[${generation.id}] Unexpected redirect: ${response.status} -> ${location}`)
+              // Treat redirect as failure and retry
+              if (i < retries - 1) {
+                await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)))
+                continue
+              }
+            }
             
             console.log(`[${generation.id}] Response status: ${response.status} ${response.statusText}`)
             
@@ -247,14 +245,49 @@ export async function POST(request: NextRequest) {
               return
             }
             
+            // TIER 1 FIX: Handle non-OK responses (like 401) - don't just silently exit
+            // A 401 is a normal HTTP response, not an exception, so we must handle it explicitly
+            const errorText = await response.text().catch(() => '')
+            console.warn(`[${generation.id}] Trigger failed: ${response.status} ${response.statusText} ${errorText}`)
+            
             if (i < retries - 1) {
+              // Not last attempt - wait and retry
               await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)))
               continue
             }
+            
+            // TIER 1 FIX: Last attempt with non-OK response - mark generation as FAILED
+            // This prevents "stuck forever" in processing state
+            console.error(`[${generation.id}] All ${retries} retries exhausted with non-OK response, marking generation as failed`)
+            await prisma.generation.update({
+              where: { id: generation.id },
+              data: { 
+                status: 'failed',
+                parameters: {
+                  ...generationParameters,
+                  error: `Failed to trigger processing: ${response.status} ${response.statusText}`,
+                  triggerErrorText: errorText?.slice(0, 1000),
+                }
+              },
+            }).catch(console.error)
+            
+            try {
+              const existing = await prisma.generation.findUnique({ where: { id: generation.id } })
+              const prev = (existing?.parameters as any) || {}
+              const logs = Array.isArray(prev.debugLogs) ? prev.debugLogs : []
+              logs.push({ at: new Date().toISOString(), step: 'process:trigger-failed-http', status: response.status, error: errorText?.slice(0, 200) })
+              await prisma.generation.update({
+                where: { id: generation.id },
+                data: { parameters: { ...prev, debugLogs: logs.slice(-100), lastStep: 'process:trigger-failed-http' } },
+              })
+            } catch (_) {}
+            return // Exit after marking failed
+            
           } catch (error: any) {
+            // This catches network errors, timeouts, etc. (not HTTP error responses)
             const errorMessage = error.message || error.toString()
             const errorName = error.name || 'Unknown'
-            console.error(`[${generation.id}] Background processing trigger attempt ${i + 1} failed:`, {
+            console.error(`[${generation.id}] Background processing trigger attempt ${i + 1} failed (exception):`, {
               error: errorMessage,
               name: errorName,
               stack: error.stack,
@@ -262,14 +295,14 @@ export async function POST(request: NextRequest) {
             })
             
             if (i === retries - 1) {
-              console.error(`[${generation.id}] All retries exhausted, marking generation as failed`)
+              console.error(`[${generation.id}] All retries exhausted (exception), marking generation as failed`)
               await prisma.generation.update({
                 where: { id: generation.id },
                 data: { 
                   status: 'failed',
                   parameters: {
                     ...generationParameters,
-                    error: 'Failed to start background processing after retries',
+                    error: `Failed to start background processing: ${errorMessage}`,
                   }
                 },
               }).catch(console.error)
@@ -277,10 +310,10 @@ export async function POST(request: NextRequest) {
                 const existing = await prisma.generation.findUnique({ where: { id: generation.id } })
                 const prev = (existing?.parameters as any) || {}
                 const logs = Array.isArray(prev.debugLogs) ? prev.debugLogs : []
-                logs.push({ at: new Date().toISOString(), step: 'process:trigger-failed', error: error?.message })
+                logs.push({ at: new Date().toISOString(), step: 'process:trigger-failed-exception', error: errorMessage })
                 await prisma.generation.update({
                   where: { id: generation.id },
-                  data: { parameters: { ...prev, debugLogs: logs.slice(-100), lastStep: 'process:trigger-failed' } },
+                  data: { parameters: { ...prev, debugLogs: logs.slice(-100), lastStep: 'process:trigger-failed-exception' } },
                 })
               } catch (_) {}
             } else {
