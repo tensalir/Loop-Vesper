@@ -921,37 +921,37 @@ export class GeminiAdapter extends BaseModelAdapter {
       console.log(`[Veo 3.1] No reference image provided, generating text-to-video`)
     }
     
-    // Build clean instance object - only include prompt and image if provided
-    // According to Veo 3.1 API docs, reference images should use inline base64 data, not fileUri
-    // Format: referenceImages array with inline base64 encoded images
+    // Build instance object according to Veo 3.1 API docs
+    // https://ai.google.dev/gemini-api/docs/video
     const cleanInstance: any = {
       prompt: instance.prompt,
     }
     
-    // Only add reference images if we have image data
-    // Veo 3.1 requires inline base64 data, not fileUri (fileUri is not supported)
+    // For image-to-video, use 'image' parameter directly (not referenceImages)
+    // referenceImages is for style/content guidance with up to 3 images
     if (imageBytes) {
-      // Convert image bytes to base64
       const base64Image = imageBytes.toString('base64')
-      
-      // Veo 3.1 expects referenceImages array with inline base64 data
-      cleanInstance.referenceImages = [
-        {
-          image: {
-            bytesBase64Encoded: base64Image,
-            mimeType: contentType,
-          },
-          referenceType: 'asset',
-        },
-      ]
-      console.log(`[Veo 3.1] Added reference image with inline base64 data (${base64Image.length} chars, ${contentType})`)
+      // Image-to-video uses direct 'image' field in instance
+      cleanInstance.image = {
+        bytesBase64Encoded: base64Image,
+        mimeType: contentType,
+      }
+      console.log(`[Veo 3.1] Added starting frame image (${base64Image.length} chars, ${contentType})`)
     }
     
-    const payload = {
+    // Build payload with separate 'parameters' object (per REST API docs)
+    const payload: any = {
       instances: [cleanInstance],
+      parameters: {
+        aspectRatio: options.aspectRatio,
+        // Resolution must be "720p" or "1080p" (string), not number
+        resolution: options.resolution === 1080 ? '1080p' : '720p',
+        // Duration in seconds as string
+        durationSeconds: String(duration),
+      },
     }
     
-    console.log(`[Veo 3.1] Calling API with ${duration}s video, ${width}x${height}, ${options.aspectRatio}`)
+    console.log(`[Veo 3.1] Calling API with ${duration}s video, ${options.resolution}p, ${options.aspectRatio}`)
     console.log(`[Veo 3.1] Payload (redacted):`, JSON.stringify(redactLargeStrings(payload), null, 2))
     
     try {
@@ -1102,10 +1102,10 @@ export const VEO_3_1_CONFIG: ModelConfig = {
   name: 'Veo 3.1',
   provider: 'Google',
   type: 'video',
-  description: 'State-of-the-art video generation with native audio support, frame-specific generation, and video extension',
+  description: 'State-of-the-art video generation with native audio and natively generated sound',
   defaultAspectRatio: '16:9',
-  // Veo 3.1 officially supports: 16:9, 9:16, and 1:1
-  supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  // Veo 3.1 officially supports: 16:9 and 9:16 only (per docs)
+  supportedAspectRatios: ['16:9', '9:16'],
   maxResolution: 1080,
   capabilities: {
     'text-2-video': true,
