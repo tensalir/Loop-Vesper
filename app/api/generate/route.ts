@@ -180,9 +180,9 @@ export async function POST(request: NextRequest) {
 
     if (!GENERATION_QUEUE_ENABLED) {
       // Trigger background processing asynchronously (fire and forget)
-      // Don't await - this allows us to return immediately
+      // IMPORTANT: The process endpoint takes 30-60+ seconds to complete (Replicate polling)
+      // We should NOT wait for completion - just verify the request was accepted
       // TIER 2 FIX: Use request origin as default to avoid URL mismatches with custom domains
-      // This prevents redirects that can strip headers and cause 401 errors
       const baseUrl = request.nextUrl.origin
       
       console.log(`[${generation.id}] Triggering background process at: ${baseUrl}/api/generate/process`)
@@ -200,22 +200,31 @@ export async function POST(request: NextRequest) {
               : 'NOT SET'
             console.log(`[${generation.id}] Internal secret available: ${hasSecret}, preview: ${secretPreview}`)
             
-            const response = await fetch(processUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                // Add internal secret for server-to-server calls
-                ...(process.env.INTERNAL_API_SECRET && {
-                  'x-internal-secret': process.env.INTERNAL_API_SECRET,
+            // Use AbortController so we can handle timeout gracefully
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 10000)
+            
+            let response: Response
+            try {
+              response = await fetch(processUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  // Add internal secret for server-to-server calls
+                  ...(process.env.INTERNAL_API_SECRET && {
+                    'x-internal-secret': process.env.INTERNAL_API_SECRET,
+                  }),
+                },
+                body: JSON.stringify({
+                  generationId: generation.id,
                 }),
-              },
-              body: JSON.stringify({
-                generationId: generation.id,
-              }),
-              signal: AbortSignal.timeout(10000),
-              // Detect unexpected redirects instead of silently following them
-              redirect: 'manual',
-            })
+                signal: controller.signal,
+                // Detect unexpected redirects instead of silently following them
+                redirect: 'manual',
+              })
+            } finally {
+              clearTimeout(timeoutId)
+            }
             
             // Check for redirects (which can strip headers and cause auth failures)
             if (response.status >= 300 && response.status < 400) {
@@ -287,6 +296,32 @@ export async function POST(request: NextRequest) {
             // This catches network errors, timeouts, etc. (not HTTP error responses)
             const errorMessage = error.message || error.toString()
             const errorName = error.name || 'Unknown'
+            const isTimeout = errorName === 'AbortError' || errorMessage.includes('abort') || errorMessage.includes('timeout')
+            
+            if (isTimeout) {
+              // IMPORTANT: Timeout does NOT mean failure!
+              // The process endpoint takes 30-60+ seconds to complete.
+              // If we timed out, the request was likely received and is processing.
+              // The frontend fallback and realtime subscriptions will handle completion.
+              console.log(`[${generation.id}] Trigger timed out waiting for response - this is NORMAL`)
+              console.log(`[${generation.id}] Processing is likely running. Frontend fallback will also trigger.`)
+              
+              try {
+                const existing = await prisma.generation.findUnique({ where: { id: generation.id } })
+                const prev = (existing?.parameters as any) || {}
+                const logs = Array.isArray(prev.debugLogs) ? prev.debugLogs : []
+                logs.push({ at: new Date().toISOString(), step: 'process:trigger-timeout-expected', note: 'Request likely received, processing continues' })
+                await prisma.generation.update({
+                  where: { id: generation.id },
+                  data: { parameters: { ...prev, debugLogs: logs.slice(-100), lastStep: 'process:trigger-timeout-expected' } },
+                })
+              } catch (_) {}
+              
+              // Do NOT mark as failed - let processing continue
+              return
+            }
+            
+            // Non-timeout exception (network error, etc.)
             console.error(`[${generation.id}] Background processing trigger attempt ${i + 1} failed (exception):`, {
               error: errorMessage,
               name: errorName,
