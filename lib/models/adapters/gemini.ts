@@ -944,10 +944,10 @@ export class GeminiAdapter extends BaseModelAdapter {
       instances: [cleanInstance],
       parameters: {
         aspectRatio: options.aspectRatio,
-        // Resolution must be "720p" or "1080p" (string), not number
+        // Resolution must be "720p" or "1080p" (string)
         resolution: options.resolution === 1080 ? '1080p' : '720p',
-        // Duration in seconds as string
-        durationSeconds: String(duration),
+        // Duration in seconds as number (not string!)
+        durationSeconds: duration,
       },
     }
     
