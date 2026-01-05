@@ -33,6 +33,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# prisma
-prisma/migrations
+# prisma - migrations are now version controlled
+# prisma/migrations
 

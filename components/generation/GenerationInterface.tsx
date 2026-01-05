@@ -150,12 +150,6 @@ export function GenerationInterface({
   // Flatten all pages into a single array
   const generations = infiniteData?.pages.flatMap((page) => page.data) || []
   
-  console.log('🟢 Generations from infinite query:', generations.length)
-  if (generations.length > 0) {
-    console.log('🟢 Sample generation:', { id: generations[0].id, status: generations[0].status, outputs: (generations[0].outputs || []).length })
-    console.log('🟢 All generation statuses:', generations.map(g => ({ id: g.id, status: g.status })))
-  }
-  
   // Subscribe to real-time updates
   useGenerationsRealtime(session?.id || null, userId)
   
@@ -480,12 +474,10 @@ export function GenerationInterface({
     })
     
     // Reuse reference images
-    let hasRefImages = false
     if (generationType === 'video') {
       // For video: use referenceImageUrl (single image or begin frame)
       if (genParams.referenceImageUrl) {
         setReferenceImageUrl(genParams.referenceImageUrl)
-        hasRefImages = true
       } else if (genParams.referenceImageId) {
         // If we only have an ID, construct the public URL
         // Reference images are stored in generated-images bucket
@@ -495,7 +487,6 @@ export function GenerationInterface({
           .getPublicUrl(`references/${generation.userId}/${genParams.referenceImageId}.jpg`)
         if (publicUrl) {
           setReferenceImageUrl(publicUrl)
-          hasRefImages = true
         }
       }
       // TODO: Handle beginFrame and endFrame when implemented
@@ -531,18 +522,8 @@ export function GenerationInterface({
       
       if (urls.length > 0) {
         setReferenceImageUrls(urls)
-        hasRefImages = true
       }
     }
-    
-    // Show toast to confirm
-    toast({
-      title: "Parameters reused",
-      description: hasRefImages 
-        ? "Prompt, settings, and reference images have been loaded."
-        : "Prompt and settings have been loaded. You can now modify and regenerate.",
-      variant: "default",
-    })
   }
 
   const handleConvertToVideo = async (generation: GenerationWithOutputs, videoSessionId: string, imageUrl?: string) => {
@@ -642,6 +623,7 @@ export function GenerationInterface({
                 currentGenerationType={generationType}
                 currentUser={currentUser}
                 onDismissGeneration={handleDismissGeneration}
+                scrollContainerRef={scrollContainerRef}
               />
             </div>
           </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 
 interface GenerationProgressProps {
   estimatedTime?: number // in seconds
@@ -9,66 +9,83 @@ interface GenerationProgressProps {
   isVideo?: boolean
 }
 
-// Generation stages with approximate durations
+// Generation stages with cumulative thresholds (percentage of total time)
 const GENERATION_STAGES = [
-  { name: 'Initializing models', duration: 0.15 }, // 15% of total time
-  { name: 'Processing prompt', duration: 0.25 }, // 25% of total time
-  { name: 'Generating frames', duration: 0.45 }, // 45% of total time
-  { name: 'Finalizing output', duration: 0.15 }, // 15% of total time
+  { name: 'Initializing models', threshold: 0.15 }, // 0-15%
+  { name: 'Processing prompt', threshold: 0.40 }, // 15-40%
+  { name: 'Generating frames', threshold: 0.85 }, // 40-85%
+  { name: 'Finalizing output', threshold: 1.0 }, // 85-100%
 ]
 
-export function GenerationProgress({ 
-  estimatedTime = 30, 
-  onComplete, 
-  aspectRatio = '1:1',
-  isVideo = false 
-}: GenerationProgressProps) {
-  const [progress, setProgress] = useState(0)
-  const [elapsed, setElapsed] = useState(0)
-  const [currentStage, setCurrentStage] = useState(0)
+// CSS keyframe animation circumference calculation
+// Circle radius = 42, circumference = 2 * PI * 42 ≈ 263.89
+const CIRCUMFERENCE = 2 * Math.PI * 42
 
+export function GenerationProgress({
+  estimatedTime = 30,
+  onComplete,
+  aspectRatio = '1:1',
+  isVideo = false,
+}: GenerationProgressProps) {
+  // Track start time for stage calculation (much slower update rate)
+  const [startTime] = useState(() => Date.now())
+  const [stageIndex, setStageIndex] = useState(0)
+  const [displayProgress, setDisplayProgress] = useState(0)
+
+  // Update stage text and display progress on a slow interval (every 2 seconds)
+  // This is only for the text - the circle animation is pure CSS
   useEffect(() => {
-    const startTime = Date.now()
-    
     const interval = setInterval(() => {
       const elapsedSeconds = (Date.now() - startTime) / 1000
-      setElapsed(elapsedSeconds)
+      const progressRatio = Math.min(elapsedSeconds / estimatedTime, 0.95)
       
-      // Calculate progress
-      const calculatedProgress = Math.min(
-        (elapsedSeconds / estimatedTime) * 95, // Cap at 95% until complete
-        95
-      )
-      
-      setProgress(calculatedProgress)
+      // Update display percentage (for the center text)
+      setDisplayProgress(Math.round(progressRatio * 100))
 
-      // Determine current stage
-      let cumulativeDuration = 0
+      // Determine current stage based on elapsed time
       for (let i = 0; i < GENERATION_STAGES.length; i++) {
-        cumulativeDuration += GENERATION_STAGES[i].duration
-        if (calculatedProgress / 100 < cumulativeDuration) {
-          setCurrentStage(i)
+        if (progressRatio < GENERATION_STAGES[i].threshold) {
+          setStageIndex(i)
           break
         }
       }
-    }, 100)
+    }, 2000) // Update every 2 seconds (was 100ms)
 
     return () => clearInterval(interval)
-  }, [estimatedTime])
+  }, [startTime, estimatedTime])
 
   const getAspectRatioStyle = (ratio: string) => {
     return ratio.replace(':', ' / ')
   }
 
-  const remaining = Math.max(0, estimatedTime - elapsed)
-  const remainingMinutes = Math.floor(remaining / 60)
-  const remainingSeconds = Math.ceil(remaining % 60)
+  // Memoize the animation duration style
+  const animationStyle = useMemo(
+    () => ({
+      // Animate from full circumference (0%) to 5% remaining (95% progress)
+      strokeDasharray: CIRCUMFERENCE,
+      strokeDashoffset: CIRCUMFERENCE,
+      animation: `progress-fill ${estimatedTime}s ease-out forwards`,
+    }),
+    [estimatedTime]
+  )
 
   return (
-    <div 
+    <div
       className="relative bg-gradient-to-br from-muted/30 to-muted/10 rounded-xl overflow-hidden border border-border/50"
       style={{ aspectRatio: getAspectRatioStyle(aspectRatio) }}
     >
+      {/* CSS Keyframe animation */}
+      <style jsx>{`
+        @keyframes progress-fill {
+          from {
+            stroke-dashoffset: ${CIRCUMFERENCE};
+          }
+          to {
+            stroke-dashoffset: ${CIRCUMFERENCE * 0.05};
+          }
+        }
+      `}</style>
+
       {/* Main content */}
       <div className="absolute inset-0 flex flex-col items-center justify-center p-8">
         {/* Simple circular progress indicator */}
@@ -85,7 +102,7 @@ export function GenerationProgress({
               className="text-muted-foreground/20"
               strokeLinecap="round"
             />
-            {/* Progress circle */}
+            {/* Progress circle - CSS animated */}
             <circle
               cx="48"
               cy="48"
@@ -93,23 +110,21 @@ export function GenerationProgress({
               stroke="currentColor"
               strokeWidth="6"
               fill="none"
-              strokeDasharray={`${2 * Math.PI * 42}`}
-              strokeDashoffset={`${2 * Math.PI * 42 * (1 - progress / 100)}`}
-              className="text-primary transition-all duration-300"
+              className="text-primary"
               strokeLinecap="round"
+              style={animationStyle}
             />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center text-lg font-semibold text-primary">
-            {Math.round(progress)}%
+            {displayProgress}%
           </div>
         </div>
 
         {/* Stage text below */}
         <p className="text-sm text-muted-foreground mt-4">
-          {GENERATION_STAGES[currentStage]?.name || 'Processing...'}
+          {GENERATION_STAGES[stageIndex]?.name || 'Processing...'}
         </p>
       </div>
     </div>
   )
 }
-

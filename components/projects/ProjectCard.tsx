@@ -173,10 +173,10 @@ export function ProjectCard({ project, currentUserId, onProjectUpdate }: Project
 
       if (response.ok) {
         toast({
-          title: displayProject.isShared ? 'Project set to private' : 'Project shared',
+          title: displayProject.isShared ? 'Project set to private' : 'Sharing enabled',
           description: displayProject.isShared
             ? 'Only you can see this project now'
-            : 'Other users can now see this project',
+            : 'Invited members can now view this project',
           variant: 'default',
         })
         // Trigger refetch with cache bypass to get fresh data
@@ -277,7 +277,7 @@ export function ProjectCard({ project, currentUserId, onProjectUpdate }: Project
                 onClick={handleTogglePrivacy}
                 disabled={updating}
                 className="bg-background/90 backdrop-blur-sm rounded-full p-1 flex items-center gap-0.5 hover:bg-background/95 transition-all relative"
-                title={displayProject.isShared ? 'Click to make private' : 'Click to make shared'}
+                title={displayProject.isShared ? 'Click to make private' : 'Click to enable sharing (invited members can view)'}
               >
                 {/* Lock Icon - Left */}
                 <div className={`p-1.5 rounded-full transition-all z-10 ${

@@ -8,16 +8,26 @@ export async function getProjects(): Promise<Project[]> {
   return response.json()
 }
 
+interface ProjectsWithThumbnailsResponse {
+  data: Project[]
+  nextCursor: string | null
+  hasMore: boolean
+}
+
 export async function getProjectsWithThumbnails(): Promise<Project[]> {
   const response = await fetch('/api/projects/with-thumbnails')
   if (!response.ok) {
     throw new Error('Failed to fetch projects with thumbnails')
   }
-  return response.json()
+  const json = await response.json() as ProjectsWithThumbnailsResponse
+  return json.data
 }
 
-export async function getProject(id: string): Promise<ProjectWithSessions> {
-  const response = await fetch(`/api/projects/${id}`)
+export async function getProject(id: string, includeSessions = false): Promise<ProjectWithSessions> {
+  const url = includeSessions 
+    ? `/api/projects/${id}?includeSessions=1` 
+    : `/api/projects/${id}`
+  const response = await fetch(url)
   if (!response.ok) {
     throw new Error('Failed to fetch project')
   }

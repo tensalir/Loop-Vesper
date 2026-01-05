@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import Image from 'next/image'
 import { Download, RotateCcw, Info, Copy, Bookmark, Check, Video, Wand2, X } from 'lucide-react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import type { GenerationWithOutputs } from '@/types/generation'
 import type { Session } from '@/types/project'
 import { useUpdateOutputMutation } from '@/hooks/useOutputMutations'
@@ -130,6 +131,11 @@ interface GenerationGalleryProps {
    * Used when a generation is stuck and doesn't exist in the database.
    */
   onDismissGeneration?: (generationId: string, clientId?: string) => void
+  /**
+   * Reference to the scroll container element for virtualization.
+   * Required for TanStack Virtual to work correctly.
+   */
+  scrollContainerRef?: React.RefObject<HTMLDivElement>
 }
 
 export function GenerationGallery({
@@ -142,6 +148,7 @@ export function GenerationGallery({
   currentGenerationType = 'image',
   currentUser,
   onDismissGeneration,
+  scrollContainerRef,
 }: GenerationGalleryProps) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -154,6 +161,14 @@ export function GenerationGallery({
   const [videoSelectorOpen, setVideoSelectorOpen] = useState(false)
   const [selectedGeneration, setSelectedGeneration] = useState<GenerationWithOutputs | null>(null)
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null)
+
+  // Virtualizer for efficient rendering of large lists
+  const virtualizer = useVirtualizer({
+    count: generations.length,
+    getScrollElement: () => scrollContainerRef?.current ?? null,
+    estimateSize: () => 400, // Estimated row height in pixels
+    overscan: 5, // Render 5 extra items above/below viewport for smooth scrolling
+  })
 
   // Convert aspect ratio string to CSS aspect-ratio value
   const getAspectRatioStyle = (aspectRatio?: string) => {
@@ -329,18 +344,47 @@ export function GenerationGallery({
   // Get stable key for React - prefer clientId, fallback to id
   const getStableKey = (gen: GenerationWithOutputs) => gen.clientId || gen.id
 
+  // If no scroll container ref provided, fall back to non-virtualized rendering
+  const useVirtualization = !!scrollContainerRef?.current && generations.length > 10
+
   return (
     <>
-      <div className="space-y-6 pb-4">
+      <div 
+        className="pb-4"
+        style={useVirtualization ? {
+          height: `${virtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        } : undefined}
+      >
         {/* Single unified list - status transitions happen in-place */}
-        {generations.map((generation) => {
+        {(useVirtualization ? virtualizer.getVirtualItems() : generations.map((_, i) => ({ index: i, start: 0, size: 0 }))).map((virtualRow) => {
+          const generation = generations[virtualRow.index]
+          if (!generation) return null
+          
           const isVideo = isVideoGeneration(generation)
           const stableKey = getStableKey(generation)
+          
+          // Wrapper for virtualized positioning
+          const rowStyle = useVirtualization ? {
+            position: 'absolute' as const,
+            top: 0,
+            left: 0,
+            width: '100%',
+            transform: `translateY(${virtualRow.start}px)`,
+          } : undefined
           
           // Cancelled generation layout
           if (generation.status === 'cancelled') {
             return (
-              <div key={stableKey} className="flex gap-6 items-start">
+              <div 
+                key={stableKey} 
+                ref={useVirtualization ? virtualizer.measureElement : undefined}
+                data-index={virtualRow.index}
+                style={rowStyle}
+                className="pb-6"
+              >
+              <div className="flex gap-6 items-start">
                 {/* Left Side: Prompt Display with Cancelled State */}
                 <div className="w-96 flex-shrink-0 bg-muted/30 rounded-xl p-6 border border-destructive/50 flex flex-col relative" style={{ minHeight: '256px' }}>
                   <div className="absolute top-2 left-2 px-2 py-1 bg-destructive/20 text-destructive text-xs font-medium rounded z-10">
@@ -378,6 +422,7 @@ export function GenerationGallery({
                   </div>
                 </div>
               </div>
+              </div>
             )
           }
           
@@ -395,7 +440,14 @@ export function GenerationGallery({
             const isStuck = ageMinutes > 2
             
             return (
-              <div key={stableKey} className="flex gap-6 items-start">
+              <div 
+                key={stableKey} 
+                ref={useVirtualization ? virtualizer.measureElement : undefined}
+                data-index={virtualRow.index}
+                style={rowStyle}
+                className="pb-6"
+              >
+              <div className="flex gap-6 items-start">
                 {/* Left Side: Prompt and metadata */}
                 <div className={`w-96 flex-shrink-0 bg-muted/30 rounded-xl p-6 border flex flex-col relative group ${
                   isStuck
@@ -497,6 +549,7 @@ export function GenerationGallery({
                   </div>
                 )}
               </div>
+              </div>
             )
           }
           
@@ -504,7 +557,14 @@ export function GenerationGallery({
           if (generation.status === 'failed') {
             const errorMessage = (generation.parameters as any)?.error || 'Generation failed'
             return (
-              <div key={stableKey} className="flex gap-6 items-start">
+              <div 
+                key={stableKey} 
+                ref={useVirtualization ? virtualizer.measureElement : undefined}
+                data-index={virtualRow.index}
+                style={rowStyle}
+                className="pb-6"
+              >
+              <div className="flex gap-6 items-start">
                 {/* Left Side: Prompt Display with Error State */}
                 <div className="w-96 flex-shrink-0 bg-destructive/10 rounded-xl p-6 border border-destructive/50 flex flex-col" style={{ minHeight: '320px' }}>
                   <div className="flex-1 overflow-hidden hover:overflow-y-auto transition-all group relative" style={{ maxHeight: '200px' }}>
@@ -551,13 +611,21 @@ export function GenerationGallery({
                   </div>
                 </div>
               </div>
+              </div>
             )
           }
           
           // Video layout: mirror image layout → prompt on the left, video on the right
           if (isVideo) {
             return (
-              <div key={stableKey} className="flex gap-6 items-start">
+              <div 
+                key={stableKey} 
+                ref={useVirtualization ? virtualizer.measureElement : undefined}
+                data-index={virtualRow.index}
+                style={rowStyle}
+                className="pb-6"
+              >
+              <div className="flex gap-6 items-start">
                 {/* Left Side: Prompt Display - same styling as images */}
                 <div className="w-96 flex-shrink-0 bg-muted/30 rounded-xl p-6 border border-border/50 flex flex-col" style={{ minHeight: '320px' }}>
                   <div className="flex-1 overflow-hidden hover:overflow-y-auto transition-all group relative" style={{ maxHeight: '200px' }}>
@@ -683,12 +751,20 @@ export function GenerationGallery({
                   )}
                 </div>
               </div>
+              </div>
             )
           }
 
           // Image layout: Original layout with prompt on left (completed status)
           return (
-            <div key={stableKey} className="flex gap-6 items-start">
+            <div 
+              key={stableKey} 
+              ref={useVirtualization ? virtualizer.measureElement : undefined}
+              data-index={virtualRow.index}
+              style={rowStyle}
+              className="pb-6"
+            >
+            <div className="flex gap-6 items-start">
               {/* Left Side: Prompt Display - Increased Height with Scroll on Hover */}
               <div className="w-96 flex-shrink-0 bg-muted/30 rounded-xl p-6 border border-border/50 flex flex-col" style={{ minHeight: '320px' }}>
                 <div className="flex-1 overflow-hidden hover:overflow-y-auto transition-all group relative" style={{ maxHeight: '200px' }}>
@@ -839,6 +915,7 @@ export function GenerationGallery({
             })}
           </div>
         </div>
+          </div>
           )
         })}
 

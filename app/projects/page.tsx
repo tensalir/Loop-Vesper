@@ -4,18 +4,18 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Plus, LogOut, Settings, Sun, Moon, Bookmark } from 'lucide-react'
 import { SpendingTracker } from '@/components/navbar/SpendingTracker'
 import { ProjectGrid } from '@/components/projects/ProjectGrid'
 import { NewProjectDialog } from '@/components/projects/NewProjectDialog'
+import { useProjects } from '@/hooks/useProjects'
 import type { Project } from '@/types/project'
 
 type TabType = 'briefings' | 'projects' | 'review'
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [loading, setLoading] = useState(true)
   const [showNewProject, setShowNewProject] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -23,6 +23,10 @@ export default function ProjectsPage() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const router = useRouter()
   const supabase = createClient()
+  const queryClient = useQueryClient()
+
+  // Use React Query for projects with caching
+  const { data: projects = [], isLoading: loading, refetch } = useProjects()
 
   // Initialize theme from localStorage
   useEffect(() => {
@@ -40,18 +44,12 @@ export default function ProjectsPage() {
     document.documentElement.classList.toggle('dark', newTheme === 'dark')
   }
 
+  // Initialize user and admin check
   useEffect(() => {
-    fetchProjects()
-  }, [])
-
-  const fetchProjects = async () => {
-    try {
+    const initUser = async () => {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       
-      console.log('Auth check:', { user: user?.id, authError })
-      
       if (authError || !user) {
-        console.log('No user, redirecting to login')
         router.push('/login')
         return
       }
@@ -64,43 +62,10 @@ export default function ProjectsPage() {
         const profile = await profileResponse.json()
         setIsAdmin(profile.role === 'admin')
       }
-
-      // Use optimized endpoint with thumbnails - bypass cache to get fresh data
-      console.log('Fetching projects with thumbnails from API...')
-      const response = await fetch('/api/projects/with-thumbnails', {
-        cache: 'no-store', // Always fetch fresh data to avoid stale cache
-      })
-      
-      console.log('API response status:', response.status)
-      
-      if (response.ok) {
-        const fetchedProjects = await response.json()
-        console.log('Fetched projects with thumbnails:', fetchedProjects)
-        
-        // Parse dates from strings to Date objects
-        const parsedProjects = fetchedProjects.map((p: any) => ({
-          ...p,
-          createdAt: new Date(p.createdAt),
-          updatedAt: new Date(p.updatedAt),
-        }))
-        
-        setProjects(parsedProjects)
-      } else {
-        const errorData = await response.json()
-        console.error('Failed to fetch projects:', response.status, errorData)
-        
-        // If unauthorized, redirect to login
-        if (response.status === 401) {
-          router.push('/login')
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching projects:', error)
-    } finally {
-      console.log('Setting loading to false')
-      setLoading(false)
     }
-  }
+
+    initUser()
+  }, [router, supabase])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -108,8 +73,14 @@ export default function ProjectsPage() {
   }
 
   const handleProjectCreated = (project: Project) => {
-    setProjects([project, ...projects])
+    // Invalidate and refetch projects query
+    queryClient.invalidateQueries({ queryKey: ['projects'] })
     setShowNewProject(false)
+  }
+
+  const handleProjectUpdate = () => {
+    // Invalidate and refetch projects query
+    queryClient.invalidateQueries({ queryKey: ['projects'] })
   }
 
   return (
@@ -281,7 +252,7 @@ export default function ProjectsPage() {
               <ProjectGrid 
                 projects={projects} 
                 currentUserId={currentUserId || undefined}
-                onProjectUpdate={fetchProjects}
+                onProjectUpdate={handleProjectUpdate}
               />
             )}
           </>
@@ -328,4 +299,3 @@ export default function ProjectsPage() {
     </div>
   )
 }
-

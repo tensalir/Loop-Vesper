@@ -1,13 +1,18 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { logMetric } from '@/lib/metrics'
 
 // GET /api/projects/[id] - Get a specific project
+// Query params:
+// - includeSessions: set to "1" or "true" to include sessions (default: false)
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const startTime = performance.now()
+  
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const {
@@ -18,23 +23,25 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Check if sessions should be included (opt-in to reduce payload)
+    const searchParams = request.nextUrl.searchParams
+    const includeSessions = searchParams.get('includeSessions') === '1' || 
+                            searchParams.get('includeSessions') === 'true'
+
+    // Project visibility: owner OR explicit member (invite-based sharing)
+    // Note: isShared is just a UI toggle for the owner, not a visibility flag
     const project = await prisma.project.findFirst({
       where: {
         id: params.id,
         OR: [
           { ownerId: user.id }, // Owner can always access
           {
-            AND: [
-              { isShared: true }, // Only shared projects
-              {
-                members: {
-                  some: {
-                    userId: user.id,
-                  },
-                },
+            members: {
+              some: {
+                userId: user.id,
               },
-            ],
-          },
+            },
+          }, // Explicitly invited to project
         ],
       },
       include: {
@@ -45,11 +52,14 @@ export async function GET(
             username: true,
           },
         },
-        sessions: {
-          orderBy: {
-            createdAt: 'desc',
+        // Only include sessions if explicitly requested
+        ...(includeSessions && {
+          sessions: {
+            orderBy: {
+              createdAt: 'desc' as const,
+            },
           },
-        },
+        }),
       },
     })
 
@@ -57,8 +67,25 @@ export async function GET(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     }
 
+    logMetric({
+      name: 'api_project_detail',
+      status: 'success',
+      durationMs: performance.now() - startTime,
+      meta: { 
+        projectId: params.id, 
+        includeSessions,
+        sessionCount: (project as any).sessions?.length || 0,
+      },
+    })
+
     return NextResponse.json(project)
-  } catch (error) {
+  } catch (error: any) {
+    logMetric({
+      name: 'api_project_detail',
+      status: 'error',
+      durationMs: performance.now() - startTime,
+      meta: { projectId: params.id, error: error?.message },
+    })
     console.error('Error fetching project:', error)
     return NextResponse.json(
       { error: 'Failed to fetch project' },

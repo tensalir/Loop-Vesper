@@ -3,7 +3,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
-import { getSkillSystemPrompt } from '@/lib/prompts/loadSkill'
+import { getSkillSystemPrompt } from '@/lib/skills/registry'
 
 export async function POST(request: NextRequest) {
   try {

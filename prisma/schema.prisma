@@ -51,6 +51,7 @@ model Project {
 
   @@index([ownerId])
   @@index([isShared, ownerId])
+  @@index([updatedAt(sort: Desc), id(sort: Desc)]) // Keyset pagination
   @@map("projects")
 }
 
@@ -83,6 +84,7 @@ model Session {
   generations Generation[]
 
   @@index([projectId])
+  @@index([projectId, isPrivate]) // For visibility queries
   @@map("sessions")
 }
 

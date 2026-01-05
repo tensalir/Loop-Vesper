@@ -2,9 +2,12 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { logMetric } from '@/lib/metrics'
 
 // GET /api/projects - List all projects for the current user
 export async function GET() {
+  const startTime = performance.now()
+  
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const {
@@ -26,27 +29,21 @@ export async function GET() {
       },
     })
 
-    // Fetch projects:
-    // 1. Projects owned by user (regardless of isShared)
-    // 2. Shared projects (isShared: true) from other users
-    // 3. Projects where user is explicitly a member
+    // Fetch projects visible to the user:
+    // 1. Projects owned by user
+    // 2. Projects where user is explicitly a member (invite-based sharing)
+    // Note: isShared is just a UI toggle for the owner, not a visibility flag
     const projects = await prisma.project.findMany({
       where: {
         OR: [
           { ownerId: user.id }, // Own projects
-          {
-            AND: [
-              { isShared: true }, // Only shared projects
-              { ownerId: { not: user.id } }, // From other users
-            ],
-          },
           {
             members: {
               some: {
                 userId: user.id,
               },
             },
-          },
+          }, // Explicitly invited to project
         ],
       },
       orderBy: {
@@ -70,8 +67,21 @@ export async function GET() {
       },
     })
 
+    logMetric({
+      name: 'api_projects_list',
+      status: 'success',
+      durationMs: performance.now() - startTime,
+      meta: { projectCount: projects.length },
+    })
+
     return NextResponse.json(projects)
   } catch (error: any) {
+    logMetric({
+      name: 'api_projects_list',
+      status: 'error',
+      durationMs: performance.now() - startTime,
+      meta: { error: error.message },
+    })
     console.error('Error fetching projects:', error)
     return NextResponse.json(
       { 

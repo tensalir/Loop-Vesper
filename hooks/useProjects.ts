@@ -1,6 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import type { Project } from '@/types/project'
 
+interface ProjectsResponse {
+  data: Array<Project & { thumbnailUrl?: string | null }>
+  nextCursor: string | null
+  hasMore: boolean
+}
+
 async function fetchProjects(): Promise<(Project & { thumbnailUrl?: string | null })[]> {
   const response = await fetch('/api/projects/with-thumbnails')
   
@@ -8,10 +14,10 @@ async function fetchProjects(): Promise<(Project & { thumbnailUrl?: string | nul
     throw new Error('Failed to fetch projects')
   }
   
-  const data = await response.json()
+  const json = await response.json() as ProjectsResponse
   
   // Parse dates from strings to Date objects
-  return data.map((p: any) => ({
+  return json.data.map((p: any) => ({
     ...p,
     createdAt: new Date(p.createdAt),
     updatedAt: new Date(p.updatedAt),

@@ -10,6 +10,8 @@ import { Prisma } from '@prisma/client'
 export const dynamic = 'force-dynamic'
 
 const GENERATION_QUEUE_ENABLED = process.env.GENERATION_QUEUE_ENABLED === 'true'
+// Concurrency limit for parallel output uploads (default: 3)
+const GENERATION_UPLOAD_CONCURRENCY = Number(process.env.GENERATION_UPLOAD_CONCURRENCY || '3')
 const GENERATION_QUEUE_BATCH_SIZE = Number(process.env.GENERATION_QUEUE_BATCH_SIZE || '5')
 const GENERATION_QUEUE_LOCK_TIMEOUT_MS = Number(process.env.GENERATION_QUEUE_LOCK_TIMEOUT_MS || 60_000)
 const GENERATION_QUEUE_RETRY_DELAY_MS = Number(process.env.GENERATION_QUEUE_RETRY_DELAY_MS || 30_000)
@@ -368,51 +370,82 @@ async function processGenerationById(
     } catch (_) {}
 
     if (result.status === 'completed' && result.outputs) {
-      const outputRecords = []
+      // Import p-limit dynamically for parallel uploads
+      const pLimit = (await import('p-limit')).default
+      const limit = pLimit(GENERATION_UPLOAD_CONCURRENCY)
 
-      for (let i = 0; i < result.outputs.length; i++) {
-        const output = result.outputs[i]
-        let finalUrl = output.url
+      // Start heartbeat for the entire upload phase
+      startHeartbeat('storage:upload-batch:heartbeat')
 
-        if (output.url.startsWith('data:')) {
-          const extension = generation.session.type === 'video' ? 'mp4' : output.url.includes('image/png') ? 'png' : 'jpg'
-          const bucket = generation.session.type === 'video' ? 'generated-videos' : 'generated-images'
-          const storagePath = `${generation.userId}/${generationId}/${i}.${extension}`
+      console.log(`[${generationId}] Uploading ${result.outputs.length} outputs in parallel (concurrency: ${GENERATION_UPLOAD_CONCURRENCY})`)
 
-          console.log(`[${generationId}] Uploading base64 ${generation.session.type} ${i} to storage`)
-          startHeartbeat('storage:upload:heartbeat')
-          finalUrl = await uploadBase64ToStorage(output.url, bucket, storagePath)
-          console.log(`[${generationId}] Uploaded to: ${finalUrl}`)
-          stopHeartbeat()
-        } else if (output.url.startsWith('http')) {
-          const extension = generation.session.type === 'video' ? 'mp4' : output.url.includes('.png') ? 'png' : 'jpg'
-          const bucket = generation.session.type === 'video' ? 'generated-videos' : 'generated-images'
-          const storagePath = `${generation.userId}/${generationId}/${i}.${extension}`
+      // Upload all outputs in parallel with limited concurrency
+      const uploadResults = await Promise.allSettled(
+        result.outputs.map((output, i) =>
+          limit(async () => {
+            let finalUrl = output.url
 
-          console.log(`[${generationId}] Uploading external URL ${i} to storage`)
-          try {
-            startHeartbeat('storage:upload-url:heartbeat')
-            const isGeminiFile = output.url.includes('generativelanguage.googleapis.com')
-            const headers = isGeminiFile && process.env.GEMINI_API_KEY ? { 'x-goog-api-key': process.env.GEMINI_API_KEY as string } : undefined
-            finalUrl = await uploadUrlToStorage(output.url, bucket, storagePath, headers ? { headers } : undefined)
-            console.log(`[${generationId}] Uploaded to: ${finalUrl}`)
-            stopHeartbeat()
-          } catch (error) {
-            console.error(`[${generationId}] Failed to upload to storage, using original URL:`, error)
-            stopHeartbeat()
-            await appendLog('storage:upload-url:failed', { error: (error as any)?.message })
-          }
+            if (output.url.startsWith('data:')) {
+              const extension = generation.session.type === 'video' ? 'mp4' : output.url.includes('image/png') ? 'png' : 'jpg'
+              const bucket = generation.session.type === 'video' ? 'generated-videos' : 'generated-images'
+              const storagePath = `${generation.userId}/${generationId}/${i}.${extension}`
+
+              console.log(`[${generationId}] Uploading base64 ${generation.session.type} ${i} to storage`)
+              finalUrl = await uploadBase64ToStorage(output.url, bucket, storagePath)
+              console.log(`[${generationId}] Uploaded ${i} to: ${finalUrl}`)
+            } else if (output.url.startsWith('http')) {
+              const extension = generation.session.type === 'video' ? 'mp4' : output.url.includes('.png') ? 'png' : 'jpg'
+              const bucket = generation.session.type === 'video' ? 'generated-videos' : 'generated-images'
+              const storagePath = `${generation.userId}/${generationId}/${i}.${extension}`
+
+              console.log(`[${generationId}] Uploading external URL ${i} to storage`)
+              try {
+                const isGeminiFile = output.url.includes('generativelanguage.googleapis.com')
+                const headers = isGeminiFile && process.env.GEMINI_API_KEY ? { 'x-goog-api-key': process.env.GEMINI_API_KEY as string } : undefined
+                finalUrl = await uploadUrlToStorage(output.url, bucket, storagePath, headers ? { headers } : undefined)
+                console.log(`[${generationId}] Uploaded ${i} to: ${finalUrl}`)
+              } catch (error) {
+                console.error(`[${generationId}] Failed to upload ${i} to storage, using original URL:`, error)
+                await appendLog('storage:upload-url:failed', { index: i, error: (error as any)?.message })
+                // Fallback to original URL
+              }
+            }
+
+            return {
+              index: i,
+              finalUrl,
+              output,
+            }
+          })
+        )
+      )
+
+      stopHeartbeat()
+
+      // Store original outputs for fallback reference
+      const originalOutputs = result.outputs
+
+      // Process results - use fallback URL for any failures
+      const outputRecords = uploadResults.map((uploadResult, i) => {
+        const originalOutput = originalOutputs[i]
+        let finalUrl = originalOutput.url
+
+        if (uploadResult.status === 'fulfilled') {
+          finalUrl = uploadResult.value.finalUrl
+        } else {
+          console.error(`[${generationId}] Upload ${i} failed:`, uploadResult.reason)
+          // Keep original URL as fallback
         }
 
-        outputRecords.push({
+        return {
           generationId: generation.id,
           fileUrl: finalUrl,
           fileType: generation.session.type,
-          width: output.width,
-          height: output.height,
-          duration: output.duration,
-        })
-      }
+          width: originalOutput.width,
+          height: originalOutput.height,
+          duration: originalOutput.duration,
+        }
+      })
 
       await prisma.output.createMany({
         data: outputRecords,

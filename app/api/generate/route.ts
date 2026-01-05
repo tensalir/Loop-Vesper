@@ -4,7 +4,7 @@ import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { getModel } from '@/lib/models/registry'
 import { logMetric } from '@/lib/metrics'
-import { persistReferenceImage } from '@/lib/reference-images'
+import { persistReferenceImage, persistReferenceImages } from '@/lib/reference-images'
 import { 
   submitReplicatePrediction, 
   supportsWebhook, 
@@ -58,16 +58,35 @@ export async function POST(request: NextRequest) {
     const { referenceImage, referenceImages, referenceImageId, ...otherParameters } = rawParameters
     let referencePointer: Record<string, any> | null = null
 
+    // Generate a unique ID for reference images (used before generation is created)
+    const referenceGroupId = `refgrp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
     // Handle multiple reference images (preferred) or single image (backward compatibility)
     if (referenceImages && Array.isArray(referenceImages) && referenceImages.length > 0) {
-      // Multiple images - persist all of them
+      // Multiple images - persist all of them to storage, store only URLs
       metricMeta.hasReferenceImage = true
       metricMeta.referenceImageCount = referenceImages.length
-      // For now, persist all images and pass them through
-      // We'll store them as an array in the parameters
-      referencePointer = {
-        referenceImages: referenceImages, // Pass through as-is for now
-        // If needed, we could persist each one separately
+      
+      // Filter to only base64 data URLs that need uploading
+      const base64Images = referenceImages.filter(
+        (img: unknown) => typeof img === 'string' && img.startsWith('data:')
+      )
+      // Keep any existing HTTP URLs as-is
+      const existingUrls = referenceImages.filter(
+        (img: unknown) => typeof img === 'string' && img.startsWith('http')
+      )
+      
+      if (base64Images.length > 0) {
+        // Persist base64 images to storage
+        const uploadedUrls = await persistReferenceImages(base64Images, user.id, referenceGroupId)
+        referencePointer = {
+          referenceImages: [...existingUrls, ...uploadedUrls],
+        }
+      } else {
+        // All images are already URLs
+        referencePointer = {
+          referenceImages: existingUrls,
+        }
       }
     } else if (referenceImage && typeof referenceImage === 'string' && referenceImage.startsWith('data:')) {
       // Single image (backward compatibility)

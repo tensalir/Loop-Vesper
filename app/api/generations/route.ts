@@ -3,6 +3,60 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 
+// Allowlist of parameter fields that the UI needs
+// All other fields (debugLogs, base64 blobs, internal state) are stripped by default
+const ALLOWED_PARAMETER_FIELDS = [
+  // Generation settings (required by UI)
+  'aspectRatio',
+  'numOutputs',
+  'resolution',
+  'duration',
+
+  // Error display
+  'error',
+
+  // Reference image pointers (for thumbnails + reuse)
+  'referenceImageUrl',
+  'referenceImageId',
+  'referenceImagePath',
+  'referenceImageBucket',
+  'referenceImageMimeType',
+  'referenceImageChecksum',
+
+  // Multi-image support (URLs only, base64 stripped in sanitize function)
+  'referenceImages',
+]
+
+/**
+ * Sanitize generation parameters to remove large/debug data.
+ * Uses an allowlist approach - only explicitly allowed fields are kept.
+ * For referenceImages, filters to only keep HTTP URLs (strips base64).
+ */
+function sanitizeParameters(params: unknown): Record<string, unknown> {
+  if (!params || typeof params !== 'object') return {}
+
+  const input = params as Record<string, unknown>
+  const sanitized: Record<string, unknown> = {}
+
+  for (const key of ALLOWED_PARAMETER_FIELDS) {
+    if (key in input) {
+      if (key === 'referenceImages' && Array.isArray(input[key])) {
+        // Strip base64 data URLs, keep only HTTP URLs
+        const filtered = (input[key] as unknown[]).filter(
+          (img: unknown) => typeof img === 'string' && img.startsWith('http')
+        )
+        if (filtered.length > 0) {
+          sanitized[key] = filtered
+        }
+      } else {
+        sanitized[key] = input[key]
+      }
+    }
+  }
+
+  return sanitized
+}
+
 // Helper to encode cursor as base64url
 function encodeCursor(createdAt: Date, id: string): string {
   const payload = JSON.stringify({ createdAt: createdAt.toISOString(), id })
@@ -41,6 +95,8 @@ export async function GET(request: NextRequest) {
     const sessionId = searchParams.get('sessionId')
     const cursor = searchParams.get('cursor')
     const limit = parseInt(searchParams.get('limit') || '10') // Default to 10 for infinite scroll
+    // Debug mode: include full parameters (for admin/debugging)
+    const includeParameters = searchParams.get('includeParameters') === 'true'
 
     if (!sessionId) {
       return NextResponse.json(
@@ -148,9 +204,13 @@ export async function GET(request: NextRequest) {
 
     const bookmarkedOutputIds = new Set(bookmarks.map((b: any) => b.outputId))
 
-    // Add isBookmarked field to outputs
+    // Add isBookmarked field to outputs and sanitize parameters
     const generationsWithBookmarks = data.map((generation: any) => ({
       ...generation,
+      // Sanitize parameters by default; pass full parameters only in debug mode
+      parameters: includeParameters
+        ? generation.parameters
+        : sanitizeParameters(generation.parameters),
       outputs: generation.outputs.map((output: any) => ({
         ...output,
         isBookmarked: bookmarkedOutputIds.has(output.id),

@@ -42,6 +42,43 @@ export async function persistReferenceImage(
   }
 }
 
+/**
+ * Persist multiple reference images to storage in parallel.
+ * Returns an array of public URLs for the uploaded images.
+ * 
+ * @param base64DataUrls - Array of base64 data URLs to upload
+ * @param userId - User ID for storage path organization
+ * @param generationId - Generation ID for creating unique reference IDs
+ * @param uploader - Optional custom uploader function (for testing)
+ * @returns Array of public URLs for the uploaded images
+ */
+export async function persistReferenceImages(
+  base64DataUrls: string[],
+  userId: string,
+  generationId: string,
+  uploader?: Uploader
+): Promise<string[]> {
+  // Import p-limit dynamically to handle ESM module
+  const pLimit = (await import('p-limit')).default
+  const limit = pLimit(3) // Max 3 concurrent uploads
+  
+  const results = await Promise.all(
+    base64DataUrls.map((dataUrl, index) =>
+      limit(async () => {
+        const pointer = await persistReferenceImage(
+          dataUrl,
+          userId,
+          `ref-${generationId}-${index}`,
+          uploader
+        )
+        return pointer.referenceImageUrl
+      })
+    )
+  )
+  
+  return results
+}
+
 export async function downloadReferenceImageAsDataUrl(
   url: string,
   mimeHint?: string,
