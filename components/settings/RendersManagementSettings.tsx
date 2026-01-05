@@ -338,7 +338,7 @@ export function RendersManagementSettings() {
               <Upload className="h-6 w-6" />
             </div>
             <p className="text-sm">No product renders found</p>
-            <p className="text-xs">Click "Add Render" to upload your first product render</p>
+            <p className="text-xs">Click &quot;Add Render&quot; to upload your first product render</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -576,8 +576,8 @@ export function RendersManagementSettings() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Product Render</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deletingRender?.name}
-              {deletingRender?.colorway ? ` - ${deletingRender.colorway}` : ''}"? 
+              Are you sure you want to delete &quot;{deletingRender?.name}
+              {deletingRender?.colorway ? ` - ${deletingRender.colorway}` : ''}&quot;? 
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>

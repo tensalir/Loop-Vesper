@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, User, BarChart3, Sparkles, Image } from 'lucide-react'
+import { ArrowLeft, User, BarChart3, Sparkles, Image as ImageIcon } from 'lucide-react'
 import { AccountSettings } from '@/components/settings/AccountSettings'
 import { AnalyticsSettings } from '@/components/settings/AnalyticsSettings'
 import { PromptManagementSettings } from '@/components/settings/PromptManagementSettings'
@@ -69,7 +69,7 @@ export default function SettingsPage() {
             </TabsTrigger>
             {isAdmin && (
               <TabsTrigger value="renders" className="flex items-center gap-2">
-                <Image className="h-4 w-4" />
+                <ImageIcon className="h-4 w-4" />
                 Renders
               </TabsTrigger>
             )}
