@@ -13,7 +13,15 @@ import {
   Upload, 
   X,
   Search,
-  RefreshCw
+  RefreshCw,
+  ChevronDown,
+  ChevronRight,
+  Sparkles,
+  FolderOpen,
+  Image as ImageIcon,
+  GripVertical,
+  Check,
+  AlertCircle
 } from 'lucide-react'
 import {
   Dialog,
@@ -33,11 +41,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface ProductRender {
   id: string
   name: string
   colorway: string | null
+  angle: string | null
+  sortOrder: number
   imageUrl: string
   storagePath: string | null
   source: 'local' | 'frontify'
@@ -46,22 +63,53 @@ interface ProductRender {
   updatedAt: string
 }
 
+interface PendingImage {
+  id: string
+  file: File
+  base64: string
+  preview: string
+  suggestedColorway: string
+  suggestedAngle: string
+  colorDescription: string
+  confidence: number
+  isAnalyzing?: boolean
+}
+
+interface ColorwayGroup {
+  colorway: string
+  images: PendingImage[]
+  expanded: boolean
+}
+
+// Angle options
+const ANGLE_OPTIONS = [
+  'front',
+  'side',
+  'rear',
+  '3/4 front',
+  '3/4 rear',
+  'top',
+  'bottom',
+  'detail',
+  'other',
+]
+
 export function RendersManagementSettings() {
   const [renders, setRenders] = useState<ProductRender[]>([])
   const [productNames, setProductNames] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null)
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set())
+  const [expandedColorways, setExpandedColorways] = useState<Set<string>>(new Set())
   
-  // Upload dialog state
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
-  const [uploadForm, setUploadForm] = useState({
-    name: '',
-    colorway: '',
-    image: null as string | null,
-    imagePreview: null as string | null,
-  })
-  const [uploading, setUploading] = useState(false)
+  // Bulk upload dialog state
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false)
+  const [productName, setProductName] = useState('')
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -69,8 +117,7 @@ export function RendersManagementSettings() {
   const [editForm, setEditForm] = useState({
     name: '',
     colorway: '',
-    image: null as string | null,
-    imagePreview: null as string | null,
+    angle: '',
   })
   const [saving, setSaving] = useState(false)
   
@@ -80,7 +127,7 @@ export function RendersManagementSettings() {
   const [deleting, setDeleting] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const editFileInputRef = useRef<HTMLInputElement>(null)
+  const dropZoneRef = useRef<HTMLDivElement>(null)
 
   const fetchRenders = useCallback(async () => {
     setLoading(true)
@@ -102,75 +149,261 @@ export function RendersManagementSettings() {
     fetchRenders()
   }, [fetchRenders])
 
-  // Filter renders
-  const filteredRenders = renders.filter(render => {
-    const matchesSearch = !searchQuery || 
-      render.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      render.colorway?.toLowerCase().includes(searchQuery.toLowerCase())
+  // Group renders by product and colorway
+  const groupedRenders = renders.reduce((acc, render) => {
+    const productKey = render.name
+    const colorwayKey = render.colorway || 'Default'
     
-    const matchesProduct = !selectedProduct || render.name === selectedProduct
-    
-    return matchesSearch && matchesProduct
-  })
-
-  // Handle file selection for upload
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    // Read file as base64
-    const reader = new FileReader()
-    reader.onload = () => {
-      const base64 = reader.result as string
-      if (isEdit) {
-        setEditForm(prev => ({ 
-          ...prev, 
-          image: base64,
-          imagePreview: base64
-        }))
-      } else {
-        setUploadForm(prev => ({ 
-          ...prev, 
-          image: base64,
-          imagePreview: base64
-        }))
-      }
+    if (!acc[productKey]) {
+      acc[productKey] = {}
     }
-    reader.readAsDataURL(file)
+    if (!acc[productKey][colorwayKey]) {
+      acc[productKey][colorwayKey] = []
+    }
+    acc[productKey][colorwayKey].push(render)
+    
+    return acc
+  }, {} as Record<string, Record<string, ProductRender[]>>)
+
+  // Filter products
+  const filteredProducts = Object.keys(groupedRenders).filter(product => {
+    if (searchQuery) {
+      return product.toLowerCase().includes(searchQuery.toLowerCase())
+    }
+    if (selectedProduct) {
+      return product === selectedProduct
+    }
+    return true
+  }).sort()
+
+  // Toggle product expansion
+  const toggleProduct = (product: string) => {
+    setExpandedProducts(prev => {
+      const next = new Set(prev)
+      if (next.has(product)) {
+        next.delete(product)
+      } else {
+        next.add(product)
+      }
+      return next
+    })
   }
 
-  // Handle upload
-  const handleUpload = async () => {
-    if (!uploadForm.name || !uploadForm.image) return
+  // Toggle colorway expansion
+  const toggleColorway = (key: string) => {
+    setExpandedColorways(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }
 
-    setUploading(true)
+  // Handle file drop/selection for bulk upload
+  const handleFilesSelected = async (files: FileList | File[]) => {
+    const fileArray = Array.from(files)
+    const imageFiles = fileArray.filter(f => f.type.startsWith('image/'))
+    
+    if (imageFiles.length === 0) return
+
+    // Convert files to base64 and create pending images
+    const newPending: PendingImage[] = await Promise.all(
+      imageFiles.map(async (file) => {
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.readAsDataURL(file)
+        })
+
+        return {
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          file,
+          base64,
+          preview: base64,
+          suggestedColorway: 'Analyzing...',
+          suggestedAngle: 'front',
+          colorDescription: '',
+          confidence: 0,
+          isAnalyzing: true,
+        }
+      })
+    )
+
+    setPendingImages(prev => [...prev, ...newPending])
+  }
+
+  // Handle drag and drop
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (dropZoneRef.current) {
+      dropZoneRef.current.classList.add('border-primary', 'bg-primary/5')
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (dropZoneRef.current) {
+      dropZoneRef.current.classList.remove('border-primary', 'bg-primary/5')
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (dropZoneRef.current) {
+      dropZoneRef.current.classList.remove('border-primary', 'bg-primary/5')
+    }
+    
+    if (e.dataTransfer.files.length > 0) {
+      handleFilesSelected(e.dataTransfer.files)
+    }
+  }
+
+  // Analyze images with Claude Vision
+  const analyzeImages = async () => {
+    if (pendingImages.length === 0) return
+    
+    setIsAnalyzing(true)
+    
     try {
-      const response = await fetch('/api/admin/product-renders', {
+      const imagesToAnalyze = pendingImages.map(img => ({
+        id: img.id,
+        base64: img.base64,
+        filename: img.file.name,
+      }))
+
+      const response = await fetch('/api/admin/product-renders/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: uploadForm.name,
-          colorway: uploadForm.colorway || null,
-          image: uploadForm.image,
+          images: imagesToAnalyze,
+          productName: productName || undefined,
         }),
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to upload')
+        throw new Error('Analysis failed')
       }
 
-      // Reset form and close dialog
-      setUploadForm({ name: '', colorway: '', image: null, imagePreview: null })
-      setUploadDialogOpen(false)
+      const result = await response.json()
+
+      // Update pending images with analysis results
+      setPendingImages(prev => prev.map(img => {
+        const analysis = result.images.find((a: any) => a.id === img.id)
+        if (analysis) {
+          return {
+            ...img,
+            suggestedColorway: analysis.suggestedColorway,
+            suggestedAngle: analysis.suggestedAngle,
+            colorDescription: analysis.colorDescription,
+            confidence: analysis.confidence,
+            isAnalyzing: false,
+          }
+        }
+        return { ...img, isAnalyzing: false }
+      }))
+    } catch (error) {
+      console.error('Analysis error:', error)
+      // Mark all as failed analysis
+      setPendingImages(prev => prev.map(img => ({
+        ...img,
+        suggestedColorway: 'Default',
+        isAnalyzing: false,
+      })))
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
+  // Auto-analyze when images are added
+  useEffect(() => {
+    const needsAnalysis = pendingImages.filter(img => img.isAnalyzing)
+    if (needsAnalysis.length > 0 && !isAnalyzing) {
+      analyzeImages()
+    }
+  }, [pendingImages.length])
+
+  // Group pending images by colorway
+  const pendingByColorway = pendingImages.reduce((acc, img) => {
+    const colorway = img.suggestedColorway
+    if (!acc[colorway]) {
+      acc[colorway] = []
+    }
+    acc[colorway].push(img)
+    return acc
+  }, {} as Record<string, PendingImage[]>)
+
+  // Update image colorway
+  const updateImageColorway = (imageId: string, colorway: string) => {
+    setPendingImages(prev => prev.map(img => 
+      img.id === imageId ? { ...img, suggestedColorway: colorway } : img
+    ))
+  }
+
+  // Update image angle
+  const updateImageAngle = (imageId: string, angle: string) => {
+    setPendingImages(prev => prev.map(img => 
+      img.id === imageId ? { ...img, suggestedAngle: angle } : img
+    ))
+  }
+
+  // Remove pending image
+  const removePendingImage = (imageId: string) => {
+    setPendingImages(prev => prev.filter(img => img.id !== imageId))
+  }
+
+  // Handle bulk upload
+  const handleBulkUpload = async () => {
+    if (!productName.trim() || pendingImages.length === 0) return
+
+    setIsUploading(true)
+    setUploadProgress(0)
+
+    try {
+      const imagesToUpload = pendingImages.map((img, index) => ({
+        id: img.id,
+        base64: img.base64,
+        colorway: img.suggestedColorway,
+        angle: img.suggestedAngle,
+        sortOrder: index,
+      }))
+
+      const response = await fetch('/api/admin/product-renders/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productName: productName.trim(),
+          images: imagesToUpload,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Upload failed')
+      }
+
+      const result = await response.json()
+      
+      // Reset and close
+      setProductName('')
+      setPendingImages([])
+      setBulkUploadOpen(false)
       
       // Refresh list
       fetchRenders()
+      
+      // Show success message
+      alert(`Successfully uploaded ${result.summary.successful} images${result.summary.failed > 0 ? ` (${result.summary.failed} failed)` : ''}`)
     } catch (error: any) {
       console.error('Upload error:', error)
-      alert(error.message || 'Failed to upload render')
+      alert(error.message || 'Failed to upload images')
     } finally {
-      setUploading(false)
+      setIsUploading(false)
+      setUploadProgress(0)
     }
   }
 
@@ -180,8 +413,7 @@ export function RendersManagementSettings() {
     setEditForm({
       name: render.name,
       colorway: render.colorway || '',
-      image: null,
-      imagePreview: render.imageUrl,
+      angle: render.angle || '',
     })
     setEditDialogOpen(true)
   }
@@ -197,7 +429,7 @@ export function RendersManagementSettings() {
         body: JSON.stringify({
           name: editForm.name,
           colorway: editForm.colorway || null,
-          image: editForm.image, // Only if changed
+          angle: editForm.angle || null,
         }),
       })
 
@@ -206,12 +438,8 @@ export function RendersManagementSettings() {
         throw new Error(error.error || 'Failed to save')
       }
 
-      // Reset form and close dialog
       setEditingRender(null)
-      setEditForm({ name: '', colorway: '', image: null, imagePreview: null })
       setEditDialogOpen(false)
-      
-      // Refresh list
       fetchRenders()
     } catch (error: any) {
       console.error('Save error:', error)
@@ -241,7 +469,6 @@ export function RendersManagementSettings() {
         throw new Error(error.error || 'Failed to delete')
       }
 
-      // Close dialog and refresh
       setDeletingRender(null)
       setDeleteDialogOpen(false)
       fetchRenders()
@@ -260,7 +487,7 @@ export function RendersManagementSettings() {
           <div>
             <CardTitle>Product Renders</CardTitle>
             <CardDescription>
-              Manage product renders for quick access during generation
+              Manage product renders organized by product, colorway, and angle
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -275,10 +502,10 @@ export function RendersManagementSettings() {
             </Button>
             <Button
               size="sm"
-              onClick={() => setUploadDialogOpen(true)}
+              onClick={() => setBulkUploadOpen(true)}
             >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Render
+              <Upload className="h-4 w-4 mr-2" />
+              Bulk Upload
             </Button>
           </div>
         </div>
@@ -289,7 +516,7 @@ export function RendersManagementSettings() {
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search renders..."
+              placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9"
@@ -312,83 +539,128 @@ export function RendersManagementSettings() {
                   Clear
                 </Button>
               )}
-              {productNames.map((name) => (
-                <Button
-                  key={name}
-                  variant={selectedProduct === name ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setSelectedProduct(selectedProduct === name ? null : name)}
-                  className="h-8 text-xs"
-                >
-                  {name}
-                </Button>
-              ))}
             </div>
           )}
         </div>
 
-        {/* Renders Grid */}
+        {/* Hierarchical Renders View */}
         {loading ? (
           <div className="flex items-center justify-center h-48">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        ) : filteredRenders.length === 0 ? (
+        ) : filteredProducts.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
             <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
               <Upload className="h-6 w-6" />
             </div>
             <p className="text-sm">No product renders found</p>
-            <p className="text-xs">Click &quot;Add Render&quot; to upload your first product render</p>
+            <p className="text-xs">Click &quot;Bulk Upload&quot; to add product renders</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {filteredRenders.map((render) => (
-              <div
-                key={render.id}
-                className="group relative aspect-square rounded-lg overflow-hidden border border-border bg-muted/30 hover:border-primary transition-colors"
-              >
-                <img
-                  src={render.imageUrl}
-                  alt={`${render.name}${render.colorway ? ` - ${render.colorway}` : ''}`}
-                  className="w-full h-full object-contain p-2"
-                />
-                
-                {/* Info overlay */}
-                <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
-                  <p className="text-white text-xs font-medium truncate">{render.name}</p>
-                  {render.colorway && (
-                    <p className="text-white/70 text-[10px] truncate">{render.colorway}</p>
+          <div className="space-y-2">
+            {filteredProducts.map((product) => (
+              <div key={product} className="border rounded-lg overflow-hidden">
+                {/* Product Header */}
+                <button
+                  className="w-full flex items-center gap-2 p-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+                  onClick={() => toggleProduct(product)}
+                >
+                  {expandedProducts.has(product) ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
                   )}
-                </div>
-                
-                {/* Source badge */}
-                {render.source === 'frontify' && (
-                  <div className="absolute top-1 right-1 px-1.5 py-0.5 bg-blue-500/80 text-white text-[8px] font-medium rounded">
-                    Frontify
+                  <FolderOpen className="h-4 w-4 text-primary" />
+                  <span className="font-medium">{product}</span>
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {Object.keys(groupedRenders[product]).length} colorway(s), {Object.values(groupedRenders[product]).flat().length} image(s)
+                  </span>
+                </button>
+
+                {/* Colorways */}
+                {expandedProducts.has(product) && (
+                  <div className="border-t">
+                    {Object.entries(groupedRenders[product]).map(([colorway, images]) => {
+                      const colorwayKey = `${product}-${colorway}`
+                      return (
+                        <div key={colorwayKey} className="border-b last:border-b-0">
+                          {/* Colorway Header */}
+                          <button
+                            className="w-full flex items-center gap-2 p-2 pl-8 hover:bg-muted/30 transition-colors text-left"
+                            onClick={() => toggleColorway(colorwayKey)}
+                          >
+                            {expandedColorways.has(colorwayKey) ? (
+                              <ChevronDown className="h-3 w-3" />
+                            ) : (
+                              <ChevronRight className="h-3 w-3" />
+                            )}
+                            <div 
+                              className="w-3 h-3 rounded-full border" 
+                              style={{ 
+                                background: colorway === 'Default' ? '#888' : undefined 
+                              }}
+                            />
+                            <span className="text-sm">{colorway}</span>
+                            <span className="text-xs text-muted-foreground ml-auto">
+                              {images.length} angle(s)
+                            </span>
+                          </button>
+
+                          {/* Images Grid */}
+                          {expandedColorways.has(colorwayKey) && (
+                            <div className="p-2 pl-12 grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                              {images.map((render) => (
+                                <div
+                                  key={render.id}
+                                  className="group relative aspect-square rounded-md overflow-hidden border bg-muted/30 hover:border-primary transition-colors"
+                                >
+                                  <img
+                                    src={render.imageUrl}
+                                    alt={`${render.name} - ${render.colorway || 'Default'} - ${render.angle || 'view'}`}
+                                    className="w-full h-full object-contain p-1"
+                                  />
+                                  
+                                  {/* Angle label */}
+                                  {render.angle && (
+                                    <div className="absolute bottom-0 inset-x-0 p-0.5 bg-black/60 text-center">
+                                      <span className="text-[8px] text-white">{render.angle}</span>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Actions */}
+                                  <div className="absolute top-0.5 right-0.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button
+                                      variant="secondary"
+                                      size="icon"
+                                      className="h-5 w-5"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleEdit(render)
+                                      }}
+                                    >
+                                      <Pencil className="h-2.5 w-2.5" />
+                                    </Button>
+                                    <Button
+                                      variant="destructive"
+                                      size="icon"
+                                      className="h-5 w-5"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleDelete(render)
+                                      }}
+                                    >
+                                      <Trash2 className="h-2.5 w-2.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
-                
-                {/* Action buttons - show on hover */}
-                <div className="absolute top-1 left-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="secondary"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => handleEdit(render)}
-                    title="Edit"
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => handleDelete(render)}
-                    title="Delete"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
               </div>
             ))}
           </div>
@@ -397,90 +669,180 @@ export function RendersManagementSettings() {
         {/* Stats */}
         <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2 border-t">
           <span>{renders.length} total renders</span>
-          <span>{renders.filter(r => r.source === 'local').length} local</span>
+          <span>{productNames.length} products</span>
           <span>{renders.filter(r => r.source === 'frontify').length} from Frontify</span>
         </div>
       </CardContent>
 
-      {/* Upload Dialog */}
-      <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-        <DialogContent>
+      {/* Bulk Upload Dialog */}
+      <Dialog open={bulkUploadOpen} onOpenChange={setBulkUploadOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle>Add Product Render</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Bulk Upload Product Renders
+            </DialogTitle>
             <DialogDescription>
-              Upload a new product render image
+              Upload multiple images and let AI automatically detect and group colorways
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
+          <div className="flex-1 overflow-y-auto space-y-4 py-4">
+            {/* Product Name */}
             <div className="space-y-2">
-              <Label htmlFor="name">Product Name *</Label>
+              <Label htmlFor="productName">Product Name *</Label>
               <Input
-                id="name"
+                id="productName"
                 placeholder="e.g., MCL38"
-                value={uploadForm.name}
-                onChange={(e) => setUploadForm(prev => ({ ...prev, name: e.target.value }))}
+                value={productName}
+                onChange={(e) => setProductName(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">
+                This will be the category name for all uploaded images
+              </p>
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="colorway">Colorway</Label>
-              <Input
-                id="colorway"
-                placeholder="e.g., Papaya Orange"
-                value={uploadForm.colorway}
-                onChange={(e) => setUploadForm(prev => ({ ...prev, colorway: e.target.value }))}
-              />
+
+            {/* Drop Zone */}
+            <div
+              ref={dropZoneRef}
+              className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors"
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm font-medium">Drag & drop images here</p>
+              <p className="text-xs text-muted-foreground mt-1">or click to browse</p>
+              <p className="text-xs text-muted-foreground mt-2">PNG with transparency recommended</p>
             </div>
-            
-            <div className="space-y-2">
-              <Label>Image *</Label>
-              {uploadForm.imagePreview ? (
-                <div className="relative aspect-video w-full bg-muted/30 rounded-lg overflow-hidden border">
-                  <img
-                    src={uploadForm.imagePreview}
-                    alt="Preview"
-                    className="w-full h-full object-contain p-4"
-                  />
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    className="absolute top-2 right-2 h-7 w-7"
-                    onClick={() => setUploadForm(prev => ({ ...prev, image: null, imagePreview: null }))}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => e.target.files && handleFilesSelected(e.target.files)}
+            />
+
+            {/* Pending Images by Colorway */}
+            {pendingImages.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    AI-Detected Colorways
+                  </h3>
+                  {isAnalyzing && (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Analyzing...
+                    </span>
+                  )}
                 </div>
-              ) : (
-                <div
-                  className="aspect-video w-full border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">Click to upload image</p>
-                  <p className="text-xs text-muted-foreground">PNG with transparency recommended</p>
-                </div>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => handleFileSelect(e, false)}
-              />
-            </div>
+
+                {Object.entries(pendingByColorway).map(([colorway, images]) => (
+                  <div key={colorway} className="border rounded-lg p-3 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded-full bg-muted border" />
+                      <span className="font-medium text-sm">{colorway}</span>
+                      <span className="text-xs text-muted-foreground">({images.length} images)</span>
+                    </div>
+
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                      {images.map((img) => (
+                        <div key={img.id} className="relative">
+                          <div className="aspect-square rounded-md overflow-hidden border bg-muted/30">
+                            <img
+                              src={img.preview}
+                              alt="Preview"
+                              className="w-full h-full object-contain p-1"
+                            />
+                            {img.isAnalyzing && (
+                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                <Loader2 className="h-4 w-4 animate-spin text-white" />
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Remove button */}
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            className="absolute -top-1 -right-1 h-5 w-5"
+                            onClick={() => removePendingImage(img.id)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+
+                          {/* Confidence indicator */}
+                          {!img.isAnalyzing && (
+                            <div className={`absolute bottom-0 left-0 right-0 h-1 ${
+                              img.confidence >= 0.8 ? 'bg-green-500' :
+                              img.confidence >= 0.5 ? 'bg-yellow-500' : 'bg-red-500'
+                            }`} />
+                          )}
+
+                          {/* Editable fields */}
+                          <div className="mt-1 space-y-1">
+                            <Input
+                              value={img.suggestedColorway}
+                              onChange={(e) => updateImageColorway(img.id, e.target.value)}
+                              className="h-6 text-xs"
+                              placeholder="Colorway"
+                            />
+                            <Select
+                              value={img.suggestedAngle}
+                              onValueChange={(v) => updateImageAngle(img.id, v)}
+                            >
+                              <SelectTrigger className="h-6 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {ANGLE_OPTIONS.map((angle) => (
+                                  <SelectItem key={angle} value={angle} className="text-xs">
+                                    {angle}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setUploadDialogOpen(false)}>
+          <DialogFooter className="border-t pt-4">
+            <div className="flex items-center gap-2 mr-auto text-xs text-muted-foreground">
+              {pendingImages.length > 0 && (
+                <>
+                  <Check className="h-3 w-3 text-green-500" />
+                  {pendingImages.length} images ready
+                </>
+              )}
+            </div>
+            <Button variant="outline" onClick={() => setBulkUploadOpen(false)}>
               Cancel
             </Button>
             <Button 
-              onClick={handleUpload}
-              disabled={!uploadForm.name || !uploadForm.image || uploading}
+              onClick={handleBulkUpload}
+              disabled={!productName.trim() || pendingImages.length === 0 || isAnalyzing || isUploading}
             >
-              {uploading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Upload
+              {isUploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload {pendingImages.length} Images
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -516,42 +878,24 @@ export function RendersManagementSettings() {
                 onChange={(e) => setEditForm(prev => ({ ...prev, colorway: e.target.value }))}
               />
             </div>
-            
+
             <div className="space-y-2">
-              <Label>Image</Label>
-              {editForm.imagePreview ? (
-                <div className="relative aspect-video w-full bg-muted/30 rounded-lg overflow-hidden border">
-                  <img
-                    src={editForm.imagePreview}
-                    alt="Preview"
-                    className="w-full h-full object-contain p-4"
-                  />
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="absolute bottom-2 right-2"
-                    onClick={() => editFileInputRef.current?.click()}
-                  >
-                    <Upload className="h-3 w-3 mr-1" />
-                    Replace
-                  </Button>
-                </div>
-              ) : (
-                <div
-                  className="aspect-video w-full border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors"
-                  onClick={() => editFileInputRef.current?.click()}
-                >
-                  <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">Click to upload new image</p>
-                </div>
-              )}
-              <input
-                ref={editFileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => handleFileSelect(e, true)}
-              />
+              <Label htmlFor="edit-angle">Angle</Label>
+              <Select
+                value={editForm.angle || 'other'}
+                onValueChange={(v) => setEditForm(prev => ({ ...prev, angle: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ANGLE_OPTIONS.map((angle) => (
+                    <SelectItem key={angle} value={angle}>
+                      {angle}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           
@@ -576,9 +920,7 @@ export function RendersManagementSettings() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Product Render</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete &quot;{deletingRender?.name}
-              {deletingRender?.colorway ? ` - ${deletingRender.colorway}` : ''}&quot;? 
-              This action cannot be undone.
+              Are you sure you want to delete this render? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -597,4 +939,3 @@ export function RendersManagementSettings() {
     </Card>
   )
 }
-
