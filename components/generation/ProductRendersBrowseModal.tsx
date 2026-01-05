@@ -50,7 +50,9 @@ export function ProductRendersBrowseModal({
       if (!response.ok) throw new Error('Failed to fetch renders')
       
       const data = await response.json()
-      setRenders(data.renders || [])
+      const fetchedRenders = data.renders || []
+      console.log('[ProductRenders] Fetched renders:', fetchedRenders.length, fetchedRenders)
+      setRenders(fetchedRenders)
       
       // Only update product names on initial load (not when filtering)
       if (!selectedProduct && !searchQuery) {
@@ -215,12 +217,50 @@ export function ProductRendersBrowseModal({
                                     title={`${render.name}${render.colorway ? ` - ${render.colorway}` : ''}`}
                                   >
                                     {/* Thumbnail Image */}
-                                    <img
-                                      src={render.imageUrl}
-                                      alt={`${render.name}${render.colorway ? ` - ${render.colorway}` : ''}`}
-                                      className="w-full h-full object-contain p-2"
-                                      loading="lazy"
-                                    />
+                                    {render.imageUrl ? (
+                                      <>
+                                        <img
+                                          src={render.imageUrl}
+                                          alt={`${render.name}${render.colorway ? ` - ${render.colorway}` : ''}`}
+                                          className="w-full h-full object-contain p-2"
+                                          loading="lazy"
+                                          onError={(e) => {
+                                            console.error('[ProductRenders] Failed to load image:', render.imageUrl, render)
+                                            e.currentTarget.style.opacity = '0'
+                                            const placeholder = e.currentTarget.nextElementSibling as HTMLElement
+                                            if (placeholder) {
+                                              placeholder.style.display = 'flex'
+                                            }
+                                          }}
+                                          onLoad={(e) => {
+                                            // Hide placeholder when image loads successfully
+                                            const placeholder = e.currentTarget.nextElementSibling as HTMLElement
+                                            if (placeholder) {
+                                              placeholder.style.display = 'none'
+                                            }
+                                          }}
+                                        />
+                                        {/* Placeholder for loading/failed images */}
+                                        <div className="image-placeholder absolute inset-0 items-center justify-center bg-muted/50 flex">
+                                          <div className="text-center p-2">
+                                            <p className="text-xs text-muted-foreground font-medium">{render.name}</p>
+                                            {render.colorway && (
+                                              <p className="text-[10px] text-muted-foreground/70">{render.colorway}</p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div className="absolute inset-0 items-center justify-center bg-muted/50 flex">
+                                        <div className="text-center p-2">
+                                          <p className="text-xs text-muted-foreground font-medium">{render.name}</p>
+                                          {render.colorway && (
+                                            <p className="text-[10px] text-muted-foreground/70">{render.colorway}</p>
+                                          )}
+                                          <p className="text-[10px] text-red-500/70 mt-1">No image URL</p>
+                                        </div>
+                                      </div>
+                                    )}
                                     
                                     {/* Hover overlay with info */}
                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors duration-200" />
