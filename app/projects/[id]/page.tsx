@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Settings, Sun, Moon, Bookmark } from 'lucide-react'
 import { SessionSidebar } from '@/components/sessions/SessionSidebar'
@@ -23,6 +24,7 @@ export default function ProjectPage() {
   const [generationType, setGenerationType] = useState<'image' | 'video'>('image')
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const supabase = createClient()
+  const queryClient = useQueryClient()
 
   // Use React Query for sessions with intelligent caching
   const { data: sessions = [], isLoading: sessionsLoading } = useSessions(params.id as string)
@@ -95,6 +97,30 @@ export default function ProjectPage() {
   }
 
   const handleSessionCreate = async (type: 'image' | 'video', name?: string): Promise<Session | null> => {
+    const projectId = params.id as string
+    const sessionName = name || `${type === 'image' ? 'Image' : 'Video'} Session ${sessions.length + 1}`
+    
+    // Create optimistic session with temporary ID
+    const tempId = `temp-${Date.now()}`
+    const now = new Date()
+    const optimisticSession: Session = {
+      id: tempId,
+      projectId,
+      name: sessionName,
+      type,
+      isPrivate: false,
+      createdAt: now,
+      updatedAt: now,
+    }
+    
+    // Optimistic update: immediately add to cache and set as active
+    queryClient.setQueryData(['sessions', projectId], (oldData: Session[] | undefined) => {
+      if (!oldData) return [optimisticSession]
+      return [...oldData, optimisticSession]
+    })
+    setActiveSession(optimisticSession)
+    setGenerationType(type)
+    
     try {
       const response = await fetch('/api/sessions', {
         method: 'POST',
@@ -102,8 +128,8 @@ export default function ProjectPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          projectId: params.id as string,
-          name: name || `${type === 'image' ? 'Image' : 'Video'} Session ${sessions.length + 1}`,
+          projectId,
+          name: sessionName,
           type,
         }),
       })
@@ -111,20 +137,39 @@ export default function ProjectPage() {
       if (response.ok) {
         const newSession = await response.json()
         // Parse dates from strings to Date objects
-        const parsedSession = {
+        const parsedSession: Session = {
           ...newSession,
           createdAt: new Date(newSession.createdAt),
           updatedAt: new Date(newSession.updatedAt),
         }
+        
+        // Replace temporary session with real one in cache
+        queryClient.setQueryData(['sessions', projectId], (oldData: Session[] | undefined) => {
+          if (!oldData) return [parsedSession]
+          return oldData.map(s => s.id === tempId ? parsedSession : s)
+        })
+        
+        // Update active session to real one
         setActiveSession(parsedSession)
-        setGenerationType(type)
-        // Sessions will refetch automatically via React Query
+        
         return parsedSession
       } else {
+        // Remove optimistic session on failure
+        queryClient.setQueryData(['sessions', projectId], (oldData: Session[] | undefined) => {
+          if (!oldData) return []
+          return oldData.filter(s => s.id !== tempId)
+        })
+        setActiveSession(null)
         console.error('Failed to create session')
         return null
       }
     } catch (error) {
+      // Remove optimistic session on error
+      queryClient.setQueryData(['sessions', projectId], (oldData: Session[] | undefined) => {
+        if (!oldData) return []
+        return oldData.filter(s => s.id !== tempId)
+      })
+      setActiveSession(null)
       console.error('Error creating session:', error)
       return null
     }

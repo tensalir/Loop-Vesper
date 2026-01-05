@@ -711,11 +711,15 @@ export class GeminiAdapter extends BaseModelAdapter {
     }
 
     // Add reference images if provided
-    // Nano Banana Pro uses 'image_urls' parameter (array, up to 14 images)
+    // Nano Banana Pro uses 'image_input' parameter (array, up to 14 images) - same as Seedream 4.5
+    // NOTE: Previously used 'image_urls' which was WRONG and caused reference images to be ignored!
     const referenceImages = request.referenceImages || (request.referenceImage ? [request.referenceImage] : [])
     if (referenceImages.length > 0) {
-      input.image_urls = referenceImages
-      console.log(`[Replicate Fallback] Using ${referenceImages.length} reference image(s) via image_urls`)
+      input.image_input = referenceImages
+      console.log(`[Replicate Fallback] ✅ Using ${referenceImages.length} reference image(s) via image_input`)
+      console.log(`[Replicate Fallback] First image type: ${referenceImages[0]?.startsWith('data:') ? 'data URL' : referenceImages[0]?.startsWith('http') ? 'public URL' : 'unknown'}`)
+    } else {
+      console.log(`[Replicate Fallback] ⚠️ No reference images provided - text-to-image only`)
     }
 
     // Resolution mapping - Nano Banana Pro uses "1K", "2K", "4K" strings

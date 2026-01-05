@@ -68,11 +68,29 @@ export function SessionSidebar({
   const handleRenameSubmit = async (sessionId: string) => {
     if (!newSessionName.trim()) return
     
+    const trimmedName = newSessionName.trim()
+    const session = sessions.find(s => s.id === sessionId)
+    if (!session) return
+    
+    const sessionProjectId = session.projectId
+    const previousSessions = queryClient.getQueryData<Session[]>(['sessions', sessionProjectId])
+    
+    // Optimistic update: immediately update session name in cache
+    queryClient.setQueryData(['sessions', sessionProjectId], (oldData: Session[] | undefined) => {
+      if (!oldData) return []
+      return oldData.map((s) => 
+        s.id === sessionId ? { ...s, name: trimmedName } : s
+      )
+    })
+    
+    // Close edit mode immediately for better UX
+    setRenamingSessionId(null)
+    
     try {
       const response = await fetch(`/api/sessions/${sessionId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newSessionName.trim() }),
+        body: JSON.stringify({ name: trimmedName }),
       })
 
       if (!response.ok) throw new Error('Failed to rename session')
@@ -83,10 +101,15 @@ export function SessionSidebar({
         variant: "default",
       })
 
-      setRenamingSessionId(null)
       onSessionUpdate?.()
     } catch (error) {
       console.error('Error renaming session:', error)
+      
+      // Rollback optimistic update on error
+      if (previousSessions) {
+        queryClient.setQueryData(['sessions', sessionProjectId], previousSessions)
+      }
+      
       toast({
         title: "Rename failed",
         description: "Failed to update session name",
@@ -112,16 +135,30 @@ export function SessionSidebar({
       return
     }
 
+    const newIsPrivate = !session.isPrivate
+    const sessionProjectId = session.projectId
+    
+    // Store previous sessions for potential rollback
+    const previousSessions = queryClient.getQueryData<Session[]>(['sessions', sessionProjectId])
+    
+    // Optimistic update: immediately update session privacy in cache
+    queryClient.setQueryData(['sessions', sessionProjectId], (oldData: Session[] | undefined) => {
+      if (!oldData) return []
+      return oldData.map((s) => 
+        s.id === session.id ? { ...s, isPrivate: newIsPrivate } : s
+      )
+    })
+
     try {
       const response = await fetch(`/api/sessions/${session.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isPrivate: !session.isPrivate }),
+        body: JSON.stringify({ isPrivate: newIsPrivate }),
       })
 
       if (!response.ok) throw new Error('Failed to update privacy')
 
-      const newStatus = !session.isPrivate ? 'Private' : 'Public'
+      const newStatus = newIsPrivate ? 'Private' : 'Public'
       toast({
         title: "Privacy updated",
         description: `Session is now ${newStatus}`,
@@ -131,6 +168,12 @@ export function SessionSidebar({
       onSessionUpdate?.()
     } catch (error) {
       console.error('Error updating privacy:', error)
+      
+      // Rollback optimistic update on error
+      if (previousSessions) {
+        queryClient.setQueryData(['sessions', sessionProjectId], previousSessions)
+      }
+      
       toast({
         title: "Update failed",
         description: "Failed to update session privacy",
@@ -147,9 +190,24 @@ export function SessionSidebar({
   const handleDeleteConfirm = async () => {
     if (!deletingSession) return
     
+    const sessionToDelete = deletingSession
+    const sessionProjectId = sessionToDelete.projectId
+    
+    // Store previous sessions for potential rollback
+    const previousSessions = queryClient.getQueryData<Session[]>(['sessions', sessionProjectId])
+    
+    // Optimistic update: immediately remove session from cache
+    queryClient.setQueryData(['sessions', sessionProjectId], (oldData: Session[] | undefined) => {
+      if (!oldData) return []
+      return oldData.filter((s) => s.id !== sessionToDelete.id)
+    })
+    
+    // Close dialog immediately for better UX
+    setDeletingSession(null)
     setIsDeleting(true)
+    
     try {
-      const response = await fetch(`/api/sessions/${deletingSession.id}`, {
+      const response = await fetch(`/api/sessions/${sessionToDelete.id}`, {
         method: 'DELETE',
       })
 
@@ -161,13 +219,18 @@ export function SessionSidebar({
         variant: "default",
       })
 
-      // Invalidate queries to refresh the session list
-      queryClient.invalidateQueries({ queryKey: ['sessions'] })
+      // Also invalidate to ensure consistency (updates in background)
+      queryClient.invalidateQueries({ queryKey: ['sessions', sessionProjectId] })
       
       onSessionUpdate?.()
-      setDeletingSession(null)
     } catch (error) {
       console.error('Error deleting session:', error)
+      
+      // Rollback optimistic update on error
+      if (previousSessions) {
+        queryClient.setQueryData(['sessions', sessionProjectId], previousSessions)
+      }
+      
       toast({
         title: "Delete failed",
         description: "Failed to delete session. Please try again.",

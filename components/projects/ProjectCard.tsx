@@ -207,6 +207,19 @@ export function ProjectCard({ project, currentUserId, onProjectUpdate }: Project
 
   const handleDeleteConfirm = async () => {
     setIsDeleting(true)
+    
+    // Store previous data for potential rollback
+    const previousProjects = queryClient.getQueryData<(Project & { thumbnailUrl?: string | null })[]>(['projects'])
+    
+    // Optimistic update: immediately remove project from cache
+    queryClient.setQueryData(['projects'], (oldData: (Project & { thumbnailUrl?: string | null })[] | undefined) => {
+      if (!oldData) return []
+      return oldData.filter((p) => p.id !== displayProject.id)
+    })
+    
+    // Close dialog immediately for better UX
+    setShowDeleteDialog(false)
+    
     try {
       const response = await fetch(`/api/projects/${displayProject.id}`, {
         method: 'DELETE',
@@ -225,6 +238,12 @@ export function ProjectCard({ project, currentUserId, onProjectUpdate }: Project
       onProjectUpdate?.()
     } catch (error) {
       console.error('Error deleting project:', error)
+      
+      // Rollback optimistic update on error
+      if (previousProjects) {
+        queryClient.setQueryData(['projects'], previousProjects)
+      }
+      
       toast({
         title: "Delete failed",
         description: "Failed to delete project. Please try again.",
@@ -232,7 +251,6 @@ export function ProjectCard({ project, currentUserId, onProjectUpdate }: Project
       })
     } finally {
       setIsDeleting(false)
-      setShowDeleteDialog(false)
     }
   }
 

@@ -73,9 +73,16 @@ export default function ProjectsPage() {
   }
 
   const handleProjectCreated = (project: Project) => {
-    // Invalidate and refetch projects query
-    queryClient.invalidateQueries({ queryKey: ['projects'] })
+    // Optimistic update: immediately add the new project to the cache
+    queryClient.setQueryData(['projects'], (oldData: (Project & { thumbnailUrl?: string | null })[] | undefined) => {
+      if (!oldData) return [project]
+      // Add new project at the beginning of the list
+      return [{ ...project, thumbnailUrl: null }, ...oldData]
+    })
     setShowNewProject(false)
+    
+    // Also invalidate to ensure data consistency (will update in background)
+    queryClient.invalidateQueries({ queryKey: ['projects'] })
   }
 
   const handleProjectUpdate = () => {
