@@ -1,18 +1,37 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, User, BarChart3, Sparkles } from 'lucide-react'
+import { ArrowLeft, User, BarChart3, Sparkles, Image } from 'lucide-react'
 import { AccountSettings } from '@/components/settings/AccountSettings'
 import { AnalyticsSettings } from '@/components/settings/AnalyticsSettings'
 import { PromptManagementSettings } from '@/components/settings/PromptManagementSettings'
+import { RendersManagementSettings } from '@/components/settings/RendersManagementSettings'
+import { createClient } from '@/lib/supabase/client'
 
 export default function SettingsPage() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState('account')
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  // Check if user is admin
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      try {
+        const response = await fetch('/api/profile')
+        if (response.ok) {
+          const profile = await response.json()
+          setIsAdmin(profile.role === 'admin')
+        }
+      } catch (error) {
+        console.error('Failed to check admin status:', error)
+      }
+    }
+    checkAdminStatus()
+  }, [])
 
   return (
     <div className="min-h-screen bg-background">
@@ -35,7 +54,7 @@ export default function SettingsPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className={`grid w-full max-w-md ${isAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}>
             <TabsTrigger value="account" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               Account
@@ -48,6 +67,12 @@ export default function SettingsPage() {
               <Sparkles className="h-4 w-4" />
               Prompts
             </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="renders" className="flex items-center gap-2">
+                <Image className="h-4 w-4" />
+                Renders
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="account" className="mt-6">
@@ -61,6 +86,12 @@ export default function SettingsPage() {
           <TabsContent value="prompts" className="mt-6">
             <PromptManagementSettings />
           </TabsContent>
+
+          {isAdmin && (
+            <TabsContent value="renders" className="mt-6">
+              <RendersManagementSettings />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </div>

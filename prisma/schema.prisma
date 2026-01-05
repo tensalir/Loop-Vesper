@@ -237,3 +237,19 @@ model PromptEnhancementPrompt {
 
   @@map("prompt_enhancement_prompts")
 }
+
+model ProductRender {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   // Product name (e.g., "MCL38")
+  colorway    String?  // Colorway (e.g., "Papaya Orange")
+  imageUrl    String   @map("image_url")
+  storagePath String?  @map("storage_path") // Supabase path for local uploads
+  source      String   @default("local") // "local" or "frontify"
+  frontifyId  String?  @map("frontify_id") // Frontify asset ID if synced
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@index([source])
+  @@map("product_renders")
+}

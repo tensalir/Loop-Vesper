@@ -5,11 +5,12 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Image as ImageIcon, ImagePlus, Ratio, ChevronDown, Upload, FolderOpen, X, MessageSquare } from 'lucide-react'
+import { Image as ImageIcon, ImagePlus, Ratio, ChevronDown, Upload, FolderOpen, X, MessageSquare, Circle } from 'lucide-react'
 import { useModelCapabilities } from '@/hooks/useModelCapabilities'
 import { AspectRatioSelector } from './AspectRatioSelector'
 import { ModelPicker } from './ModelPicker'
 import { ImageBrowseModal } from './ImageBrowseModal'
+import { ProductRendersBrowseModal } from './ProductRendersBrowseModal'
 import { PromptEnhancementButton } from './PromptEnhancementButton'
 import { useParams } from 'next/navigation'
 
@@ -50,6 +51,7 @@ export function ChatInput({
   const [referenceImages, setReferenceImages] = useState<File[]>([]) // Multiple images
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([])
   const [browseModalOpen, setBrowseModalOpen] = useState(false)
+  const [rendersModalOpen, setRendersModalOpen] = useState(false)
   const [stylePopoverOpen, setStylePopoverOpen] = useState(false)
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -502,6 +504,20 @@ export function ChatInput({
           onChange={handleFileSelect}
         />
 
+        {/* Renders Button - Product renders quick access */}
+        {supportsImageEditing && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-3 rounded-lg"
+            onClick={() => setRendersModalOpen(true)}
+            title="Browse product renders"
+          >
+            {/* Loop logo - white circle */}
+            <div className="w-3.5 h-3.5 rounded-full bg-white border border-white/20" />
+          </Button>
+        )}
+
         {/* Aspect Ratio Popover */}
         <Popover>
           <PopoverTrigger asChild>
@@ -574,6 +590,13 @@ export function ChatInput({
         onClose={() => setBrowseModalOpen(false)}
         onSelectImage={handleBrowseSelect}
         projectId={params.id as string}
+      />
+
+      {/* Product Renders Browse Modal */}
+      <ProductRendersBrowseModal
+        isOpen={rendersModalOpen}
+        onClose={() => setRendersModalOpen(false)}
+        onSelectImage={handleBrowseSelect}
       />
 
       {/* Assistant Drawer - Lazy loaded */}

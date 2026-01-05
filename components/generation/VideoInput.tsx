@@ -10,6 +10,7 @@ import { useModelCapabilities } from '@/hooks/useModelCapabilities'
 import { AspectRatioSelector } from './AspectRatioSelector'
 import { ModelPicker } from './ModelPicker'
 import { ImageBrowseModal } from './ImageBrowseModal'
+import { ProductRendersBrowseModal } from './ProductRendersBrowseModal'
 import { useParams } from 'next/navigation'
 import { PromptEnhancementButton } from './PromptEnhancementButton'
 
@@ -49,6 +50,7 @@ export function VideoInput({
   const [referenceImageId, setReferenceImageId] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [browseModalOpen, setBrowseModalOpen] = useState(false)
+  const [rendersModalOpen, setRendersModalOpen] = useState(false)
   const [stylePopoverOpen, setStylePopoverOpen] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -386,6 +388,19 @@ export function VideoInput({
           onChange={handleFileSelect}
         />
 
+        {/* Renders Button - Product renders quick access */}
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={generating}
+          className="h-8 px-3 rounded-lg"
+          onClick={() => setRendersModalOpen(true)}
+          title="Browse product renders"
+        >
+          {/* Loop logo - white circle */}
+          <div className="w-3.5 h-3.5 rounded-full bg-white border border-white/20" />
+        </Button>
+
         {/* Aspect Ratio Popover */}
         <Popover>
           <PopoverTrigger asChild>
@@ -457,6 +472,13 @@ export function VideoInput({
         onClose={() => setBrowseModalOpen(false)}
         onSelectImage={handleBrowseSelect}
         projectId={params.id as string}
+      />
+
+      {/* Product Renders Browse Modal */}
+      <ProductRendersBrowseModal
+        isOpen={rendersModalOpen}
+        onClose={() => setRendersModalOpen(false)}
+        onSelectImage={handleBrowseSelect}
       />
     </div>
   )

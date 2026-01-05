@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { persistReferenceImage, persistReferenceImages } from '@/lib/reference-images'
+import { Prisma } from '@prisma/client'
 
 /**
  * Admin endpoint to backfill existing generations that have base64 reference images
@@ -144,7 +145,7 @@ export async function POST(request: NextRequest) {
         // Update the generation with cleaned parameters
         await prisma.generation.update({
           where: { id: gen.id },
-          data: { parameters: newParams },
+          data: { parameters: newParams as Prisma.InputJsonValue },
         })
 
         results.updated++
