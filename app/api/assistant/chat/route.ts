@@ -33,7 +33,7 @@ function checkRateLimit(userId: string): { allowed: boolean; remaining: number }
 // Cleanup old rate limit entries periodically
 setInterval(() => {
   const now = Date.now()
-  for (const [userId, limit] of rateLimits) {
+  for (const [userId, limit] of Array.from(rateLimits.entries())) {
     if (now > limit.resetAt) {
       rateLimits.delete(userId)
     }
