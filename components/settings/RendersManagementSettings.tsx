@@ -72,7 +72,6 @@ interface PendingImage {
   suggestedAngle: string
   colorDescription: string
   confidence: number
-  isAnalyzing?: boolean
 }
 
 interface ColorwayGroup {
@@ -223,16 +222,18 @@ export function RendersManagementSettings() {
           file,
           base64,
           preview: base64,
-          suggestedColorway: 'Analyzing...',
+          suggestedColorway: 'Unanalyzed',
           suggestedAngle: 'front',
           colorDescription: '',
           confidence: 0,
-          isAnalyzing: true,
         }
       })
     )
 
     setPendingImages(prev => [...prev, ...newPending])
+    // Reset analysis state when new images are added
+    setAnalysisComplete(false)
+    setAnalysisError(null)
   }
 
   // Handle drag and drop
@@ -269,6 +270,8 @@ export function RendersManagementSettings() {
     if (pendingImages.length === 0) return
     
     setIsAnalyzing(true)
+    setAnalysisError(null)
+    setAnalysisComplete(false)
     
     try {
       const imagesToAnalyze = pendingImages.map(img => ({
@@ -276,6 +279,8 @@ export function RendersManagementSettings() {
         base64: img.base64,
         filename: img.file.name,
       }))
+
+      console.log(`[Analyze] Sending ${imagesToAnalyze.length} images to Claude Vision...`)
 
       const response = await fetch('/api/admin/product-renders/analyze', {
         method: 'POST',
@@ -287,10 +292,12 @@ export function RendersManagementSettings() {
       })
 
       if (!response.ok) {
-        throw new Error('Analysis failed')
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Analysis failed: ${response.status}`)
       }
 
       const result = await response.json()
+      console.log(`[Analyze] Received results:`, result)
 
       // Update pending images with analysis results
       setPendingImages(prev => prev.map(img => {
@@ -298,35 +305,27 @@ export function RendersManagementSettings() {
         if (analysis) {
           return {
             ...img,
-            suggestedColorway: analysis.suggestedColorway,
-            suggestedAngle: analysis.suggestedAngle,
-            colorDescription: analysis.colorDescription,
-            confidence: analysis.confidence,
-            isAnalyzing: false,
+            suggestedColorway: analysis.suggestedColorway || 'Default',
+            suggestedAngle: analysis.suggestedAngle || 'front',
+            colorDescription: analysis.colorDescription || '',
+            confidence: analysis.confidence || 0.5,
           }
         }
-        return { ...img, isAnalyzing: false }
+        return img
       }))
-    } catch (error) {
-      console.error('Analysis error:', error)
-      // Mark all as failed analysis
-      setPendingImages(prev => prev.map(img => ({
-        ...img,
-        suggestedColorway: 'Default',
-        isAnalyzing: false,
-      })))
+      
+      setAnalysisComplete(true)
+    } catch (error: any) {
+      console.error('[Analyze] Error:', error)
+      setAnalysisError(error.message || 'Analysis failed')
     } finally {
       setIsAnalyzing(false)
     }
   }
 
-  // Auto-analyze when images are added
-  useEffect(() => {
-    const needsAnalysis = pendingImages.filter(img => img.isAnalyzing)
-    if (needsAnalysis.length > 0 && !isAnalyzing) {
-      analyzeImages()
-    }
-  }, [pendingImages.length])
+  // Track if analysis has been done
+  const [analysisComplete, setAnalysisComplete] = useState(false)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
 
   // Group pending images by colorway
   const pendingByColorway = pendingImages.reduce((acc, img) => {
@@ -728,17 +727,47 @@ export function RendersManagementSettings() {
             {/* Pending Images by Colorway */}
             {pendingImages.length > 0 && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-medium flex items-center gap-2">
+                {/* Analysis Controls */}
+                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
+                  <div className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-primary" />
-                    AI-Detected Colorways
+                    <span className="font-medium">AI Colorway Detection</span>
+                    {analysisComplete && (
+                      <span className="text-xs text-green-500 flex items-center gap-1">
+                        <Check className="h-3 w-3" />
+                        Complete
+                      </span>
+                    )}
+                    {analysisError && (
+                      <span className="text-xs text-red-500 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {analysisError}
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={analyzeImages}
+                    disabled={isAnalyzing || pendingImages.length === 0}
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Analyzing {pendingImages.length} images...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        {analysisComplete ? 'Re-analyze' : 'Analyze with AI'}
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm text-muted-foreground">
+                    {analysisComplete ? 'Detected Colorways' : 'Images to Upload'} ({pendingImages.length})
                   </h3>
-                  {isAnalyzing && (
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Analyzing...
-                    </span>
-                  )}
                 </div>
 
                 {Object.entries(pendingByColorway).map(([colorway, images]) => (
@@ -758,11 +787,6 @@ export function RendersManagementSettings() {
                               alt="Preview"
                               className="w-full h-full object-contain p-1"
                             />
-                            {img.isAnalyzing && (
-                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                <Loader2 className="h-4 w-4 animate-spin text-white" />
-                              </div>
-                            )}
                           </div>
                           
                           {/* Remove button */}
@@ -776,7 +800,7 @@ export function RendersManagementSettings() {
                           </Button>
 
                           {/* Confidence indicator */}
-                          {!img.isAnalyzing && (
+                          {img.confidence > 0 && (
                             <div className={`absolute bottom-0 left-0 right-0 h-1 ${
                               img.confidence >= 0.8 ? 'bg-green-500' :
                               img.confidence >= 0.5 ? 'bg-yellow-500' : 'bg-red-500'
