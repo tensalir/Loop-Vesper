@@ -222,17 +222,19 @@ export function ProductRendersBrowseModal({
                                         <img
                                           src={render.imageUrl}
                                           alt={`${render.name}${render.colorway ? ` - ${render.colorway}` : ''}`}
-                                          className="w-full h-full object-contain p-2"
+                                          className="w-full h-full object-contain p-2 bg-white/5"
                                           loading="lazy"
+                                          style={{ minHeight: '100%', minWidth: '100%' }}
                                           onError={(e) => {
                                             console.error('[ProductRenders] Failed to load image:', render.imageUrl, render)
-                                            e.currentTarget.style.opacity = '0'
+                                            e.currentTarget.style.display = 'none'
                                             const placeholder = e.currentTarget.nextElementSibling as HTMLElement
                                             if (placeholder) {
                                               placeholder.style.display = 'flex'
                                             }
                                           }}
                                           onLoad={(e) => {
+                                            console.log('[ProductRenders] Image loaded successfully:', render.imageUrl)
                                             // Hide placeholder when image loads successfully
                                             const placeholder = e.currentTarget.nextElementSibling as HTMLElement
                                             if (placeholder) {
@@ -241,8 +243,9 @@ export function ProductRendersBrowseModal({
                                           }}
                                         />
                                         {/* Placeholder for loading/failed images */}
-                                        <div className="image-placeholder absolute inset-0 items-center justify-center bg-muted/50 flex">
+                                        <div className="image-placeholder absolute inset-0 items-center justify-center bg-muted/50 flex" style={{ display: 'flex' }}>
                                           <div className="text-center p-2">
+                                            <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1 text-muted-foreground" />
                                             <p className="text-xs text-muted-foreground font-medium">{render.name}</p>
                                             {render.colorway && (
                                               <p className="text-[10px] text-muted-foreground/70">{render.colorway}</p>
