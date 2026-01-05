@@ -10,7 +10,36 @@ interface PromptEnhancementButtonProps {
   referenceImage?: string | File | null
   onEnhancementComplete: (enhancedPrompt: string) => void
   onEnhancingChange?: (isEnhancing: boolean) => void
+  onTextTransform?: (transformedText: string) => void
   disabled?: boolean
+}
+
+// Helper function to gradually morph text from original to enhanced
+function morphText(original: string, enhanced: string, progress: number): string {
+  if (progress <= 0) return original
+  if (progress >= 1) return enhanced
+  
+  // Split into words for smoother transformation
+  const originalWords = original.split(/(\s+)/)
+  const enhancedWords = enhanced.split(/(\s+)/)
+  
+  // Calculate how many words to transform
+  const totalWords = Math.max(originalWords.length, enhancedWords.length)
+  const wordsToTransform = Math.floor(totalWords * progress)
+  
+  // Build the morphed text
+  const morphedWords: string[] = []
+  for (let i = 0; i < totalWords; i++) {
+    if (i < wordsToTransform) {
+      // Use enhanced word if available, otherwise keep original
+      morphedWords.push(enhancedWords[i] || originalWords[i] || '')
+    } else {
+      // Use original word if available, otherwise use enhanced
+      morphedWords.push(originalWords[i] || enhancedWords[i] || '')
+    }
+  }
+  
+  return morphedWords.join('')
 }
 
 export function PromptEnhancementButton({
@@ -19,6 +48,7 @@ export function PromptEnhancementButton({
   referenceImage,
   onEnhancementComplete,
   onEnhancingChange,
+  onTextTransform,
   disabled = false,
 }: PromptEnhancementButtonProps) {
   const [loading, setLoading] = useState(false)
@@ -130,12 +160,31 @@ export function PromptEnhancementButton({
       }
 
       const data = await response.json()
+      const enhancedPrompt = data.enhancedPrompt
       
-      // Apply the enhanced prompt - glitch effect will continue until this completes
-      onEnhancementComplete(data.enhancedPrompt)
+      // Gradually transform the text with glitch effect
+      const startTime = Date.now()
+      const duration = 2000 // 2 seconds for transformation
+      const steps = 30 // Number of transformation steps
+      const stepDuration = duration / steps
       
-      // Stop enhancing state after a brief moment to allow smooth transition
-      setTimeout(() => setEnhancing(false), 300)
+      let currentStep = 0
+      const transformInterval = setInterval(() => {
+        currentStep++
+        const progress = Math.min(currentStep / steps, 1)
+        const transformedText = morphText(prompt, enhancedPrompt, progress)
+        
+        // Update the text during transformation
+        onTextTransform?.(transformedText)
+        
+        if (progress >= 1) {
+          clearInterval(transformInterval)
+          // Final update with complete enhanced text
+          onEnhancementComplete(enhancedPrompt)
+          // Stop enhancing state after transformation completes
+          setTimeout(() => setEnhancing(false), 200)
+        }
+      }, stepDuration)
     } catch (error: any) {
       console.error('Error enhancing prompt:', error)
       setEnhancing(false)

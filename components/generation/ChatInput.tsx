@@ -54,6 +54,7 @@ export function ChatInput({
   const [rendersModalOpen, setRendersModalOpen] = useState(false)
   const [stylePopoverOpen, setStylePopoverOpen] = useState(false)
   const [isEnhancing, setIsEnhancing] = useState(false)
+  const [transformedPrompt, setTransformedPrompt] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -378,8 +379,11 @@ export function ChatInput({
         <div className="flex-1 relative">
           <Textarea
             placeholder={supportsImageEditing ? "Describe an image and click generate, or drag and drop images here..." : "Describe an image and click generate..."}
-            value={prompt}
-            onChange={(e) => onPromptChange(e.target.value)}
+            value={transformedPrompt !== null ? transformedPrompt : prompt}
+            onChange={(e) => {
+              setTransformedPrompt(null) // Clear transformation when user types
+              onPromptChange(e.target.value)
+            }}
             onKeyDown={handleKeyDown}
             className={`resize-none min-h-[52px] max-h-[104px] px-4 py-3 text-sm rounded-lg bg-muted/50 border transition-all pr-10 ${
               isEnhancing 
@@ -394,9 +398,18 @@ export function ChatInput({
             modelId={selectedModel}
             referenceImage={referenceImage}
             onEnhancementComplete={(enhancedPrompt) => {
+              setTransformedPrompt(null)
               onPromptChange(enhancedPrompt)
             }}
-            onEnhancingChange={setIsEnhancing}
+            onEnhancingChange={(enhancing) => {
+              setIsEnhancing(enhancing)
+              if (!enhancing) {
+                setTransformedPrompt(null)
+              }
+            }}
+            onTextTransform={(text) => {
+              setTransformedPrompt(text)
+            }}
             disabled={isGenerating}
           />
         </div>

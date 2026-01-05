@@ -138,68 +138,69 @@
     0%, 100% {
       text-shadow: 
         0 0 0 hsl(var(--foreground)),
-        0 0 0 hsl(var(--primary));
+        0 0 0 hsl(var(--primary) / 0);
       opacity: 1;
     }
     10% {
       text-shadow: 
-        -1px 1px 0 hsl(var(--primary) / 0.5),
-        1px -1px 0 hsl(var(--primary) / 0.3);
-      opacity: 0.95;
+        -0.5px 0.5px 0 hsl(var(--primary) / 0.2),
+        0.5px -0.5px 0 hsl(var(--primary) / 0.1);
+      opacity: 0.99;
     }
     20% {
       text-shadow: 
-        1px -1px 0 hsl(var(--primary) / 0.5),
-        -1px 1px 0 hsl(var(--primary) / 0.3);
-      opacity: 0.98;
+        0.5px -0.5px 0 hsl(var(--primary) / 0.2),
+        -0.5px 0.5px 0 hsl(var(--primary) / 0.1);
+      opacity: 0.99;
     }
     30% {
       text-shadow: 
-        -1px -1px 0 hsl(var(--primary) / 0.4),
-        1px 1px 0 hsl(var(--primary) / 0.2);
-      opacity: 0.97;
+        -0.5px -0.5px 0 hsl(var(--primary) / 0.15),
+        0.5px 0.5px 0 hsl(var(--primary) / 0.1);
+      opacity: 0.995;
     }
     40% {
       text-shadow: 
-        1px 1px 0 hsl(var(--primary) / 0.4),
-        -1px -1px 0 hsl(var(--primary) / 0.2);
-      opacity: 0.96;
+        0.5px 0.5px 0 hsl(var(--primary) / 0.15),
+        -0.5px -0.5px 0 hsl(var(--primary) / 0.1);
+      opacity: 0.995;
     }
     50% {
       text-shadow: 
-        -1px 0 0 hsl(var(--primary) / 0.3),
-        1px 0 0 hsl(var(--primary) / 0.2);
-      opacity: 0.99;
+        -0.5px 0 0 hsl(var(--primary) / 0.15),
+        0.5px 0 0 hsl(var(--primary) / 0.1);
+      opacity: 0.998;
     }
     60% {
       text-shadow: 
-        1px 0 0 hsl(var(--primary) / 0.3),
-        -1px 0 0 hsl(var(--primary) / 0.2);
-      opacity: 0.98;
+        0.5px 0 0 hsl(var(--primary) / 0.15),
+        -0.5px 0 0 hsl(var(--primary) / 0.1);
+      opacity: 0.998;
     }
     70% {
       text-shadow: 
-        0 -1px 0 hsl(var(--primary) / 0.3),
-        0 1px 0 hsl(var(--primary) / 0.2);
-      opacity: 0.97;
+        0 -0.5px 0 hsl(var(--primary) / 0.15),
+        0 0.5px 0 hsl(var(--primary) / 0.1);
+      opacity: 0.997;
     }
     80% {
       text-shadow: 
-        0 1px 0 hsl(var(--primary) / 0.3),
-        0 -1px 0 hsl(var(--primary) / 0.2);
-      opacity: 0.98;
+        0 0.5px 0 hsl(var(--primary) / 0.15),
+        0 -0.5px 0 hsl(var(--primary) / 0.1);
+      opacity: 0.998;
     }
     90% {
       text-shadow: 
         0 0 0 hsl(var(--foreground)),
-        0 0 0 hsl(var(--primary));
+        0 0 0 hsl(var(--primary) / 0);
       opacity: 1;
     }
   }
   
   .enhancing-text {
-    animation: glitch-text 0.3s infinite;
+    animation: glitch-text 0.4s infinite;
     will-change: text-shadow, opacity;
+    transition: opacity 0.1s ease;
   }
   
   /* Custom scrollbar for prompt text */

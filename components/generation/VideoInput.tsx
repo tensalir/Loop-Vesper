@@ -54,6 +54,7 @@ export function VideoInput({
   const [stylePopoverOpen, setStylePopoverOpen] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [isEnhancing, setIsEnhancing] = useState(false)
+  const [transformedPrompt, setTransformedPrompt] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const createReferenceId = () => {
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -271,8 +272,11 @@ export function VideoInput({
         <div className="flex-1 relative">
           <Textarea
             placeholder={supportsImageToVideo ? "Describe a video to animate from the reference image, or drag and drop an image here..." : "Describe a video to animate from the reference image..."}
-            value={prompt}
-            onChange={(e) => onPromptChange(e.target.value)}
+            value={transformedPrompt !== null ? transformedPrompt : prompt}
+            onChange={(e) => {
+              setTransformedPrompt(null) // Clear transformation when user types
+              onPromptChange(e.target.value)
+            }}
             onKeyDown={handleKeyDown}
             className={`resize-none min-h-[52px] max-h-[104px] px-4 py-3 text-sm rounded-lg bg-muted/50 border transition-all ${
               isEnhancing
@@ -287,8 +291,19 @@ export function VideoInput({
             prompt={prompt}
             modelId={selectedModel}
             referenceImage={referenceImage || imagePreviewUrl || null}
-            onEnhancementComplete={(enhanced) => onPromptChange(enhanced)}
-            onEnhancingChange={setIsEnhancing}
+            onEnhancementComplete={(enhanced) => {
+              setTransformedPrompt(null)
+              onPromptChange(enhanced)
+            }}
+            onEnhancingChange={(enhancing) => {
+              setIsEnhancing(enhancing)
+              if (!enhancing) {
+                setTransformedPrompt(null)
+              }
+            }}
+            onTextTransform={(text) => {
+              setTransformedPrompt(text)
+            }}
             disabled={generating}
           />
         </div>
