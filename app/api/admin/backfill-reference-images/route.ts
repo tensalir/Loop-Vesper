@@ -52,8 +52,7 @@ export async function POST(request: NextRequest) {
     // Fetch batch of generations
     const generations = await prisma.generation.findMany({
       where: {
-        // Has parameters (not null)
-        parameters: { not: null },
+        // All generations have parameters (required field)
       },
       select: {
         id: true,
