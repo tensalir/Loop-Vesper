@@ -397,6 +397,18 @@ export function RendersManagementSettings() {
   // Track if analysis has been done
   const [analysisComplete, setAnalysisComplete] = useState(false)
   const [analysisError, setAnalysisError] = useState<string | null>(null)
+  
+  // Track colorway editing
+  const [editingColorway, setEditingColorway] = useState<string | null>(null)
+  const [editingColorwayName, setEditingColorwayName] = useState('')
+  const [creatingColorway, setCreatingColorway] = useState(false)
+  const [creatingColorwayForImage, setCreatingColorwayForImage] = useState<string | null>(null)
+  const [newColorwayName, setNewColorwayName] = useState('')
+
+  // Get all unique colorways (sorted, including 'Unanalyzed' if present)
+  const allColorways = Array.from(
+    new Set(pendingImages.map(img => img.suggestedColorway))
+  ).sort()
 
   // Group pending images by colorway
   const pendingByColorway = pendingImages.reduce((acc, img) => {
@@ -413,6 +425,47 @@ export function RendersManagementSettings() {
     setPendingImages(prev => prev.map(img => 
       img.id === imageId ? { ...img, suggestedColorway: colorway } : img
     ))
+  }
+
+  // Rename a colorway (updates all images with that colorway)
+  const renameColorway = (oldName: string, newName: string) => {
+    if (!newName.trim() || newName === oldName) {
+      setEditingColorway(null)
+      return
+    }
+    
+    setPendingImages(prev => prev.map(img => 
+      img.suggestedColorway === oldName 
+        ? { ...img, suggestedColorway: newName.trim() }
+        : img
+    ))
+    setEditingColorway(null)
+  }
+
+  // Start editing colorway name
+  const startEditingColorway = (colorway: string) => {
+    setEditingColorway(colorway)
+    setEditingColorwayName(colorway)
+  }
+
+  // Create a new colorway and assign selected image to it
+  const createNewColorway = () => {
+    if (!newColorwayName.trim()) {
+      setCreatingColorway(false)
+      setCreatingColorwayForImage(null)
+      return
+    }
+    
+    const trimmedName = newColorwayName.trim()
+    
+    // If creating for a specific image, assign it immediately
+    if (creatingColorwayForImage) {
+      updateImageColorway(creatingColorwayForImage, trimmedName)
+      setCreatingColorwayForImage(null)
+    }
+    
+    setNewColorwayName('')
+    setCreatingColorway(false)
   }
 
   // Update image angle
@@ -839,14 +892,112 @@ export function RendersManagementSettings() {
                   <h3 className="text-sm text-muted-foreground">
                     {analysisComplete ? 'Detected Colorways' : 'Images to Upload'} ({pendingImages.length})
                   </h3>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setCreatingColorwayForImage(null)
+                      setCreatingColorway(true)
+                      setNewColorwayName('')
+                    }}
+                    className="h-7 text-xs"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    New Colorway
+                  </Button>
                 </div>
+
+                {/* Create new colorway dialog */}
+                {creatingColorway && (
+                  <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+                    <Label className="text-xs">Create New Colorway</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={newColorwayName}
+                        onChange={(e) => setNewColorwayName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            createNewColorway()
+                          } else if (e.key === 'Escape') {
+                            setCreatingColorway(false)
+                          }
+                        }}
+                        placeholder="e.g., Monaco Blue"
+                        className="h-7 text-xs"
+                        autoFocus
+                      />
+                      <Button
+                        size="sm"
+                        onClick={createNewColorway}
+                        disabled={!newColorwayName.trim()}
+                        className="h-7 text-xs"
+                      >
+                        <Check className="h-3 w-3 mr-1" />
+                        Create
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setCreatingColorway(false)}
+                        className="h-7 text-xs"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {Object.entries(pendingByColorway).map(([colorway, images]) => (
                   <div key={colorway} className="border rounded-lg p-3 space-y-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 group/colorway">
                       <div className="w-4 h-4 rounded-full bg-muted border" />
-                      <span className="font-medium text-sm">{colorway}</span>
-                      <span className="text-xs text-muted-foreground">({images.length} images)</span>
+                      {editingColorway === colorway ? (
+                        <div className="flex items-center gap-2 flex-1">
+                          <Input
+                            value={editingColorwayName}
+                            onChange={(e) => setEditingColorwayName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                renameColorway(colorway, editingColorwayName)
+                              } else if (e.key === 'Escape') {
+                                setEditingColorway(null)
+                              }
+                            }}
+                            className="h-7 text-sm flex-1"
+                            autoFocus
+                          />
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => renameColorway(colorway, editingColorwayName)}
+                          >
+                            <Check className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => setEditingColorway(null)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="font-medium text-sm">{colorway}</span>
+                          <span className="text-xs text-muted-foreground">({images.length} images)</span>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 opacity-0 group-hover/colorway:opacity-100 transition-opacity"
+                            onClick={() => startEditingColorway(colorway)}
+                            title="Rename colorway"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                        </>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
@@ -880,12 +1031,34 @@ export function RendersManagementSettings() {
 
                           {/* Editable fields */}
                           <div className="mt-1 space-y-1">
-                            <Input
-                              value={img.suggestedColorway}
-                              onChange={(e) => updateImageColorway(img.id, e.target.value)}
-                              className="h-6 text-xs"
-                              placeholder="Colorway"
-                            />
+                            <div className="flex gap-1">
+                              <Select
+                                value={img.suggestedColorway}
+                                onValueChange={(v) => {
+                                  if (v === '__create_new__') {
+                                    setCreatingColorwayForImage(img.id)
+                                    setCreatingColorway(true)
+                                    setNewColorwayName('')
+                                  } else {
+                                    updateImageColorway(img.id, v)
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-6 text-xs flex-1">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {allColorways.map((cw) => (
+                                    <SelectItem key={cw} value={cw} className="text-xs">
+                                      {cw}
+                                    </SelectItem>
+                                  ))}
+                                  <SelectItem value="__create_new__" className="text-xs text-primary font-medium">
+                                    + Create new colorway
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
                             <Select
                               value={img.suggestedAngle}
                               onValueChange={(v) => updateImageAngle(img.id, v)}
