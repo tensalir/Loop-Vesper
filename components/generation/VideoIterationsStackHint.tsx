@@ -11,73 +11,99 @@ interface VideoIterationsStackHintProps {
 }
 
 /**
- * Visual indicator showing video iterations exist for an image.
+ * Video button + stacked card effect for an image output.
  * 
- * Due to CSS overflow limitations in scrollable containers, we show a 
- * glowing border effect + badge instead of actual stacked cards behind.
- * The badge is clickable to open the full overlay with all iterations.
+ * - Always renders a video icon (bottom-right)
+ * - When no videos exist: icon appears on hover only (white)
+ * - When videos exist: icon is always visible (green with glow) + stacked layers behind card
  */
 export function VideoIterationsStackHint({ outputId, onClick }: VideoIterationsStackHintProps) {
-  const { iterations, count, hasProcessing } = useVideoIterations(outputId, {
+  const { count, hasProcessing } = useVideoIterations(outputId, {
     limit: 1,
     enabled: true,
   })
   
-  // Don't render if no iterations
-  if (count === 0) return null
+  const hasVideos = count > 0
+  
+  // Number of stacked layers to show (cosmetic, not based on actual count)
+  const stackLayers = 3
   
   return (
     <>
-      {/* Glow effect ring around the card - indicates video iterations exist */}
-      <div 
-        className="absolute -inset-1 rounded-2xl pointer-events-none"
-        style={{
-          background: `linear-gradient(135deg, hsl(var(--primary) / 0.5) 0%, hsl(var(--primary) / 0.3) 50%, hsl(var(--primary) / 0.5) 100%)`,
-          boxShadow: hasProcessing 
-            ? '0 0 20px hsl(var(--primary) / 0.5), inset 0 0 15px hsl(var(--primary) / 0.2)' 
-            : '0 0 12px hsl(var(--primary) / 0.4)',
-          zIndex: -1,
-        }}
-      />
-      
-      {/* Animated pulse effect when processing */}
-      {hasProcessing && (
-        <div 
-          className="absolute -inset-2 rounded-2xl pointer-events-none animate-pulse"
-          style={{
-            background: 'transparent',
-            boxShadow: '0 0 30px hsl(var(--primary) / 0.3)',
-            zIndex: -2,
-          }}
-        />
+      {/* Stacked layers wrapper - only show when videos exist */}
+      {hasVideos && (
+        <div className="absolute inset-0 pointer-events-none overflow-visible" style={{ zIndex: 0 }}>
+          {/* Stacked card layers - cosmetic effect positioned behind the image card, only on right side */}
+          {Array.from({ length: stackLayers }).map((_, index) => {
+            const layerIndex = stackLayers - index - 1 // Reverse order so first layer is furthest back
+            const offset = (layerIndex + 1) * 8 // 8px, 16px, 24px offsets
+            const verticalOffset = offset * 0.3 // Slight vertical offset for natural stacking
+            const opacity = 0.15 - (layerIndex * 0.03) // Reduced opacity for subtler glow
+            const scale = 1 - (layerIndex * 0.02) // Slightly smaller for depth
+            
+            return (
+              <div
+                key={`stack-layer-${layerIndex}`}
+                className="absolute pointer-events-none rounded-xl"
+                style={{
+                  // Full-width layer shifted right so only the extra portion peeks out (no hard cut)
+                  top: `${verticalOffset}px`,
+                  left: `${offset}px`,
+                  right: `${-offset}px`,
+                  bottom: `${-verticalOffset}px`,
+                  zIndex: -10 - layerIndex, // Ensure they're behind everything
+                  transform: `scale(${scale})`,
+                  background: `linear-gradient(to left,
+                    hsl(var(--primary) / ${opacity * 0.35}) 0%,
+                    hsl(var(--primary) / ${opacity * 0.18}) 45%,
+                    transparent 85%
+                  )`,
+                  border: `1.5px solid hsl(var(--primary) / ${opacity * 0.8})`,
+                  borderLeft: '0',
+                  borderTopLeftRadius: 0,
+                  borderBottomLeftRadius: 0,
+                  boxShadow: `
+                    ${offset}px 0 ${offset * 2}px -${offset * 0.65}px hsl(var(--primary) / ${opacity * 0.55}),
+                    inset 10px 0 ${12 + layerIndex * 2}px hsl(var(--primary) / ${opacity * 0.25})
+                  `,
+                  backdropFilter: 'blur(1px)',
+                }}
+              />
+            )
+          })}
+        </div>
       )}
       
-      {/* Badge showing count and status - positioned at bottom-right corner */}
+      {/* Video icon button - hover-only when no videos, always visible when videos exist */}
       <button
         onClick={(e) => {
           e.stopPropagation()
           onClick?.()
         }}
-        className="absolute -bottom-2 -right-2 cursor-pointer"
-        style={{ zIndex: 50 }}
-        title={`${count} video iteration${count !== 1 ? 's' : ''} - Click to view`}
+        className={`
+          absolute bottom-2 right-2 pointer-events-auto transition-all hover:scale-110
+          ${hasVideos ? '' : 'opacity-0 group-hover:opacity-100'}
+        `}
+        style={{ zIndex: 10 }}
+        title={hasVideos ? `${count} video${count !== 1 ? 's' : ''} - Click to view` : 'Convert to video'}
       >
-        <div className={`
-          flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold
-          shadow-xl backdrop-blur-md
-          transition-all hover:scale-110 hover:shadow-2xl
-          ${hasProcessing 
-            ? 'bg-primary text-primary-foreground animate-pulse' 
-            : 'bg-background text-foreground border-2 border-primary'
-          }
-        `}>
-          {hasProcessing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Video className="h-3.5 w-3.5 text-primary" />
-          )}
-          <span>{count}</span>
-        </div>
+        {hasProcessing ? (
+          <Loader2 
+            className="h-4 w-4 text-primary animate-spin"
+            style={{
+              filter: 'drop-shadow(0 0 6px hsl(var(--primary) / 0.6)) drop-shadow(0 0 12px hsl(var(--primary) / 0.3))',
+            }}
+          />
+        ) : hasVideos ? (
+          <Video 
+            className="h-4 w-4 text-primary"
+            style={{
+              filter: 'drop-shadow(0 0 6px hsl(var(--primary) / 0.5)) drop-shadow(0 0 10px hsl(var(--primary) / 0.25))',
+            }}
+          />
+        ) : (
+          <Video className="h-4 w-4 text-white" />
+        )}
       </button>
     </>
   )

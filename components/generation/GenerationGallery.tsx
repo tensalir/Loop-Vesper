@@ -672,8 +672,18 @@ export function GenerationGallery({
 
                         {/* Hover Overlay with Actions (no convert-to-video button in video view) */}
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
-                          {/* Top Right - Approval checkmark */}
-                          <div className="absolute top-2 right-2 pointer-events-auto">
+                          {/* Top Right - Bookmark + Approval */}
+                          <div className="absolute top-2 right-2 pointer-events-auto flex items-center gap-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleToggleBookmark(output.id, (output as any).isBookmarked || false)
+                              }}
+                              className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
+                              title={(output as any).isBookmarked ? 'Remove bookmark' : 'Bookmark'}
+                            >
+                              <Bookmark className={`h-3.5 w-3.5 text-white ${(output as any).isBookmarked ? 'fill-white' : ''}`} />
+                            </button>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
@@ -691,7 +701,7 @@ export function GenerationGallery({
                           </div>
                           
                           {/* Bottom Action Bar */}
-                          <div className="absolute bottom-0 left-0 right-0 p-2 flex items-center justify-between pointer-events-auto">
+                          <div className="absolute bottom-0 left-0 right-0 p-2 flex items-center justify-start pointer-events-auto">
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={(e) => {
@@ -712,18 +722,6 @@ export function GenerationGallery({
                                 title="Reuse"
                               >
                                 <RotateCcw className="h-3.5 w-3.5 text-white" />
-                              </button>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleToggleBookmark(output.id, (output as any).isBookmarked || false)
-                                }}
-                                className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
-                                title={(output as any).isBookmarked ? 'Remove bookmark' : 'Bookmark'}
-                              >
-                                <Bookmark className={`h-3.5 w-3.5 text-white ${(output as any).isBookmarked ? 'fill-white' : ''}`} />
                               </button>
                             </div>
                           </div>
@@ -818,8 +816,8 @@ export function GenerationGallery({
               {(generation.outputs || []).map((output) => {
                 const aspectRatio = (generation.parameters as any)?.aspectRatio || '1:1'
                 return (
-                <div key={output.id} className="relative">
-                  {/* Video iterations indicator - glow effect + badge */}
+                <div key={output.id} className="group relative overflow-visible">
+                  {/* Video iterations indicator - glow effect + video button */}
                   {currentGenerationType === 'image' && (
                     <VideoIterationsStackHint 
                       outputId={output.id} 
@@ -829,8 +827,8 @@ export function GenerationGallery({
                   
                   {/* Main image card */}
                   <div
-                    className="group relative bg-muted rounded-xl overflow-hidden border border-border/50 hover:border-primary/50 hover:shadow-lg transition-all duration-200"
-                    style={{ aspectRatio: getAspectRatioStyle(aspectRatio) }}
+                    className="relative bg-muted rounded-xl overflow-hidden border border-border/50 group-hover:border-primary/50 group-hover:shadow-lg transition-all duration-200"
+                    style={{ aspectRatio: getAspectRatioStyle(aspectRatio), zIndex: 1 }}
                   >
                     {output.fileType === 'image' && (
                       <Image
@@ -851,8 +849,18 @@ export function GenerationGallery({
 
                 {/* Hover Overlay - Minimal Krea Style - pointer-events-none to allow image clicks */}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
-                  {/* Top Right - Approval checkmark (always visible when approved) */}
-                  <div className="absolute top-2 right-2 pointer-events-auto">
+                  {/* Top Right - Bookmark + Approval */}
+                  <div className="absolute top-2 right-2 pointer-events-auto flex items-center gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleToggleBookmark(output.id, (output as any).isBookmarked || false)
+                      }}
+                      className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
+                      title={(output as any).isBookmarked ? 'Remove bookmark' : 'Bookmark'}
+                    >
+                      <Bookmark className={`h-3.5 w-3.5 text-white ${(output as any).isBookmarked ? 'fill-white' : ''}`} />
+                    </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
@@ -870,7 +878,7 @@ export function GenerationGallery({
                   </div>
                   
                   {/* Bottom Action Bar */}
-                  <div className="absolute bottom-0 left-0 right-0 p-2 flex items-center justify-between pointer-events-auto">
+                  <div className="absolute bottom-0 left-0 right-0 p-2 flex items-center justify-start pointer-events-auto">
                     <div className="flex items-center gap-1">
                       <button
                         onClick={(e) => {
@@ -892,33 +900,10 @@ export function GenerationGallery({
                       >
                         <RotateCcw className="h-3.5 w-3.5 text-white" />
                       </button>
-                      {currentGenerationType === 'image' && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleVideoConversion(output.id, output.fileUrl)
-                          }}
-                          className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
-                          title="Convert to Video"
-                        >
-                          <Video className="h-3.5 w-3.5 text-white" />
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleToggleBookmark(output.id, (output as any).isBookmarked || false)
-                        }}
-                        className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
-                        title={(output as any).isBookmarked ? 'Remove bookmark' : 'Bookmark'}
-                      >
-                        <Bookmark className={`h-3.5 w-3.5 text-white ${(output as any).isBookmarked ? 'fill-white' : ''}`} />
-                      </button>
                     </div>
                   </div>
                 </div>
+
               </div>
               {/* Close wrapper for stacked iterations */}
               </div>
