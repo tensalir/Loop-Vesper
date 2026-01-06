@@ -64,6 +64,12 @@ export default function ProjectPage() {
       hasProcessedInitialSessionsRef.current = true
     }
 
+    const urlSessionId =
+      typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('sessionId')
+        : null
+    const firstSessionOfType = sessions.find((s) => s.type === generationType)
+
     if (sessions.length === 0) {
       if (activeSession) setActiveSession(null)
       return

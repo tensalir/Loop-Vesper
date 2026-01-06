@@ -57,6 +57,7 @@ export function GenerationInterface({
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const scrollContentRef = useRef<HTMLDivElement>(null)
   const loadOlderRef = useRef<HTMLDivElement | null>(null) // Sentinel at TOP for loading older items
   const [prompt, setPrompt] = useState('')
   const [referenceImageUrl, setReferenceImageUrl] = useState<string | null>(null)
@@ -65,6 +66,8 @@ export function GenerationInterface({
   const [currentUser, setCurrentUser] = useState<{ displayName: string | null } | null>(null)
   const previousSessionIdRef = useRef<string | null>(null)
   const pendingScrollToBottomRef = useRef(false) // Flag to scroll after data loads
+  const isPinnedToBottomRef = useRef(true)
+  const sessionAutoScrollAttemptCountRef = useRef(0)
   
   // Scroll pinning state
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true)
@@ -200,6 +203,7 @@ export function GenerationInterface({
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight
       // Consider "pinned" if within 100px of bottom
       const pinned = distanceFromBottom < 100
+      isPinnedToBottomRef.current = pinned
       setIsPinnedToBottom(pinned)
       
       // Hide new items indicator when user scrolls to bottom
@@ -219,9 +223,82 @@ export function GenerationInterface({
       // Mark that we need to scroll to bottom once data loads
       pendingScrollToBottomRef.current = true
       previousGenerationsCountRef.current = 0 // Reset count for new session
+      sessionAutoScrollAttemptCountRef.current = 0
+      isPinnedToBottomRef.current = true
+      setIsPinnedToBottom(true)
     }
     previousSessionIdRef.current = session?.id || null
   }, [session?.id])
+
+  const scrollToBottomNow = useCallback(
+    (reason: 'session-load' | 'pinned-resize' | 'new-items') => {
+      const container = scrollContainerRef.current
+      if (!container || !session?.id) return
+
+      const beforeDistance =
+        container.scrollHeight - container.scrollTop - container.clientHeight
+      const before = {
+        scrollTop: Math.round(container.scrollTop),
+        scrollHeight: Math.round(container.scrollHeight),
+        clientHeight: Math.round(container.clientHeight),
+        distanceFromBottom: Math.round(beforeDistance),
+      }
+
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: 'auto',
+      })
+
+      const afterDistance =
+        container.scrollHeight - container.scrollTop - container.clientHeight
+      const after = {
+        scrollTop: Math.round(container.scrollTop),
+        scrollHeight: Math.round(container.scrollHeight),
+        clientHeight: Math.round(container.clientHeight),
+        distanceFromBottom: Math.round(afterDistance),
+      }
+    },
+    [session?.id]
+  )
+
+  // Observe scroll content height changes to detect late-loading layout shifts (images, virtualizer, dynamic import)
+  useEffect(() => {
+    if (isLoading) return
+    if (!session?.id) return
+    const contentEl = scrollContentRef.current
+    const container = scrollContainerRef.current
+    if (!contentEl || !container) return
+    if (typeof ResizeObserver === 'undefined') return
+
+    const observer = new ResizeObserver(() => {
+      if (!container) return
+
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight
+
+      // Keep the view pinned to bottom across late layout shifts
+      // - When opening a session: force-scroll until we actually reach bottom at least once
+      // - When user is pinned: stay pinned even if images load and push content down
+      if (pendingScrollToBottomRef.current || isPinnedToBottomRef.current) {
+        scrollToBottomNow(pendingScrollToBottomRef.current ? 'session-load' : 'pinned-resize')
+        // Clear pending once we are actually at (or extremely near) the bottom
+        const afterDistance =
+          container.scrollHeight - container.scrollTop - container.clientHeight
+        if (afterDistance < 2) {
+          pendingScrollToBottomRef.current = false
+        } else {
+          sessionAutoScrollAttemptCountRef.current += 1
+          // Avoid infinite loops if something is truly off; fall back to non-pending behavior.
+          if (sessionAutoScrollAttemptCountRef.current >= 6) {
+            pendingScrollToBottomRef.current = false
+          }
+        }
+      }
+    })
+
+    observer.observe(contentEl)
+    return () => observer.disconnect()
+  }, [session?.id, isLoading, generations.length])
 
   // Handle scrolling: on session load completion and new items
   useEffect(() => {
@@ -233,18 +310,9 @@ export function GenerationInterface({
     
     // Scroll to bottom when session data finishes loading
     if (!isLoading && pendingScrollToBottomRef.current && currentCount > 0) {
-      pendingScrollToBottomRef.current = false
-      // Use requestAnimationFrame to ensure DOM is updated
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          scrollContainerRef.current?.scrollTo({
-            top: scrollContainerRef.current!.scrollHeight,
-            behavior: 'auto',
-          })
-          setIsPinnedToBottom(true)
-          setShowNewItemsIndicator(false)
-        }, 100)
-      })
+      // Attempt an immediate scroll (ResizeObserver will keep it pinned through late layout shifts)
+      scrollToBottomNow('session-load')
+      setShowNewItemsIndicator(false)
       previousGenerationsCountRef.current = currentCount
       return
     }
@@ -255,17 +323,12 @@ export function GenerationInterface({
     // For new items (not session change): auto-scroll if pinned, show indicator otherwise
     if (hasNewItems && !pendingScrollToBottomRef.current) {
       if (isPinnedToBottom) {
-        setTimeout(() => {
-          scrollContainerRef.current?.scrollTo({
-            top: scrollContainerRef.current!.scrollHeight,
-            behavior: 'smooth',
-          })
-        }, 100)
+        scrollToBottomNow('new-items')
       } else {
         setShowNewItemsIndicator(true)
       }
     }
-  }, [generations.length, isLoading, isPinnedToBottom])
+  }, [generations.length, isLoading, isPinnedToBottom, scrollToBottomNow])
 
   // Load older items when scrolling to top (sentinel at top)
   useEffect(() => {
@@ -609,7 +672,7 @@ export function GenerationInterface({
             </div>
           </div>
         ) : (
-          <div className="pt-24 pb-52 pl-24 flex justify-center">
+          <div ref={scrollContentRef} className="pt-24 pb-52 pl-24 flex justify-center">
             <div className="w-full max-w-7xl">
               {/* Sentinel at TOP for loading older items when scrolling up */}
               <div ref={loadOlderRef} className="h-1 w-full" />
