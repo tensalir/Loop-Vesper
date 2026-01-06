@@ -19,6 +19,8 @@ interface GenerateParams {
     duration?: number
     referenceImage?: string
     referenceImageId?: string
+    /** Links this video generation to a source image output (for animate-still) */
+    sourceOutputId?: string
   }
 }
 

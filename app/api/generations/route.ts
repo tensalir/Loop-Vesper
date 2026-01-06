@@ -25,6 +25,9 @@ const ALLOWED_PARAMETER_FIELDS = [
 
   // Multi-image support (URLs only, base64 stripped in sanitize function)
   'referenceImages',
+
+  // Animate-still: links video generations to source image output
+  'sourceOutputId',
 ]
 
 /**

@@ -12,6 +12,7 @@ interface PromptEnhancementButtonProps {
   onEnhancingChange?: (isEnhancing: boolean) => void
   onTextTransform?: (transformedText: string) => void
   disabled?: boolean
+  className?: string
 }
 
 // Helper function to gradually morph text from original to enhanced

@@ -616,6 +616,7 @@ export function GenerationInterface({
               <GenerationGallery
                 generations={displayGenerations}
                 sessionId={session?.id || null}
+                projectId={session?.projectId || ''}
                 onReuseParameters={handleReuseParameters}
                 videoSessions={videoSessions}
                 onConvertToVideo={handleConvertToVideo}

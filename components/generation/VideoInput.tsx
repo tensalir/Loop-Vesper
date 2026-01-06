@@ -30,6 +30,18 @@ interface VideoInputProps {
   referenceImageUrl?: string | null
   onClearReferenceImage?: () => void
   onSetReferenceImageUrl?: (url: string) => void
+  /** Display variant: 'default' for full prompt bar, 'overlay' for compact overlay mode */
+  variant?: 'default' | 'overlay'
+  /** When true, reference image cannot be removed (used in animate-still overlay) */
+  lockedReferenceImage?: boolean
+  /** When true, hides upload/browse buttons for reference images */
+  hideReferencePicker?: boolean
+  /** Override reference image ID (e.g., use outputId for animate-still link) */
+  referenceImageIdOverride?: string
+  /** Whether to show the generate button (default true) */
+  showGenerateButton?: boolean
+  /** Whether generation is currently in progress */
+  isGenerating?: boolean
 }
 
 export function VideoInput({
@@ -43,12 +55,18 @@ export function VideoInput({
   referenceImageUrl,
   onClearReferenceImage,
   onSetReferenceImageUrl,
+  variant = 'default',
+  lockedReferenceImage = false,
+  hideReferencePicker = false,
+  referenceImageIdOverride,
+  showGenerateButton = true,
+  isGenerating: externalGenerating,
 }: VideoInputProps) {
   const params = useParams()
   const [referenceImage, setReferenceImage] = useState<File | null>(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [referenceImageId, setReferenceImageId] = useState<string | null>(null)
-  const [generating, setGenerating] = useState(false)
+  const [localGenerating, setLocalGenerating] = useState(false)
   const [browseModalOpen, setBrowseModalOpen] = useState(false)
   const [rendersModalOpen, setRendersModalOpen] = useState(false)
   const [stylePopoverOpen, setStylePopoverOpen] = useState(false)
@@ -56,7 +74,15 @@ export function VideoInput({
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [transformedPrompt, setTransformedPrompt] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Combine external and internal generating state
+  const generating = externalGenerating ?? localGenerating
+  const isOverlay = variant === 'overlay'
+  
   const createReferenceId = () => {
+    // Use override if provided (e.g., outputId for animate-still)
+    if (referenceImageIdOverride) {
+      return referenceImageIdOverride
+    }
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
       return crypto.randomUUID()
     }
@@ -103,23 +129,25 @@ export function VideoInput({
   const handleSubmit = async () => {
     if (!prompt.trim()) return
 
-    setGenerating(true)
+    setLocalGenerating(true)
     try {
       await onGenerate(prompt, {
         referenceImage: referenceImage || undefined,
         referenceImageId: referenceImageId || undefined,
       })
       onPromptChange('')
-      // Clean up preview URL
-      if (imagePreviewUrl) {
-        URL.revokeObjectURL(imagePreviewUrl)
+      // Clean up preview URL only if reference isn't locked
+      if (!lockedReferenceImage) {
+        if (imagePreviewUrl) {
+          URL.revokeObjectURL(imagePreviewUrl)
+        }
+        setImagePreviewUrl(null)
+        setReferenceImage(null)
       }
-      setImagePreviewUrl(null)
-      setReferenceImage(null)
     } catch (error) {
       console.error('Generation error:', error)
     } finally {
-      setGenerating(false)
+      setLocalGenerating(false)
     }
   }
 
@@ -269,7 +297,7 @@ export function VideoInput({
       {/* Main Input Area - Card Style */}
       <div className="flex items-center gap-3">
         {/* Input */}
-        <div className="flex-1 relative">
+        <div className="flex-1 relative flex">
           <Textarea
             placeholder={supportsImageToVideo ? "Describe a video to animate from the reference image, or drag and drop an image here..." : "Describe a video to animate from the reference image..."}
             value={transformedPrompt !== null ? transformedPrompt : prompt}
@@ -278,12 +306,16 @@ export function VideoInput({
               onPromptChange(e.target.value)
             }}
             onKeyDown={handleKeyDown}
-            className={`resize-none min-h-[52px] max-h-[104px] px-4 py-3 text-sm rounded-lg bg-muted/50 border transition-all ${
+            className={`resize-none px-4 text-sm rounded-lg bg-white/5 border-white/10 transition-all w-full flex-1 custom-scrollbar ${
+              isOverlay 
+                ? 'min-h-[48px] max-h-[120px] py-3.5 pr-10' 
+                : 'min-h-[56px] max-h-[140px] py-4 pr-10'
+            } ${
               isEnhancing
                 ? 'border-primary/50 bg-primary/5 shadow-lg shadow-primary/10'
                 : isDragging && supportsImageToVideo
                 ? 'border-primary/50'
-                : 'border-border focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary'
+                : 'border-border focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary/50'
             } ${isEnhancing ? 'enhancing-text' : ''}`}
             disabled={generating}
           />
@@ -311,46 +343,59 @@ export function VideoInput({
         {/* Reference Image Thumbnail - Left of Generate Button */}
         {(referenceImage || imagePreviewUrl) && (
           <div className="relative group">
-            <div className="w-[52px] h-[52px] rounded-lg overflow-hidden border-2 border-primary shadow-md">
+            <div className={`rounded-lg overflow-hidden border-2 border-primary/50 shadow-xl transition-transform duration-300 group-hover:scale-105 ${
+              isOverlay ? 'w-[48px] h-[48px]' : 'w-[56px] h-[56px]'
+            }`}>
               <img
                 src={imagePreviewUrl || ''}
                 alt="Reference"
                 className="w-full h-full object-cover"
               />
             </div>
-            <button
-              onClick={() => {
-                if (imagePreviewUrl) {
-                  URL.revokeObjectURL(imagePreviewUrl)
-                }
-                setImagePreviewUrl(null)
-                setReferenceImage(null)
-                setReferenceImageId(null)
-              }}
-              className="absolute -top-2 -right-2 bg-background border border-border rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-destructive hover:text-destructive-foreground"
-              title="Remove reference image"
-            >
-              <X className="h-3 w-3" />
-            </button>
+            {/* Hide remove button if reference is locked */}
+            {!lockedReferenceImage && (
+              <button
+                onClick={() => {
+                  if (imagePreviewUrl) {
+                    URL.revokeObjectURL(imagePreviewUrl)
+                  }
+                  setImagePreviewUrl(null)
+                  setReferenceImage(null)
+                  setReferenceImageId(null)
+                }}
+                className="absolute -top-2 -right-2 bg-background border border-border rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-destructive hover:text-destructive-foreground"
+                title="Remove reference image"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
           </div>
         )}
         
-        {/* Generate Button */}
-        <Button
-          onClick={handleSubmit}
-          disabled={!prompt.trim() || generating}
-          size="default"
-          className="h-[52px] px-8 rounded-lg font-semibold shadow-sm hover:shadow transition-all"
-        >
-          <VideoIcon className="mr-2 h-4 w-4" />
-          {generating ? 'Generating...' : 'Generate'}
-        </Button>
+        {/* Generate Button - conditionally rendered */}
+        {showGenerateButton && (
+          <Button
+            onClick={handleSubmit}
+            disabled={!prompt.trim() || generating}
+            size="default"
+            className={`rounded-lg font-semibold shadow-sm hover:shadow transition-all ${
+              isOverlay ? 'h-[48px] px-6 text-xs' : 'h-[56px] px-8 text-sm'
+            }`}
+          >
+            {generating ? (
+              <Loader2 className={`mr-2 animate-spin ${isOverlay ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
+            ) : (
+              <VideoIcon className={`mr-2 ${isOverlay ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
+            )}
+            {generating ? 'Generating...' : 'Generate'}
+          </Button>
+        )}
       </div>
 
       {/* Parameter Controls - Compact Row */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {/* Model Picker - Inline */}
-        <div className="[&>button]:h-8 [&>button]:text-xs [&>button]:px-3 [&>button]:rounded-lg">
+        <div className="[&>button]:h-8 [&>button]:text-xs [&>button]:px-3 [&>button]:rounded-lg [&>button]:bg-white/5 [&>button]:border-white/10 [&>button]:hover:bg-white/10 [&>button]:transition-colors">
           <ModelPicker
             selectedModel={selectedModel}
             onModelSelect={onModelSelect}
@@ -358,67 +403,70 @@ export function VideoInput({
           />
         </div>
 
-        {/* Style/Image Input - Popover with Upload/Browse */}
-        <Popover open={stylePopoverOpen} onOpenChange={setStylePopoverOpen}>
-          <PopoverTrigger asChild>
+        {/* Style/Image Input - Popover with Upload/Browse (hidden in locked mode) */}
+        {!hideReferencePicker && (
+          <>
+            <Popover open={stylePopoverOpen} onOpenChange={setStylePopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={generating}
+                  className="h-8 px-3 rounded-lg bg-white/5 border-white/10 hover:bg-white/10 transition-colors"
+                >
+                  <ImagePlus className="h-3.5 w-3.5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-40 p-2 bg-background/95 backdrop-blur-xl border-white/10 rounded-lg" align="start">
+                <div className="flex flex-col gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
+                    onClick={() => {
+                      fileInputRef.current?.click()
+                      setStylePopoverOpen(false)
+                    }}
+                  >
+                    <Upload className="h-3.5 w-3.5 mr-2" />
+                    Upload
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
+                    onClick={() => {
+                      setBrowseModalOpen(true)
+                      setStylePopoverOpen(false)
+                    }}
+                  >
+                    <FolderOpen className="h-3.5 w-3.5 mr-2" />
+                    Browse
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+
+            {/* Renders Button - Product renders quick access */}
             <Button
               variant="outline"
               size="sm"
               disabled={generating}
-              className="h-8 px-3 rounded-lg"
+              className="h-8 px-3 rounded-lg bg-white/5 border-white/10 hover:bg-white/10 transition-colors"
+              onClick={() => setRendersModalOpen(true)}
+              title="Browse product renders"
             >
-              <ImagePlus className="h-3.5 w-3.5" />
+              <div className="w-3.5 h-3.5 rounded-full bg-white border border-white/20" />
             </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-40 p-2" align="start">
-            <div className="flex flex-col gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start h-8 text-xs"
-                onClick={() => {
-                  fileInputRef.current?.click()
-                  setStylePopoverOpen(false)
-                }}
-              >
-                <Upload className="h-3.5 w-3.5 mr-2" />
-                Upload
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start h-8 text-xs"
-                onClick={() => {
-                  setBrowseModalOpen(true)
-                  setStylePopoverOpen(false)
-                }}
-              >
-                <FolderOpen className="h-3.5 w-3.5 mr-2" />
-                Browse
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleFileSelect}
-        />
-
-        {/* Renders Button - Product renders quick access */}
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={generating}
-          className="h-8 px-3 rounded-lg"
-          onClick={() => setRendersModalOpen(true)}
-          title="Browse product renders"
-        >
-          {/* Loop logo - white circle */}
-          <div className="w-3.5 h-3.5 rounded-full bg-white border border-white/20" />
-        </Button>
+          </>
+        )}
 
         {/* Aspect Ratio Popover */}
         <Popover>
@@ -427,13 +475,13 @@ export function VideoInput({
               variant="outline"
               size="sm"
               disabled={generating}
-              className="h-8 text-xs px-3 rounded-lg"
+              className="h-8 text-xs px-3 rounded-lg bg-white/5 border-white/10 hover:bg-white/10 transition-colors"
             >
-              <Ratio className="h-3.5 w-3.5 mr-1.5" />
+              <Ratio className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
               {parameters.aspectRatio}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-3" align="start">
+          <PopoverContent className="w-auto p-3 bg-background/95 backdrop-blur-xl border-white/10 rounded-xl shadow-2xl" align="start">
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground">Aspect Ratio</p>
               <AspectRatioSelector
@@ -451,12 +499,12 @@ export function VideoInput({
           onValueChange={(value) => onParametersChange({ ...parameters, resolution: parseInt(value) })}
           disabled={generating}
         >
-          <SelectTrigger className="h-8 text-xs px-3 rounded-lg w-auto min-w-[90px]">
+          <SelectTrigger className="h-8 text-xs px-3 rounded-lg bg-white/5 border-white/10 hover:bg-white/10 transition-colors w-auto min-w-[80px]">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-background/95 backdrop-blur-xl border-white/10 rounded-lg">
             {resolutionOptions.map(option => (
-              <SelectItem key={option.value} value={String(option.value)}>
+              <SelectItem key={option.value} value={String(option.value)} className="rounded-md text-xs">
                 {option.label}
               </SelectItem>
             ))}
@@ -470,13 +518,13 @@ export function VideoInput({
             onValueChange={(value) => onParametersChange({ ...parameters, duration: parseInt(value) })}
             disabled={generating}
           >
-            <SelectTrigger className="h-8 text-xs px-3 rounded-lg w-auto min-w-[100px]">
-              <Clock className="h-3.5 w-3.5 mr-1.5" />
+            <SelectTrigger className="h-8 text-xs px-3 rounded-lg bg-white/5 border-white/10 hover:bg-white/10 transition-colors w-auto min-w-[100px]">
+              <Clock className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-background/95 backdrop-blur-xl border-white/10 rounded-lg">
               {durationOptions.map((option) => (
-                <SelectItem key={option.value} value={String(option.value)}>
+                <SelectItem key={option.value} value={String(option.value)} className="rounded-md text-xs">
                   {option.label}
                 </SelectItem>
               ))}

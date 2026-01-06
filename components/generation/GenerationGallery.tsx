@@ -9,7 +9,8 @@ import { useToast } from '@/components/ui/use-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { GenerationProgress } from './GenerationProgress'
 import { ImageLightbox } from './ImageLightbox'
-import { VideoSessionSelector } from './VideoSessionSelector'
+import { ImageToVideoOverlay } from './ImageToVideoOverlay'
+import { VideoIterationsStackHint } from './VideoIterationsStackHint'
 import { getAllModels } from '@/lib/models/registry'
 
 // Safe date formatter
@@ -120,6 +121,8 @@ interface GenerationGalleryProps {
    */
   generations: GenerationWithOutputs[]
   sessionId: string | null
+  /** Project ID for the current session - needed for ImageToVideoOverlay */
+  projectId: string
   onReuseParameters: (generation: GenerationWithOutputs) => void
   videoSessions?: Session[]
   onConvertToVideo?: (generation: GenerationWithOutputs, videoSessionId: string, imageUrl?: string) => void
@@ -141,6 +144,7 @@ interface GenerationGalleryProps {
 export function GenerationGallery({
   generations,
   sessionId,
+  projectId,
   onReuseParameters,
   videoSessions = [],
   onConvertToVideo,
@@ -158,9 +162,10 @@ export function GenerationGallery({
     output: any
     generation: GenerationWithOutputs
   } | null>(null)
-  const [videoSelectorOpen, setVideoSelectorOpen] = useState(false)
-  const [selectedGeneration, setSelectedGeneration] = useState<GenerationWithOutputs | null>(null)
-  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null)
+  // Image-to-video overlay state (replaces VideoSessionSelector)
+  const [overlayOpen, setOverlayOpen] = useState(false)
+  const [overlayOutputId, setOverlayOutputId] = useState<string | null>(null)
+  const [overlayImageUrl, setOverlayImageUrl] = useState<string | null>(null)
 
   // Virtualizer for efficient rendering of large lists
   const virtualizer = useVirtualizer({
@@ -306,25 +311,17 @@ export function GenerationGallery({
     }
   }
 
-  const handleVideoConversion = (generation: GenerationWithOutputs, imageUrl: string) => {
-    setSelectedGeneration(generation)
-    setSelectedImageUrl(imageUrl)
-    setVideoSelectorOpen(true)
+  // Open the image-to-video overlay for a specific output
+  const handleVideoConversion = (outputId: string, imageUrl: string) => {
+    setOverlayOutputId(outputId)
+    setOverlayImageUrl(imageUrl)
+    setOverlayOpen(true)
   }
 
-  const handleSelectVideoSession = async (videoSessionId: string) => {
-    if (selectedGeneration && onConvertToVideo) {
-      onConvertToVideo(selectedGeneration, videoSessionId, selectedImageUrl || undefined)
-    }
-  }
-
-  const handleCreateVideoSession = async (sessionName: string) => {
-    if (selectedGeneration && onCreateVideoSession) {
-      const newSession = await onCreateVideoSession('video', sessionName)
-      if (newSession && onConvertToVideo) {
-        onConvertToVideo(selectedGeneration, newSession.id, selectedImageUrl || undefined)
-      }
-    }
+  const handleOverlayClose = () => {
+    setOverlayOpen(false)
+    setOverlayOutputId(null)
+    setOverlayImageUrl(null)
   }
 
 
@@ -816,32 +813,41 @@ export function GenerationGallery({
                 </div>
               </div>
 
-            {/* Right Side: Outputs in 2-Column Grid - Smaller Images */}
-            <div className="flex-1 grid grid-cols-2 gap-3 max-w-4xl">
+            {/* Right Side: Outputs in 2-Column Grid */}
+            <div className="flex-1 grid grid-cols-2 gap-4 max-w-4xl">
               {(generation.outputs || []).map((output) => {
                 const aspectRatio = (generation.parameters as any)?.aspectRatio || '1:1'
                 return (
-                <div
-                  key={output.id}
-                  className="group relative bg-muted rounded-xl overflow-hidden border border-border/50 hover:border-primary/50 hover:shadow-lg transition-all duration-200"
-                  style={{ aspectRatio: getAspectRatioStyle(aspectRatio) }}
-                >
-                  {output.fileType === 'image' && (
-                    <Image
-                      src={output.fileUrl}
-                      alt="Generated content"
-                      width={output.width || 512}
-                      height={output.height || 512}
-                      className="w-full h-full object-cover cursor-pointer"
-                      loading="lazy"
-                      unoptimized={false}
-                      onClick={() => setLightboxData({
-                        imageUrl: output.fileUrl,
-                        output: output,
-                        generation: generation
-                      })}
+                <div key={output.id} className="relative">
+                  {/* Video iterations indicator - glow effect + badge */}
+                  {currentGenerationType === 'image' && (
+                    <VideoIterationsStackHint 
+                      outputId={output.id} 
+                      onClick={() => handleVideoConversion(output.id, output.fileUrl)}
                     />
                   )}
+                  
+                  {/* Main image card */}
+                  <div
+                    className="group relative bg-muted rounded-xl overflow-hidden border border-border/50 hover:border-primary/50 hover:shadow-lg transition-all duration-200"
+                    style={{ aspectRatio: getAspectRatioStyle(aspectRatio) }}
+                  >
+                    {output.fileType === 'image' && (
+                      <Image
+                        src={output.fileUrl}
+                        alt="Generated content"
+                        width={output.width || 512}
+                        height={output.height || 512}
+                        className="w-full h-full object-cover cursor-pointer"
+                        loading="lazy"
+                        unoptimized={false}
+                        onClick={() => setLightboxData({
+                          imageUrl: output.fileUrl,
+                          output: output,
+                          generation: generation
+                        })}
+                      />
+                    )}
 
                 {/* Hover Overlay - Minimal Krea Style - pointer-events-none to allow image clicks */}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
@@ -890,7 +896,7 @@ export function GenerationGallery({
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
-                            handleVideoConversion(generation, output.fileUrl)
+                            handleVideoConversion(output.id, output.fileUrl)
                           }}
                           className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
                           title="Convert to Video"
@@ -913,6 +919,8 @@ export function GenerationGallery({
                     </div>
                   </div>
                 </div>
+              </div>
+              {/* Close wrapper for stacked iterations */}
               </div>
               )
             })}
@@ -941,18 +949,17 @@ export function GenerationGallery({
         onDownload={handleDownload}
       />
 
-      {/* Video Session Selector */}
-      <VideoSessionSelector
-        isOpen={videoSelectorOpen}
-        onClose={() => {
-          setVideoSelectorOpen(false)
-          setSelectedGeneration(null)
-          setSelectedImageUrl(null)
-        }}
-        videoSessions={videoSessions}
-        onSelectSession={handleSelectVideoSession}
-        onCreateNewSession={handleCreateVideoSession}
-      />
+      {/* Image-to-Video Overlay */}
+      {overlayOutputId && overlayImageUrl && (
+        <ImageToVideoOverlay
+          isOpen={overlayOpen}
+          onClose={handleOverlayClose}
+          outputId={overlayOutputId}
+          imageUrl={overlayImageUrl}
+          projectId={projectId}
+          onCreateSession={onCreateVideoSession}
+        />
+      )}
     </>
   )
 }
