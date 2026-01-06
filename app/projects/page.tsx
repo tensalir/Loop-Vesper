@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
@@ -255,11 +255,20 @@ export default function ProjectsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('projects')
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const queryClient = useQueryClient()
 
   // Use React Query for projects with caching
   const { data: projects = [], isLoading: loading, refetch } = useProjects()
+
+  // Read tab from URL query params
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'review' || tab === 'briefings' || tab === 'projects') {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
 
   // Initialize theme from localStorage
   useEffect(() => {

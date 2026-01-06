@@ -6,10 +6,11 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
-import { Settings, Sun, Moon, Bookmark } from 'lucide-react'
+import { Settings, Sun, Moon } from 'lucide-react'
 import { FloatingSessionBar } from '@/components/sessions/FloatingSessionBar'
 import { GenerationInterface } from '@/components/generation/GenerationInterface'
 import { useSessions } from '@/hooks/useSessions'
+import { Navbar } from '@/components/navbar/Navbar'
 import { SpendingTracker } from '@/components/navbar/SpendingTracker'
 import type { Session } from '@/types/project'
 
@@ -257,109 +258,52 @@ export default function ProjectPage() {
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      {/* Header */}
-      <header className="border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between">
-          {/* Left side - Logo + Project Info */}
-          <div className="flex items-center gap-3 flex-1">
-            <img 
-              src={theme === 'light' ? "/images/Loop Vesper (Black).svg" : "/images/Loop Vesper (White).svg"}
-              alt="Loop Vesper Logo" 
-              className="h-7 object-contain cursor-pointer hover:opacity-80 transition-opacity"
-              onClick={() => router.push('/projects')}
-              title="Back to Projects"
-            />
-            <div className="border-l border-border pl-3">
-              <h1 className="font-semibold">{projectName}</h1>
-            </div>
-          </div>
+      {/* Compact Centered Navbar - Logo + Image/Video Toggle */}
+      <Navbar
+        theme={theme}
+        generationType={generationType}
+        onGenerationTypeChange={handleGenerationTypeChange}
+        showGenerationToggle={true}
+      />
 
-          {/* Center - Mode Toggle with Icons */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 bg-muted rounded-lg p-1">
-            <Button
-              variant={generationType === 'image' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => handleGenerationTypeChange('image')}
-              className="h-8 w-8 p-0"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                <circle cx="9" cy="9" r="2" />
-                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-              </svg>
-            </Button>
-            <Button
-              variant={generationType === 'video' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => handleGenerationTypeChange('video')}
-              className="h-8 w-8 p-0"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
-                <rect x="2" y="6" width="14" height="12" rx="2" />
-              </svg>
-            </Button>
-          </div>
-
-          {/* Right side */}
-          <div className="flex items-center gap-2 flex-1 justify-end">
-            <SpendingTracker isAdmin={isAdmin} />
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => router.push('/bookmarks')}
-              title="Bookmarks"
-            >
-              <Bookmark className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={toggleTheme}
-              className="transition-transform hover:rotate-12"
-            >
-              {theme === 'light' ? (
-                <Moon className="h-4 w-4" />
-              ) : (
-                <Sun className="h-4 w-4" />
-              )}
-            </Button>
-            <Link href="/settings">
-              <Button 
-                variant="ghost" 
-                size="icon"
-                title="Settings"
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      {/* Utility Icons - Fixed Top Right */}
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-1">
+        <SpendingTracker isAdmin={isAdmin} />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleTheme}
+          className="h-8 w-8 transition-transform hover:rotate-12"
+          title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+        >
+          {theme === 'light' ? (
+            <Moon className="h-4 w-4" />
+          ) : (
+            <Sun className="h-4 w-4" />
+          )}
+        </Button>
+        <Link href="/settings">
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Settings"
+            className="h-8 w-8"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        </Link>
+      </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Floating Session Thumbnails - Left Side */}
+      <div className="flex-1 flex overflow-hidden relative pt-16">
+        {/* Project Title - Subtle, positioned above session bar */}
+        <div className="fixed left-4 top-[72px] z-40 px-2">
+          <h1 className="text-xs font-medium text-muted-foreground/80 truncate max-w-[180px] hover:text-muted-foreground transition-colors" title={projectName}>
+            {projectName}
+          </h1>
+        </div>
+        
+        {/* Floating Session Thumbnails - Left Side (keeps its own fixed positioning) */}
         <FloatingSessionBar
           sessions={sessions}
           activeSession={activeSession}
