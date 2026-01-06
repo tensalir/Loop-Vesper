@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -249,7 +249,7 @@ function ReviewTabContent() {
   )
 }
 
-export default function ProjectsPage() {
+function ProjectsPageContent() {
   const [showNewProject, setShowNewProject] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -503,5 +503,18 @@ export default function ProjectsPage() {
         onProjectCreated={handleProjectCreated}
       />
     </div>
+  )
+}
+
+// Wrap in Suspense for useSearchParams() - required by Next.js 14
+export default function ProjectsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    }>
+      <ProjectsPageContent />
+    </Suspense>
   )
 }
