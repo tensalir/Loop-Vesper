@@ -263,7 +263,7 @@
   
   /* Prompt card - solid background with better contrast in light mode */
   .bg-prompt-card {
-    background-color: rgb(215, 212, 208); /* Solid warm gray for light mode */
+    background-color: #F0F0F0; /* Light gray for light mode */
   }
   
   .dark .bg-prompt-card {
