@@ -30,6 +30,7 @@ export interface ModelConfig {
     'text-2-video'?: boolean
     'image-2-video'?: boolean
     multiImageEditing?: boolean // Supports multiple reference images
+    audioGeneration?: boolean // Supports generating audio with video
   }
   pricing?: {
     perImage?: number

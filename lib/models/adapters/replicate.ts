@@ -104,6 +104,65 @@ export const REVE_CONFIG: ModelConfig = {
 }
 
 /**
+ * Kling 2.6 Pro Model Configuration
+ * Top-tier image-to-video with cinematic visuals, fluid motion, and native audio generation
+ * Documentation: https://replicate.com/kwaivgi/kling-v2.6
+ */
+export const KLING_2_6_CONFIG: ModelConfig = {
+  id: 'replicate-kling-2.6',
+  name: 'Kling 2.6 Pro',
+  provider: 'Kuaishou (Replicate)',
+  type: 'video',
+  description: 'Top-tier image-to-video with cinematic visuals, fluid motion, and native audio generation',
+  supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  defaultAspectRatio: '16:9',
+  maxResolution: 1080,
+  capabilities: {
+    'text-2-video': true,
+    'image-2-video': true,
+    audioGeneration: true,
+  },
+  parameters: [
+    {
+      name: 'aspectRatio',
+      type: 'select',
+      label: 'Aspect Ratio',
+      options: [
+        { label: '16:9 (Landscape)', value: '16:9' },
+        { label: '9:16 (Portrait)', value: '9:16' },
+        { label: '1:1 (Square)', value: '1:1' },
+      ],
+    },
+    {
+      name: 'duration',
+      type: 'select',
+      label: 'Duration',
+      options: [
+        { label: '5 seconds', value: 5 },
+        { label: '10 seconds', value: 10 },
+      ],
+    },
+    {
+      name: 'generateAudio',
+      type: 'boolean',
+      label: 'Generate Audio',
+      default: true,
+    },
+    {
+      name: 'numOutputs',
+      type: 'number',
+      label: 'Number of outputs',
+      min: 1,
+      max: 1,
+      default: 1,
+      options: [
+        { label: '1', value: 1 },
+      ],
+    },
+  ],
+}
+
+/**
  * Replicate API Adapter
  * Handles image generation via Replicate.com
  * Documentation: https://replicate.com/docs
@@ -358,7 +417,196 @@ export class ReplicateAdapter extends BaseModelAdapter {
   }
 
   private async generateVideo(request: GenerationRequest): Promise<GenerationResponse> {
-    throw new Error('Video generation not yet implemented for Replicate')
+    if (!this.apiKey) {
+      throw new Error('REPLICATE_API_TOKEN is not configured. Please add your Replicate API token to .env.local and restart the dev server. Get your token from: https://replicate.com/account/api-tokens')
+    }
+
+    const {
+      prompt,
+      parameters = {},
+      referenceImage,
+      referenceImageUrl,
+    } = request
+
+    try {
+      // Determine which Replicate video model to use
+      let modelPath: string
+      if (this.config.id === 'replicate-kling-2.6') {
+        modelPath = 'kwaivgi/kling-v2.6'
+      } else {
+        throw new Error(`Unknown Replicate video model: ${this.config.id}`)
+      }
+
+      // Get parameters with safe fallbacks
+      const aspectRatio = parameters?.aspectRatio || request.aspectRatio || '16:9'
+      const duration = parameters?.duration || 5
+      const generateAudio = parameters?.generateAudio !== false // Default true
+      const negativePrompt = parameters?.negativePrompt
+
+      // Prepare model-specific input for Kling 2.6
+      const input: any = {
+        prompt,
+        duration,
+        aspect_ratio: aspectRatio,
+        generate_audio: generateAudio,
+      }
+
+      // Add negative prompt if provided
+      if (negativePrompt) {
+        input.negative_prompt = negativePrompt
+      }
+
+      // Add start image for image-to-video (Kling's main strength)
+      let startImage: string | null = null
+      
+      // Check for reference image from various sources
+      if (referenceImage && typeof referenceImage === 'string' && referenceImage.length > 0) {
+        startImage = referenceImage
+        console.log('[Kling-2.6] Using referenceImage for start_image')
+      } else if (referenceImageUrl && typeof referenceImageUrl === 'string') {
+        startImage = referenceImageUrl
+        console.log('[Kling-2.6] Using referenceImageUrl for start_image:', referenceImageUrl.substring(0, 50))
+      } else if (request.referenceImages && Array.isArray(request.referenceImages) && request.referenceImages.length > 0) {
+        startImage = request.referenceImages[0]
+        console.log('[Kling-2.6] Using first referenceImages entry for start_image')
+      }
+
+      if (startImage) {
+        input.start_image = startImage
+        // When start_image is provided, aspect_ratio is ignored by Kling
+        console.log('[Kling-2.6] ✅ Image-to-video mode with start_image')
+      } else {
+        console.log('[Kling-2.6] Text-to-video mode (no start_image)')
+      }
+
+      console.log('Submitting Kling 2.6 video generation:', { ...input, start_image: startImage ? '[IMAGE]' : undefined })
+
+      // First, fetch the latest version for the model
+      const modelResponse = await fetch(`${this.baseUrl}/models/${modelPath}`, {
+        headers: {
+          'Authorization': `Token ${this.apiKey}`,
+        },
+      })
+
+      if (!modelResponse.ok) {
+        const errorText = await modelResponse.text()
+        console.error('Failed to fetch model info:', errorText)
+        throw new Error(`Failed to fetch model info: ${errorText}`)
+      }
+
+      const modelData = await modelResponse.json()
+      const versionHash = modelData.latest_version?.id
+
+      if (!versionHash) {
+        throw new Error('Could not determine latest version for the model')
+      }
+
+      console.log('Using version:', versionHash)
+
+      // Submit prediction to Replicate
+      const response = await fetch(`${this.baseUrl}/predictions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          version: versionHash,
+          input,
+        }),
+      })
+
+      if (!response.ok) {
+        let errorMessage = 'Replicate API request failed'
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.detail || errorData.error || JSON.stringify(errorData)
+        } catch {
+          const errorText = await response.text()
+          errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`
+        }
+        console.error('Replicate API error:', errorMessage)
+        throw new Error(errorMessage)
+      }
+
+      const data = await response.json()
+      const predictionId = data.id
+
+      console.log('Kling 2.6 prediction started:', predictionId)
+
+      // Poll for results - video generation takes longer
+      let attempts = 0
+      const maxAttempts = 180 // 15 minutes max (video generation takes longer)
+      
+      while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 5000)) // Wait 5 seconds
+
+        const statusResponse = await fetch(`${this.baseUrl}/predictions/${predictionId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Token ${this.apiKey}`,
+          },
+        })
+
+        if (!statusResponse.ok) {
+          let errorMessage = `Failed to check prediction status (${statusResponse.status})`
+          try {
+            const errorData = await statusResponse.json()
+            errorMessage = errorData.detail || errorData.error || errorMessage
+          } catch {
+            errorMessage = `${statusResponse.status}: ${statusResponse.statusText}`
+          }
+          throw new Error(errorMessage)
+        }
+
+        const statusData = await statusResponse.json()
+        console.log(`Kling 2.6 status: ${statusData.status} (attempt ${attempts + 1})`)
+
+        if (statusData.status === 'succeeded') {
+          // Parse output URL - Kling returns a single video URL
+          let outputUrl: string | null = null
+          
+          if (statusData.output) {
+            if (typeof statusData.output === 'string') {
+              outputUrl = statusData.output
+            } else if (statusData.output.url) {
+              outputUrl = statusData.output.url
+            } else if (Array.isArray(statusData.output) && statusData.output.length > 0) {
+              outputUrl = statusData.output[0]
+            }
+          }
+          
+          if (!outputUrl) {
+            throw new Error('No video generated - unexpected output format')
+          }
+
+          return {
+            id: `replicate-kling-${Date.now()}`,
+            status: 'completed',
+            outputs: [{
+              url: outputUrl,
+              width: aspectRatio === '9:16' ? 720 : 1280,
+              height: aspectRatio === '9:16' ? 1280 : 720,
+              duration: duration,
+            }],
+            metadata: {
+              model: request.modelId,
+              duration,
+              hasAudio: generateAudio,
+            },
+          }
+        } else if (statusData.status === 'failed' || statusData.status === 'canceled') {
+          throw new Error(`Video generation failed: ${statusData.error || 'Unknown error'}`)
+        }
+
+        attempts++
+      }
+
+      throw new Error('Video generation timeout - request took too long')
+    } catch (error: any) {
+      console.error('Kling 2.6 video generation error:', error)
+      throw new Error(error.message || 'Failed to generate video with Kling 2.6')
+    }
   }
 }
 

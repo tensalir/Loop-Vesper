@@ -88,6 +88,15 @@ export async function GET(request: NextRequest) {
         FROM projects p
         INNER JOIN project_members pm ON p.id = pm.project_id
         WHERE pm.user_id = ${userId}::uuid
+        
+        UNION
+        
+        -- Public shared projects from other users
+        SELECT p.id, p.name, p.description, p.owner_id, p.is_shared,
+               p.created_at, p.updated_at, FALSE as is_owner
+        FROM projects p
+        WHERE p.is_shared = TRUE
+          AND p.owner_id != ${userId}::uuid
       )
       SELECT 
         ap.id,

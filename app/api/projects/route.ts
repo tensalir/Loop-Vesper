@@ -32,7 +32,7 @@ export async function GET() {
     // Fetch projects visible to the user:
     // 1. Projects owned by user
     // 2. Projects where user is explicitly a member (invite-based sharing)
-    // Note: isShared is just a UI toggle for the owner, not a visibility flag
+    // 3. Public shared projects from other users (isShared = true)
     const projects = await prisma.project.findMany({
       where: {
         OR: [
@@ -44,6 +44,12 @@ export async function GET() {
               },
             },
           }, // Explicitly invited to project
+          {
+            AND: [
+              { isShared: true },
+              { NOT: { ownerId: user.id } },
+            ],
+          }, // Public shared projects from others
         ],
       },
       orderBy: {

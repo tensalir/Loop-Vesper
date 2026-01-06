@@ -8,6 +8,7 @@ import {
   ReplicateAdapter,
   SEEDREAM_4_CONFIG,
   REVE_CONFIG,
+  KLING_2_6_CONFIG,
 } from './adapters/replicate'
 
 /**
@@ -31,6 +32,7 @@ class ModelRegistry {
     // Register Replicate models
     this.register(SEEDREAM_4_CONFIG, ReplicateAdapter)
     this.register(REVE_CONFIG, ReplicateAdapter)
+    this.register(KLING_2_6_CONFIG, ReplicateAdapter)
   }
 
   /**

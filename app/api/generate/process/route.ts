@@ -349,14 +349,8 @@ async function processGenerationById(
     }
 
     // Generate using the model
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'local-debug',hypothesisId:'B',location:'api/generate/process/route.ts:pre-generate',message:'About to call model.generate()',data:{generationId,modelId:generation.modelId},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     const result = await model.generate(generationRequest)
     stopHeartbeat()
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'local-debug',hypothesisId:'B',location:'api/generate/process/route.ts:post-generate',message:'model.generate() completed',data:{generationId,status:result?.status,outputCount:result?.outputs?.length||0},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     await appendLog('model:generate:end', { status: result?.status })
 
     console.log(`[${generationId}] Generation result:`, result.status)
