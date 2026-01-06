@@ -9,6 +9,8 @@ interface NavbarProps {
   generationType?: 'image' | 'video'
   onGenerationTypeChange?: (type: 'image' | 'video') => void
   showGenerationToggle?: boolean
+  /** When true, navbar positions itself fixed in center. When false, it's just a pill (for use in a wrapper) */
+  standalone?: boolean
 }
 
 export function Navbar({
@@ -16,12 +18,12 @@ export function Navbar({
   generationType,
   onGenerationTypeChange,
   showGenerationToggle = false,
+  standalone = true,
 }: NavbarProps) {
   const router = useRouter()
 
-  return (
-    <nav className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
-      <div className="flex items-center gap-1 h-12 px-3 rounded-lg border border-border bg-background/95 backdrop-blur-sm shadow-sm">
+  const navContent = (
+    <div className="flex items-center gap-1 h-12 px-3 rounded-lg border border-border bg-background/95 backdrop-blur-sm shadow-sm">
         {/* Logo */}
         <img
           src={theme === 'light' ? "/images/Loop Vesper (Black).svg" : "/images/Loop Vesper (White).svg"}
@@ -83,7 +85,16 @@ export function Navbar({
           <CheckCircle className="h-4 w-4" />
         </Button>
       </div>
-    </nav>
   )
+
+  if (standalone) {
+    return (
+      <nav className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
+        {navContent}
+      </nav>
+    )
+  }
+
+  return navContent
 }
 

@@ -335,15 +335,21 @@ export default function ProjectsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navbar */}
-      <Navbar theme={theme} showGenerationToggle={false} />
+      {/* Navbar + New Button - Centered */}
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
+        <Navbar theme={theme} showGenerationToggle={false} standalone={false} />
+        <Button
+          onClick={() => setShowNewProject(true)}
+          className="h-12 px-4 rounded-lg border border-border bg-background/95 backdrop-blur-sm shadow-sm hover:bg-primary hover:text-primary-foreground transition-colors"
+          variant="ghost"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          New
+        </Button>
+      </div>
 
       {/* Utility Icons - Fixed Top Right */}
       <div className="fixed top-4 right-4 z-50 flex items-center gap-1">
-        <Button onClick={() => setShowNewProject(true)} size="sm" className="h-8">
-          <Plus className="mr-1.5 h-3.5 w-3.5" />
-          New
-        </Button>
         <SpendingTracker isAdmin={isAdmin} />
         <Button
           variant="ghost"
