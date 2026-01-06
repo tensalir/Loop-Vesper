@@ -115,6 +115,15 @@ export async function GET(
       : []
 
     // Group outputs by generation
+    type OutputSubset = {
+      id: string
+      fileUrl: string
+      fileType: string
+      width: number | null
+      height: number | null
+      duration: number | null
+      createdAt: Date
+    }
     const outputsByGeneration = outputs.reduce((acc, output) => {
       if (!acc[output.generationId]) {
         acc[output.generationId] = []
@@ -129,7 +138,7 @@ export async function GET(
         createdAt: output.createdAt,
       })
       return acc
-    }, {} as Record<string, typeof outputs>)
+    }, {} as Record<string, OutputSubset[]>)
 
     // Format response
     const data = iterations.map((iteration) => ({
