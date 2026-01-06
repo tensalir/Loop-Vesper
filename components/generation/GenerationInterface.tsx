@@ -573,7 +573,7 @@ export function GenerationInterface({
 
   if (!session) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground">
+      <div className="flex-1 pl-24 flex items-center justify-center text-muted-foreground bg-grid-soft">
         <div className="text-center">
           <p className="text-lg mb-2">No session selected</p>
           <p className="text-sm">Create or select a session to start generating</p>
@@ -585,16 +585,16 @@ export function GenerationInterface({
   return (
     <div className="flex-1 flex flex-col relative">
       {/* Gallery Area - Always show, even if empty */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-grid-soft">
         {isLoading ? (
           // Loading state
-          <div className="h-full flex items-center justify-center">
+          <div className="h-full pl-24 flex items-center justify-center">
             <div className="text-center text-muted-foreground">
               <p className="text-lg mb-2">Loading generations...</p>
             </div>
           </div>
         ) : (
-          <div className="p-6 flex justify-center">
+          <div className="p-6 pb-52 pl-24 flex justify-center">
             <div className="w-full max-w-7xl">
               {/* Sentinel at TOP for loading older items when scrolling up */}
               <div ref={loadOlderRef} className="h-1 w-full" />
@@ -635,16 +635,15 @@ export function GenerationInterface({
       {showNewItemsIndicator && (
         <button
           onClick={scrollToBottom}
-          className="absolute bottom-28 left-1/2 -translate-x-1/2 z-10 px-4 py-2 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-all animate-bounce"
+          className="absolute bottom-48 left-1/2 -translate-x-1/2 z-20 px-4 py-2 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-all animate-bounce"
         >
           ↓ New items
         </button>
       )}
 
       {/* Chat Input - Floating Card at Bottom */}
-      <div className="border-t border-border/50 bg-muted/20 p-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-card border border-border rounded-xl shadow-lg p-4">
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-4xl px-6 z-30">
+        <div className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl p-4">
             {generationType === 'video' ? (
               <VideoInput
                 prompt={prompt}
@@ -674,7 +673,6 @@ export function GenerationInterface({
             )}
           </div>
         </div>
-      </div>
     </div>
   )
 }

@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Settings, Sun, Moon, Bookmark } from 'lucide-react'
-import { SessionSidebar } from '@/components/sessions/SessionSidebar'
+import { FloatingSessionBar } from '@/components/sessions/FloatingSessionBar'
 import { GenerationInterface } from '@/components/generation/GenerationInterface'
 import { useSessions } from '@/hooks/useSessions'
 import { SpendingTracker } from '@/components/navbar/SpendingTracker'
@@ -300,20 +300,17 @@ export default function ProjectPage() {
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sessions Sidebar - Always Visible */}
-        <SessionSidebar
-          sessions={sessions.filter(s => s.type === generationType)}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Floating Session Thumbnails - Left Side */}
+        <FloatingSessionBar
+          sessions={sessions}
           activeSession={activeSession}
           generationType={generationType}
-          projectOwnerId={projectOwnerId}
-          currentUserId={currentUserId}
           onSessionSelect={setActiveSession}
           onSessionCreate={handleSessionCreate}
-          onSessionUpdate={() => {}}
         />
 
-        {/* Generation Interface */}
+        {/* Generation Interface - Full Width */}
         <GenerationInterface
           session={activeSession}
           generationType={generationType}
