@@ -154,9 +154,8 @@ export function ImageToVideoOverlay({
       // Invalidate the video session's generations
       queryClient.invalidateQueries({ queryKey: ['generations', sessionId] })
       
-      // Close the overlay immediately after generation starts
-      // User stays in image view - they can switch to video tab manually when ready
-      onClose()
+      // Keep overlay open so user can see progress and make more iterations
+      // Prompt is preserved for easy iteration
     } catch (error) {
       console.error('Video generation failed:', error)
     }

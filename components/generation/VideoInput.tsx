@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Video as VideoIcon, ImagePlus, Ratio, ChevronDown, X, Upload, FolderOpen, Clock, Loader2 } from 'lucide-react'
+import { Video as VideoIcon, ImagePlus, Ratio, ChevronDown, X, Upload, FolderOpen, Clock, Loader2, GripHorizontal } from 'lucide-react'
 import { useModelCapabilities } from '@/hooks/useModelCapabilities'
 import { AspectRatioSelector } from './AspectRatioSelector'
 import { ModelPicker } from './ModelPicker'
@@ -77,9 +77,23 @@ export function VideoInput({
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [transformedPrompt, setTransformedPrompt] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Resizable input height - only for overlay mode
+  const [inputHeight, setInputHeight] = useState(48) // Default min height for overlay
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeStartY = useRef(0)
+  const resizeStartHeight = useRef(48)
+  const rafId = useRef<number | null>(null)
+  const currentHeight = useRef(48)
+  
   // Combine external and internal generating state
   const generating = externalGenerating ?? localGenerating
   const isOverlay = variant === 'overlay'
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    currentHeight.current = inputHeight
+  }, [inputHeight])
   
   const createReferenceId = () => {
     // Use override if provided (e.g., outputId for animate-still)
@@ -231,6 +245,63 @@ export function VideoInput({
     }
   }
 
+  // Resize handlers for expanding/collapsing input area (overlay mode only)
+  const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    resizeStartY.current = clientY
+    resizeStartHeight.current = currentHeight.current
+    setIsResizing(true)
+  }, [])
+
+  const handleResizeMove = useCallback((e: MouseEvent | TouchEvent) => {
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    // Calculate delta (negative because we're dragging up to expand)
+    const delta = resizeStartY.current - clientY
+    const newHeight = Math.min(Math.max(resizeStartHeight.current + delta, 48), 200) // Min 48px, max 200px
+    
+    // Cancel any pending RAF
+    if (rafId.current) {
+      cancelAnimationFrame(rafId.current)
+    }
+    
+    // Use RAF for smooth updates
+    rafId.current = requestAnimationFrame(() => {
+      currentHeight.current = newHeight
+      setInputHeight(newHeight)
+    })
+  }, [])
+
+  const handleResizeEnd = useCallback(() => {
+    if (rafId.current) {
+      cancelAnimationFrame(rafId.current)
+      rafId.current = null
+    }
+    setIsResizing(false)
+  }, [])
+
+  // Global mouse/touch events for resizing
+  useEffect(() => {
+    if (isResizing) {
+      // Use passive: false for touchmove to prevent scroll interference
+      document.addEventListener('mousemove', handleResizeMove)
+      document.addEventListener('mouseup', handleResizeEnd)
+      document.addEventListener('touchmove', handleResizeMove, { passive: false })
+      document.addEventListener('touchend', handleResizeEnd)
+      // Prevent text selection while resizing
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor = 'ns-resize'
+      return () => {
+        document.removeEventListener('mousemove', handleResizeMove)
+        document.removeEventListener('mouseup', handleResizeEnd)
+        document.removeEventListener('touchmove', handleResizeMove)
+        document.removeEventListener('touchend', handleResizeEnd)
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
+      }
+    }
+  }, [isResizing, handleResizeMove, handleResizeEnd])
+
   const handleBrowseSelect = async (imageUrl: string) => {
     // Convert URL to File for consistent handling
     try {
@@ -313,8 +384,25 @@ export function VideoInput({
     >
       {/* Main Input Area - Card Style */}
       <div className="flex items-center gap-3">
-        {/* Input */}
+        {/* Input with optional resize handle */}
         <div className="flex-1 relative flex">
+          {/* Resize handle at top of input - only in overlay mode */}
+          {isOverlay && (
+            <div 
+              className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 cursor-ns-resize group"
+              onMouseDown={handleResizeStart}
+              onTouchStart={handleResizeStart}
+            >
+              <div className={`flex items-center justify-center w-12 h-5 rounded-full transition-all ${
+                isResizing 
+                  ? 'bg-primary/20 text-primary' 
+                  : 'bg-muted/80 text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}>
+                <GripHorizontal className="w-5 h-3" />
+              </div>
+            </div>
+          )}
+          
           <Textarea
             placeholder={supportsImageToVideo ? "Describe a video to animate from the reference image, or drag and drop an image here..." : "Describe a video to animate from the reference image..."}
             value={transformedPrompt !== null ? transformedPrompt : prompt}
@@ -324,9 +412,12 @@ export function VideoInput({
             }}
             onKeyDown={handleKeyDown}
             data-generation-input="true"
-            className={`resize-none px-4 text-sm rounded-lg bg-white/5 border-white/10 transition-all w-full flex-1 custom-scrollbar ${
+            style={isOverlay ? { height: `${inputHeight}px` } : undefined}
+            className={`resize-none px-4 text-sm rounded-lg bg-white/5 border-white/10 w-full flex-1 custom-scrollbar overflow-y-auto ${
+              isResizing ? '' : 'transition-all'
+            } ${
               isOverlay 
-                ? 'min-h-[48px] max-h-[120px] py-3.5 pr-10' 
+                ? 'py-3.5 pr-10' 
                 : 'min-h-[56px] max-h-[140px] py-4 pr-10'
             } ${
               isEnhancing
