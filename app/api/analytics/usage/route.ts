@@ -65,23 +65,66 @@ export async function GET() {
     // Map model IDs to names and calculate percentages
     const topModels = modelUsage.map((usage) => {
       const model = modelRegistry.getModel(usage.modelId)
-      const modelName = model?.getConfig().name || usage.modelId
+      const config = model?.getConfig()
       const count = usage._count.modelId
       const percentage = totalGenerations > 0 ? (count / totalGenerations) * 100 : 0
 
       return {
         modelId: usage.modelId,
-        modelName,
+        modelName: config?.name || usage.modelId,
+        provider: config?.provider || 'Unknown',
+        type: (config?.type || 'image') as 'image' | 'video',
         count,
         percentage,
       }
     })
+
+    // Calculate provider breakdown from all user's generations
+    const allModelUsage = await prisma.generation.groupBy({
+      by: ['modelId'],
+      where: { userId },
+      _count: {
+        modelId: true,
+      },
+    })
+
+    const providerCounts: Record<string, number> = {}
+    for (const usage of allModelUsage) {
+      const model = modelRegistry.getModel(usage.modelId)
+      const config = model?.getConfig()
+      const provider = config?.provider || 'Unknown'
+      providerCounts[provider] = (providerCounts[provider] || 0) + usage._count.modelId
+    }
+
+    const byProvider = Object.entries(providerCounts)
+      .map(([provider, count]) => ({
+        provider,
+        count,
+        percentage: totalGenerations > 0 ? (count / totalGenerations) * 100 : 0,
+      }))
+      .sort((a, b) => b.count - a.count)
+
+    // Calculate type breakdown (image vs video)
+    const byType = [
+      {
+        type: 'image' as const,
+        count: imageGenerations,
+        percentage: totalGenerations > 0 ? (imageGenerations / totalGenerations) * 100 : 0,
+      },
+      {
+        type: 'video' as const,
+        count: videoGenerations,
+        percentage: totalGenerations > 0 ? (videoGenerations / totalGenerations) * 100 : 0,
+      },
+    ]
 
     return NextResponse.json({
       totalGenerations,
       totalImages: imageGenerations,
       totalVideos: videoGenerations,
       topModels,
+      byProvider,
+      byType,
     })
   } catch (error) {
     console.error('Error fetching analytics:', error)

@@ -10,6 +10,7 @@ import {
   CheckCircle,
   Bookmark,
   Settings,
+  BarChart3,
 } from 'lucide-react'
 
 interface NavItem {
@@ -18,12 +19,19 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>
 }
 
-// Top section - Dashboard only
-const dashboardItem: NavItem = {
-  title: 'Dashboard',
-  href: '/',
-  icon: LayoutDashboard,
-}
+// Top section - Dashboard and Analytics
+const topNavItems: NavItem[] = [
+  {
+    title: 'Dashboard',
+    href: '/',
+    icon: LayoutDashboard,
+  },
+  {
+    title: 'Analytics',
+    href: '/analytics',
+    icon: BarChart3,
+  },
+]
 
 // Main section - Briefings, Projects, Review
 const mainNavItems: NavItem[] = [
@@ -115,9 +123,11 @@ export function DashboardSidebar({ className }: DashboardSidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 p-4 flex flex-col">
-        {/* Dashboard */}
+        {/* Dashboard & Analytics */}
         <div className="space-y-1">
-          <NavLink item={dashboardItem} />
+          {topNavItems.map((item) => (
+            <NavLink key={item.href} item={item} />
+          ))}
         </div>
 
         {/* Divider */}

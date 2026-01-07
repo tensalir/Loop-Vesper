@@ -23,7 +23,7 @@ export default function BriefingsPage() {
         <div className="text-center">
           <h2 className="text-2xl font-semibold mb-2">Briefings coming soon</h2>
           <p className="text-muted-foreground max-w-md">
-            This feature is under development. Soon you'll be able to create and manage 
+            This feature is under development. Soon you&apos;ll be able to create and manage 
             detailed project briefs here.
           </p>
         </div>

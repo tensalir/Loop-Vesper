@@ -17,6 +17,7 @@ import {
   Bookmark,
   Settings,
   X,
+  BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -26,6 +27,7 @@ interface DashboardHeaderProps {
 
 const mobileNavItems = [
   { title: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { title: 'Analytics', href: '/analytics', icon: BarChart3 },
   { title: 'Projects', href: '/projects', icon: FolderKanban },
   { title: 'Review', href: '/review', icon: CheckCircle },
   { title: 'Bookmarks', href: '/bookmarks', icon: Bookmark },
