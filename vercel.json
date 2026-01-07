@@ -3,6 +3,9 @@
   "functions": {
     "app/api/generate/process/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/analyze/process/route.ts": {
+      "maxDuration": 300
     }
   }
 }

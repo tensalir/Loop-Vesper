@@ -445,6 +445,30 @@ async function processGenerationById(
         data: outputRecords,
       })
 
+      // Enqueue semantic analysis for the new outputs (best-effort)
+      try {
+        // Fetch the created output IDs
+        const createdOutputs = await prisma.output.findMany({
+          where: { generationId: generation.id },
+          select: { id: true },
+        })
+
+        if (createdOutputs.length > 0) {
+          // Create OutputAnalysis rows for each output (idempotent via unique constraint)
+          await (prisma as any).outputAnalysis.createMany({
+            data: createdOutputs.map((output: { id: string }) => ({
+              outputId: output.id,
+              status: 'queued',
+            })),
+            skipDuplicates: true,
+          })
+          console.log(`[${generationId}] Enqueued ${createdOutputs.length} output(s) for semantic analysis`)
+        }
+      } catch (analysisError: any) {
+        // Don't fail the generation if analysis enqueue fails
+        console.warn(`[${generationId}] Failed to enqueue analysis:`, analysisError.message)
+      }
+
       // Calculate cost for this generation
       const { calculateGenerationCost } = await import('@/lib/cost/calculator')
       const totalVideoDuration = outputRecords.reduce((sum, output) => {

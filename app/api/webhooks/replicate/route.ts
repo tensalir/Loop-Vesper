@@ -221,6 +221,27 @@ export async function POST(request: NextRequest) {
         data: outputRecords,
       })
 
+      // Enqueue semantic analysis for the new outputs (best-effort)
+      try {
+        const createdOutputs = await prisma.output.findMany({
+          where: { generationId: generation.id },
+          select: { id: true },
+        })
+
+        if (createdOutputs.length > 0) {
+          await (prisma as any).outputAnalysis.createMany({
+            data: createdOutputs.map((output: { id: string }) => ({
+              outputId: output.id,
+              status: 'queued',
+            })),
+            skipDuplicates: true,
+          })
+          console.log(`[Replicate Webhook] Enqueued ${createdOutputs.length} output(s) for semantic analysis`)
+        }
+      } catch (analysisError: any) {
+        console.warn(`[Replicate Webhook] Failed to enqueue analysis:`, analysisError.message)
+      }
+
       // Calculate cost
       const { calculateGenerationCost } = await import('@/lib/cost/calculator')
       const costResult = calculateGenerationCost(generation.modelId, {

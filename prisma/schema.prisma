@@ -141,13 +141,43 @@ model Output {
   isApproved   Boolean  @default(false) @map("is_approved") // New approval system (replaces star UI)
   createdAt    DateTime @default(now()) @map("created_at")
 
-  generation Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  generation Generation      @relation(fields: [generationId], references: [id], onDelete: Cascade)
   bookmarks  Bookmark[]
   notes      Note[]
+  analysis   OutputAnalysis?
 
   @@index([generationId])
   @@index([generationId, fileType])
   @@map("outputs")
+}
+
+// Semantic analysis of outputs (Gemini caption + Claude parsing)
+model OutputAnalysis {
+  id            String    @id @default(uuid()) @db.Uuid
+  outputId      String    @unique @map("output_id") @db.Uuid
+  status        String    @default("queued") // 'queued', 'processing', 'completed', 'failed'
+  attempts      Int       @default(0)
+  lockedAt      DateTime? @map("locked_at")
+  runAfter      DateTime? @map("run_after")
+  error         String?   @db.Text
+
+  // Gemini caption results
+  geminiCaption String?   @map("gemini_caption") @db.Text
+  geminiModel   String?   @map("gemini_model")
+
+  // Claude parsing results (structured JSON)
+  claudeParsed  Json?     @map("claude_parsed")
+  claudeModel   String?   @map("claude_model")
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  completedAt   DateTime? @map("completed_at")
+
+  output Output @relation(fields: [outputId], references: [id], onDelete: Cascade)
+
+  @@index([status, lockedAt])
+  @@index([status, runAfter])
+  @@map("output_analyses")
 }
 
 model Note {
