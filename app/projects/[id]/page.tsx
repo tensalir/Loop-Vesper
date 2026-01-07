@@ -30,6 +30,7 @@ export default function ProjectPage() {
   const [generationType, setGenerationType] = useState<'image' | 'video'>('image')
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [isChatOpen, setIsChatOpen] = useState(false)
+  const [externalPrompt, setExternalPrompt] = useState<string>('')
   const supabase = createClient()
   const queryClient = useQueryClient()
   const hasProcessedInitialSessionsRef = useRef(false)
@@ -439,6 +440,8 @@ export default function ProjectPage() {
           onGenerationTypeChange={handleGenerationTypeChange}
           onToggleChat={() => setIsChatOpen(!isChatOpen)}
           isChatOpen={isChatOpen}
+          externalPrompt={externalPrompt}
+          onExternalPromptConsumed={() => setExternalPrompt('')}
         />
       </div>
 
@@ -447,6 +450,7 @@ export default function ProjectPage() {
         projectId={params.id as string}
         isOpen={isChatOpen}
         onOpenChange={setIsChatOpen}
+        onSendPrompt={setExternalPrompt}
       />
     </div>
   )

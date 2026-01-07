@@ -14,6 +14,9 @@ import {
   Paperclip,
   FileText,
   Image as ImageIcon,
+  ArrowRight,
+  Copy,
+  Check as CheckIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -31,9 +34,11 @@ interface BrainstormChatWidgetProps {
   projectId: string
   isOpen?: boolean
   onOpenChange?: (open: boolean) => void
+  /** Callback to send a prompt to the main generation input */
+  onSendPrompt?: (prompt: string) => void
 }
 
-export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOpenChange }: BrainstormChatWidgetProps) {
+export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOpenChange, onSendPrompt }: BrainstormChatWidgetProps) {
   // Panel open/close state (controlled or uncontrolled)
   const [internalIsOpen, setInternalIsOpen] = useState(false)
   const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen
@@ -410,6 +415,64 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
   // Check if widget is being controlled externally (from the control bar)
   const isControlled = onOpenChange !== undefined
 
+  // Extract prompts from AI messages - looks for quoted text or text following "Prompt:" patterns
+  const extractPrompts = (text: string): string[] => {
+    const prompts: string[] = []
+    
+    // Match text in double quotes that looks like a prompt (more than 20 chars)
+    const quotedMatches = text.match(/"([^"]{20,})"/g)
+    if (quotedMatches) {
+      quotedMatches.forEach(match => {
+        prompts.push(match.slice(1, -1)) // Remove quotes
+      })
+    }
+    
+    // Match text after "Prompt:" or similar labels
+    const labeledMatches = text.match(/(?:Prompt|Try this|Suggested prompt|Here's a prompt)[:\s]+[""]?([^""]+)[""]?/gi)
+    if (labeledMatches) {
+      labeledMatches.forEach(match => {
+        const cleaned = match.replace(/^(?:Prompt|Try this|Suggested prompt|Here's a prompt)[:\s]+[""]?/i, '').replace(/[""]$/, '').trim()
+        if (cleaned.length > 20 && !prompts.includes(cleaned)) {
+          prompts.push(cleaned)
+        }
+      })
+    }
+    
+    // Match code blocks that might contain prompts
+    const codeBlockMatches = text.match(/```(?:prompt)?\n?([\s\S]*?)```/g)
+    if (codeBlockMatches) {
+      codeBlockMatches.forEach(match => {
+        const content = match.replace(/```(?:prompt)?\n?/g, '').replace(/```/g, '').trim()
+        if (content.length > 20 && !prompts.includes(content)) {
+          prompts.push(content)
+        }
+      })
+    }
+    
+    return prompts
+  }
+
+  // State to track copied prompts
+  const [copiedPrompt, setCopiedPrompt] = useState<string | null>(null)
+
+  // Handle sending prompt to main input
+  const handleSendPrompt = (prompt: string) => {
+    if (onSendPrompt) {
+      onSendPrompt(prompt)
+    }
+  }
+
+  // Handle copying prompt
+  const handleCopyPrompt = async (prompt: string) => {
+    try {
+      await navigator.clipboard.writeText(prompt)
+      setCopiedPrompt(prompt)
+      setTimeout(() => setCopiedPrompt(null), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
+
   return (
     <>
       {/* Floating trigger button - only show when not controlled externally */}
@@ -454,7 +517,9 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
             onDrop={handleDrop}
             className={cn(
               "z-40",
-              "w-[420px] h-[600px] max-h-[75vh]",
+              // Responsive sizing: taller on larger screens, constrained on smaller
+              "w-[420px] max-w-[calc(100vw-3rem)]",
+              "h-[calc(100vh-10rem)] min-h-[400px] max-h-[800px]",
               "bg-card border rounded-2xl shadow-2xl",
               "flex flex-col overflow-hidden",
               // Position based on whether controlled (from control bar) or standalone
@@ -660,8 +725,70 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
                         </div>
                       )}
                       
-                      {displayText && (
+                      {displayText && message.role === 'user' && (
                         <p className="whitespace-pre-wrap break-words">{displayText}</p>
+                      )}
+                      {displayText && message.role === 'assistant' && (
+                        <>
+                          {/* Render text with prompts extracted into code boxes */}
+                          {(() => {
+                            const prompts = extractPrompts(displayText)
+                            let remainingText = displayText
+                            
+                            // If we found prompts, render them specially
+                            if (prompts.length > 0) {
+                              return (
+                                <div className="space-y-3">
+                                  {/* Regular text (remove the quoted prompts for cleaner display) */}
+                                  <p className="whitespace-pre-wrap break-words">
+                                    {remainingText
+                                      .replace(/"[^"]{20,}"/g, '') // Remove long quoted text
+                                      .replace(/```(?:prompt)?\n?[\s\S]*?```/g, '') // Remove code blocks
+                                      .replace(/\n{3,}/g, '\n\n') // Clean up extra newlines
+                                      .trim()}
+                                  </p>
+                                  
+                                  {/* Prompt boxes */}
+                                  {prompts.map((prompt, idx) => (
+                                    <div 
+                                      key={idx}
+                                      className="relative group bg-black/20 dark:bg-white/5 border border-border/50 rounded-lg p-3 mt-2"
+                                    >
+                                      <pre className="text-xs whitespace-pre-wrap break-words font-mono text-foreground/90 pr-16">
+                                        {prompt}
+                                      </pre>
+                                      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                          onClick={() => handleCopyPrompt(prompt)}
+                                          className="p-1.5 rounded-md bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                          title="Copy prompt"
+                                        >
+                                          {copiedPrompt === prompt ? (
+                                            <CheckIcon className="w-3.5 h-3.5 text-green-500" />
+                                          ) : (
+                                            <Copy className="w-3.5 h-3.5" />
+                                          )}
+                                        </button>
+                                        {onSendPrompt && (
+                                          <button
+                                            onClick={() => handleSendPrompt(prompt)}
+                                            className="p-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                                            title="Use this prompt"
+                                          >
+                                            <ArrowRight className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )
+                            }
+                            
+                            // No prompts found, render normally
+                            return <p className="whitespace-pre-wrap break-words">{displayText}</p>
+                          })()}
+                        </>
                       )}
                       {!displayText && hasAttachments && (
                         <p className="opacity-70 italic">Sent attachments</p>

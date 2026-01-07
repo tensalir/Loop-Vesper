@@ -51,6 +51,10 @@ interface GenerationInterfaceProps {
   onGenerationTypeChange?: (type: 'image' | 'video') => void
   onToggleChat?: () => void
   isChatOpen?: boolean
+  /** External prompt to set (from Brainstorm chat) */
+  externalPrompt?: string
+  /** Callback when external prompt is consumed */
+  onExternalPromptConsumed?: () => void
 }
 
 export function GenerationInterface({
@@ -62,6 +66,8 @@ export function GenerationInterface({
   onGenerationTypeChange,
   onToggleChat,
   isChatOpen = false,
+  externalPrompt,
+  onExternalPromptConsumed,
 }: GenerationInterfaceProps) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -87,6 +93,14 @@ export function GenerationInterface({
   // State for pasted images (passed to input components)
   const [pastedImageFiles, setPastedImageFiles] = useState<File[]>([])
   const pastedImageCallbackRef = useRef<((files: File[]) => void) | null>(null)
+  
+  // Handle external prompt from Brainstorm chat
+  useEffect(() => {
+    if (externalPrompt && externalPrompt.trim()) {
+      setPrompt(externalPrompt)
+      onExternalPromptConsumed?.()
+    }
+  }, [externalPrompt, onExternalPromptConsumed])
   
   /**
    * Dismiss/remove a stuck generation from the UI cache.
