@@ -1,13 +1,16 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextRequest } from 'next/server'
-import { streamText, convertToModelMessages, type UIMessage } from 'ai'
+import { streamText, type UIMessage, type CoreMessage } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 import { prisma } from '@/lib/prisma'
 import { loadSkill, combineSkills } from '@/lib/skills/registry'
 
 // Default model if env var not set
 const DEFAULT_MODEL = 'claude-sonnet-4-20250514'
+
+// Regex to extract embedded image data URLs from messages
+const IMAGE_DATA_REGEX = /<<IMAGE_DATA:(data:image\/[^>]+)>>/g
 
 /**
  * Check if user has access to the project (owner or invited member)
@@ -106,7 +109,8 @@ export async function POST(
     if (!latestUserMessage) {
       return new Response('No user message found', { status: 400 })
     }
-    const latestUserText = getMessageText(latestUserMessage)
+    // Remove image data markers for cleaner persistence (keep URLs for display)
+    const latestUserText = getMessageText(latestUserMessage).replace(IMAGE_DATA_REGEX, '').trim()
 
     // Persist the user message
     await prisma.projectChatMessage.create({
@@ -138,11 +142,49 @@ export async function POST(
     // Get the model from env or use default
     const modelId = process.env.ANTHROPIC_BRAINSTORM_MODEL || DEFAULT_MODEL
 
-    // Convert UI messages from the client into ModelMessages for the model call.
-    // Note: `convertToModelMessages` expects messages WITHOUT the `id` field.
-    const modelMessages = await convertToModelMessages(
-      messages.map(({ id, ...rest }) => rest)
-    )
+    // Convert UI messages to CoreMessages, extracting embedded images for Claude vision
+    const modelMessages: CoreMessage[] = messages.map((msg) => {
+      const textContent = getMessageText(msg)
+      
+      // Extract any embedded image data URLs
+      const imageMatches = Array.from(textContent.matchAll(IMAGE_DATA_REGEX))
+      
+      // Remove image data markers from text for cleaner display
+      const cleanText = textContent.replace(IMAGE_DATA_REGEX, '').trim()
+      
+      if (msg.role === 'user' && imageMatches.length > 0) {
+        // Build multi-modal content with images + text
+        const content: Array<{ type: 'text'; text: string } | { type: 'image'; image: string }> = []
+        
+        // Add images first so Claude sees them before the text
+        for (const match of imageMatches) {
+          const dataUrl = match[1]
+          content.push({
+            type: 'image',
+            image: dataUrl,
+          })
+        }
+        
+        // Add the text content
+        if (cleanText) {
+          content.push({
+            type: 'text',
+            text: cleanText,
+          })
+        }
+        
+        return {
+          role: 'user' as const,
+          content,
+        }
+      }
+      
+      // For assistant messages or user messages without images, just use text
+      return {
+        role: msg.role as 'user' | 'assistant',
+        content: cleanText || textContent,
+      }
+    })
 
     // Stream the response using AI SDK
     const result = streamText({

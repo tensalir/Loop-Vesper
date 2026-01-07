@@ -290,7 +290,7 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
     try {
       // Build message with attachments
       let messageText = text
-      const attachments: { name: string; contentType: string; url: string }[] = []
+      const imageDataUrls: string[] = []
       
       // If we have files, process them for Claude vision + upload to Supabase for persistence
       if (hasFiles) {
@@ -306,14 +306,9 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
             const originalFile = attachedFiles[i]
             
             if (file.type.startsWith('image/')) {
-              // For images: Add to attachments array so Claude can SEE them
-              // Convert to base64 data URL for Claude vision
+              // For images: Convert to base64 so Claude can actually SEE them
               const base64 = await fileToBase64(originalFile)
-              attachments.push({
-                name: file.name,
-                contentType: file.type,
-                url: base64, // Send base64 data URL for Claude to analyze
-              })
+              imageDataUrls.push(base64)
               fileDescriptions.push(`[Attached image: ${file.name}](${file.url})`)
             } else {
               // For documents: Include as text reference
@@ -321,11 +316,20 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
             }
           }
           
+          // Build message: include image data URLs in a special format for the API to parse
+          // Format: <<IMAGE_DATA:base64_url>> for each image
+          let imageDataSection = ''
+          if (imageDataUrls.length > 0) {
+            imageDataSection = imageDataUrls.map(url => `<<IMAGE_DATA:${url}>>`).join('\n') + '\n\n'
+          }
+          
           // Prepend file descriptions to message for display/persistence
           if (fileDescriptions.length > 0 && !text) {
-            messageText = fileDescriptions.join('\n')
+            messageText = imageDataSection + fileDescriptions.join('\n')
           } else if (fileDescriptions.length > 0) {
-            messageText = fileDescriptions.join('\n') + '\n\n' + text
+            messageText = imageDataSection + fileDescriptions.join('\n') + '\n\n' + text
+          } else if (imageDataSection) {
+            messageText = imageDataSection + text
           }
         } catch (uploadError) {
           console.error('Failed to upload files:', uploadError)
@@ -341,11 +345,8 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
         }
       }
       
-      // Send message with attachments for Claude vision
-      await sendMessage({ 
-        text: messageText,
-        experimental_attachments: attachments.length > 0 ? attachments : undefined,
-      })
+      // Send message
+      await sendMessage({ text: messageText })
       setInput('')
       setAttachedFiles([])
       setFilePreviews([])
