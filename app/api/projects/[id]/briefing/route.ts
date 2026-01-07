@@ -105,12 +105,6 @@ export async function PUT(
         ],
       },
       select: { id: true },
-      include: {
-        members: {
-          where: { userId: user.id },
-          select: { role: true },
-        },
-      },
     })
 
     if (!project) {
