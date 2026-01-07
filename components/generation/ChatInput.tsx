@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useRef, useEffect, lazy, Suspense } from 'react'
+import { useState, useRef, useEffect, lazy, Suspense, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Image as ImageIcon, ImagePlus, Ratio, ChevronDown, Upload, FolderOpen, X, MessageSquare, Circle } from 'lucide-react'
+import { Image as ImageIcon, ImagePlus, Ratio, ChevronDown, Upload, FolderOpen, X, MessageSquare, Circle, GripHorizontal } from 'lucide-react'
 import { useModelCapabilities } from '@/hooks/useModelCapabilities'
 import { AspectRatioSelector } from './AspectRatioSelector'
 import { ModelPicker } from './ModelPicker'
@@ -60,6 +60,12 @@ export function ChatInput({
   const [isDragging, setIsDragging] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Resizable input height
+  const [inputHeight, setInputHeight] = useState(52) // Default min height
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeStartY = useRef(0)
+  const resizeStartHeight = useRef(0)
   
   // Get model-specific capabilities
   const { modelConfig, supportedAspectRatios, maxResolution, parameters: modelParameters } = useModelCapabilities(selectedModel)
@@ -231,6 +237,44 @@ export function ChatInput({
     processImageFiles(files)
   }
 
+  // Resize handlers for expanding/collapsing input area
+  const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    resizeStartY.current = clientY
+    resizeStartHeight.current = inputHeight
+  }, [inputHeight])
+
+  const handleResizeMove = useCallback((e: MouseEvent | TouchEvent) => {
+    if (!isResizing) return
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    // Calculate delta (negative because we're dragging up to expand)
+    const delta = resizeStartY.current - clientY
+    const newHeight = Math.min(Math.max(resizeStartHeight.current + delta, 52), 300) // Min 52px, max 300px
+    setInputHeight(newHeight)
+  }, [isResizing])
+
+  const handleResizeEnd = useCallback(() => {
+    setIsResizing(false)
+  }, [])
+
+  // Global mouse/touch events for resizing
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleResizeMove)
+      document.addEventListener('mouseup', handleResizeEnd)
+      document.addEventListener('touchmove', handleResizeMove)
+      document.addEventListener('touchend', handleResizeEnd)
+      return () => {
+        document.removeEventListener('mousemove', handleResizeMove)
+        document.removeEventListener('mouseup', handleResizeEnd)
+        document.removeEventListener('touchmove', handleResizeMove)
+        document.removeEventListener('touchend', handleResizeEnd)
+      }
+    }
+  }, [isResizing, handleResizeMove, handleResizeEnd])
+
   const handleBrowseSelect = async (imageUrl: string) => {
     // Convert URL to File for image generation
     try {
@@ -388,8 +432,23 @@ export function ChatInput({
     >
       {/* Main Input Area - Card Style */}
       <div className="flex items-center gap-3">
-        {/* Input */}
+        {/* Input with resize handle */}
         <div className="flex-1 relative">
+          {/* Resize handle at top of input */}
+          <div 
+            className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 cursor-ns-resize group"
+            onMouseDown={handleResizeStart}
+            onTouchStart={handleResizeStart}
+          >
+            <div className={`flex items-center justify-center w-12 h-5 rounded-full transition-all ${
+              isResizing 
+                ? 'bg-primary/20 text-primary' 
+                : 'bg-muted/80 text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}>
+              <GripHorizontal className="w-5 h-3" />
+            </div>
+          </div>
+          
           <Textarea
             placeholder={supportsImageEditing ? "Describe an image and click generate, or drag and drop images here..." : "Describe an image and click generate..."}
             value={transformedPrompt !== null ? transformedPrompt : prompt}
@@ -399,7 +458,8 @@ export function ChatInput({
             }}
             onKeyDown={handleKeyDown}
             data-generation-input="true"
-            className={`resize-none min-h-[52px] max-h-[104px] px-4 py-3 text-sm rounded-lg bg-muted/50 border transition-all pr-10 ${
+            style={{ height: `${inputHeight}px` }}
+            className={`resize-none px-4 py-3 text-sm rounded-lg bg-muted/50 border transition-all pr-10 overflow-y-auto ${
               isEnhancing 
                 ? 'border-primary/50 bg-primary/5 shadow-lg shadow-primary/10' 
                 : isDragging && supportsImageEditing
