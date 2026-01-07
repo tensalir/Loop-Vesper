@@ -61,11 +61,18 @@ export function ChatInput({
   const [assistantOpen, setAssistantOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
-  // Resizable input height
+  // Resizable input height - use refs for smooth dragging performance
   const [inputHeight, setInputHeight] = useState(52) // Default min height
   const [isResizing, setIsResizing] = useState(false)
   const resizeStartY = useRef(0)
-  const resizeStartHeight = useRef(0)
+  const resizeStartHeight = useRef(52)
+  const rafId = useRef<number | null>(null)
+  const currentHeight = useRef(52)
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    currentHeight.current = inputHeight
+  }, [inputHeight])
   
   // Get model-specific capabilities
   const { modelConfig, supportedAspectRatios, maxResolution, parameters: modelParameters } = useModelCapabilities(selectedModel)
@@ -240,37 +247,56 @@ export function ChatInput({
   // Resize handlers for expanding/collapsing input area
   const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault()
-    setIsResizing(true)
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
     resizeStartY.current = clientY
-    resizeStartHeight.current = inputHeight
-  }, [inputHeight])
+    resizeStartHeight.current = currentHeight.current
+    setIsResizing(true)
+  }, [])
 
   const handleResizeMove = useCallback((e: MouseEvent | TouchEvent) => {
-    if (!isResizing) return
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
     // Calculate delta (negative because we're dragging up to expand)
     const delta = resizeStartY.current - clientY
     const newHeight = Math.min(Math.max(resizeStartHeight.current + delta, 52), 300) // Min 52px, max 300px
-    setInputHeight(newHeight)
-  }, [isResizing])
+    
+    // Cancel any pending RAF
+    if (rafId.current) {
+      cancelAnimationFrame(rafId.current)
+    }
+    
+    // Use RAF for smooth updates
+    rafId.current = requestAnimationFrame(() => {
+      currentHeight.current = newHeight
+      setInputHeight(newHeight)
+    })
+  }, [])
 
   const handleResizeEnd = useCallback(() => {
+    if (rafId.current) {
+      cancelAnimationFrame(rafId.current)
+      rafId.current = null
+    }
     setIsResizing(false)
   }, [])
 
   // Global mouse/touch events for resizing
   useEffect(() => {
     if (isResizing) {
+      // Use passive: false for touchmove to prevent scroll interference
       document.addEventListener('mousemove', handleResizeMove)
       document.addEventListener('mouseup', handleResizeEnd)
-      document.addEventListener('touchmove', handleResizeMove)
+      document.addEventListener('touchmove', handleResizeMove, { passive: false })
       document.addEventListener('touchend', handleResizeEnd)
+      // Prevent text selection while resizing
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor = 'ns-resize'
       return () => {
         document.removeEventListener('mousemove', handleResizeMove)
         document.removeEventListener('mouseup', handleResizeEnd)
         document.removeEventListener('touchmove', handleResizeMove)
         document.removeEventListener('touchend', handleResizeEnd)
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
       }
     }
   }, [isResizing, handleResizeMove, handleResizeEnd])
@@ -459,7 +485,9 @@ export function ChatInput({
             onKeyDown={handleKeyDown}
             data-generation-input="true"
             style={{ height: `${inputHeight}px` }}
-            className={`resize-none px-4 py-3 text-sm rounded-lg bg-muted/50 border transition-all pr-10 overflow-y-auto ${
+            className={`resize-none px-4 py-3 text-sm rounded-lg bg-muted/50 border pr-10 overflow-y-auto ${
+              isResizing ? '' : 'transition-all'
+            } ${
               isEnhancing 
                 ? 'border-primary/50 bg-primary/5 shadow-lg shadow-primary/10' 
                 : isDragging && supportsImageEditing
