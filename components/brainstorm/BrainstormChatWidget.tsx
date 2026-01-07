@@ -792,11 +792,12 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
                 const imageMatches = Array.from(messageText.matchAll(imageUrlRegex))
                 const fileMatches = Array.from(messageText.matchAll(fileUrlRegex))
                 
-                // Check if message contains attachment markers
-                const hasAttachments = messageText.includes('[Attached image:') || messageText.includes('[Attached file:') || messageText.includes('[Attached:')
+                // Check if message contains attachment markers or image data
+                const hasAttachments = messageText.includes('[Attached image:') || messageText.includes('[Attached file:') || messageText.includes('[Attached:') || messageText.includes('<<IMAGE_DATA:')
                 
-                // Clean message text for display (remove attachment markers for cleaner view)
+                // Clean message text for display (remove attachment markers and base64 data for cleaner view)
                 const displayText = messageText
+                  .replace(/<<IMAGE_DATA:[^>]+>>\n?/g, '') // Remove base64 image data markers
                   .replace(/\[Attached image: [^\]]+\]\([^)]+\)\n?/g, '')
                   .replace(/\[Attached file: [^\]]+\]\([^)]+\)\n?/g, '')
                   .replace(/\[Attached image: [^\]]+\]\n?/g, '')
