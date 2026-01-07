@@ -24,7 +24,7 @@ export async function GET(_request: NextRequest) {
     }
 
     // SECURITY: Require admin role for admin endpoints
-    const profile = await prisma.profiles.findUnique({
+    const profile = await prisma.profile.findUnique({
       where: { id: session.user.id },
       select: { role: true },
     })

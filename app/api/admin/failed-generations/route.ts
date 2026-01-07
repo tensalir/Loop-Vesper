@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     }
 
     // SECURITY: Only admins can view all failed generations
-    const profile = await prisma.profiles.findUnique({
+    const profile = await prisma.profile.findUnique({
       where: { id: session.user.id },
       select: { role: true },
     })
@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch generations with user info
-    const generations = await prisma.generations.findMany({
+    const generations = await prisma.generation.findMany({
       where: whereClause,
       select: {
         id: true,

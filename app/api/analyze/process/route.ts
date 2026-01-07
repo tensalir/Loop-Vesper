@@ -127,7 +127,7 @@ async function processAnalysisJob(job: AnalysisJob): Promise<AnalysisResult> {
 
   try {
     // Fetch the output with its generation context
-    const output = await prisma.outputs.findUnique({
+    const output = await prisma.output.findUnique({
       where: { id: outputId },
       include: {
         generation: {
@@ -260,7 +260,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Check admin role
-      const profile = await prisma.profiles.findUnique({
+      const profile = await prisma.profile.findUnique({
         where: { id: session.user.id },
         select: { role: true },
       })
@@ -444,7 +444,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
-      const profile = await prisma.profiles.findUnique({
+      const profile = await prisma.profile.findUnique({
         where: { id: session.user.id },
         select: { role: true },
       })
@@ -500,7 +500,7 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    const totalOutputs = await prisma.outputs.count()
+    const totalOutputs = await prisma.output.count()
     const analyzedOutputs = await (prisma as any).outputAnalysis.count({
       where: { status: 'completed' },
     })

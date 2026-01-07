@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     // SECURITY: Require admin role to clean up all stuck generations
-    const profile = await prisma.profiles.findUnique({
+    const profile = await prisma.profile.findUnique({
       where: { id: session.user.id },
       select: { role: true },
     })
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     // Find generations stuck > 2 minutes (Vercel Pro timeout is 60s, so 2min is definitely stuck)
     const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000)
     
-    const stuckGenerations = await prisma.generations.findMany({
+    const stuckGenerations = await prisma.generation.findMany({
       where: {
         status: 'processing',
         createdAt: {
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     
     for (const gen of stuckGenerations) {
       try {
-        await prisma.generations.update({
+        await prisma.generation.update({
           where: { id: gen.id },
           data: {
             status: 'failed',

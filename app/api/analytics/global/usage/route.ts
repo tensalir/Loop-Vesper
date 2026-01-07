@@ -48,7 +48,7 @@ export async function GET() {
     }
 
     // Count unique users who have generated content
-    const uniqueUsersResult = await prisma.generations.groupBy({
+    const uniqueUsersResult = await prisma.generation.groupBy({
       by: ['userId'],
       _count: true,
     })
@@ -67,10 +67,10 @@ export async function GET() {
     }
 
     // Get total generations (all users)
-    const totalGenerations = await prisma.generations.count()
+    const totalGenerations = await prisma.generation.count()
 
     // Get generations with images
-    const imageGenerations = await prisma.generations.count({
+    const imageGenerations = await prisma.generation.count({
       where: {
         outputs: {
           some: {
@@ -81,7 +81,7 @@ export async function GET() {
     })
 
     // Get generations with videos
-    const videoGenerations = await prisma.generations.count({
+    const videoGenerations = await prisma.generation.count({
       where: {
         outputs: {
           some: {
@@ -92,7 +92,7 @@ export async function GET() {
     })
 
     // Get model usage statistics (aggregated across all users)
-    const modelUsage = await prisma.generations.groupBy({
+    const modelUsage = await prisma.generation.groupBy({
       by: ['modelId'],
       _count: {
         modelId: true,
@@ -129,7 +129,7 @@ export async function GET() {
 
     // For models not in top 10, we still need their counts for accurate provider breakdown
     // Use a simpler approach: group providers based on modelId patterns
-    const allModelUsage = await prisma.generations.groupBy({
+    const allModelUsage = await prisma.generation.groupBy({
       by: ['modelId'],
       _count: {
         modelId: true,

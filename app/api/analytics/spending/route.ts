@@ -23,7 +23,7 @@ export async function GET() {
     }
 
     // SECURITY: Only admins can view spending
-    const profile = await prisma.profiles.findUnique({
+    const profile = await prisma.profile.findUnique({
       where: { id: session.user.id },
       select: { role: true },
     })
@@ -33,7 +33,7 @@ export async function GET() {
     }
 
     // Get all completed generations with costs
-    const generations = await prisma.generations.findMany({
+    const generations = await prisma.generation.findMany({
       where: {
         status: 'completed',
         cost: {

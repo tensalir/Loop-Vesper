@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const profile = await prisma.profiles.findUnique({
+    const profile = await prisma.profile.findUnique({
       where: { id: user.id },
       select: { role: true },
     })
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     const analyzedOutputIds = new Set(existingAnalyses.map((a: { outputId: string }) => a.outputId))
 
     // Get outputs that don't have analysis
-    const outputsToAnalyze = await prisma.outputs.findMany({
+    const outputsToAnalyze = await prisma.output.findMany({
       where: {
         id: {
           notIn: Array.from(analyzedOutputIds) as string[],
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get remaining count for progress info
-    const totalOutputs = await prisma.outputs.count()
+    const totalOutputs = await prisma.output.count()
     const totalAnalyzed = await (prisma as any).outputAnalysis.count()
     const remaining = totalOutputs - totalAnalyzed
 
@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const profile = await prisma.profiles.findUnique({
+    const profile = await prisma.profile.findUnique({
       where: { id: user.id },
       select: { role: true },
     })
@@ -156,7 +156,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get statistics
-    const totalOutputs = await prisma.outputs.count()
+    const totalOutputs = await prisma.output.count()
 
     const analysisByStatus = await (prisma as any).outputAnalysis.groupBy({
       by: ['status'],

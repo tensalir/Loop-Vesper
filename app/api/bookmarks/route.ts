@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     }
 
     // Check if bookmark already exists
-    const existing = await prisma.bookmarks.findUnique({
+    const existing = await prisma.bookmark.findUnique({
       where: {
         userId_outputId: {
           userId: user.id,
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     }
 
     // Create bookmark
-    const bookmark = await prisma.bookmarks.create({
+    const bookmark = await prisma.bookmark.create({
       data: {
         userId: user.id,
         outputId: outputId,
@@ -65,7 +65,7 @@ export async function DELETE(request: Request) {
     }
 
     // Delete bookmark
-    await prisma.bookmarks.delete({
+    await prisma.bookmark.delete({
       where: {
         userId_outputId: {
           userId: user.id,
@@ -91,7 +91,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const bookmarks = await prisma.bookmarks.findMany({
+    const bookmarks = await prisma.bookmark.findMany({
       where: {
         userId: user.id,
       },

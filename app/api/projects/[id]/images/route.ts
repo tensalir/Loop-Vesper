@@ -21,7 +21,7 @@ export async function GET(
     const projectId = params.id
 
     // Verify user has access to this project
-    const project = await prisma.projects.findFirst({
+    const project = await prisma.project.findFirst({
       where: {
         id: projectId,
         OR: [
@@ -45,7 +45,7 @@ export async function GET(
     }
 
     // Fetch all image outputs from image sessions in one optimized query
-    const outputs = await prisma.outputs.findMany({
+    const outputs = await prisma.output.findMany({
       where: {
         generation: {
           session: {

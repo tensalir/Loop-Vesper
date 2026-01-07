@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch generations
-    const generations = await prisma.generations.findMany({
+    const generations = await prisma.generation.findMany({
       where: whereClause,
       select: {
         id: true,

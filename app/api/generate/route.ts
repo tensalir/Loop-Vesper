@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
     }
 
     // SECURITY: Verify user has access to this session via project ownership or membership
-    const sessionRecord = await prisma.sessions.findFirst({
+    const sessionRecord = await prisma.session.findFirst({
       where: {
         id: sessionId,
         project: {
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
     // Create generation record in database with 'processing' status
     // Note: cost field is nullable and will be set later when generation completes
     try {
-      generation = await prisma.generations.create({
+      generation = await prisma.generation.create({
         data: {
           sessionId,
           userId: user.id,
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
       if (error.message?.includes('cost') || error.message?.includes('column') || error.code === 'P2002') {
         console.error('Database schema mismatch - cost column may be missing. Run migration: prisma/migrations/add_cost_column.sql')
         // Try without cost field (if Prisma allows it)
-        generation = await prisma.generations.create({
+        generation = await prisma.generation.create({
           data: {
             sessionId,
             userId: user.id,
@@ -199,11 +199,11 @@ export async function POST(request: NextRequest) {
     }
     // Best-effort: add initial debug log
     try {
-      const existing = await prisma.generations.findUnique({ where: { id: generation.id } })
+      const existing = await prisma.generation.findUnique({ where: { id: generation.id } })
       const prev = (existing?.parameters as any) || {}
       const logs = Array.isArray(prev.debugLogs) ? prev.debugLogs : []
       logs.push({ at: new Date().toISOString(), step: 'generate:create' })
-      await prisma.generations.update({
+      await prisma.generation.update({
         where: { id: generation.id },
         data: { parameters: { ...prev, debugLogs: logs.slice(-100), lastStep: 'generate:create' } },
       })
@@ -242,7 +242,7 @@ export async function POST(request: NextRequest) {
           })
           
           // Store prediction ID for webhook matching
-          await prisma.generations.update({
+          await prisma.generation.update({
             where: { id: generation.id },
             data: {
               parameters: {
@@ -336,11 +336,11 @@ export async function POST(request: NextRequest) {
             if (response.ok) {
               console.log(`[${generation.id}] Background processing triggered successfully`)
               try {
-                const existing = await prisma.generations.findUnique({ where: { id: generation.id } })
+                const existing = await prisma.generation.findUnique({ where: { id: generation.id } })
                 const prev = (existing?.parameters as any) || {}
                 const logs = Array.isArray(prev.debugLogs) ? prev.debugLogs : []
                 logs.push({ at: new Date().toISOString(), step: 'process:triggered' })
-                await prisma.generations.update({
+                await prisma.generation.update({
                   where: { id: generation.id },
                   data: { parameters: { ...prev, debugLogs: logs.slice(-100), lastStep: 'process:triggered' } },
                 })
@@ -362,7 +362,7 @@ export async function POST(request: NextRequest) {
             // TIER 1 FIX: Last attempt with non-OK response - mark generation as FAILED
             // This prevents "stuck forever" in processing state
             console.error(`[${generation.id}] All ${retries} retries exhausted with non-OK response, marking generation as failed`)
-            await prisma.generations.update({
+            await prisma.generation.update({
               where: { id: generation.id },
               data: { 
                 status: 'failed',
@@ -375,11 +375,11 @@ export async function POST(request: NextRequest) {
             }).catch(console.error)
             
             try {
-              const existing = await prisma.generations.findUnique({ where: { id: generation.id } })
+              const existing = await prisma.generation.findUnique({ where: { id: generation.id } })
               const prev = (existing?.parameters as any) || {}
               const logs = Array.isArray(prev.debugLogs) ? prev.debugLogs : []
               logs.push({ at: new Date().toISOString(), step: 'process:trigger-failed-http', status: response.status, error: errorText?.slice(0, 200) })
-              await prisma.generations.update({
+              await prisma.generation.update({
                 where: { id: generation.id },
                 data: { parameters: { ...prev, debugLogs: logs.slice(-100), lastStep: 'process:trigger-failed-http' } },
               })
@@ -401,11 +401,11 @@ export async function POST(request: NextRequest) {
               console.log(`[${generation.id}] Processing is likely running. Frontend fallback will also trigger.`)
               
               try {
-                const existing = await prisma.generations.findUnique({ where: { id: generation.id } })
+                const existing = await prisma.generation.findUnique({ where: { id: generation.id } })
                 const prev = (existing?.parameters as any) || {}
                 const logs = Array.isArray(prev.debugLogs) ? prev.debugLogs : []
                 logs.push({ at: new Date().toISOString(), step: 'process:trigger-timeout-expected', note: 'Request likely received, processing continues' })
-                await prisma.generations.update({
+                await prisma.generation.update({
                   where: { id: generation.id },
                   data: { parameters: { ...prev, debugLogs: logs.slice(-100), lastStep: 'process:trigger-timeout-expected' } },
                 })
@@ -425,7 +425,7 @@ export async function POST(request: NextRequest) {
             
             if (i === retries - 1) {
               console.error(`[${generation.id}] All retries exhausted (exception), marking generation as failed`)
-              await prisma.generations.update({
+              await prisma.generation.update({
                 where: { id: generation.id },
                 data: { 
                   status: 'failed',
@@ -436,11 +436,11 @@ export async function POST(request: NextRequest) {
                 },
               }).catch(console.error)
               try {
-                const existing = await prisma.generations.findUnique({ where: { id: generation.id } })
+                const existing = await prisma.generation.findUnique({ where: { id: generation.id } })
                 const prev = (existing?.parameters as any) || {}
                 const logs = Array.isArray(prev.debugLogs) ? prev.debugLogs : []
                 logs.push({ at: new Date().toISOString(), step: 'process:trigger-failed-exception', error: errorMessage })
-                await prisma.generations.update({
+                await prisma.generation.update({
                   where: { id: generation.id },
                   data: { parameters: { ...prev, debugLogs: logs.slice(-100), lastStep: 'process:trigger-failed-exception' } },
                 })
@@ -454,7 +454,7 @@ export async function POST(request: NextRequest) {
       
       triggerProcessing().catch((error) => {
         console.error(`[${generation.id}] Background processing trigger failed completely:`, error)
-        prisma.generations.update({
+        prisma.generation.update({
           where: { id: generation.id },
           data: { 
             status: 'failed',
@@ -482,7 +482,7 @@ export async function POST(request: NextRequest) {
     
     // Update generation status to failed if we created it
     if (generation) {
-      await prisma.generations.update({
+      await prisma.generation.update({
         where: { id: generation.id },
         data: { 
           status: 'failed',

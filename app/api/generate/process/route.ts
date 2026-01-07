@@ -96,7 +96,7 @@ async function processGenerationById(
 
   const appendLog = async (step: string, extra?: Record<string, any>) => {
     try {
-      const existing = await prisma.generations.findUnique({ where: { id: generationId } })
+      const existing = await prisma.generation.findUnique({ where: { id: generationId } })
       if (!existing) return
       const prev = (existing.parameters as any) || {}
       const logs = Array.isArray(prev.debugLogs) ? prev.debugLogs : []
@@ -105,7 +105,7 @@ async function processGenerationById(
         step,
         ...((extra || {}) as any),
       })
-      await prisma.generations.update({
+      await prisma.generation.update({
         where: { id: generationId },
         data: {
           parameters: {
@@ -130,7 +130,7 @@ async function processGenerationById(
   try {
     await appendLog('process:start')
 
-    const generation = await prisma.generations.findUnique({
+    const generation = await prisma.generation.findUnique({
       where: { id: generationId },
       include: {
         session: {
@@ -196,7 +196,7 @@ async function processGenerationById(
 
     // Set the processing lock atomically
     try {
-      await prisma.generations.update({
+      await prisma.generation.update({
         where: { id: generationId },
         data: {
           parameters: {
@@ -214,7 +214,7 @@ async function processGenerationById(
     // Get model adapter
     const model = getModel(generation.modelId)
     if (!model) {
-      await prisma.generations.update({
+      await prisma.generation.update({
         where: { id: generationId },
         data: {
           status: 'failed',
@@ -356,7 +356,7 @@ async function processGenerationById(
     console.log(`[${generationId}] Generation result:`, result.status)
 
     try {
-      const latest = await prisma.generations.findUnique({ where: { id: generation.id } })
+      const latest = await prisma.generation.findUnique({ where: { id: generation.id } })
       if (latest && latest.status === 'cancelled') {
         await appendLog('cancelled:skip-after-generate')
         return { id: generation.id, status: 'skipped' }
@@ -441,14 +441,14 @@ async function processGenerationById(
         }
       })
 
-      await prisma.outputs.createMany({
+      await prisma.output.createMany({
         data: outputRecords,
       })
 
       // Enqueue semantic analysis for the new outputs (best-effort)
       try {
         // Fetch the created output IDs
-        const createdOutputs = await prisma.outputs.findMany({
+        const createdOutputs = await prisma.output.findMany({
           where: { generationId: generation.id },
           select: { id: true },
         })
@@ -479,7 +479,7 @@ async function processGenerationById(
         videoDurationSeconds: totalVideoDuration > 0 ? totalVideoDuration : undefined,
       })
 
-      await prisma.generations.update({
+      await prisma.generation.update({
         where: { id: generation.id },
         data: {
           status: 'completed',
@@ -505,7 +505,7 @@ async function processGenerationById(
         userId: generation.userId,
       }
       
-      await prisma.generations.update({
+      await prisma.generation.update({
         where: { id: generation.id },
         data: {
           status: 'failed',
@@ -537,7 +537,7 @@ async function processGenerationById(
     console.error('Background generation error:', error)
 
     try {
-      const generation = await prisma.generations.findUnique({
+      const generation = await prisma.generation.findUnique({
         where: { id: generationId },
       })
 
@@ -550,7 +550,7 @@ async function processGenerationById(
           userId: generation.userId,
         }
         
-        await prisma.generations.update({
+        await prisma.generation.update({
           where: { id: generationId },
           data: {
             status: 'failed',

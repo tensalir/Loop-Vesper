@@ -34,6 +34,15 @@ We’ve hit a TypeScript build failure from Prisma args:
   - Also good:
     - `include: { members: { where: { userId }, select: { role: true } } }`
 
+## Prisma schema safety (important)
+- **Do not run `prisma db pull --force` and commit the resulting `prisma/schema.prisma` changes.**
+  - This repo’s Prisma schema is **hand-maintained** with `@map` / `@@map` to keep **camelCase fields** and stable model names.
+  - `db pull` will often rewrite models/fields to **snake_case** table/column names, which causes widespread TypeScript failures on Vercel.
+- To test database connectivity, prefer:
+  - `prisma generate`
+  - `prisma migrate status`
+  - A small “health” query via an API route (using the existing Prisma client)
+
 ## React hooks lint
 - Avoid introducing new `react-hooks/exhaustive-deps` issues.
 - If you intentionally exclude deps, add a short comment explaining why and disable only that line sparingly.

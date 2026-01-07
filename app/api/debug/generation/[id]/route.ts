@@ -30,7 +30,7 @@ export async function GET(
     }
 
     // SECURITY: Only fetch generation if user owns it
-    const generation = await prisma.generations.findFirst({
+    const generation = await prisma.generation.findFirst({
       where: { 
         id,
         userId: session.user.id, // Only own generations

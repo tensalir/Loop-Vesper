@@ -13,7 +13,7 @@ export async function GET() {
     }
 
     // Check if user is admin
-    const profile = await prisma.profiles.findUnique({
+    const profile = await prisma.profile.findUnique({
       where: { id: session.user.id }
     })
 
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user is admin
-    const profile = await prisma.profiles.findUnique({
+    const profile = await prisma.profile.findUnique({
       where: { id: session.user.id }
     })
 

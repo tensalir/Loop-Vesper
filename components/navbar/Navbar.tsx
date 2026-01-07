@@ -63,7 +63,7 @@ export function Navbar({
     <div 
       className={cn(
         "flex items-center h-12 px-3 rounded-lg border backdrop-blur-sm shadow-sm",
-        "transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]",
+        "transition-all duration-500 ease-in-out",
         isExpanded 
           ? "bg-background/95 border-border" 
           : "bg-background/40 border-border/30"
@@ -76,7 +76,7 @@ export function Navbar({
         src={theme === 'light' ? "/images/Loop Vesper (Black).svg" : "/images/Loop Vesper (White).svg"}
         alt="Loop Vesper Logo"
         className={cn(
-          "h-4 object-contain cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] flex-shrink-0",
+          "h-4 object-contain cursor-pointer transition-all duration-500 ease-in-out flex-shrink-0",
           isExpanded ? "opacity-100" : "opacity-50 hover:opacity-70"
         )}
         onClick={() => router.push('/projects')}
@@ -86,7 +86,7 @@ export function Navbar({
       {/* Expandable section */}
       <div 
         className={cn(
-          "flex items-center overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]",
+          "flex items-center overflow-hidden transition-all duration-500 ease-in-out",
           isExpanded ? "max-w-[400px] opacity-100 ml-0" : "max-w-0 opacity-0 ml-0"
         )}
       >
@@ -142,7 +142,7 @@ export function Navbar({
       {/* Collapsed indicator - subtle hint there's more */}
       <div 
         className={cn(
-          "flex items-center gap-0.5 ml-2 transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]",
+          "flex items-center gap-0.5 ml-2 transition-all duration-500 ease-in-out",
           isExpanded ? "opacity-0 max-w-0" : "opacity-30 max-w-[30px]"
         )}
       >

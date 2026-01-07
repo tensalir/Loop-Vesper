@@ -30,7 +30,7 @@ export async function GET(
 
     // Project visibility: owner OR explicit member (invite-based sharing)
     // Note: isShared is just a UI toggle for the owner, not a visibility flag
-    const project = await prisma.projects.findFirst({
+    const project = await prisma.project.findFirst({
       where: {
         id: params.id,
         OR: [
@@ -113,7 +113,7 @@ export async function PATCH(
     const { name, description, isShared } = body
 
     // Check if user owns the project
-    const existingProject = await prisma.projects.findFirst({
+    const existingProject = await prisma.project.findFirst({
       where: {
         id: params.id,
         ownerId: user.id,
@@ -127,7 +127,7 @@ export async function PATCH(
       )
     }
 
-    const project = await prisma.projects.update({
+    const project = await prisma.project.update({
       where: { id: params.id },
       data: {
         ...(name && { name: name.trim() }),
@@ -162,7 +162,7 @@ export async function DELETE(
     }
 
     // Check if user owns the project
-    const existingProject = await prisma.projects.findFirst({
+    const existingProject = await prisma.project.findFirst({
       where: {
         id: params.id,
         ownerId: user.id,
@@ -176,7 +176,7 @@ export async function DELETE(
       )
     }
 
-    await prisma.projects.delete({
+    await prisma.project.delete({
       where: { id: params.id },
     })
 

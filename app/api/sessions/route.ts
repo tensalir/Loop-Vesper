@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     }
 
     // Verify user has access to this project
-    const project = await prisma.projects.findFirst({
+    const project = await prisma.project.findFirst({
       where: {
         id: projectId,
         OR: [
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
 
     // Filter sessions based on privacy and ownership
     const isOwner = project.ownerId === user.id
-    const sessions = await prisma.sessions.findMany({
+    const sessions = await prisma.session.findMany({
       where: {
         projectId,
         ...(isOwner
@@ -64,7 +64,7 @@ export async function GET(request: Request) {
     })
 
     // Get project owner profile for display
-    const ownerProfile = await prisma.profiles.findUnique({
+    const ownerProfile = await prisma.profile.findUnique({
       where: { id: project.ownerId },
       select: {
         id: true,
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
     }
 
     // Verify user has access to this project
-    const project = await prisma.projects.findFirst({
+    const project = await prisma.project.findFirst({
       where: {
         id: projectId,
         OR: [
@@ -146,7 +146,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const session = await prisma.sessions.create({
+    const session = await prisma.session.create({
       data: {
         projectId,
         name: name.trim(),

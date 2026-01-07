@@ -20,7 +20,7 @@ type ModelMessage = { role: 'user' | 'assistant'; content: MessageContent }
  * Check if user has access to the project (owner or invited member)
  */
 async function checkProjectAccess(projectId: string, userId: string) {
-  const project = await prisma.projects.findFirst({
+  const project = await prisma.project.findFirst({
     where: {
       id: projectId,
       OR: [
@@ -79,7 +79,7 @@ export async function POST(
     const projectId = params.id
 
     // Check project access and get project info (including briefing)
-    const project = await prisma.projects.findFirst({
+    const project = await prisma.project.findFirst({
       where: {
         id: projectId,
         OR: [

@@ -23,7 +23,7 @@ export async function PATCH(
     const { name, isPrivate } = body
 
     // First verify the session belongs to the user via the project
-    const existingSession = await prisma.sessions.findUnique({
+    const existingSession = await prisma.session.findUnique({
       where: { id },
       include: { project: true },
     })
@@ -33,7 +33,7 @@ export async function PATCH(
     }
 
     // Update session
-    const updatedSession = await prisma.sessions.update({
+    const updatedSession = await prisma.session.update({
       where: { id },
       data: {
         ...(name && typeof name === 'string' && { name: name.trim() }),
@@ -71,7 +71,7 @@ export async function DELETE(
     const { id } = params
 
     // Verify the session belongs to the user via the project
-    const existingSession = await prisma.sessions.findUnique({
+    const existingSession = await prisma.session.findUnique({
       where: { id },
       include: { project: true },
     })
@@ -84,7 +84,7 @@ export async function DELETE(
     }
 
     // Delete the session (cascade will delete generations and outputs)
-    await prisma.sessions.delete({
+    await prisma.session.delete({
       where: { id },
     })
 
