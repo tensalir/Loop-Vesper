@@ -831,7 +831,7 @@ export function GenerationInterface({
 
       {/* Chat Input - Floating Card at Bottom */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-4xl px-6 z-30">
-        <div className="flex items-end gap-3">
+        <div className="flex items-center gap-3">
           {/* Prompt Bar */}
           <div className="flex-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl p-4">
               {generationType === 'video' ? (

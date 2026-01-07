@@ -6,7 +6,16 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
-import { Settings, Sun, Moon, Lock, Globe } from 'lucide-react'
+import { Settings, Sun, Moon, Lock, Globe, Loader2 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import { FloatingSessionBar } from '@/components/sessions/FloatingSessionBar'
 import { GenerationInterface } from '@/components/generation/GenerationInterface'
 import { BrainstormChatWidget } from '@/components/brainstorm/BrainstormChatWidget'
@@ -31,6 +40,10 @@ export default function ProjectPage() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [externalPrompt, setExternalPrompt] = useState<string>('')
+  const [showBriefingModal, setShowBriefingModal] = useState(false)
+  const [briefing, setBriefing] = useState('')
+  const [isSavingBriefing, setIsSavingBriefing] = useState(false)
+  const [briefingLoaded, setBriefingLoaded] = useState(false)
   const supabase = createClient()
   const queryClient = useQueryClient()
   const hasProcessedInitialSessionsRef = useRef(false)
@@ -169,6 +182,60 @@ export default function ProjectPage() {
       })
     } finally {
       setUpdating(false)
+    }
+  }
+
+  // Fetch briefing when modal opens
+  const fetchBriefing = async () => {
+    if (!params.id || briefingLoaded) return
+    try {
+      const response = await fetch(`/api/projects/${params.id}/briefing`)
+      if (response.ok) {
+        const data = await response.json()
+        setBriefing(data.briefing || '')
+        setBriefingLoaded(true)
+      }
+    } catch (error) {
+      console.error('Error fetching briefing:', error)
+    }
+  }
+
+  // Save briefing
+  const saveBriefing = async () => {
+    if (!params.id) return
+    setIsSavingBriefing(true)
+    try {
+      const response = await fetch(`/api/projects/${params.id}/briefing`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ briefing }),
+      })
+      if (response.ok) {
+        toast({
+          title: 'Briefing saved',
+          description: 'Your project briefing has been updated.',
+        })
+        setShowBriefingModal(false)
+      } else {
+        throw new Error('Failed to save briefing')
+      }
+    } catch (error) {
+      console.error('Error saving briefing:', error)
+      toast({
+        title: 'Save failed',
+        description: 'Failed to save project briefing',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsSavingBriefing(false)
+    }
+  }
+
+  // Handle opening briefing modal
+  const handleOpenBriefing = () => {
+    setShowBriefingModal(true)
+    if (!briefingLoaded) {
+      fetchBriefing()
     }
   }
 
@@ -338,12 +405,11 @@ export default function ProjectPage() {
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      {/* Compact Centered Navbar - Logo + Image/Video Toggle */}
+      {/* Compact Centered Navbar */}
       <Navbar
         theme={theme}
-        generationType={generationType}
-        onGenerationTypeChange={handleGenerationTypeChange}
-        showGenerationToggle={true}
+        projectId={params.id as string}
+        onOpenBriefing={handleOpenBriefing}
       />
 
       {/* Utility Icons - Fixed Top Right */}
@@ -452,6 +518,50 @@ export default function ProjectPage() {
         onOpenChange={setIsChatOpen}
         onSendPrompt={setExternalPrompt}
       />
+
+      {/* Briefing Modal */}
+      <Dialog open={showBriefingModal} onOpenChange={setShowBriefingModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Project Briefing</DialogTitle>
+            <DialogDescription>
+              Add high-level instructions or context that will apply to all AI chats in this project.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Textarea
+              value={briefing}
+              onChange={(e) => setBriefing(e.target.value)}
+              placeholder="e.g., 'This project focuses on Loop Earplugs marketing campaigns. Generate visuals that emphasize comfort, noise reduction, and modern lifestyle aesthetics.'"
+              rows={8}
+              className="resize-none"
+              disabled={isSavingBriefing}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowBriefingModal(false)}
+              disabled={isSavingBriefing}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={saveBriefing}
+              disabled={isSavingBriefing}
+            >
+              {isSavingBriefing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save briefing'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

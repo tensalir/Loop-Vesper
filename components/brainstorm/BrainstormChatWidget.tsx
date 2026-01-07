@@ -690,55 +690,32 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
           
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <Sparkles className="w-5 h-5 text-primary" />
               <span className="font-semibold text-sm">Brainstorm</span>
-            </div>
-            
-            <div className="flex items-center gap-1">
-              {/* Briefing button */}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2 text-xs gap-1"
-                onClick={() => setShowBriefingModal(true)}
-                title="Project briefing (applies to all chats)"
-              >
-                <BriefingIcon className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Briefing</span>
-              </Button>
               
-              {/* Thread selector dropdown */}
+              {/* Thread selector dropdown - just an arrow */}
               <div className="relative">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2 text-xs gap-1"
+                <button
                   onClick={() => setShowThreadList(!showThreadList)}
+                  className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
+                  title="Previous chats"
                 >
-                  <span className="max-w-[100px] truncate">
-                    {activeThread?.title || 'Select chat'}
-                  </span>
-                  <ChevronDown className="w-3 h-3" />
-                </Button>
+                  <ChevronDown className={cn(
+                    "w-4 h-4 text-muted-foreground transition-transform",
+                    showThreadList && "rotate-180"
+                  )} />
+                </button>
                 
                 {showThreadList && (
-                  <div className="absolute top-full right-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-xl z-50 py-1 max-h-64 overflow-y-auto">
-                    <button
-                      onClick={createThread}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted text-left"
-                    >
-                      <Plus className="w-4 h-4" />
-                      New chat
-                    </button>
-                    <div className="border-t border-border my-1" />
+                  <div className="absolute top-full left-0 mt-2 w-56 bg-card border border-border rounded-lg shadow-xl z-50 py-1 max-h-64 overflow-y-auto">
                     {threadsLoading ? (
                       <div className="px-3 py-2 text-sm text-muted-foreground">
                         Loading...
                       </div>
                     ) : threads.length === 0 ? (
                       <div className="px-3 py-2 text-sm text-muted-foreground">
-                        No chats yet
+                        No previous chats
                       </div>
                     ) : (
                       threads.map((thread) => (
@@ -771,17 +748,27 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
                 )}
               </div>
               
-              {/* New chat button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
+              {/* New chat button - green, next to arrow */}
+              <button
                 onClick={createThread}
+                className="flex items-center justify-center w-6 h-6 rounded text-primary hover:bg-primary/10 transition-colors"
                 title="New chat"
               >
                 <Plus className="w-4 h-4" />
-              </Button>
+              </button>
             </div>
+            
+            {/* Briefing button - right side */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-xs gap-1"
+              onClick={() => setShowBriefingModal(true)}
+              title="Project briefing (applies to all chats)"
+            >
+              <BriefingIcon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Briefing</span>
+            </Button>
           </div>
 
           {/* Messages area */}

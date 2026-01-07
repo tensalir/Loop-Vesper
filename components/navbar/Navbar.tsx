@@ -1,90 +1,156 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Image as ImageIcon, Video, Bookmark, CheckCircle } from 'lucide-react'
+import { FileText, FolderOpen, ClipboardCheck, Bookmark } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface NavbarProps {
   theme: 'light' | 'dark'
-  generationType?: 'image' | 'video'
-  onGenerationTypeChange?: (type: 'image' | 'video') => void
-  showGenerationToggle?: boolean
+  projectId?: string
+  onOpenBriefing?: () => void
   /** When true, navbar positions itself fixed in center. When false, it's just a pill (for use in a wrapper) */
   standalone?: boolean
 }
 
 export function Navbar({
   theme,
-  generationType,
-  onGenerationTypeChange,
-  showGenerationToggle = false,
+  projectId,
+  onOpenBriefing,
   standalone = true,
 }: NavbarProps) {
   const router = useRouter()
+  const pathname = usePathname()
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  const navItems = [
+    {
+      label: 'Briefings',
+      icon: FileText,
+      onClick: onOpenBriefing || (() => {}),
+      active: false,
+    },
+    {
+      label: 'Projects',
+      icon: FolderOpen,
+      onClick: () => router.push('/projects'),
+      active: pathname === '/projects',
+    },
+    {
+      label: 'Review',
+      icon: ClipboardCheck,
+      onClick: () => router.push('/review'),
+      active: pathname === '/review',
+    },
+    {
+      label: 'divider',
+      icon: null,
+      onClick: () => {},
+      active: false,
+      isDivider: true,
+    },
+    {
+      label: 'Bookmarks',
+      icon: Bookmark,
+      onClick: () => router.push('/bookmarks'),
+      active: pathname === '/bookmarks',
+      iconOnly: true,
+    },
+  ]
 
   const navContent = (
-    <div className="flex items-center gap-1 h-12 px-3 rounded-lg border border-border bg-background/95 backdrop-blur-sm shadow-sm">
-        {/* Logo */}
-        <img
-          src={theme === 'light' ? "/images/Loop Vesper (Black).svg" : "/images/Loop Vesper (White).svg"}
-          alt="Loop Vesper Logo"
-          className="h-4 object-contain cursor-pointer hover:opacity-80 transition-opacity"
-          onClick={() => router.push('/projects')}
-          title="Back to Projects"
-        />
-
-        {/* Divider + Generation Type Toggle (only in project view) */}
-        {showGenerationToggle && onGenerationTypeChange && (
-          <>
-            <div className="w-px h-6 bg-border mx-2" />
-            <div className="flex items-center gap-0.5 bg-muted rounded-md p-1">
-              <Button
-                variant={generationType === 'image' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => onGenerationTypeChange('image')}
-                className="h-8 w-8 p-0 rounded-md"
-                title="Image generation"
-              >
-                <ImageIcon className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={generationType === 'video' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => onGenerationTypeChange('video')}
-                className="h-8 w-8 p-0 rounded-md"
-                title="Video generation"
-              >
-                <Video className="h-4 w-4" />
-              </Button>
-            </div>
-          </>
+    <div 
+      className={cn(
+        "flex items-center h-12 px-3 rounded-lg border backdrop-blur-sm shadow-sm",
+        "transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]",
+        isExpanded 
+          ? "bg-background/95 border-border" 
+          : "bg-background/40 border-border/30"
+      )}
+      onMouseEnter={() => setIsExpanded(true)}
+      onMouseLeave={() => setIsExpanded(false)}
+    >
+      {/* Logo - always visible */}
+      <img
+        src={theme === 'light' ? "/images/Loop Vesper (Black).svg" : "/images/Loop Vesper (White).svg"}
+        alt="Loop Vesper Logo"
+        className={cn(
+          "h-4 object-contain cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] flex-shrink-0",
+          isExpanded ? "opacity-100" : "opacity-50 hover:opacity-70"
         )}
+        onClick={() => router.push('/projects')}
+        title="Back to Projects"
+      />
 
+      {/* Expandable section */}
+      <div 
+        className={cn(
+          "flex items-center overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]",
+          isExpanded ? "max-w-[400px] opacity-100 ml-0" : "max-w-0 opacity-0 ml-0"
+        )}
+      >
         {/* Divider */}
-        <div className="w-px h-6 bg-border mx-2" />
+        <div className={cn(
+          "w-px h-6 bg-border mx-2 flex-shrink-0 transition-opacity duration-500",
+          isExpanded ? "opacity-100" : "opacity-0"
+        )} />
 
-        {/* Bookmarks Button - Icon only */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push('/bookmarks')}
-          className="h-8 w-8 rounded-md"
-          title="Bookmarks"
-        >
-          <Bookmark className="h-4 w-4" />
-        </Button>
-
-        {/* Approved Button - Icon only */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push('/review')}
-          className="h-8 w-8 rounded-md"
-          title="Approved assets"
-        >
-          <CheckCircle className="h-4 w-4" />
-        </Button>
+        {/* Navigation Items */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {navItems.map((item, index) => {
+            // Render divider
+            if (item.isDivider) {
+              return (
+                <div 
+                  key={item.label} 
+                  className={cn(
+                    "w-px h-6 bg-border mx-1 flex-shrink-0 transition-opacity duration-500",
+                    isExpanded ? "opacity-100" : "opacity-0"
+                  )}
+                />
+              )
+            }
+            
+            // Render button
+            const IconComponent = item.icon
+            return (
+              <Button
+                key={item.label}
+                variant="ghost"
+                size={item.iconOnly ? "icon" : "sm"}
+                onClick={item.onClick}
+                className={cn(
+                  "font-medium rounded-md whitespace-nowrap",
+                  "transition-all duration-300 ease-out",
+                  item.iconOnly ? "h-8 w-8 p-0" : "h-8 px-3 gap-1.5 text-xs",
+                  item.active && "bg-muted text-foreground"
+                )}
+                style={{
+                  transitionDelay: isExpanded ? `${index * 50}ms` : '0ms'
+                }}
+                title={item.iconOnly ? item.label : undefined}
+              >
+                {IconComponent && <IconComponent className="h-3.5 w-3.5" />}
+                {!item.iconOnly && <span>{item.label}</span>}
+              </Button>
+            )
+          })}
+        </div>
       </div>
+
+      {/* Collapsed indicator - subtle hint there's more */}
+      <div 
+        className={cn(
+          "flex items-center gap-0.5 ml-2 transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]",
+          isExpanded ? "opacity-0 max-w-0" : "opacity-30 max-w-[30px]"
+        )}
+      >
+        <span className="w-1 h-1 rounded-full bg-foreground/40" />
+        <span className="w-1 h-1 rounded-full bg-foreground/40" />
+        <span className="w-1 h-1 rounded-full bg-foreground/40" />
+      </div>
+    </div>
   )
 
   if (standalone) {
