@@ -1,7 +1,7 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextRequest } from 'next/server'
-import { streamText, type UIMessage, type CoreMessage } from 'ai'
+import { streamText, type UIMessage } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 import { prisma } from '@/lib/prisma'
 import { loadSkill, combineSkills } from '@/lib/skills/registry'
@@ -11,6 +11,10 @@ const DEFAULT_MODEL = 'claude-sonnet-4-20250514'
 
 // Regex to extract embedded image data URLs from messages
 const IMAGE_DATA_REGEX = /<<IMAGE_DATA:(data:image\/[^>]+)>>/g
+
+// Type for multi-modal message content
+type MessageContent = string | Array<{ type: 'text'; text: string } | { type: 'image'; image: string }>
+type ModelMessage = { role: 'user' | 'assistant'; content: MessageContent }
 
 /**
  * Check if user has access to the project (owner or invited member)
@@ -142,8 +146,8 @@ export async function POST(
     // Get the model from env or use default
     const modelId = process.env.ANTHROPIC_BRAINSTORM_MODEL || DEFAULT_MODEL
 
-    // Convert UI messages to CoreMessages, extracting embedded images for Claude vision
-    const modelMessages: CoreMessage[] = messages.map((msg) => {
+    // Convert UI messages to model messages, extracting embedded images for Claude vision
+    const modelMessages: ModelMessage[] = messages.map((msg) => {
       const textContent = getMessageText(msg)
       
       // Extract any embedded image data URLs
