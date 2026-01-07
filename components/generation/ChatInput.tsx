@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useRef, useEffect, lazy, Suspense, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Image as ImageIcon, ImagePlus, Ratio, ChevronDown, Upload, FolderOpen, X, MessageSquare, Circle, GripHorizontal } from 'lucide-react'
+import { Image as ImageIcon, ImagePlus, Ratio, ChevronDown, Upload, FolderOpen, X, Circle, GripHorizontal } from 'lucide-react'
 import { useModelCapabilities } from '@/hooks/useModelCapabilities'
 import { AspectRatioSelector } from './AspectRatioSelector'
 import { ModelPicker } from './ModelPicker'
@@ -14,8 +14,6 @@ import { ProductRendersBrowseModal } from './ProductRendersBrowseModal'
 import { PromptEnhancementButton } from './PromptEnhancementButton'
 import { useParams } from 'next/navigation'
 
-// Lazy load the assistant drawer to avoid impacting initial load
-const AssistantDrawer = lazy(() => import('./AssistantDrawer').then(mod => ({ default: mod.AssistantDrawer })))
 
 interface ChatInputProps {
   prompt: string
@@ -58,7 +56,6 @@ export function ChatInput({
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [transformedPrompt, setTransformedPrompt] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
-  const [assistantOpen, setAssistantOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   // Resizable input height - use refs for smooth dragging performance
@@ -679,17 +676,6 @@ export function ChatInput({
           </Select>
         )}
 
-        {/* Assistant Button */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 px-3 rounded-lg"
-          onClick={() => setAssistantOpen(true)}
-          title="Open assistant"
-        >
-          <MessageSquare className="h-3.5 w-3.5" />
-        </Button>
-
         {/* Keyboard Shortcut */}
         <span className="text-xs text-muted-foreground ml-auto hidden lg:inline-flex items-center gap-1">
           <kbd className="px-2 py-0.5 bg-muted rounded text-[10px] border">⌘</kbd>
@@ -713,23 +699,6 @@ export function ChatInput({
         onSelectImage={handleBrowseSelect}
       />
 
-      {/* Assistant Drawer - Lazy loaded */}
-      <Suspense fallback={null}>
-        <AssistantDrawer
-          isOpen={assistantOpen}
-          onClose={() => setAssistantOpen(false)}
-          context={{
-            currentPrompt: prompt,
-            selectedModel,
-            generationType,
-            referenceImageCount: referenceImages.length,
-          }}
-          onApplyPrompt={(newPrompt) => {
-            onPromptChange(newPrompt)
-            setAssistantOpen(false)
-          }}
-        />
-      </Suspense>
     </div>
   )
 }

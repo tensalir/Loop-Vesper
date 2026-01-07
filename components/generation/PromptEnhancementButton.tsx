@@ -15,32 +15,65 @@ interface PromptEnhancementButtonProps {
   className?: string
 }
 
-// Helper function to gradually morph text from original to enhanced
+// Glitch characters for scramble effect
+const GLITCH_CHARS = '!@#$%^&*()_+-=[]{}|;:,.<>?~`░▒▓█▄▀■□▪▫●○◆◇★☆'
+
+// Helper function to create a glitch/scramble effect during transformation
 function morphText(original: string, enhanced: string, progress: number): string {
   if (progress <= 0) return original
   if (progress >= 1) return enhanced
   
-  // Split into words for smoother transformation
-  const originalWords = original.split(/(\s+)/)
-  const enhancedWords = enhanced.split(/(\s+)/)
+  // Three phases:
+  // Phase 1 (0-0.3): Original text with increasing glitch
+  // Phase 2 (0.3-0.7): Heavy glitch transition
+  // Phase 3 (0.7-1): Enhanced text emerging from glitch
   
-  // Calculate how many words to transform
-  const totalWords = Math.max(originalWords.length, enhancedWords.length)
-  const wordsToTransform = Math.floor(totalWords * progress)
+  const chars = enhanced.split('')
+  const originalChars = original.split('')
+  const maxLen = Math.max(chars.length, originalChars.length)
   
-  // Build the morphed text
-  const morphedWords: string[] = []
-  for (let i = 0; i < totalWords; i++) {
-    if (i < wordsToTransform) {
-      // Use enhanced word if available, otherwise keep original
-      morphedWords.push(enhancedWords[i] || originalWords[i] || '')
+  const result: string[] = []
+  
+  for (let i = 0; i < maxLen; i++) {
+    const enhancedChar = chars[i] || ''
+    const originalChar = originalChars[i] || ''
+    
+    // Calculate character-specific progress (wave effect from start to end)
+    const charProgress = Math.max(0, Math.min(1, (progress * 1.5) - (i / maxLen) * 0.5))
+    
+    if (charProgress < 0.2) {
+      // Still original
+      result.push(originalChar)
+    } else if (charProgress < 0.4) {
+      // Glitching - random chance to show glitch char
+      if (Math.random() < 0.6) {
+        result.push(GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)])
+      } else {
+        result.push(originalChar)
+      }
+    } else if (charProgress < 0.7) {
+      // Heavy glitch
+      if (Math.random() < 0.8) {
+        result.push(GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)])
+      } else if (Math.random() < 0.5) {
+        result.push(enhancedChar)
+      } else {
+        result.push(originalChar)
+      }
+    } else if (charProgress < 0.9) {
+      // Emerging - mostly enhanced with some glitch
+      if (Math.random() < 0.3) {
+        result.push(GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)])
+      } else {
+        result.push(enhancedChar)
+      }
     } else {
-      // Use original word if available, otherwise use enhanced
-      morphedWords.push(originalWords[i] || enhancedWords[i] || '')
+      // Final - enhanced character
+      result.push(enhancedChar)
     }
   }
   
-  return morphedWords.join('')
+  return result.join('')
 }
 
 export function PromptEnhancementButton({
@@ -165,8 +198,8 @@ export function PromptEnhancementButton({
       
       // Gradually transform the text with glitch effect
       const startTime = Date.now()
-      const duration = 2000 // 2 seconds for transformation
-      const steps = 30 // Number of transformation steps
+      const duration = 1500 // 1.5 seconds for transformation
+      const steps = 50 // More steps for smoother glitch effect
       const stepDuration = duration / steps
       
       let currentStep = 0

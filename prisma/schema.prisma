@@ -41,6 +41,7 @@ model Project {
   name          String
   description   String?
   coverImageUrl String?  @map("cover_image_url")
+  briefing      String?  @db.Text // High-level instructions that apply to all chats in this project
   ownerId       String   @map("owner_id") @db.Uuid
   isShared      Boolean  @default(false) @map("is_shared")
   createdAt     DateTime @default(now()) @map("created_at")
