@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
 
   try {
     // Fetch batch of generations
-    const generations = await prisma.generation.findMany({
+    const generations = await prisma.generations.findMany({
       where: {
         // All generations have parameters (required field)
       },
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Update the generation with cleaned parameters
-        await prisma.generation.update({
+        await prisma.generations.update({
           where: { id: gen.id },
           data: { parameters: newParams as Prisma.InputJsonValue },
         })

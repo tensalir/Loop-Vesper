@@ -14,7 +14,7 @@ export async function GET() {
     }
 
     // Fetch all approved outputs for the user's generations
-    const approvedOutputs = await prisma.output.findMany({
+    const approvedOutputs = await prisma.outputs.findMany({
       where: {
         isApproved: true,
         generation: {

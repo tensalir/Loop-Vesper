@@ -33,7 +33,7 @@ export async function GET() {
     // 1. Projects owned by user
     // 2. Projects where user is explicitly a member (invite-based sharing)
     // 3. Public shared projects from other users (isShared = true)
-    const projects = await prisma.project.findMany({
+    const projects = await prisma.projects.findMany({
       where: {
         OR: [
           { ownerId: user.id }, // Own projects
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const project = await prisma.project.create({
+    const project = await prisma.projects.create({
       data: {
         name: name.trim(),
         description: description?.trim() || null,
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
     })
 
     // Create a default session for the project
-    await prisma.session.create({
+    await prisma.sessions.create({
       data: {
         projectId: project.id,
         name: 'Session 1',

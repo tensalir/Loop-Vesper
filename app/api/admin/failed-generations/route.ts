@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch generations with user info
-    const generations = await prisma.generation.findMany({
+    const generations = await prisma.generations.findMany({
       where: whereClause,
       select: {
         id: true,

@@ -33,7 +33,7 @@ export async function GET(
     const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50)
 
     // First, verify the output exists and user has access via project ownership/membership
-    const sourceOutput = await prisma.output.findUnique({
+    const sourceOutput = await prisma.outputs.findUnique({
       where: { id: outputId },
       include: {
         generation: {
@@ -108,7 +108,7 @@ export async function GET(
     // Fetch outputs for these generations
     const generationIds = iterations.map((i) => i.id)
     const outputs = generationIds.length > 0
-      ? await prisma.output.findMany({
+      ? await prisma.outputs.findMany({
           where: { generationId: { in: generationIds } },
           orderBy: { createdAt: 'asc' },
         })

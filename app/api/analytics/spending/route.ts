@@ -33,7 +33,7 @@ export async function GET() {
     }
 
     // Get all completed generations with costs
-    const generations = await prisma.generation.findMany({
+    const generations = await prisma.generations.findMany({
       where: {
         status: 'completed',
         cost: {

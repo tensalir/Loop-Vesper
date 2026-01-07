@@ -25,7 +25,7 @@ export async function GET(
     const projectId = params.id
 
     // Check project access
-    const project = await prisma.project.findFirst({
+    const project = await prisma.projects.findFirst({
       where: {
         id: projectId,
         OR: [
@@ -89,7 +89,7 @@ export async function PUT(
     }
 
     // Check project access and permissions (owner or admin member)
-    const project = await prisma.project.findFirst({
+    const project = await prisma.projects.findFirst({
       where: {
         id: projectId,
         OR: [
@@ -115,7 +115,7 @@ export async function PUT(
     }
 
     // Update briefing
-    const updated = await prisma.project.update({
+    const updated = await prisma.projects.update({
       where: { id: projectId },
       data: {
         briefing: briefing?.trim() || null,

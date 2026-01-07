@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     // Find generations stuck in processing for more than 5 minutes
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
     
-    const stuckGenerations = await prisma.generation.findMany({
+    const stuckGenerations = await prisma.generations.findMany({
       where: {
         userId: session.user.id, // Only own generations
         status: 'processing',

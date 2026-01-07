@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     // Find generations stuck > 2 minutes (Vercel Pro timeout is 60s, so 2min is definitely stuck)
     const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000)
     
-    const stuckGenerations = await prisma.generation.findMany({
+    const stuckGenerations = await prisma.generations.findMany({
       where: {
         status: 'processing',
         createdAt: {
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     
     for (const gen of stuckGenerations) {
       try {
-        await prisma.generation.update({
+        await prisma.generations.update({
           where: { id: gen.id },
           data: {
             status: 'failed',

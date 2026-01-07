@@ -23,7 +23,7 @@ export async function PATCH(
     const { isStarred, isApproved } = body
 
     // Verify the output belongs to the user
-    const output = await prisma.output.findUnique({
+    const output = await prisma.outputs.findUnique({
       where: { id: params.id },
       include: {
         generation: {
@@ -43,7 +43,7 @@ export async function PATCH(
     }
 
     // Update the output
-    const updatedOutput = await prisma.output.update({
+    const updatedOutput = await prisma.outputs.update({
       where: { id: params.id },
       data: {
         ...(typeof isStarred === 'boolean' && { isStarred }),
@@ -78,7 +78,7 @@ export async function DELETE(
     }
 
     // Verify the output belongs to the user
-    const output = await prisma.output.findUnique({
+    const output = await prisma.outputs.findUnique({
       where: { id: params.id },
       include: {
         generation: {
@@ -97,7 +97,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
-    await prisma.output.delete({
+    await prisma.outputs.delete({
       where: { id: params.id },
     })
 

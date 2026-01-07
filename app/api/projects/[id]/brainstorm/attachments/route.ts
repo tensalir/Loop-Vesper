@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma'
  * Check if user has access to the project (owner or invited member)
  */
 async function checkProjectAccess(projectId: string, userId: string) {
-  const project = await prisma.project.findFirst({
+  const project = await prisma.projects.findFirst({
     where: {
       id: projectId,
       OR: [

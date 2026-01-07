@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '12'), 24)
 
     // Fetch recent outputs for the user's generations
-    const recentOutputs = await prisma.output.findMany({
+    const recentOutputs = await prisma.outputs.findMany({
       where: {
         generation: {
           userId: user.id,

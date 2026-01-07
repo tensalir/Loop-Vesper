@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
 
     // Find the generation by prediction ID
     // The prediction ID is stored in parameters.replicatePredictionId
-    const generation = await prisma.generation.findFirst({
+    const generation = await prisma.generations.findFirst({
       where: {
         parameters: {
           path: ['replicatePredictionId'],
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
 
       if (outputUrls.length === 0) {
         console.error(`[Replicate Webhook] No output URLs for prediction ${predictionId}`)
-        await prisma.generation.update({
+        await prisma.generations.update({
           where: { id: generation.id },
           data: {
             status: 'failed',
@@ -217,13 +217,13 @@ export async function POST(request: NextRequest) {
       }
 
       // Create output records
-      await prisma.output.createMany({
+      await prisma.outputs.createMany({
         data: outputRecords,
       })
 
       // Enqueue semantic analysis for the new outputs (best-effort)
       try {
-        const createdOutputs = await prisma.output.findMany({
+        const createdOutputs = await prisma.outputs.findMany({
           where: { generationId: generation.id },
           select: { id: true },
         })
@@ -249,7 +249,7 @@ export async function POST(request: NextRequest) {
       })
 
       // Update generation to completed
-      await prisma.generation.update({
+      await prisma.generations.update({
         where: { id: generation.id },
         data: {
           status: 'completed',
@@ -274,7 +274,7 @@ export async function POST(request: NextRequest) {
     } else if (payload.status === 'failed' || payload.status === 'canceled') {
       console.log(`[Replicate Webhook] Prediction ${predictionId} ${payload.status}: ${payload.error}`)
 
-      await prisma.generation.update({
+      await prisma.generations.update({
         where: { id: generation.id },
         data: {
           status: 'failed',

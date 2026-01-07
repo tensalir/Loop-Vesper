@@ -28,7 +28,7 @@ export async function PUT(
     }
 
     // Fetch the generation
-    const generation = await prisma.generation.findUnique({
+    const generation = await prisma.generations.findUnique({
       where: { id: generationId },
     })
 
@@ -56,7 +56,7 @@ export async function PUT(
     }
 
     // Update generation status to cancelled
-    await prisma.generation.update({
+    await prisma.generations.update({
       where: { id: generationId },
       data: {
         status: 'cancelled',

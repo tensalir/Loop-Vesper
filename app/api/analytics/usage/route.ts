@@ -19,12 +19,12 @@ export async function GET() {
     const userId = session.user.id
 
     // Get total generations
-    const totalGenerations = await prisma.generation.count({
+    const totalGenerations = await prisma.generations.count({
       where: { userId },
     })
 
     // Get image generations count
-    const imageGenerations = await prisma.generation.count({
+    const imageGenerations = await prisma.generations.count({
       where: {
         userId,
         outputs: {
@@ -36,7 +36,7 @@ export async function GET() {
     })
 
     // Get video generations count
-    const videoGenerations = await prisma.generation.count({
+    const videoGenerations = await prisma.generations.count({
       where: {
         userId,
         outputs: {
@@ -48,7 +48,7 @@ export async function GET() {
     })
 
     // Get model usage statistics
-    const modelUsage = await prisma.generation.groupBy({
+    const modelUsage = await prisma.generations.groupBy({
       by: ['modelId'],
       where: { userId },
       _count: {
@@ -80,7 +80,7 @@ export async function GET() {
     })
 
     // Calculate provider breakdown from all user's generations
-    const allModelUsage = await prisma.generation.groupBy({
+    const allModelUsage = await prisma.generations.groupBy({
       by: ['modelId'],
       where: { userId },
       _count: {
