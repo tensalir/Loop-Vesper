@@ -31,6 +31,7 @@ model Profile {
   workflows      Workflow[]
   bookmarks      Bookmark[]
   notes          Note[]
+  projectChats   ProjectChat[]
 
   @@map("profiles")
 }
@@ -48,6 +49,7 @@ model Project {
   owner    Profile         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   sessions Session[]
   members  ProjectMember[]
+  chats    ProjectChat[]
 
   @@index([ownerId])
   @@index([isShared, ownerId])
@@ -255,4 +257,36 @@ model ProductRender {
   @@index([name, colorway])
   @@index([source])
   @@map("product_renders")
+}
+
+// Brainstorm chat threads (per user + per project)
+model ProjectChat {
+  id        String   @id @default(uuid()) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  title     String   @default("New Chat")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project  Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user     Profile              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ProjectChatMessage[]
+
+  @@index([projectId, userId])
+  @@index([userId])
+  @@map("project_chats")
+}
+
+// Individual messages within a brainstorm chat
+model ProjectChatMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  chatId    String   @map("chat_id") @db.Uuid
+  role      String   // 'user' or 'assistant'
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  chat ProjectChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId])
+  @@map("project_chat_messages")
 }

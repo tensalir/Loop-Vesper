@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Settings, Sun, Moon, Lock, Globe } from 'lucide-react'
 import { FloatingSessionBar } from '@/components/sessions/FloatingSessionBar'
 import { GenerationInterface } from '@/components/generation/GenerationInterface'
+import { BrainstormChatWidget } from '@/components/brainstorm/BrainstormChatWidget'
 import { useSessions } from '@/hooks/useSessions'
 import { Navbar } from '@/components/navbar/Navbar'
 import { SpendingTracker } from '@/components/navbar/SpendingTracker'
@@ -428,6 +429,8 @@ export default function ProjectPage() {
         />
       </div>
 
+      {/* Brainstorm Chat Widget - Bottom Right */}
+      <BrainstormChatWidget projectId={params.id as string} />
     </div>
   )
 }
