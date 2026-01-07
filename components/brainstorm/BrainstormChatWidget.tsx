@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useChat, Message } from 'ai/react'
+import { useChat } from '@ai-sdk/react'
+import type { Message } from '@ai-sdk/react'
 import { 
   MessageCircle, 
   X, 
