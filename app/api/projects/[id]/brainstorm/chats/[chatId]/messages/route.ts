@@ -56,15 +56,19 @@ export async function GET(
       },
     })
 
-    // Transform to AI SDK message format
-    const aiMessages = messages.map((msg) => ({
+    // Transform to AI SDK UIMessage format (parts-based)
+    const uiMessages = messages.map((msg) => ({
       id: msg.id,
       role: msg.role as 'user' | 'assistant',
-      content: msg.content,
-      createdAt: msg.createdAt,
+      parts: [
+        {
+          type: 'text' as const,
+          text: msg.content,
+        },
+      ],
     }))
 
-    return NextResponse.json(aiMessages)
+    return NextResponse.json(uiMessages)
   } catch (error: any) {
     console.error('Error fetching brainstorm messages:', error)
     return NextResponse.json(

@@ -1,7 +1,7 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextRequest } from 'next/server'
-import { streamText } from 'ai'
+import { streamText, convertToModelMessages, type UIMessage } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 import { prisma } from '@/lib/prisma'
 import { loadSkill, combineSkills } from '@/lib/skills/registry'
@@ -78,7 +78,7 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { messages, chatId } = body
+    const { messages, chatId } = body as { messages: UIMessage[]; chatId: string }
 
     if (!chatId || typeof chatId !== 'string') {
       return new Response('chatId is required', { status: 400 })
@@ -88,6 +88,13 @@ export async function POST(
       return new Response('messages array is required', { status: 400 })
     }
 
+    const getMessageText = (message: UIMessage): string => {
+      return message.parts
+        .filter((part) => part.type === 'text')
+        .map((part) => part.text)
+        .join('')
+    }
+
     // Verify chat ownership
     const isOwner = await checkChatOwnership(chatId, user.id, projectId)
     if (!isOwner) {
@@ -95,17 +102,18 @@ export async function POST(
     }
 
     // Get the latest user message to persist
-    const latestUserMessage = messages[messages.length - 1]
-    if (latestUserMessage?.role !== 'user') {
-      return new Response('Last message must be from user', { status: 400 })
+    const latestUserMessage = [...messages].reverse().find((m) => m.role === 'user')
+    if (!latestUserMessage) {
+      return new Response('No user message found', { status: 400 })
     }
+    const latestUserText = getMessageText(latestUserMessage)
 
     // Persist the user message
     await prisma.projectChatMessage.create({
       data: {
         chatId,
         role: 'user',
-        content: latestUserMessage.content,
+        content: latestUserText,
       },
     })
 
@@ -130,11 +138,17 @@ export async function POST(
     // Get the model from env or use default
     const modelId = process.env.ANTHROPIC_BRAINSTORM_MODEL || DEFAULT_MODEL
 
+    // Convert UI messages from the client into ModelMessages for the model call.
+    // Note: `convertToModelMessages` expects messages WITHOUT the `id` field.
+    const modelMessages = await convertToModelMessages(
+      messages.map(({ id, ...rest }) => rest)
+    )
+
     // Stream the response using AI SDK
     const result = streamText({
       model: anthropic(modelId),
       system: systemPrompt,
-      messages,
+      messages: modelMessages,
       onFinish: async ({ text }) => {
         // Persist the assistant message after streaming completes
         try {
@@ -155,8 +169,8 @@ export async function POST(
           
           if (chat && chat.title === 'New Chat' && chat._count.messages <= 2) {
             // Generate a short title from the first user message
-            const firstUserMsg = latestUserMessage.content.slice(0, 50)
-            const newTitle = firstUserMsg.length < latestUserMessage.content.length 
+            const firstUserMsg = latestUserText.slice(0, 50)
+            const newTitle = firstUserMsg.length < latestUserText.length 
               ? `${firstUserMsg}...` 
               : firstUserMsg
             

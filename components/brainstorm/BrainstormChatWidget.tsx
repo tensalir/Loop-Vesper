@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useChat } from '@ai-sdk/react'
-import type { Message } from '@ai-sdk/react'
+import { TextStreamChatTransport, type UIMessage } from 'ai'
 import { 
-  MessageCircle, 
   X, 
   Send, 
   Plus, 
@@ -12,7 +11,6 @@ import {
   ChevronDown,
   Loader2,
   Sparkles,
-  MoreHorizontal
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -33,6 +31,7 @@ interface BrainstormChatWidgetProps {
 export function BrainstormChatWidget({ projectId }: BrainstormChatWidgetProps) {
   // Panel open/close state
   const [isOpen, setIsOpen] = useState(false)
+  const [input, setInput] = useState('')
   
   // Chat threads
   const [threads, setThreads] = useState<ChatThread[]>([])
@@ -46,26 +45,39 @@ export function BrainstormChatWidget({ projectId }: BrainstormChatWidgetProps) {
   // Message scroll ref
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const activeThreadIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    activeThreadIdRef.current = activeThreadId
+  }, [activeThreadId])
+
+  const transport = useMemo(() => {
+    return new TextStreamChatTransport({
+      api: `/api/projects/${projectId}/brainstorm/chat`,
+      body: () =>
+        activeThreadIdRef.current ? { chatId: activeThreadIdRef.current } : {},
+    })
+  }, [projectId])
+
+  const getMessageText = (message: UIMessage): string => {
+    return message.parts
+      .filter((part) => part.type === 'text')
+      .map((part) => part.text)
+      .join('')
+  }
   
   // AI SDK useChat hook
-  const { 
-    messages, 
-    input, 
-    setInput, 
-    handleSubmit, 
-    isLoading,
-    setMessages,
-    error,
-  } = useChat({
-    api: `/api/projects/${projectId}/brainstorm/chat`,
-    body: {
-      chatId: activeThreadId,
-    },
+  const { messages, setMessages, sendMessage, status, error } = useChat({
+    id: `brainstorm-${projectId}`,
+    transport,
     onFinish: () => {
       // Refresh thread list to update titles
       fetchThreads()
     },
   })
+
+  const isLoading = status === 'submitted' || status === 'streaming'
+  const canSend = !isLoading
 
   // Fetch threads for this project
   const fetchThreads = useCallback(async () => {
@@ -97,7 +109,7 @@ export function BrainstormChatWidget({ projectId }: BrainstormChatWidgetProps) {
   }, [projectId, setMessages])
 
   // Create a new chat thread
-  const createThread = async () => {
+  const createThread = async (): Promise<ChatThread | null> => {
     try {
       const res = await fetch(`/api/projects/${projectId}/brainstorm/chats`, {
         method: 'POST',
@@ -107,13 +119,16 @@ export function BrainstormChatWidget({ projectId }: BrainstormChatWidgetProps) {
       if (res.ok) {
         const newThread = await res.json()
         setThreads(prev => [newThread, ...prev])
+        activeThreadIdRef.current = newThread.id
         setActiveThreadId(newThread.id)
         setMessages([])
         setShowThreadList(false)
+        return newThread
       }
     } catch (err) {
       console.error('Failed to create thread:', err)
     }
+    return null
   }
 
   // Delete a chat thread
@@ -128,9 +143,11 @@ export function BrainstormChatWidget({ projectId }: BrainstormChatWidgetProps) {
           // Switch to another thread or clear
           const remaining = threads.filter(t => t.id !== threadId)
           if (remaining.length > 0) {
+            activeThreadIdRef.current = remaining[0].id
             setActiveThreadId(remaining[0].id)
             fetchMessages(remaining[0].id)
           } else {
+            activeThreadIdRef.current = null
             setActiveThreadId(null)
             setMessages([])
           }
@@ -145,6 +162,7 @@ export function BrainstormChatWidget({ projectId }: BrainstormChatWidgetProps) {
 
   // Switch active thread
   const switchThread = (threadId: string) => {
+    activeThreadIdRef.current = threadId
     setActiveThreadId(threadId)
     fetchMessages(threadId)
     setShowThreadList(false)
@@ -167,6 +185,7 @@ export function BrainstormChatWidget({ projectId }: BrainstormChatWidgetProps) {
   // Auto-select first thread on load
   useEffect(() => {
     if (threads.length > 0 && !activeThreadId) {
+      activeThreadIdRef.current = threads[0].id
       setActiveThreadId(threads[0].id)
     }
   }, [threads, activeThreadId])
@@ -174,8 +193,10 @@ export function BrainstormChatWidget({ projectId }: BrainstormChatWidgetProps) {
   // Reset when project changes
   useEffect(() => {
     setThreads([])
+    activeThreadIdRef.current = null
     setActiveThreadId(null)
     setMessages([])
+    setInput('')
     if (isOpen) {
       fetchThreads()
     }
@@ -194,39 +215,33 @@ export function BrainstormChatWidget({ projectId }: BrainstormChatWidgetProps) {
   }, [isOpen, activeThreadId])
 
   // Handle form submission
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() || isLoading) return
-    
-    // If no active thread, create one first
-    if (!activeThreadId) {
-      try {
-        const res = await fetch(`/api/projects/${projectId}/brainstorm/chats`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: 'New Chat' }),
-        })
-        if (res.ok) {
-          const newThread = await res.json()
-          setThreads(prev => [newThread, ...prev])
-          setActiveThreadId(newThread.id)
-          // Wait for state to update then submit
-          setTimeout(() => handleSubmit(e), 50)
-        }
-      } catch (err) {
-        console.error('Failed to create thread:', err)
-      }
-      return
+  const submitCurrentInput = async () => {
+    const text = input.trim()
+    if (!text || isLoading || !canSend) return
+
+    if (!activeThreadIdRef.current) {
+      const newThread = await createThread()
+      if (!newThread) return
     }
-    
-    handleSubmit(e)
+
+    try {
+      await sendMessage({ text })
+      setInput('')
+    } catch (err) {
+      console.error('Failed to send message:', err)
+    }
+  }
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    void submitCurrentInput()
   }
 
   // Handle keyboard shortcuts
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      onSubmit(e)
+      void submitCurrentInput()
     }
   }
 
@@ -374,7 +389,7 @@ export function BrainstormChatWidget({ projectId }: BrainstormChatWidgetProps) {
                         : "bg-muted rounded-bl-md"
                     )}
                   >
-                    <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                    <p className="whitespace-pre-wrap break-words">{getMessageText(message)}</p>
                   </div>
                 </div>
               ))
@@ -413,7 +428,7 @@ export function BrainstormChatWidget({ projectId }: BrainstormChatWidgetProps) {
                 type="submit"
                 size="icon"
                 className="h-11 w-11 rounded-xl shrink-0"
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim() || !canSend}
               >
                 {isLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
