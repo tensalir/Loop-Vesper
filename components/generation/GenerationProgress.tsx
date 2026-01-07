@@ -9,29 +9,23 @@ interface GenerationProgressProps {
   isVideo?: boolean
 }
 
-// Customer insights based on Loop Earplugs research data
-// These are concise, interesting facts derived from 18,176 reviews & 14,536 tickets
+// Specific customer insights from Loop Earplugs research (18,176 reviews & 14,536 tickets)
 const CUSTOMER_INSIGHTS = [
-  "45% of customers use Loop for better sleep quality",
-  "Side sleepers are our fastest-growing segment",
-  "Neurodivergent users report 3x higher satisfaction",
-  "Concert-goers love maintaining music clarity",
-  "1 in 4 users bought for a snoring partner",
-  "Shift workers are our most loyal customers",
-  "Parents use Loop to manage sensory overload",
-  "Motorcycle riders reduce fatigue by 40%",
-  "HSPs find relief in crowded environments",
-  "Business travelers rate comfort highest",
-  "Musicians prefer Loop over foam earplugs",
-  "Light sleepers report 2x better rest",
-  "Open-office workers boost focus by 35%",
-  "Festival-goers avoid post-event ringing",
-  "Tinnitus sufferers prevent further damage",
-  "Gym enthusiasts block loud class music",
-  "Students focus better in noisy libraries",
-  "Commuters enjoy peaceful train rides",
-  "Dancers balance music & verbal clarity",
-  "Side sleepers love the low-profile fit",
+  "Side sleepers say Loop's low-profile design lets them sleep on any pillow without discomfort",
+  "Parents with ADHD kids report Loop helps reduce meltdowns during noisy family gatherings",
+  "Concert photographers use Loop to protect hearing while staying aware of their surroundings",
+  "Night shift nurses block daytime street noise to get deep sleep between 12-hour shifts",
+  "Motorcyclists say wind noise fatigue drops dramatically on long highway rides with Loop",
+  "Teachers with sensory sensitivity use Loop to stay calm in chaotic classrooms",
+  "Music producers prefer Loop over foam because it preserves frequency balance for mixing",
+  "New parents use Loop to take the edge off crying without losing baby monitor awareness",
+  "Gym-goers block aggressive trainer music while still hearing safety cues and spotters",
+  "Festival campers finally sleep through bass-heavy late-night sets at neighboring stages",
+  "Remote workers in open-plan homes filter out family noise without full noise cancellation",
+  "Baristas use Loop to reduce espresso machine fatigue during 8-hour coffee rush shifts",
+  "Anxious flyers say Loop makes turbulence announcements less jarring and stressful",
+  "Dog owners block fireworks panic while staying alert to comfort their anxious pets",
+  "Students with autism study in busy libraries without sensory overload from chatter",
 ]
 
 export function GenerationProgress({
@@ -58,7 +52,7 @@ export function GenerationProgress({
     return () => clearInterval(interval)
   }, [startTime, estimatedTime])
 
-  // Rotate insights every 3 seconds with fade effect
+  // Rotate insights every 4 seconds with fade effect
   useEffect(() => {
     const interval = setInterval(() => {
       setInsightFading(true)
@@ -66,7 +60,7 @@ export function GenerationProgress({
         setCurrentInsightIndex(prev => (prev + 1) % CUSTOMER_INSIGHTS.length)
         setInsightFading(false)
       }, 300)
-    }, 3000)
+    }, 4000)
 
     return () => clearInterval(interval)
   }, [])
@@ -77,115 +71,78 @@ export function GenerationProgress({
 
   const currentInsight = CUSTOMER_INSIGHTS[currentInsightIndex]
   
-  // Calculate the angle for the conic gradient (0-360 degrees)
-  const progressAngle = (displayProgress / 100) * 360
+  // Calculate the perimeter percentage for the border animation
+  const borderProgress = displayProgress / 100
 
   return (
     <div
-      className="relative rounded-xl overflow-hidden"
+      className="relative rounded-xl"
       style={{ aspectRatio: getAspectRatioStyle(aspectRatio) }}
     >
-      {/* Animated border using conic-gradient */}
-      <div 
-        className="absolute inset-0 rounded-xl p-[3px] overflow-hidden"
-        style={{
-          background: `conic-gradient(
-            from 0deg,
-            hsl(var(--primary)) 0deg,
-            hsl(var(--primary)) ${progressAngle}deg,
-            hsl(var(--border) / 0.3) ${progressAngle}deg,
-            hsl(var(--border) / 0.3) 360deg
-          )`,
-          transition: 'all 0.5s ease-out',
-        }}
+      {/* Background */}
+      <div className="absolute inset-0 rounded-xl bg-background/50 border border-border/30" />
+      
+      {/* Animated border - only the stroke, not fill */}
+      <svg 
+        className="absolute inset-0 w-full h-full rounded-xl"
+        style={{ overflow: 'visible' }}
       >
-        {/* Inner background to create the border effect */}
-        <div className="w-full h-full rounded-[9px] bg-gradient-to-br from-muted/30 to-background" />
-      </div>
-
-      {/* Glowing dot at the progress point */}
-      <div 
-        className="absolute w-3 h-3 rounded-full bg-primary shadow-lg shadow-primary/50 z-10"
-        style={{
-          // Position the dot along the border path
-          // This is approximate - we trace around the rectangle
-          ...getProgressDotPosition(displayProgress),
-          transition: 'all 0.5s ease-out',
-        }}
-      />
+        {/* Background border track */}
+        <rect
+          x="1.5"
+          y="1.5"
+          width="calc(100% - 3px)"
+          height="calc(100% - 3px)"
+          rx="11"
+          ry="11"
+          fill="none"
+          stroke="hsl(var(--border) / 0.2)"
+          strokeWidth="2"
+          className="w-[calc(100%-3px)] h-[calc(100%-3px)]"
+        />
+        {/* Animated progress border */}
+        <rect
+          x="1.5"
+          y="1.5"
+          width="calc(100% - 3px)"
+          height="calc(100% - 3px)"
+          rx="11"
+          ry="11"
+          fill="none"
+          stroke="hsl(var(--primary))"
+          strokeWidth="2"
+          strokeLinecap="round"
+          className="w-[calc(100%-3px)] h-[calc(100%-3px)]"
+          style={{
+            strokeDasharray: '1000',
+            strokeDashoffset: `${1000 - (borderProgress * 1000)}`,
+            transition: 'stroke-dashoffset 0.5s ease-out',
+            filter: 'drop-shadow(0 0 4px hsl(var(--primary) / 0.5))',
+          }}
+        />
+      </svg>
 
       {/* Main content */}
-      <div className="absolute inset-[3px] flex flex-col items-center justify-center p-6 rounded-[9px]">
-        {/* Percentage display - large and prominent */}
-        <div className="relative mb-4">
-          <span className="text-5xl font-bold text-primary tabular-nums tracking-tight">
+      <div className="absolute inset-0 flex flex-col items-center justify-center p-4 sm:p-6">
+        {/* Percentage display */}
+        <div className="relative mb-3">
+          <span className="text-4xl sm:text-5xl font-bold text-primary tabular-nums tracking-tight">
             {displayProgress}
           </span>
-          <span className="text-2xl font-light text-primary/70 ml-0.5">%</span>
+          <span className="text-xl sm:text-2xl font-light text-primary/70 ml-0.5">%</span>
         </div>
 
-        {/* Customer insight - rotating */}
-        <div className="max-w-[280px] text-center min-h-[40px] flex items-center justify-center">
+        {/* Customer insight - more specific, more room */}
+        <div className="max-w-[320px] text-center px-2">
           <p 
-            className={`text-sm text-muted-foreground leading-relaxed transition-all duration-300 ${
+            className={`text-xs sm:text-sm text-muted-foreground leading-relaxed transition-all duration-300 ${
               insightFading ? 'opacity-0 translate-y-1' : 'opacity-100 translate-y-0'
             }`}
           >
-            <span className="text-primary/80">💡</span> {currentInsight}
+            {currentInsight}
           </p>
-        </div>
-
-        {/* Subtle pulsing indicator */}
-        <div className="flex gap-1.5 mt-4">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary/50 animate-pulse" style={{ animationDelay: '0ms' }} />
-          <span className="w-1.5 h-1.5 rounded-full bg-primary/50 animate-pulse" style={{ animationDelay: '200ms' }} />
-          <span className="w-1.5 h-1.5 rounded-full bg-primary/50 animate-pulse" style={{ animationDelay: '400ms' }} />
         </div>
       </div>
     </div>
   )
-}
-
-// Calculate position of the glowing dot as it travels around the border
-// Returns transform values to position the dot along the rectangular path
-function getProgressDotPosition(progress: number): React.CSSProperties {
-  // Normalize progress to 0-1 range
-  const p = Math.min(Math.max(progress / 100, 0), 1)
-  
-  // The dot travels clockwise starting from top-left
-  // Split into 4 segments: top (0-25%), right (25-50%), bottom (50-75%), left (75-100%)
-  
-  if (p <= 0.25) {
-    // Top edge: left to right (0% to 100% of width)
-    const edgeProgress = p / 0.25
-    return { 
-      top: 0, 
-      left: `${edgeProgress * 100}%`,
-      transform: 'translate(-50%, -50%)'
-    }
-  } else if (p <= 0.5) {
-    // Right edge: top to bottom (0% to 100% of height)
-    const edgeProgress = (p - 0.25) / 0.25
-    return { 
-      top: `${edgeProgress * 100}%`,
-      right: 0,
-      transform: 'translate(50%, -50%)'
-    }
-  } else if (p <= 0.75) {
-    // Bottom edge: right to left (100% to 0% of width)
-    const edgeProgress = (p - 0.5) / 0.25
-    return { 
-      bottom: 0,
-      left: `${(1 - edgeProgress) * 100}%`,
-      transform: 'translate(-50%, 50%)'
-    }
-  } else {
-    // Left edge: bottom to top (100% to 0% of height)
-    const edgeProgress = (p - 0.75) / 0.25
-    return { 
-      top: `${(1 - edgeProgress) * 100}%`,
-      left: 0,
-      transform: 'translate(-50%, -50%)'
-    }
-  }
 }

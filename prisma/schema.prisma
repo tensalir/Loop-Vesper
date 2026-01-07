@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,314 +7,287 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model bookmarks {
+  id         String   @id @db.Uuid
+  user_id    String   @db.Uuid
+  output_id  String   @db.Uuid
+  created_at DateTime @default(now())
+  outputs    outputs  @relation(fields: [output_id], references: [id], onDelete: Cascade)
+  profiles   profiles @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, output_id])
+  @@index([output_id])
+  @@index([user_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model generation_jobs {
+  id            String      @id @db.Uuid
+  generation_id String      @unique @db.Uuid
+  run_after     DateTime?
+  attempts      Int         @default(0)
+  locked_at     DateTime?
+  created_at    DateTime    @default(now())
+  generations   generations @relation(fields: [generation_id], references: [id], onDelete: Cascade)
+
+  @@index([locked_at])
+  @@index([run_after])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model generations {
+  id              String           @id @db.Uuid
+  session_id      String           @db.Uuid
+  user_id         String           @db.Uuid
+  model_id        String
+  prompt          String
+  negative_prompt String?
+  parameters      Json
+  status          String
+  created_at      DateTime         @default(now())
+  cost            Decimal?         @db.Decimal(10, 6)
+  generation_jobs generation_jobs?
+  sessions        sessions         @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  profiles        profiles         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  outputs         outputs[]
+
+  @@index([session_id])
+  @@index([session_id, status])
+  @@index([session_id, user_id])
+  @@index([user_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model models {
+  id              String            @id
+  name            String
+  provider        String
+  type            String[]
+  config          Json
+  is_active       Boolean           @default(true)
+  created_at      DateTime          @default(now())
+  user_model_pins user_model_pins[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model notes {
+  id         String   @id @db.Uuid
+  user_id    String   @db.Uuid
+  output_id  String   @db.Uuid
+  text       String
+  context    String?
+  created_at DateTime @default(now())
+  updated_at DateTime
+  outputs    outputs  @relation(fields: [output_id], references: [id], onDelete: Cascade)
+  profiles   profiles @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([output_id], map: "idx_notes_output_id")
+  @@index([user_id], map: "idx_notes_user_id")
+  @@index([output_id])
+  @@index([user_id])
+}
+
+model output_analyses {
+  id             String    @id @db.Uuid
+  output_id      String    @unique @db.Uuid
+  status         String    @default("queued")
+  attempts       Int       @default(0)
+  locked_at      DateTime?
+  run_after      DateTime?
+  error          String?
+  gemini_caption String?
+  gemini_model   String?
+  claude_parsed  Json?
+  claude_model   String?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime
+  completed_at   DateTime?
+  outputs        outputs   @relation(fields: [output_id], references: [id], onDelete: Cascade)
+
+  @@index([status, locked_at])
+  @@index([status, run_after])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model outputs {
+  id              String           @id @db.Uuid
+  generation_id   String           @db.Uuid
+  file_url        String
+  file_type       String
+  width           Int?
+  height          Int?
+  duration        Float?
+  is_starred      Boolean          @default(false)
+  created_at      DateTime         @default(now())
+  is_approved     Boolean          @default(false)
+  bookmarks       bookmarks[]
+  notes           notes[]
+  output_analyses output_analyses?
+  generations     generations      @relation(fields: [generation_id], references: [id], onDelete: Cascade)
+
+  @@index([generation_id, file_type])
+  @@index([generation_id])
+}
+
+model product_renders {
+  id           String   @id @db.Uuid
+  name         String
+  colorway     String?
+  image_url    String
+  storage_path String?
+  source       String   @default("local")
+  frontify_id  String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime
+  angle        String?
+  sort_order   Int      @default(0)
+
+  @@index([name, colorway])
+  @@index([name])
+  @@index([source])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model profiles {
+  id              String            @id @db.Uuid
+  username        String?           @unique
+  display_name    String?
+  avatar_url      String?
+  created_at      DateTime          @default(now())
+  updated_at      DateTime
+  role            UserRole          @default(user)
+  bookmarks       bookmarks[]
+  generations     generations[]
+  notes           notes[]
+  project_chats   project_chats[]
+  project_members project_members[]
+  projects        projects[]
+  user_model_pins user_model_pins[]
+  workflows       workflows[]
+}
+
+model project_chat_messages {
+  id            String        @id @db.Uuid
+  chat_id       String        @db.Uuid
+  role          String
+  content       String
+  created_at    DateTime      @default(now())
+  project_chats project_chats @relation(fields: [chat_id], references: [id], onDelete: Cascade)
+
+  @@index([chat_id])
+}
+
+model project_chats {
+  id                    String                  @id @db.Uuid
+  project_id            String                  @db.Uuid
+  user_id               String                  @db.Uuid
+  title                 String                  @default("New Chat")
+  created_at            DateTime                @default(now())
+  updated_at            DateTime
+  project_chat_messages project_chat_messages[]
+  projects              projects                @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  profiles              profiles                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id, user_id])
+  @@index([user_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model project_members {
+  id         String   @id @db.Uuid
+  project_id String   @db.Uuid
+  user_id    String   @db.Uuid
+  role       String
+  joined_at  DateTime @default(now())
+  projects   projects @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  profiles   profiles @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([project_id, user_id])
+  @@index([project_id])
+  @@index([user_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model projects {
+  id              String            @id @db.Uuid
+  name            String
+  description     String?
+  cover_image_url String?
+  owner_id        String            @db.Uuid
+  is_shared       Boolean           @default(false)
+  created_at      DateTime          @default(now())
+  updated_at      DateTime
+  briefing        String?
+  project_chats   project_chats[]
+  project_members project_members[]
+  profiles        profiles          @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  sessions        sessions[]
+
+  @@index([is_shared, owner_id])
+  @@index([owner_id])
+  @@index([updated_at(sort: Desc), id(sort: Desc)])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model prompt_enhancement_prompts {
+  id           String   @id @db.Uuid
+  name         String
+  description  String?
+  systemPrompt String
+  is_active    Boolean  @default(true)
+  modelIds     String[]
+  createdBy    String   @db.Uuid
+  created_at   DateTime @default(now())
+  updatedAt    DateTime
+  updatedBy    String   @db.Uuid
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model sessions {
+  id          String        @id @db.Uuid
+  project_id  String        @db.Uuid
+  name        String
+  type        String
+  created_at  DateTime      @default(now())
+  updated_at  DateTime
+  is_private  Boolean       @default(true)
+  generations generations[]
+  projects    projects      @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@index([project_id, is_private])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model user_model_pins {
+  user_id   String   @db.Uuid
+  model_id  String
+  pin_order Int
+  models    models   @relation(fields: [model_id], references: [id], onDelete: Cascade)
+  profiles  profiles @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, model_id])
+  @@index([user_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model workflows {
+  id            String   @id @db.Uuid
+  user_id       String   @db.Uuid
+  name          String
+  description   String?
+  is_template   Boolean  @default(false)
+  workflow_data Json
+  created_at    DateTime @default(now())
+  updated_at    DateTime
+  profiles      profiles @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
 enum UserRole {
   admin
   user
-}
-
-model Profile {
-  id          String   @id @db.Uuid
-  username    String?  @unique
-  displayName String?  @map("display_name")
-  avatarUrl   String?  @map("avatar_url")
-  role        UserRole @default(user) // 'admin' or 'user'
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  projects       Project[]
-  generations    Generation[]
-  projectMembers ProjectMember[]
-  modelPins      UserModelPin[]
-  workflows      Workflow[]
-  bookmarks      Bookmark[]
-  notes          Note[]
-  projectChats   ProjectChat[]
-
-  @@map("profiles")
-}
-
-model Project {
-  id            String   @id @default(uuid()) @db.Uuid
-  name          String
-  description   String?
-  coverImageUrl String?  @map("cover_image_url")
-  briefing      String?  @db.Text // High-level instructions that apply to all chats in this project
-  ownerId       String   @map("owner_id") @db.Uuid
-  isShared      Boolean  @default(false) @map("is_shared")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  owner    Profile         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  sessions Session[]
-  members  ProjectMember[]
-  chats    ProjectChat[]
-
-  @@index([ownerId])
-  @@index([isShared, ownerId])
-  @@index([updatedAt(sort: Desc), id(sort: Desc)]) // Keyset pagination
-  @@map("projects")
-}
-
-model ProjectMember {
-  id        String   @id @default(uuid()) @db.Uuid
-  projectId String   @map("project_id") @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  role      String // 'viewer', 'editor', 'admin'
-  joinedAt  DateTime @default(now()) @map("joined_at")
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([projectId, userId])
-  @@index([projectId])
-  @@index([userId])
-  @@map("project_members")
-}
-
-model Session {
-  id        String   @id @default(uuid()) @db.Uuid
-  projectId String   @map("project_id") @db.Uuid
-  name      String
-  type      String // 'image' or 'video'
-  isPrivate Boolean  @default(true) @map("is_private")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  generations Generation[]
-
-  @@index([projectId])
-  @@index([projectId, isPrivate]) // For visibility queries
-  @@map("sessions")
-}
-
-model Generation {
-  id             String   @id @default(uuid()) @db.Uuid
-  sessionId      String   @map("session_id") @db.Uuid
-  userId         String   @map("user_id") @db.Uuid
-  modelId        String   @map("model_id")
-  prompt         String   @db.Text
-  negativePrompt String?  @map("negative_prompt") @db.Text
-  parameters     Json // Flexible params per model
-  status         String // 'queued', 'processing', 'completed', 'failed'
-  cost           Decimal? @db.Decimal(10, 6) // Cost in USD (e.g., 0.010000 for $0.01)
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  session Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user    Profile        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  outputs Output[]
-  job     GenerationJob?
-
-  @@index([sessionId])
-  @@index([userId])
-  @@index([sessionId, userId]) // Composite index for the query
-  @@index([sessionId, status])
-  @@map("generations")
-}
-
-model GenerationJob {
-  id           String    @id @default(uuid()) @db.Uuid
-  generationId String    @unique @map("generation_id") @db.Uuid
-  runAfter     DateTime? @map("run_after")
-  attempts     Int       @default(0)
-  lockedAt     DateTime? @map("locked_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
-
-  generation Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
-
-  @@index([lockedAt])
-  @@index([runAfter])
-  @@map("generation_jobs")
-}
-
-model Output {
-  id           String   @id @default(uuid()) @db.Uuid
-  generationId String   @map("generation_id") @db.Uuid
-  fileUrl      String   @map("file_url")
-  fileType     String   @map("file_type") // 'image' or 'video'
-  width        Int?
-  height       Int?
-  duration     Float? // For videos
-  isStarred    Boolean  @default(false) @map("is_starred") // Kept for backward compatibility
-  isApproved   Boolean  @default(false) @map("is_approved") // New approval system (replaces star UI)
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  generation Generation      @relation(fields: [generationId], references: [id], onDelete: Cascade)
-  bookmarks  Bookmark[]
-  notes      Note[]
-  analysis   OutputAnalysis?
-
-  @@index([generationId])
-  @@index([generationId, fileType])
-  @@map("outputs")
-}
-
-// Semantic analysis of outputs (Gemini caption + Claude parsing)
-model OutputAnalysis {
-  id            String    @id @default(uuid()) @db.Uuid
-  outputId      String    @unique @map("output_id") @db.Uuid
-  status        String    @default("queued") // 'queued', 'processing', 'completed', 'failed'
-  attempts      Int       @default(0)
-  lockedAt      DateTime? @map("locked_at")
-  runAfter      DateTime? @map("run_after")
-  error         String?   @db.Text
-
-  // Gemini caption results
-  geminiCaption String?   @map("gemini_caption") @db.Text
-  geminiModel   String?   @map("gemini_model")
-
-  // Claude parsing results (structured JSON)
-  claudeParsed  Json?     @map("claude_parsed")
-  claudeModel   String?   @map("claude_model")
-
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  completedAt   DateTime? @map("completed_at")
-
-  output Output @relation(fields: [outputId], references: [id], onDelete: Cascade)
-
-  @@index([status, lockedAt])
-  @@index([status, runAfter])
-  @@map("output_analyses")
-}
-
-model Note {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  outputId  String   @map("output_id") @db.Uuid
-  text      String
-  context   String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  user   Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
-  output Output  @relation(fields: [outputId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([outputId])
-  @@map("notes")
-}
-
-model Model {
-  id        String   @id
-  name      String
-  provider  String
-  type      String[] // ['image', 'video']
-  config    Json // Full model configuration
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  pins UserModelPin[]
-
-  @@map("models")
-}
-
-model UserModelPin {
-  userId   String @map("user_id") @db.Uuid
-  modelId  String @map("model_id")
-  pinOrder Int    @map("pin_order")
-
-  user  Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
-  model Model   @relation(fields: [modelId], references: [id], onDelete: Cascade)
-
-  @@id([userId, modelId])
-  @@index([userId])
-  @@map("user_model_pins")
-}
-
-model Workflow {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @map("user_id") @db.Uuid
-  name         String
-  description  String?
-  isTemplate   Boolean  @default(false) @map("is_template")
-  workflowData Json     @map("workflow_data") // Node graph structure
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("workflows")
-}
-
-model Bookmark {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  outputId  String   @map("output_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at")
-
-  user   Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
-  output Output  @relation(fields: [outputId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, outputId])
-  @@index([userId])
-  @@index([outputId])
-  @@map("bookmarks")
-}
-
-model PromptEnhancementPrompt {
-  id           String   @id @default(uuid()) @db.Uuid
-  name         String
-  description  String?  @db.Text
-  systemPrompt String   @db.Text
-  isActive     Boolean  @default(true) @map("is_active")
-  modelIds     String[]
-  createdBy    String   @db.Uuid
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt
-  updatedBy    String   @db.Uuid
-
-  @@map("prompt_enhancement_prompts")
-}
-
-model ProductRender {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String   // Product name / category (e.g., "MCL38")
-  colorway    String?  // Colorway / variant (e.g., "Papaya Orange")
-  angle       String?  // Angle / view (e.g., "front", "side", "3/4", "back")
-  sortOrder   Int      @default(0) @map("sort_order") // For ordering within colorway
-  imageUrl    String   @map("image_url")
-  storagePath String?  @map("storage_path") // Supabase path for local uploads
-  source      String   @default("local") // "local" or "frontify"
-  frontifyId  String?  @map("frontify_id") // Frontify asset ID if synced
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  @@index([name])
-  @@index([name, colorway])
-  @@index([source])
-  @@map("product_renders")
-}
-
-// Brainstorm chat threads (per user + per project)
-model ProjectChat {
-  id        String   @id @default(uuid()) @db.Uuid
-  projectId String   @map("project_id") @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  title     String   @default("New Chat")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  project  Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user     Profile              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages ProjectChatMessage[]
-
-  @@index([projectId, userId])
-  @@index([userId])
-  @@map("project_chats")
-}
-
-// Individual messages within a brainstorm chat
-model ProjectChatMessage {
-  id        String   @id @default(uuid()) @db.Uuid
-  chatId    String   @map("chat_id") @db.Uuid
-  role      String   // 'user' or 'assistant'
-  content   String   @db.Text
-  createdAt DateTime @default(now()) @map("created_at")
-
-  chat ProjectChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
-
-  @@index([chatId])
-  @@map("project_chat_messages")
 }
