@@ -753,25 +753,57 @@ export class GeminiAdapter extends BaseModelAdapter {
 
       console.log(`[Replicate Fallback] Using version: ${versionHash}`)
 
-      // Submit prediction
-      const response = await fetch(`${baseUrl}/predictions`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${REPLICATE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          version: versionHash,
-          input,
-        }),
-      })
+      // Submit prediction with retry logic for transient server errors (502, 503, 504)
+      let data: any
+      let lastError: any = null
+      const maxSubmitAttempts = 3
+      
+      for (let submitAttempt = 1; submitAttempt <= maxSubmitAttempts; submitAttempt++) {
+        try {
+          const response = await fetch(`${baseUrl}/predictions`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Token ${REPLICATE_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              version: versionHash,
+              input,
+            }),
+          })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || errorData.error || `Replicate API error: ${response.status}`)
+          if (!response.ok) {
+            // Check for retryable server errors
+            if ([502, 503, 504].includes(response.status) && submitAttempt < maxSubmitAttempts) {
+              const delay = Math.pow(2, submitAttempt) * 1000 // 2s, 4s
+              console.log(`[Replicate Fallback] Server error ${response.status}, retrying in ${delay}ms (attempt ${submitAttempt}/${maxSubmitAttempts})`)
+              await new Promise(resolve => setTimeout(resolve, delay))
+              continue
+            }
+            
+            const errorData = await response.json().catch(() => ({}))
+            throw new Error(errorData.detail || errorData.error || `Replicate API error: ${response.status}`)
+          }
+
+          data = await response.json()
+          break // Success, exit retry loop
+        } catch (submitError: any) {
+          lastError = submitError
+          
+          // Only retry on network errors or server errors
+          if (submitAttempt < maxSubmitAttempts && (submitError.message?.includes('502') || submitError.message?.includes('503') || submitError.message?.includes('504') || submitError.code === 'ECONNRESET')) {
+            const delay = Math.pow(2, submitAttempt) * 1000
+            console.log(`[Replicate Fallback] ${submitError.message}, retrying in ${delay}ms (attempt ${submitAttempt}/${maxSubmitAttempts})`)
+            await new Promise(resolve => setTimeout(resolve, delay))
+            continue
+          }
+          throw submitError
+        }
       }
-
-      const data = await response.json()
+      
+      if (!data) {
+        throw lastError || new Error('Failed to submit prediction after retries')
+      }
       const predictionId = data.id
 
       console.log(`[Replicate Fallback] Prediction started: ${predictionId}`)
@@ -788,17 +820,44 @@ export class GeminiAdapter extends BaseModelAdapter {
       while (attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 5000)) // Wait 5 seconds
 
-        const statusResponse = await fetch(`${baseUrl}/predictions/${predictionId}`, {
-          headers: {
-            'Authorization': `Token ${REPLICATE_API_KEY}`,
-          },
-        })
+        // Poll with retry for transient errors
+        let statusData: any
+        let pollRetries = 2
+        for (let pollAttempt = 0; pollAttempt <= pollRetries; pollAttempt++) {
+          try {
+            const statusResponse = await fetch(`${baseUrl}/predictions/${predictionId}`, {
+              headers: {
+                'Authorization': `Token ${REPLICATE_API_KEY}`,
+              },
+            })
 
-        if (!statusResponse.ok) {
-          throw new Error(`Failed to check prediction status: ${statusResponse.status}`)
+            if (!statusResponse.ok) {
+              // Retry on 502/503/504
+              if ([502, 503, 504].includes(statusResponse.status) && pollAttempt < pollRetries) {
+                console.log(`[Replicate Fallback] Poll returned ${statusResponse.status}, retrying...`)
+                await new Promise(resolve => setTimeout(resolve, 2000))
+                continue
+              }
+              throw new Error(`Failed to check prediction status: ${statusResponse.status}`)
+            }
+
+            statusData = await statusResponse.json()
+            break
+          } catch (pollError: any) {
+            // Retry on JSON parse errors (malformed responses)
+            if (pollAttempt < pollRetries && (pollError.message?.includes('JSON') || pollError.message?.includes('Unexpected'))) {
+              console.log(`[Replicate Fallback] Poll parse error, retrying: ${pollError.message}`)
+              await new Promise(resolve => setTimeout(resolve, 2000))
+              continue
+            }
+            throw pollError
+          }
         }
-
-        const statusData = await statusResponse.json()
+        
+        if (!statusData) {
+          attempts++
+          continue
+        }
         console.log(`[Replicate Fallback] Status: ${statusData.status} (attempt ${attempts + 1})`)
 
         if (statusData.status === 'succeeded') {
