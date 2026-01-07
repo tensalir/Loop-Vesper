@@ -613,10 +613,10 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
                 </Button>
                 
                 {showThreadList && (
-                  <div className="absolute top-full right-0 mt-1 w-56 bg-popover border border-border rounded-lg shadow-lg z-10 py-1 max-h-64 overflow-y-auto">
+                  <div className="absolute top-full right-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-xl z-50 py-1 max-h-64 overflow-y-auto">
                     <button
                       onClick={createThread}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent text-left"
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted text-left"
                     >
                       <Plus className="w-4 h-4" />
                       New chat
@@ -635,8 +635,8 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
                         <div
                           key={thread.id}
                           className={cn(
-                            "flex items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-accent group",
-                            thread.id === activeThreadId && "bg-accent"
+                            "flex items-center justify-between gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted group",
+                            thread.id === activeThreadId && "bg-muted"
                           )}
                         >
                           <button
