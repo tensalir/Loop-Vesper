@@ -172,7 +172,7 @@ export async function POST(
     })
 
     // Return the streaming response
-    return result.toDataStreamResponse()
+    return result.toTextStreamResponse()
   } catch (error: any) {
     console.error('Brainstorm chat error:', error)
     return new Response(error.message || 'Internal server error', { status: 500 })
