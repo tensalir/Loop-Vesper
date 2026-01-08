@@ -203,6 +203,20 @@
     transition: opacity 0.1s ease;
   }
   
+  /* Video generation stack pulse animation */
+  @keyframes stack-pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+  
+  .animate-stack-pulse {
+    animation: stack-pulse 2s ease-in-out infinite;
+  }
+  
   /* Custom scrollbar for prompt text */
   .scrollable-prompt {
     max-height: 100%;

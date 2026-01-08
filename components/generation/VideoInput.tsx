@@ -483,23 +483,31 @@ export function VideoInput({
         )}
         
         {/* Generate Button - conditionally rendered */}
-        {showGenerateButton && (
-          <Button
-            onClick={handleSubmit}
-            disabled={!prompt.trim() || generating}
-            size="default"
-            className={`rounded-lg font-semibold shadow-sm hover:shadow transition-all ${
-              isOverlay ? 'h-[48px] px-6 text-xs' : 'h-[56px] px-8 text-sm'
-            }`}
-          >
-            {generating ? (
-              <Loader2 className={`mr-2 animate-spin ${isOverlay ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
-            ) : (
-              <VideoIcon className={`mr-2 ${isOverlay ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
-            )}
-            {generating ? 'Generating...' : 'Generate'}
-          </Button>
-        )}
+        {showGenerateButton && (() => {
+          // Validation: all required fields must be selected
+          const hasPrompt = prompt.trim().length > 0
+          const hasModel = !!selectedModel
+          const hasDurationIfRequired = !hasDuration || (parameters.duration && parameters.duration > 0)
+          const canGenerate = hasPrompt && hasModel && hasDurationIfRequired && !generating
+          
+          return (
+            <Button
+              onClick={handleSubmit}
+              disabled={!canGenerate}
+              size="default"
+              className={`rounded-lg font-semibold shadow-sm hover:shadow transition-all ${
+                isOverlay ? 'h-[48px] px-6 text-xs' : 'h-[56px] px-8 text-sm'
+              }`}
+            >
+              {generating ? (
+                <Loader2 className={`mr-2 animate-spin ${isOverlay ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
+              ) : (
+                <VideoIcon className={`mr-2 ${isOverlay ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
+              )}
+              {generating ? 'Generating...' : 'Generate'}
+            </Button>
+          )
+        })()}
       </div>
 
       {/* Parameter Controls - Compact Row */}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { X, Video, Plus, Play, Loader2, Check, Clock, AlertCircle, ChevronDown, ChevronUp, RotateCcw, Download, Bookmark } from 'lucide-react'
+import { X, Video, Plus, Play, Loader2, Check, Clock, AlertCircle, ChevronDown, ChevronUp, RotateCcw, Download, Bookmark, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -195,6 +195,20 @@ export function ImageToVideoOverlay({
       console.error('Error toggling approval:', error)
     }
   }, [queryClient, refetch])
+  
+  // Handle delete generation (for failed ones)
+  const handleDeleteGeneration = useCallback(async (generationId: string) => {
+    try {
+      const response = await fetch(`/api/generations/${generationId}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) throw new Error('Failed to delete generation')
+      // Refetch iterations to remove the deleted one
+      refetch()
+    } catch (error) {
+      console.error('Error deleting generation:', error)
+    }
+  }, [refetch])
   
   // Close on escape
   useEffect(() => {
@@ -438,6 +452,7 @@ export function ImageToVideoOverlay({
                       }}
                       onBookmark={handleToggleBookmark}
                       onApprove={handleToggleApproval}
+                      onDelete={handleDeleteGeneration}
                     />
                   ))
                 )}
@@ -470,11 +485,13 @@ function IterationCard({
   onReuseParameters,
   onBookmark,
   onApprove,
+  onDelete,
 }: { 
   iteration: VideoIteration
   onReuseParameters?: (iteration: VideoIteration) => void
   onBookmark?: (outputId: string, isBookmarked: boolean) => void
   onApprove?: (outputId: string, isApproved: boolean) => void
+  onDelete?: (generationId: string) => void
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const hasOutput = iteration.outputs.length > 0
@@ -591,13 +608,27 @@ function IterationCard({
             </div>
           </>
         ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/50 backdrop-blur-sm">
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/50 backdrop-blur-sm group/placeholder">
             <div className={`p-3 rounded-full ${statusColors[iteration.status].split(' ')[0]} border border-border mb-3`}>
               <StatusIcon className={`h-6 w-6 ${iteration.status === 'processing' ? 'animate-spin' : ''}`} />
             </div>
             <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               {iteration.status === 'processing' ? 'Creating...' : iteration.status}
             </span>
+            
+            {/* Delete button for failed generations */}
+            {iteration.status === 'failed' && onDelete && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete(iteration.id)
+                }}
+                className="absolute top-2 right-2 p-1.5 bg-destructive/80 backdrop-blur-sm rounded-lg hover:bg-destructive transition-colors opacity-0 group-hover/placeholder:opacity-100"
+                title="Delete failed generation"
+              >
+                <Trash2 className="h-3.5 w-3.5 text-white" />
+              </button>
+            )}
           </div>
         )}
       </div>

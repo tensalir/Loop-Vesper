@@ -875,6 +875,16 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
                         <>
                           {/* Render text with prompts extracted into code boxes */}
                           {(() => {
+                            // Check if this is the currently streaming message
+                            // Only format prompts for completed messages to avoid flash of unstyled text
+                            const isLastMessage = message.id === messages[messages.length - 1]?.id
+                            const isStreaming = isLastMessage && status === 'streaming'
+                            
+                            // While streaming, just show plain text
+                            if (isStreaming) {
+                              return <p className="whitespace-pre-wrap break-words">{displayText}</p>
+                            }
+                            
                             const prompts = extractPrompts(displayText)
                             let remainingText = displayText
                             

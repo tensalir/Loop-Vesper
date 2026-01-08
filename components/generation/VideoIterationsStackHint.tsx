@@ -24,27 +24,34 @@ export function VideoIterationsStackHint({ outputId, onClick }: VideoIterationsS
   })
   
   const hasVideos = count > 0
+  // Show stack effect when videos exist OR when one is currently processing
+  const showStackEffect = hasVideos || hasProcessing
   
   // Number of stacked layers to show (cosmetic, not based on actual count)
   const stackLayers = 3
   
   return (
     <>
-      {/* Stacked layers wrapper - only show when videos exist */}
-      {hasVideos && (
-        <div className="absolute inset-0 pointer-events-none overflow-visible" style={{ zIndex: 0 }}>
+      {/* Stacked layers wrapper - show when videos exist OR when processing */}
+      {showStackEffect && (
+        <div 
+          className={`absolute inset-0 pointer-events-none overflow-visible ${hasProcessing ? 'animate-stack-pulse' : ''}`} 
+          style={{ zIndex: 0 }}
+        >
           {/* Stacked card layers - cosmetic effect positioned behind the image card, only on right side */}
           {Array.from({ length: stackLayers }).map((_, index) => {
             const layerIndex = stackLayers - index - 1 // Reverse order so first layer is furthest back
             const offset = (layerIndex + 1) * 8 // 8px, 16px, 24px offsets
             const verticalOffset = offset * 0.3 // Slight vertical offset for natural stacking
-            const opacity = 0.15 - (layerIndex * 0.03) // Reduced opacity for subtler glow
+            // Slightly brighter when processing to make glow more noticeable
+            const baseOpacity = hasProcessing ? 0.2 : 0.15
+            const opacity = baseOpacity - (layerIndex * 0.03)
             const scale = 1 - (layerIndex * 0.02) // Slightly smaller for depth
             
             return (
               <div
                 key={`stack-layer-${layerIndex}`}
-                className="absolute pointer-events-none rounded-xl"
+                className="absolute pointer-events-none rounded-xl transition-all duration-500"
                 style={{
                   // Full-width layer shifted right so only the extra portion peeks out (no hard cut)
                   top: `${verticalOffset}px`,
@@ -74,7 +81,7 @@ export function VideoIterationsStackHint({ outputId, onClick }: VideoIterationsS
         </div>
       )}
       
-      {/* Video icon button - hover-only when no videos, always visible when videos exist */}
+      {/* Video icon button - hover-only when no videos/processing, always visible when videos exist or processing */}
       <button
         onClick={(e) => {
           e.stopPropagation()
@@ -82,10 +89,10 @@ export function VideoIterationsStackHint({ outputId, onClick }: VideoIterationsS
         }}
         className={`
           absolute bottom-2 right-2 pointer-events-auto transition-all hover:scale-110
-          ${hasVideos ? '' : 'opacity-0 group-hover:opacity-100'}
+          ${showStackEffect ? '' : 'opacity-0 group-hover:opacity-100'}
         `}
         style={{ zIndex: 10 }}
-        title={hasVideos ? `${count} video${count !== 1 ? 's' : ''} - Click to view` : 'Convert to video'}
+        title={hasProcessing ? 'Video generating...' : hasVideos ? `${count} video${count !== 1 ? 's' : ''} - Click to view` : 'Convert to video'}
       >
         {hasProcessing ? (
           <Loader2 
@@ -119,7 +126,8 @@ export function VideoIterationsBadge({ outputId, onClick }: VideoIterationsStack
     enabled: true,
   })
   
-  if (count === 0) return null
+  // Show badge when videos exist OR when processing
+  if (count === 0 && !hasProcessing) return null
   
   return (
     <button
@@ -128,18 +136,18 @@ export function VideoIterationsBadge({ outputId, onClick }: VideoIterationsStack
         flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium
         transition-colors
         ${hasProcessing 
-          ? 'bg-primary/20 text-primary hover:bg-primary/30' 
+          ? 'bg-primary/20 text-primary hover:bg-primary/30 animate-pulse' 
           : 'bg-muted/50 text-muted-foreground hover:bg-muted'
         }
       `}
-      title={`${count} video${count !== 1 ? 's' : ''} generated from this image`}
+      title={hasProcessing ? 'Video generating...' : `${count} video${count !== 1 ? 's' : ''} generated from this image`}
     >
       {hasProcessing ? (
         <Loader2 className="h-3 w-3 animate-spin" />
       ) : (
         <Video className="h-3 w-3" />
       )}
-      <span>{count}</span>
+      <span>{hasProcessing && count === 0 ? '...' : count}</span>
     </button>
   )
 }
