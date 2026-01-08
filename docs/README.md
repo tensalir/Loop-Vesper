@@ -11,6 +11,7 @@ Setup guides and quickstart documentation for new developers.
 - [Setup Guide](./getting-started/SETUP.md) - Full environment setup
 - [Quickstart](./getting-started/QUICKSTART.md) - Quick setup for returning developers
 - [Brainstorm Chatbot Setup](./getting-started/BRAINSTORM_CHATBOT_SETUP.md) - AI assistant configuration
+- [Environment Updates](./getting-started/ENV_UPDATE_REQUIRED.md) - Required environment variable updates
 
 ### [Architecture](./architecture/)
 
@@ -25,9 +26,12 @@ System design and technical overview.
 Third-party service integrations and API configurations.
 
 - [Replicate Setup](./integrations/REPLICATE_SETUP.md) - Replicate AI integration
+- [Fal Setup](./integrations/FAL_SETUP.md) - Fal AI integration
+- [Gemini Setup](./integrations/GEMINI_SETUP.md) - Google Gemini setup
 - [Vertex AI Setup](./integrations/VERTEX_AI_SETUP.md) - Google Vertex AI setup
 - [Vertex AI Migration](./integrations/VERTEX_AI_MIGRATION.md) - Migration guide
 - [Vertex AI Environment](./integrations/VERTEX_AI_ENV_SETUP.md) - Environment configuration
+- [Vertex AI Pricing](./integrations/GOOGLE_VERTEX_AI_PRICING_REQUEST.md) - Pricing information
 - [GenAI SDK Migration](./integrations/GEN_AI_SDK_MIGRATION.md) - SDK migration guide
 
 ### [Database](./database/)
