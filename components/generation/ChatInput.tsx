@@ -13,7 +13,6 @@ import { ImageBrowseModal } from './ImageBrowseModal'
 import { ProductRendersBrowseModal } from './ProductRendersBrowseModal'
 import { PromptEnhancementButton } from './PromptEnhancementButton'
 import { useParams } from 'next/navigation'
-import Image from 'next/image'
 
 
 interface ChatInputProps {
@@ -79,7 +78,7 @@ export function ChatInput({
   const supportsImageEditing = modelConfig?.capabilities?.editing === true
   // Check if model supports multiple reference images
   const supportsMultiImage = modelConfig?.capabilities?.multiImageEditing === true
-  
+
   // Get resolution options from model config or use defaults
   const resolutionOptions = modelParameters.find(p => p.name === 'resolution')?.options || [
     { label: '512px', value: 512 },
@@ -625,8 +624,8 @@ export function ChatInput({
             onClick={() => setRendersModalOpen(true)}
             title="Browse product renders"
           >
-            <Image
-              src="/images/Loop-Favicon-(Mint).png"
+            <img
+              src="/images/Loop-Favicon-(White).png"
               alt="Loop"
               width={14}
               height={14}

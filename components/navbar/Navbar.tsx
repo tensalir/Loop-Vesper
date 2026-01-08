@@ -79,8 +79,8 @@ export function Navbar({
           "h-4 object-contain cursor-pointer transition-all duration-500 ease-in-out flex-shrink-0",
           isExpanded ? "opacity-100" : "opacity-50 hover:opacity-70"
         )}
-        onClick={() => router.push('/projects')}
-        title="Back to Projects"
+        onClick={() => router.push('/')}
+        title="Back to Dashboard"
       />
 
       {/* Expandable section */}
