@@ -44,7 +44,7 @@ export function ProjectCard({ project, currentUserId, onProjectUpdate }: Project
       setEditedName(displayProject.name)
     }
   }, [displayProject.name, isEditingName])
-  const isOwner = currentUserId && displayProject.ownerId === currentUserId
+  const isOwner = !!currentUserId && displayProject.ownerId === currentUserId
   const thumbnailUrl = displayProject.thumbnailUrl || null
 
   const handleMouseEnter = () => {
@@ -292,10 +292,15 @@ export function ProjectCard({ project, currentUserId, onProjectUpdate }: Project
           <div className="absolute top-2 right-2">
             {isOwner ? (
               <button
+                type="button"
                 onClick={handleTogglePrivacy}
                 disabled={updating}
                 className="bg-background/90 backdrop-blur-sm rounded-full p-1 flex items-center gap-0.5 hover:bg-background/95 transition-all relative"
-                title={displayProject.isShared ? 'Click to make private' : 'Click to enable sharing (invited members can view)'}
+                title={
+                  displayProject.isShared
+                    ? 'Public (visible in Community Creations). Click to make private.'
+                    : 'Private (hidden from Community Creations). Click to make public.'
+                }
               >
                 {/* Lock Icon - Left */}
                 <div className={`p-1.5 rounded-full transition-all z-10 ${
@@ -323,7 +328,11 @@ export function ProjectCard({ project, currentUserId, onProjectUpdate }: Project
                 />
               </button>
             ) : (
-              <div className="bg-background/80 backdrop-blur-sm rounded-full p-1 flex items-center gap-0.5">
+              <div
+                className="bg-background/80 backdrop-blur-sm rounded-full p-1 flex items-center gap-0.5 cursor-default"
+                onClick={(e) => e.stopPropagation()}
+                title="Only the project owner can change Community visibility"
+              >
                 <div className={`p-1.5 ${!displayProject.isShared ? 'opacity-100' : 'opacity-40'}`}>
                   <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                 </div>

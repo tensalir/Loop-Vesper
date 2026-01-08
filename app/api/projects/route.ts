@@ -138,7 +138,8 @@ export async function POST(request: Request) {
         name: name.trim(),
         description: description?.trim() || null,
         ownerId: user.id,
-        isShared: false,
+        // Visible in Community Creations by default (owner can toggle)
+        isShared: true,
       },
     })
 
@@ -148,6 +149,8 @@ export async function POST(request: Request) {
         projectId: project.id,
         name: 'Session 1',
         type: 'image',
+        // Public by default (owner can toggle per-session privacy)
+        isPrivate: false,
       },
     })
 

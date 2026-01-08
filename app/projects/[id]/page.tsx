@@ -453,7 +453,11 @@ export default function ProjectPage() {
               onClick={handleTogglePrivacy}
               disabled={updating}
               className="bg-background/90 backdrop-blur-sm rounded-full p-1 flex items-center gap-0.5 hover:bg-background/95 transition-all relative"
-              title={project.isShared ? 'Click to make private' : 'Click to enable sharing'}
+              title={
+                project.isShared
+                  ? 'Public (visible in Community Creations). Click to make private.'
+                  : 'Private (hidden from Community Creations). Click to make public.'
+              }
             >
               {/* Lock Icon - Left */}
               <div className={`p-1.5 rounded-full transition-all z-10 ${

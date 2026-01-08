@@ -5,12 +5,14 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { useProjects } from '@/hooks/useProjects'
 import { useApprovedOutputs } from '@/hooks/useApprovedOutputs'
-import { useRecentOutputs } from '@/hooks/useRecentOutputs'
+import { useCommunityCreations, type CommunityCreation } from '@/hooks/useCommunityCreations'
+import { useProfile } from '@/hooks/useProfile'
 import { NewProjectDialog } from '@/components/projects/NewProjectDialog'
 import { ProjectCard } from '@/components/projects/ProjectCard'
+import { CommunityCreationDialog } from '@/components/generation/CommunityCreationDialog'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Project } from '@/types/project'
 import {
@@ -22,17 +24,19 @@ import {
   Sparkles,
   Play,
   ImageIcon,
-  Clock,
+  User,
 } from 'lucide-react'
 
 export default function DashboardPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [showNewProject, setShowNewProject] = useState(false)
+  const [selectedCreation, setSelectedCreation] = useState<CommunityCreation | null>(null)
   
+  const { data: profile } = useProfile()
   const { data: projects = [], isLoading: projectsLoading } = useProjects()
   const { data: approvedOutputs = [] } = useApprovedOutputs()
-  const { data: recentOutputs = [], isLoading: recentLoading } = useRecentOutputs(12)
+  const { data: communityCreations = [], isLoading: communityLoading } = useCommunityCreations(8)
   
   // Get the 3 most recent projects
   const recentProjects = projects.slice(0, 3)
@@ -50,21 +54,6 @@ export default function DashboardPage() {
 
   const handleProjectUpdate = () => {
     queryClient.invalidateQueries({ queryKey: ['projects'] })
-  }
-
-  const formatTimeAgo = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-    
-    if (seconds < 60) return 'just now'
-    const minutes = Math.floor(seconds / 60)
-    if (minutes < 60) return `${minutes}m ago`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
-    const days = Math.floor(hours / 24)
-    if (days < 7) return `${days}d ago`
-    return date.toLocaleDateString()
   }
 
   return (
@@ -160,6 +149,7 @@ export default function DashboardPage() {
               <ProjectCard
                 key={project.id}
                 project={project}
+                currentUserId={profile?.id}
                 onProjectUpdate={handleProjectUpdate}
               />
             ))}
@@ -183,111 +173,85 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Recent Creations Feed */}
-      {(recentOutputs.length > 0 || recentLoading) && (
+      {/* Community Creations Feed */}
+      {(communityCreations.length > 0 || communityLoading) && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold">Recent Creations</h2>
-              <p className="text-sm text-muted-foreground">
-                Your latest generated images and videos
-              </p>
-            </div>
+          <div>
+            <h2 className="text-xl font-semibold">Community Creations</h2>
+            <p className="text-sm text-muted-foreground">
+              Explore what others are creating
+            </p>
           </div>
 
-          {recentLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="aspect-square bg-muted rounded-lg animate-pulse" />
+          {communityLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="aspect-square bg-muted rounded-xl animate-pulse" />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {recentOutputs.map((output) => (
-                <Link
-                  key={output.id}
-                  href={`/projects/${output.generation.session.project.id}`}
-                  className="group relative aspect-square rounded-lg overflow-hidden bg-muted hover:ring-2 hover:ring-primary/50 transition-all"
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {communityCreations.map((creation) => (
+                <button
+                  key={creation.id}
+                  onClick={() => setSelectedCreation(creation)}
+                  className="group flex flex-col gap-2 text-left focus:outline-none"
                 >
-                  {output.fileType === 'video' ? (
-                    <video
-                      src={output.fileUrl}
-                      className="w-full h-full object-cover"
-                      muted
-                      loop
-                      playsInline
-                      onMouseEnter={(e) => e.currentTarget.play()}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.pause()
-                        e.currentTarget.currentTime = 0
-                      }}
-                    />
-                  ) : (
-                    <Image
-                      src={output.fileUrl}
-                      alt={output.generation.prompt.slice(0, 100)}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
-                    />
-                  )}
-                  
-                  {/* Overlay with type indicator and time */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="absolute bottom-0 left-0 right-0 p-2">
-                      <div className="flex items-center justify-between text-white text-xs">
-                        <span className="flex items-center gap-1">
-                          {output.fileType === 'video' ? (
-                            <Play className="h-3 w-3" />
-                          ) : (
-                            <ImageIcon className="h-3 w-3" />
-                          )}
-                          {output.fileType}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatTimeAgo(output.createdAt)}
-                        </span>
+                  <div className="relative aspect-square rounded-xl overflow-hidden bg-muted transition-all group-hover:ring-2 group-hover:ring-primary/50 group-focus-visible:ring-2 group-focus-visible:ring-primary">
+                    {creation.fileType === 'video' ? (
+                      <video
+                        src={creation.fileUrl}
+                        className="w-full h-full object-cover"
+                        muted
+                        loop
+                        playsInline
+                        onMouseEnter={(e) => e.currentTarget.play()}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.pause()
+                          e.currentTarget.currentTime = 0
+                        }}
+                      />
+                    ) : (
+                      <Image
+                        src={creation.fileUrl}
+                        alt={creation.generation.prompt.slice(0, 100)}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
+                      />
+                    )}
+
+                    {/* Video indicator badge */}
+                    {creation.fileType === 'video' && (
+                      <div className="absolute top-2 right-2 bg-black/60 rounded-full p-1.5">
+                        <Play className="h-3 w-3 text-white" />
                       </div>
-                    </div>
+                    )}
                   </div>
 
-                  {/* Video indicator badge (always visible) */}
-                  {output.fileType === 'video' && (
-                    <div className="absolute top-2 right-2 bg-black/60 rounded-full p-1">
-                      <Play className="h-3 w-3 text-white" />
+                  {/* Author (always visible) */}
+                  <div className="flex items-center gap-2 px-0.5">
+                    <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
+                      {creation.generation.user.avatarUrl ? (
+                        <Image
+                          src={creation.generation.user.avatarUrl}
+                          alt=""
+                          width={24}
+                          height={24}
+                          className="rounded-full"
+                        />
+                      ) : (
+                        <User className="h-3.5 w-3.5 text-muted-foreground" />
+                      )}
                     </div>
-                  )}
-                </Link>
+                    <span className="text-xs font-medium text-foreground/90 truncate">
+                      {creation.generation.user.displayName || 'Anonymous'}
+                    </span>
+                  </div>
+                </button>
               ))}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Stats Section */}
-      {hasProjects && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Total Projects</CardDescription>
-              <CardTitle className="text-3xl">{projects.length}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Approved Items</CardDescription>
-              <CardTitle className="text-3xl">{approvedOutputs.length}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Ready for Review</CardDescription>
-              <CardTitle className="text-3xl text-primary">
-                {approvedOutputs.length > 0 ? 'Yes' : 'No'}
-              </CardTitle>
-            </CardHeader>
-          </Card>
         </div>
       )}
 
@@ -296,6 +260,13 @@ export default function DashboardPage() {
         open={showNewProject}
         onOpenChange={setShowNewProject}
         onProjectCreated={handleProjectCreated}
+      />
+
+      {/* Community Creation Detail Dialog */}
+      <CommunityCreationDialog
+        creation={selectedCreation}
+        open={!!selectedCreation}
+        onClose={() => setSelectedCreation(null)}
       />
     </div>
   )

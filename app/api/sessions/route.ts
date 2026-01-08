@@ -151,6 +151,8 @@ export async function POST(request: Request) {
         projectId,
         name: name.trim(),
         type,
+        // Public by default (owner can toggle per-session privacy)
+        isPrivate: false,
       },
     })
 

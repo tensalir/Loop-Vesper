@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react'
 import { ProjectGrid } from '@/components/projects/ProjectGrid'
 import { NewProjectDialog } from '@/components/projects/NewProjectDialog'
 import { useProjects } from '@/hooks/useProjects'
+import { useProfile } from '@/hooks/useProfile'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Project } from '@/types/project'
 
@@ -13,6 +14,7 @@ export default function ProjectsPage() {
   const [showNewProject, setShowNewProject] = useState(false)
   const queryClient = useQueryClient()
   
+  const { data: profile } = useProfile()
   const { data: projects = [], isLoading: loading } = useProjects()
 
   const handleProjectCreated = (project: Project) => {
@@ -68,6 +70,7 @@ export default function ProjectsPage() {
       ) : (
         <ProjectGrid
           projects={projects}
+          currentUserId={profile?.id}
           onProjectUpdate={handleProjectUpdate}
         />
       )}

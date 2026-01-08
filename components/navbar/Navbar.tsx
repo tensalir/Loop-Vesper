@@ -63,21 +63,21 @@ export function Navbar({
     <div 
       className={cn(
         "flex items-center h-12 px-3 rounded-lg border backdrop-blur-sm shadow-sm",
-        "transition-all duration-500 ease-in-out",
+        "transition-all duration-300 ease-in-out",
         isExpanded 
-          ? "bg-background/95 border-border" 
-          : "bg-background/40 border-border/30"
+          ? "bg-background/95 border-primary/60" 
+          : "bg-background/40 border-primary/20"
       )}
       onMouseEnter={() => setIsExpanded(true)}
       onMouseLeave={() => setIsExpanded(false)}
     >
-      {/* Logo - always visible */}
+      {/* Logo - always visible, mint green in dark mode */}
       <img
-        src={theme === 'light' ? "/images/Loop-Vesper-Black.svg" : "/images/Loop-Vesper-White.svg"}
+        src={theme === 'light' ? "/images/Loop-Vesper-Black.svg" : "/images/Loop-Vesper-Mint.svg"}
         alt="Loop Vesper Logo"
         className={cn(
           "h-4 object-contain cursor-pointer transition-all duration-500 ease-in-out flex-shrink-0",
-          isExpanded ? "opacity-100" : "opacity-50 hover:opacity-70"
+          isExpanded ? "opacity-100" : "opacity-70 hover:opacity-90"
         )}
         onClick={() => router.push('/')}
         title="Back to Dashboard"
