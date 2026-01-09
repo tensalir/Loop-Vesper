@@ -13,6 +13,9 @@ const DEFAULT_MODEL = 'claude-sonnet-4-20250514'
 const IMAGE_DATA_START = '<<IMAGE_DATA:'
 const IMAGE_DATA_END = '>>'
 
+// Attachment link format used by the client for persisted display
+const ATTACHED_IMAGE_URL_REGEX = /\[Attached image: [^\]]+\]\(([^)]+)\)/g
+
 /**
  * Extract image data URLs and clean text from a string containing <<IMAGE_DATA:...>> markers.
  * Uses string splitting instead of regex to avoid stack overflow on large base64 strings.
@@ -53,6 +56,49 @@ function extractImageDataUrls(text: string): { images: string[]; cleanText: stri
   }
 
   return { images, cleanText: cleanText.trim() }
+}
+
+function extractAttachedImageUrls(text: string): string[] {
+  return Array.from(text.matchAll(ATTACHED_IMAGE_URL_REGEX))
+    .map((match) => match[1])
+    .filter((url): url is string => typeof url === 'string' && url.length > 0)
+}
+
+function isAllowedAttachmentUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false
+
+    // Prefer the configured Supabase project host if available
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (supabaseUrl) {
+      const supabaseHost = new URL(supabaseUrl).host
+      if (parsed.host === supabaseHost) return true
+    }
+
+    // Fallback: allow direct Supabase storage URLs
+    return parsed.host.endsWith('.supabase.co')
+  } catch {
+    return false
+  }
+}
+
+async function fetchImageUrlAsDataUrl(url: string): Promise<string | null> {
+  if (!isAllowedAttachmentUrl(url)) return null
+
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+
+    const contentType = res.headers.get('content-type') || ''
+    if (!contentType.startsWith('image/')) return null
+
+    const arrayBuffer = await res.arrayBuffer()
+    const base64 = Buffer.from(arrayBuffer).toString('base64')
+    return `data:${contentType};base64,${base64}`
+  } catch {
+    return null
+  }
 }
 
 // Type for multi-modal message content
@@ -209,45 +255,63 @@ export async function POST(
     // Get the model from env or use default
     const modelId = process.env.ANTHROPIC_BRAINSTORM_MODEL || DEFAULT_MODEL
 
-    // Convert UI messages to model messages, extracting embedded images for Claude vision
-    const modelMessages: ModelMessage[] = messages.map((msg) => {
-      const textContent = getMessageText(msg)
-      
-      // Extract any embedded image data URLs (using string splitting to avoid regex stack overflow)
-      const { images: imageDataUrls, cleanText } = extractImageDataUrls(textContent)
-      
-      if (msg.role === 'user' && imageDataUrls.length > 0) {
-        // Build multi-modal content with images + text
-        const content: Array<{ type: 'text'; text: string } | { type: 'image'; image: string }> = []
-        
-        // Add images first so Claude sees them before the text
-        for (const dataUrl of imageDataUrls) {
-          content.push({
-            type: 'image',
-            image: dataUrl,
-          })
+    // Convert UI messages to model messages, extracting embedded images for Claude vision.
+    // IMPORTANT: On Vercel, large request bodies can trigger 413. The client sends only URLs,
+    // and we fetch the images here to provide them as data URLs to the model.
+    const modelMessages: ModelMessage[] = await Promise.all(
+      messages.map(async (msg) => {
+        const textContent = getMessageText(msg)
+
+        // Extract any embedded image data URLs (legacy support)
+        const { images: embeddedImageDataUrls, cleanText } = extractImageDataUrls(textContent)
+
+        let imageDataUrls: string[] = embeddedImageDataUrls
+
+        // If no embedded data URLs, try fetching attached image URLs from Supabase storage
+        if (msg.role === 'user' && imageDataUrls.length === 0) {
+          const attachedUrls = extractAttachedImageUrls(cleanText)
+            .filter(isAllowedAttachmentUrl)
+            .slice(0, 4)
+
+          if (attachedUrls.length > 0) {
+            const fetched = await Promise.all(attachedUrls.map(fetchImageUrlAsDataUrl))
+            imageDataUrls = fetched.filter((u): u is string => typeof u === 'string' && u.length > 0)
+          }
         }
-        
-        // Add the text content
-        if (cleanText) {
-          content.push({
-            type: 'text',
-            text: cleanText,
-          })
+
+        if (msg.role === 'user' && imageDataUrls.length > 0) {
+          // Build multi-modal content with images + text
+          const content: Array<{ type: 'text'; text: string } | { type: 'image'; image: string }> = []
+
+          // Add images first so Claude sees them before the text
+          for (const dataUrl of imageDataUrls) {
+            content.push({
+              type: 'image',
+              image: dataUrl,
+            })
+          }
+
+          // Add the text content
+          if (cleanText) {
+            content.push({
+              type: 'text',
+              text: cleanText,
+            })
+          }
+
+          return {
+            role: 'user' as const,
+            content,
+          }
         }
-        
+
+        // For assistant messages or user messages without images, just use text
         return {
-          role: 'user' as const,
-          content,
+          role: msg.role as 'user' | 'assistant',
+          content: cleanText || textContent,
         }
-      }
-      
-      // For assistant messages or user messages without images, just use text
-      return {
-        role: msg.role as 'user' | 'assistant',
-        content: cleanText || textContent,
-      }
-    })
+      })
+    )
 
     // Stream the response using AI SDK
     // Cast messages to the expected type to handle multi-modal content

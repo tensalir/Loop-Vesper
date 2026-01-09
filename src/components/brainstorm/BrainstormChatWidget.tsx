@@ -316,16 +316,6 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
     }
   }, [isOpen, activeThreadId])
 
-  // Convert file to base64 data URL for Claude vision
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = reject
-      reader.readAsDataURL(file)
-    })
-  }
-
   // Upload files to Supabase
   const uploadFilesToSupabase = async (files: File[]): Promise<{ name: string; url: string; type: string }[]> => {
     const formData = new FormData()
@@ -359,9 +349,9 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
     try {
       // Build message with attachments
       let messageText = text
-      const imageDataUrls: string[] = []
       
-      // If we have files, process them for Claude vision + upload to Supabase for persistence
+      // If we have files, upload to Supabase and reference via URLs.
+      // IMPORTANT: Avoid embedding base64 in the chat request body (Vercel can return 413 for large payloads).
       if (hasFiles) {
         setIsUploading(true)
         
@@ -372,12 +362,8 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
           
           for (let i = 0; i < uploadedFiles.length; i++) {
             const file = uploadedFiles[i]
-            const originalFile = attachedFiles[i]
             
             if (file.type.startsWith('image/')) {
-              // For images: Convert to base64 so Claude can actually SEE them
-              const base64 = await fileToBase64(originalFile)
-              imageDataUrls.push(base64)
               fileDescriptions.push(`[Attached image: ${file.name}](${file.url})`)
             } else {
               // For documents: Include as text reference
@@ -385,20 +371,11 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
             }
           }
           
-          // Build message: include image data URLs in a special format for the API to parse
-          // Format: <<IMAGE_DATA:base64_url>> for each image
-          let imageDataSection = ''
-          if (imageDataUrls.length > 0) {
-            imageDataSection = imageDataUrls.map(url => `<<IMAGE_DATA:${url}>>`).join('\n') + '\n\n'
-          }
-          
           // Prepend file descriptions to message for display/persistence
           if (fileDescriptions.length > 0 && !text) {
-            messageText = imageDataSection + fileDescriptions.join('\n')
+            messageText = fileDescriptions.join('\n')
           } else if (fileDescriptions.length > 0) {
-            messageText = imageDataSection + fileDescriptions.join('\n') + '\n\n' + text
-          } else if (imageDataSection) {
-            messageText = imageDataSection + text
+            messageText = fileDescriptions.join('\n') + '\n\n' + text
           }
         } catch (uploadError) {
           console.error('Failed to upload files:', uploadError)
