@@ -9,7 +9,6 @@ import { cn } from '@/lib/utils'
 interface NavbarProps {
   theme: 'light' | 'dark'
   projectId?: string
-  onOpenBriefing?: () => void
   /** When true, navbar positions itself fixed in center. When false, it's just a pill (for use in a wrapper) */
   standalone?: boolean
 }
@@ -17,7 +16,6 @@ interface NavbarProps {
 export function Navbar({
   theme,
   projectId,
-  onOpenBriefing,
   standalone = true,
 }: NavbarProps) {
   const router = useRouter()
@@ -28,8 +26,8 @@ export function Navbar({
     {
       label: 'Briefings',
       icon: FileText,
-      onClick: onOpenBriefing || (() => {}),
-      active: false,
+      onClick: () => router.push('/briefings'),
+      active: pathname === '/briefings',
     },
     {
       label: 'Projects',

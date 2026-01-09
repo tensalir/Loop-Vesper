@@ -641,14 +641,15 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
       {/* Chat panel */}
       {isOpen && (
         <div className="relative">
-          {/* Connector line from control bar (only when controlled) */}
+          {/* Connector line from control bar (only when controlled) - only on large screens */}
           {isControlled && (
             <div 
-              className="fixed bottom-[2.25rem] h-[2px] bg-border/50 z-30"
-              style={{ 
-                left: 'calc(50% + 28rem)',
-                width: '1.5rem'
-              }}
+              className={cn(
+                "fixed bottom-[2.25rem] h-[2px] bg-border/50 z-30",
+                // Only show connector on 2xl screens where layout has proper alignment
+                "hidden 2xl:block",
+                "2xl:left-[calc(50%+28rem)] 2xl:w-4"
+              )}
             />
           )}
           
@@ -660,14 +661,24 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
             onDrop={handleDrop}
             className={cn(
               "z-40",
-              // Responsive sizing: taller on larger screens, constrained on smaller
-              "w-[420px] max-w-[calc(100vw-3rem)]",
-              "h-[calc(100vh-10rem)] min-h-[400px] max-h-[800px]",
+              // Responsive sizing: smaller on medium screens, full on large
+              "w-[320px] xl:w-[360px] 2xl:w-[400px]",
+              "max-w-[calc(100vw-3rem)]",
+              "h-[calc(100vh-10rem)] min-h-[350px] max-h-[700px] xl:max-h-[800px]",
               "bg-card border rounded-2xl shadow-2xl",
               "flex flex-col overflow-hidden",
               // Position based on whether controlled (from control bar) or standalone
+              // Responsive positioning: stays visible on smaller screens without overlapping prompt bar
               isControlled 
-                ? "fixed bottom-6 left-[calc(50%+29.5rem)] animate-in slide-in-from-left-8 fade-in duration-300 ease-out"
+                ? cn(
+                    "fixed bottom-6 animate-in slide-in-from-left-8 fade-in duration-300 ease-out",
+                    // Position from right edge, ensuring no overlap with centered prompt bar
+                    // xl: prompt is max-w-3xl (768px) centered, so left edge clears at 50%+24rem+gap
+                    "right-4",
+                    "xl:right-auto xl:left-[calc(50%+22rem)]",
+                    // On 2xl screens, position relative to center with more space
+                    "2xl:left-[calc(50%+29rem)]"
+                  )
                 : "fixed bottom-24 right-6 animate-in slide-in-from-bottom-4 fade-in duration-300",
               // Drag state styling
               isDragging 

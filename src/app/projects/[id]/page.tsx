@@ -409,7 +409,6 @@ export default function ProjectPage() {
       <Navbar
         theme={theme}
         projectId={params.id as string}
-        onOpenBriefing={handleOpenBriefing}
       />
 
       {/* Utility Icons - Fixed Top Right */}
@@ -443,7 +442,7 @@ export default function ProjectPage() {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Project Title - Top Left, aligned with navbar */}
-        <div className="fixed left-4 top-4 z-40 flex items-center gap-3 h-12">
+        <div className="fixed left-4 top-4 z-40 flex items-center gap-2 h-12 group/title">
           <h1 className="text-sm font-bold truncate max-w-[240px] tracking-tight" title={projectName}>
             {projectName}
           </h1>
@@ -452,7 +451,7 @@ export default function ProjectPage() {
             <button
               onClick={handleTogglePrivacy}
               disabled={updating}
-              className="bg-background/90 backdrop-blur-sm rounded-full p-1 flex items-center gap-0.5 hover:bg-background/95 transition-all relative"
+              className="opacity-0 group-hover/title:opacity-100 focus:opacity-100 bg-muted/50 hover:bg-muted/80 rounded-full p-0.5 flex items-center gap-0 transition-all duration-200 relative scale-90"
               title={
                 project.isShared
                   ? 'Public (visible in Community Creations). Click to make private.'
@@ -460,27 +459,27 @@ export default function ProjectPage() {
               }
             >
               {/* Lock Icon - Left */}
-              <div className={`p-1.5 rounded-full transition-all z-10 ${
+              <div className={`p-1 rounded-full transition-all z-10 ${
                 !project.isShared 
                   ? 'text-background' 
-                  : 'text-muted-foreground'
+                  : 'text-muted-foreground/60'
               }`}>
-                <Lock className="h-3.5 w-3.5" />
+                <Lock className="h-3 w-3" />
               </div>
               
               {/* Globe Icon - Right */}
-              <div className={`p-1.5 rounded-full transition-all z-10 ${
+              <div className={`p-1 rounded-full transition-all z-10 ${
                 project.isShared 
                   ? 'text-background' 
-                  : 'text-muted-foreground'
+                  : 'text-muted-foreground/60'
               }`}>
-                <Globe className="h-3.5 w-3.5" />
+                <Globe className="h-3 w-3" />
               </div>
 
               {/* Sliding Background */}
               <div
-                className={`absolute top-1 bottom-1 w-7 bg-primary rounded-full transition-all duration-300 ${
-                  project.isShared ? 'left-[calc(50%-2px)]' : 'left-1'
+                className={`absolute top-0.5 bottom-0.5 w-5 bg-muted-foreground/80 rounded-full transition-all duration-300 ${
+                  project.isShared ? 'left-[calc(50%-1px)]' : 'left-0.5'
                 }`}
               />
             </button>

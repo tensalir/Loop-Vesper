@@ -1,14 +1,8 @@
 'use client'
 
 import Image from 'next/image'
-import { X, User, Wand2, Settings2, Copy, Check } from 'lucide-react'
-import { useState } from 'react'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { X, User, Copy, Check } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import type { CommunityCreation } from '@/hooks/useCommunityCreations'
 
 interface CommunityCreationDialogProps {
@@ -26,41 +20,31 @@ const formatModelName = (modelId: string): string => {
     .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-// Format parameter value for display
-const formatParamValue = (key: string, value: any): string => {
-  if (value === null || value === undefined) return '—'
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-  if (typeof value === 'number') return value.toString()
-  if (typeof value === 'string') return value
-  return JSON.stringify(value)
+// Get reference image URL from parameters
+const getReferenceImageUrl = (parameters: Record<string, any>): string | null => {
+  // Direct URL
+  if (parameters?.referenceImageUrl) {
+    return parameters.referenceImageUrl
+  }
+  
+  // Check referenceImages array
+  if (parameters?.referenceImages?.length > 0) {
+    const firstRef = parameters.referenceImages[0]
+    if (typeof firstRef === 'string') return firstRef
+    if (firstRef?.url) return firstRef.url
+  }
+  
+  return null
 }
 
-// Filter parameters to show only relevant ones
-const getDisplayParams = (params: Record<string, any>): [string, any][] => {
-  const excludeKeys = [
-    'referenceImageUrl',
-    'referenceImages',
-    'referenceImagePath',
-    'referenceImageBucket',
-    'referenceImageId',
-    'referenceImageMimeType',
-    'error',
-  ]
-  
-  const displayKeys = [
-    'aspectRatio',
-    'numOutputs',
-    'seed',
-    'guidanceScale',
-    'numInferenceSteps',
-    'style',
-    'negativePrompt',
-  ]
-
-  return Object.entries(params)
-    .filter(([key]) => !excludeKeys.includes(key))
-    .filter(([key, value]) => displayKeys.includes(key) && value !== null && value !== undefined)
-    .slice(0, 6) // Limit to 6 parameters
+// Format date
+const formatDate = (dateString: string): string => {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric', 
+    year: 'numeric' 
+  })
 }
 
 export function CommunityCreationDialog({
@@ -70,12 +54,27 @@ export function CommunityCreationDialog({
 }: CommunityCreationDialogProps) {
   const [copied, setCopied] = useState(false)
 
-  if (!creation) return null
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+
+    if (open) {
+      document.addEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'hidden'
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'unset'
+    }
+  }, [open, onClose])
+
+  if (!open || !creation) return null
 
   const { generation, fileUrl, fileType } = creation
-  const { prompt, modelId, parameters, user } = generation
-  const displayParams = getDisplayParams(parameters)
-  const aspectRatio = (parameters?.aspectRatio as string) || '1:1'
+  const { prompt, modelId, parameters, user, createdAt } = generation
+  const referenceImageUrl = getReferenceImageUrl(parameters)
 
   const handleCopyPrompt = async () => {
     try {
@@ -88,121 +87,132 @@ export function CommunityCreationDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden bg-card border-border">
-        <div className="flex flex-col md:flex-row">
-          {/* Left: Media preview */}
-          <div className="relative w-full md:w-1/2 aspect-square bg-muted flex-shrink-0">
+    <div
+      className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 md:p-8"
+      onClick={onClose}
+    >
+      {/* Close button */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors z-10"
+      >
+        <X className="h-6 w-6 text-white" />
+      </button>
+
+      {/* Content Container - Side by side layout */}
+      <div 
+        className="flex flex-col md:flex-row items-stretch gap-6 max-w-6xl w-full max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Left: Prompt Card - matching session styling */}
+        <div className="w-full md:w-96 flex-shrink-0 bg-card rounded-xl p-6 border border-border flex flex-col" style={{ minHeight: '320px' }}>
+          {/* Prompt */}
+          <div className="flex-1 overflow-hidden hover:overflow-y-auto transition-all group relative" style={{ maxHeight: '200px' }}>
+            <p 
+              className="text-base font-normal leading-relaxed text-foreground/90 cursor-pointer hover:text-primary transition-colors"
+              onClick={handleCopyPrompt}
+              title="Click to copy"
+            >
+              {prompt}
+            </p>
+            {copied ? (
+              <Check className="h-3.5 w-3.5 absolute top-0 right-0 text-primary" />
+            ) : (
+              <Copy className="h-3.5 w-3.5 absolute top-0 right-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+            )}
+          </div>
+
+          {/* Metadata */}
+          <div className="space-y-2 text-xs text-muted-foreground mt-4">
+            {/* User */}
+            <div className="flex items-center gap-2">
+              <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                {user.avatarUrl ? (
+                  <Image
+                    src={user.avatarUrl}
+                    alt={user.displayName || 'User'}
+                    width={20}
+                    height={20}
+                    className="rounded-full"
+                  />
+                ) : (
+                  <User className="h-3 w-3 text-muted-foreground" />
+                )}
+              </div>
+              <span className="font-medium">
+                {user.displayName || user.username || 'Anonymous'}
+              </span>
+            </div>
+
+            {/* Model */}
+            <div className="flex items-center gap-2">
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className="h-3.5 w-3.5 text-primary"
+              >
+                <path d="M15 4V2" />
+                <path d="M15 16v-2" />
+                <path d="M8 9h2" />
+                <path d="M20 9h2" />
+                <path d="M17.8 11.8 19 13" />
+                <path d="M15 9h0" />
+                <path d="M17.8 6.2 19 5" />
+                <path d="m3 21 9-9" />
+                <path d="M12.2 6.2 11 5" />
+              </svg>
+              <span className="font-medium">{formatModelName(modelId)}</span>
+            </div>
+
+            {/* Date */}
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground/70">Generated:</span>
+              <span className="font-medium">{formatDate(createdAt)}</span>
+            </div>
+
+            {/* Reference Image */}
+            {referenceImageUrl && (
+              <div className="mt-3 pt-3 border-t border-border/50">
+                <div className="text-xs text-muted-foreground/70 mb-1.5">Reference Image:</div>
+                <div className="w-16 h-16 rounded-lg overflow-hidden border border-border/50">
+                  <img 
+                    src={referenceImageUrl} 
+                    alt="Reference" 
+                    className="w-full h-full object-cover" 
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Media */}
+        <div className="flex-1 flex items-center justify-center min-h-[300px] md:min-h-0">
+          <div className="relative w-full h-full flex items-center justify-center">
             {fileType === 'video' ? (
               <video
                 src={fileUrl}
-                className="w-full h-full object-cover"
+                className="max-w-full max-h-[70vh] md:max-h-[80vh] object-contain rounded-lg shadow-2xl"
                 controls
                 autoPlay
                 muted
                 loop
               />
             ) : (
-              <Image
+              <img
                 src={fileUrl}
                 alt={prompt.slice(0, 100)}
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 50vw"
+                className="max-w-full max-h-[70vh] md:max-h-[80vh] object-contain rounded-lg shadow-2xl"
               />
             )}
           </div>
-
-          {/* Right: Details */}
-          <div className="flex flex-col p-6 w-full md:w-1/2">
-            {/* Header with close button */}
-            <DialogHeader className="pb-4 border-b border-border">
-              <div className="flex items-center justify-between">
-                <DialogTitle className="text-lg font-semibold">
-                  Creation Details
-                </DialogTitle>
-              </div>
-            </DialogHeader>
-
-            {/* Creator info */}
-            <div className="flex items-center gap-2 py-4 border-b border-border">
-              <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                {user.avatarUrl ? (
-                  <Image
-                    src={user.avatarUrl}
-                    alt={user.displayName || 'User'}
-                    width={32}
-                    height={32}
-                    className="rounded-full"
-                  />
-                ) : (
-                  <User className="h-4 w-4 text-muted-foreground" />
-                )}
-              </div>
-              <span className="font-medium text-sm">
-                {user.displayName || user.username || 'Anonymous'}
-              </span>
-            </div>
-
-            {/* Prompt */}
-            <div className="py-4 border-b border-border flex-1">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Prompt
-                </h3>
-                <button
-                  onClick={handleCopyPrompt}
-                  className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                  title="Copy prompt"
-                >
-                  {copied ? (
-                    <Check className="h-3.5 w-3.5 text-primary" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                  )}
-                </button>
-              </div>
-              <p className="text-sm leading-relaxed text-foreground/90 max-h-32 overflow-y-auto">
-                {prompt}
-              </p>
-            </div>
-
-            {/* Model & Settings */}
-            <div className="pt-4 space-y-3">
-              {/* Model */}
-              <div className="flex items-center gap-2">
-                <Wand2 className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">Model:</span>
-                <span className="text-xs font-medium">
-                  {formatModelName(modelId)}
-                </span>
-              </div>
-
-              {/* Settings */}
-              {displayParams.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">Settings</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 pl-5">
-                    {displayParams.map(([key, value]) => (
-                      <div key={key} className="flex justify-between text-xs">
-                        <span className="text-muted-foreground capitalize">
-                          {key.replace(/([A-Z])/g, ' $1').trim()}:
-                        </span>
-                        <span className="font-medium">
-                          {formatParamValue(key, value)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   )
 }
