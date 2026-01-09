@@ -843,7 +843,7 @@ export function GenerationInterface({
       )}
 
       {/* Chat Input - Floating Card at Bottom - Responsive width */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl xl:max-w-3xl 2xl:max-w-4xl px-4 xl:px-6 z-30">
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl 2xl:max-w-3xl px-4 xl:px-6 z-30">
         <div className="flex items-center gap-3">
           {/* Prompt Bar */}
           <div className="flex-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl p-4">
@@ -927,10 +927,6 @@ export function GenerationInterface({
                 <MessageCircle className="h-4 w-4" />
               </button>
               
-              {/* Connector line to chat panel - hidden on smaller screens where panel is right-positioned */}
-              {isChatOpen && (
-                <div className="hidden 2xl:block absolute left-[calc(100%+2px)] top-1/2 -translate-y-1/2 w-4 h-[2px] bg-border/50 z-30" />
-              )}
             </div>
           </div>
         </div>
