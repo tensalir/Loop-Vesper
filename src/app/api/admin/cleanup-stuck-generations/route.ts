@@ -21,7 +21,7 @@ function getSupabaseAdmin() {
 
 /**
  * Cleanup endpoint for stuck generations
- * Marks generations as failed if they've been processing > 2 minutes
+ * Marks generations as failed if they appear abandoned (no heartbeat for a while).
  * Can be called manually or via cron job
  */
 export async function POST(request: NextRequest) {
@@ -46,14 +46,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden - admin access required' }, { status: 403 })
     }
 
-    // Find generations stuck > 2 minutes (Vercel Pro timeout is 60s, so 2min is definitely stuck)
-    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000)
+    // "Stuck" heuristic:
+    // - Only consider older generations (avoid false positives for slow video models)
+    // - Require missing/stale heartbeat (written by the background processor)
+    const MIN_AGE_MINUTES = 10
+    const HEARTBEAT_STALE_MINUTES = 5
+    const minAgeAgo = new Date(Date.now() - MIN_AGE_MINUTES * 60 * 1000)
     
-    const stuckGenerations = await prisma.generation.findMany({
+    const candidates = await prisma.generation.findMany({
       where: {
         status: 'processing',
         createdAt: {
-          lt: twoMinutesAgo,
+          lt: minAgeAgo,
         },
       },
       include: {
@@ -67,10 +71,25 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    const now = Date.now()
+    const stuckGenerations = candidates.filter((gen) => {
+      const params = (gen.parameters as any) || {}
+      const lastHeartbeatAtRaw = params?.lastHeartbeatAt
+      if (typeof lastHeartbeatAtRaw !== 'string') return true
+      const lastHeartbeatAtMs = new Date(lastHeartbeatAtRaw).getTime()
+      if (!Number.isFinite(lastHeartbeatAtMs)) return true
+      return (now - lastHeartbeatAtMs) > HEARTBEAT_STALE_MINUTES * 60 * 1000
+    })
+
     if (stuckGenerations.length === 0) {
       return NextResponse.json({ 
         message: 'No stuck generations found',
-        cleaned: 0 
+        cleaned: 0,
+        scanned: candidates.length,
+        heuristic: {
+          minAgeMinutes: MIN_AGE_MINUTES,
+          heartbeatStaleMinutes: HEARTBEAT_STALE_MINUTES,
+        },
       })
     }
 
@@ -86,7 +105,7 @@ export async function POST(request: NextRequest) {
             status: 'failed',
             parameters: {
               ...(gen.parameters as any || {}),
-              error: 'Processing timed out - exceeded Vercel function execution limit',
+              error: 'Processing appears stuck (no progress heartbeat)',
               timeoutDetectedAt: new Date().toISOString(),
             },
           },

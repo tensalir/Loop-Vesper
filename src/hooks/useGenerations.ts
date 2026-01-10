@@ -55,13 +55,17 @@ async function triggerProcessForStuckGeneration(generationId: string) {
 
 /**
  * Check for stuck generations and trigger cleanup if needed
- * A generation is considered stuck if it's been processing for > 2 minutes
- * (Vercel Pro timeout is 60s, so 2min is definitely stuck)
  * Also checks for generations that haven't started processing (> 10 seconds with no heartbeat)
  */
 async function checkAndCleanupStuckGenerations(generations: GenerationWithOutputs[]) {
   const now = Date.now()
-  const TWO_MINUTES = 2 * 60 * 1000
+  // "Stuck" heuristic:
+  // - Video generations can legitimately take several minutes
+  // - Only flag as stuck if older AND heartbeat is missing/stale
+  const MIN_AGE_MINUTES = 10
+  const HEARTBEAT_STALE_MINUTES = 5
+  const MIN_AGE_MS = MIN_AGE_MINUTES * 60 * 1000
+  const HEARTBEAT_STALE_MS = HEARTBEAT_STALE_MINUTES * 60 * 1000
   const TEN_SECONDS = 10 * 1000
   
   // Check for generations that haven't started processing (no heartbeat after 10s)
@@ -82,16 +86,23 @@ async function checkAndCleanupStuckGenerations(generations: GenerationWithOutput
     triggerProcessForStuckGeneration(gen.id)
   }
   
-  // Check for truly stuck generations (> 2 minutes)
+  // Check for truly stuck generations (old + no heartbeat)
   const stuckGenerations = generations.filter(gen => {
     if (gen.status !== 'processing') return false
     const createdAt = new Date(gen.createdAt).getTime()
     const age = now - createdAt
-    return age > TWO_MINUTES
+    if (age < MIN_AGE_MS) return false
+
+    const params = gen.parameters as any
+    const lastHeartbeatAtRaw = params?.lastHeartbeatAt
+    if (typeof lastHeartbeatAtRaw !== 'string') return true
+    const lastHeartbeatAtMs = new Date(lastHeartbeatAtRaw).getTime()
+    if (!Number.isFinite(lastHeartbeatAtMs)) return true
+    return (now - lastHeartbeatAtMs) > HEARTBEAT_STALE_MS
   })
   
   if (stuckGenerations.length > 0) {
-    console.warn(`⚠️ Found ${stuckGenerations.length} stuck generation(s) (older than 2 minutes), triggering cleanup...`, 
+    console.warn(`⚠️ Found ${stuckGenerations.length} stuck generation(s), triggering cleanup...`, 
       stuckGenerations.map(g => ({ id: g.id, age: Math.round((now - new Date(g.createdAt).getTime()) / 1000) + 's' }))
     )
     // Trigger cleanup endpoint (best effort, don't await)

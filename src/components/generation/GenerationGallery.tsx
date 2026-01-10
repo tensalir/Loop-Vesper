@@ -1,10 +1,11 @@
 import { useState, useRef, useCallback } from 'react'
 import Image from 'next/image'
-import { Download, RotateCcw, Info, Copy, Bookmark, Check, Video, Wand2, X, Trash2 } from 'lucide-react'
+import { Download, RotateCcw, Info, Copy, Bookmark, Check, Video, Wand2, X, Trash2, Pin } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { GenerationWithOutputs } from '@/types/generation'
 import type { Session } from '@/types/project'
 import { useUpdateOutputMutation } from '@/hooks/useOutputMutations'
+import { usePinnedImages } from '@/hooks/usePinnedImages'
 import { useToast } from '@/components/ui/use-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { GenerationProgress } from './GenerationProgress'
@@ -75,7 +76,13 @@ const getReferenceImageUrls = (generation: GenerationWithOutputs): string[] => {
   return urls
 }
 
-const ReferenceImageThumbnail = ({ generation }: { generation: GenerationWithOutputs }) => {
+interface ReferenceImageThumbnailProps {
+  generation: GenerationWithOutputs
+  onPinImage?: (url: string) => void
+}
+
+const ReferenceImageThumbnail = ({ generation, onPinImage }: ReferenceImageThumbnailProps) => {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const urls = getReferenceImageUrls(generation)
   if (urls.length === 0) return null
 
@@ -83,24 +90,57 @@ const ReferenceImageThumbnail = ({ generation }: { generation: GenerationWithOut
   const visibleUrls = urls.slice(0, 4)
   const remaining = urls.length - visibleUrls.length
 
+  const handlePinClick = (e: React.MouseEvent, url: string) => {
+    e.stopPropagation()
+    onPinImage?.(url)
+  }
+
   return (
     <div className="mt-3 pt-3 border-t border-border/50">
       <div className="text-xs text-muted-foreground/70 mb-1.5">{label}</div>
 
       {urls.length === 1 ? (
-        <div className="w-20 h-20 rounded-lg overflow-hidden border border-border/50">
+        <div 
+          className="relative w-20 h-20 rounded-lg overflow-hidden border border-border/50 group/refimg"
+          onMouseEnter={() => setHoveredIndex(0)}
+          onMouseLeave={() => setHoveredIndex(null)}
+        >
           <img src={urls[0]} alt="Reference" className="w-full h-full object-cover" />
+          {onPinImage && hoveredIndex === 0 && (
+            <button
+              onClick={(e) => handlePinClick(e, urls[0])}
+              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary/90 text-primary-foreground flex items-center justify-center hover:bg-primary transition-colors shadow-sm"
+              title="Pin to project"
+            >
+              <Pin className="h-2.5 w-2.5" />
+            </button>
+          )}
         </div>
       ) : (
         <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-border/50 bg-muted/10 p-0.5">
           <div className="grid grid-cols-2 grid-rows-2 gap-0.5 w-full h-full">
             {visibleUrls.map((url, index) => (
-              <img
+              <div
                 key={`${generation.id}-ref-${index}`}
-                src={url}
-                alt={`Reference ${index + 1}`}
-                className="w-full h-full object-cover rounded-[4px]"
-              />
+                className="relative group/refimg"
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
+                <img
+                  src={url}
+                  alt={`Reference ${index + 1}`}
+                  className="w-full h-full object-cover rounded-[4px]"
+                />
+                {onPinImage && hoveredIndex === index && (
+                  <button
+                    onClick={(e) => handlePinClick(e, url)}
+                    className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-primary/90 text-primary-foreground flex items-center justify-center hover:bg-primary transition-colors shadow-sm"
+                    title="Pin to project"
+                  >
+                    <Pin className="h-2 w-2" />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
           {remaining > 0 && (
@@ -157,6 +197,15 @@ export function GenerationGallery({
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const updateOutputMutation = useUpdateOutputMutation()
+  const { pinImage, isPinning } = usePinnedImages(projectId)
+  
+  const handlePinImage = useCallback((imageUrl: string) => {
+    pinImage({ imageUrl })
+    toast({
+      title: 'Image pinned',
+      description: 'Reference image added to project pins',
+    })
+  }, [pinImage, toast])
   const [lightboxData, setLightboxData] = useState<{
     imageUrl: string
     output: any
@@ -212,6 +261,19 @@ export function GenerationGallery({
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
+      
+      // Log download event for semantic analysis (fire-and-forget)
+      fetch(`/api/outputs/${outputId}/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventType: 'download',
+          metadata: { fileType },
+        }),
+      }).catch((err) => {
+        // Silent fail - don't interrupt the download experience
+        console.debug('Failed to log download event:', err)
+      })
     } catch (error) {
       console.error('Download failed:', error)
       toast({
@@ -472,11 +534,30 @@ export function GenerationGallery({
             const modelName = modelConfig?.name || 'Unknown Model'
             const numOutputs = (generation.parameters as any)?.numOutputs || 1
             
-            // Check if generation is stuck (> 2 minutes old)
+            const isVideoModel = modelConfig?.type === 'video'
+            const params = (generation.parameters as any) || {}
+
+            // Heartbeat is written by the background processor every ~10s while the model call is active.
+            // Use it to distinguish "slow but alive" vs "likely stuck".
             const now = Date.now()
-            const createdAt = new Date(generation.createdAt).getTime()
-            const ageMinutes = (now - createdAt) / (60 * 1000)
-            const isStuck = ageMinutes > 2
+            const createdAtMs = new Date(generation.createdAt).getTime()
+            const ageMinutes = (now - createdAtMs) / (60 * 1000)
+            const lastHeartbeatAtRaw = params?.lastHeartbeatAt
+            const lastHeartbeatAtMs =
+              typeof lastHeartbeatAtRaw === 'string' ? new Date(lastHeartbeatAtRaw).getTime() : null
+            const heartbeatAgeMinutes =
+              typeof lastHeartbeatAtMs === 'number' && Number.isFinite(lastHeartbeatAtMs)
+                ? (now - lastHeartbeatAtMs) / (60 * 1000)
+                : null
+
+            const longThresholdMinutes = isVideoModel ? 2 : 1
+            const stuckThresholdMinutes = isVideoModel ? 12 : 5
+            const heartbeatStaleMinutes = isVideoModel ? 3 : 2
+
+            const isTakingLong = ageMinutes > longThresholdMinutes
+            const isHeartbeatStale =
+              heartbeatAgeMinutes === null ? ageMinutes > (isVideoModel ? 4 : 2) : heartbeatAgeMinutes > heartbeatStaleMinutes
+            const isLikelyStuck = ageMinutes > stuckThresholdMinutes && isHeartbeatStale
             
             return (
               <div 
@@ -489,8 +570,10 @@ export function GenerationGallery({
               <div className="flex gap-6 items-start">
                 {/* Left Side: Prompt and metadata */}
                 <div className={`w-96 flex-shrink-0 bg-prompt-card rounded-xl p-6 border flex flex-col relative group ${
-                  isStuck
+                  isLikelyStuck
                     ? 'border-destructive/50 border-destructive'
+                    : isTakingLong
+                    ? 'border-amber-500/50 border-amber-500/30'
                     : 'border-border/50 border-primary/30'
                 }`} style={{ minHeight: '320px' }}>
                   {/* Cancel button - top left, only visible on hover when processing */}
@@ -502,10 +585,16 @@ export function GenerationGallery({
                     <X className="h-4 w-4 text-white" />
                   </button>
                   
-                  {/* Stuck badge */}
-                  {isStuck && (
-                    <div className="absolute top-2 left-10 px-2 py-1 bg-destructive/20 text-destructive text-xs font-medium rounded z-10">
-                      ⚠️ Stuck ({Math.round(ageMinutes)}min)
+                  {/* Status badge (only when taking longer than usual) */}
+                  {isTakingLong && (
+                    <div
+                      className={`absolute top-2 left-10 px-2 py-1 text-xs font-medium rounded z-10 ${
+                        isLikelyStuck
+                          ? 'bg-destructive/20 text-destructive'
+                          : 'bg-amber-500/15 text-amber-300'
+                      }`}
+                    >
+                      {isLikelyStuck ? 'Delayed' : 'Processing'} ({Math.round(ageMinutes)}min)
                     </div>
                   )}
                   
@@ -545,18 +634,18 @@ export function GenerationGallery({
                     </div>
                     
                     {/* Reference Image Thumbnail - shown during processing too */}
-                    <ReferenceImageThumbnail generation={generation} />
+                    <ReferenceImageThumbnail generation={generation} onPinImage={handlePinImage} />
                   </div>
                 </div>
 
                 {/* Right Side: Progress placeholders or stuck message */}
-                {isStuck ? (
+                {isLikelyStuck ? (
                   <div className="flex-1 max-w-5xl">
                     <div className="bg-destructive/10 rounded-xl p-6 border border-destructive/50">
-                      <h3 className="text-lg font-semibold text-destructive mb-2">Generation Stuck</h3>
+                      <h3 className="text-lg font-semibold text-destructive mb-2">Taking unusually long</h3>
                       <p className="text-sm text-foreground/80 mb-4">
-                        This generation has been processing for {Math.round(ageMinutes)} minutes and appears to be stuck. 
-                        The cleanup process will mark it as failed shortly.
+                        This generation has been processing for {Math.round(ageMinutes)} minutes without recent progress.
+                        It may still complete, but you can retry or dismiss it if needed.
                       </p>
                       <div className="flex gap-2">
                         <button
@@ -634,7 +723,7 @@ export function GenerationGallery({
                     </div>
                     
                     {/* Reference Image Thumbnail */}
-                    <ReferenceImageThumbnail generation={generation} />
+                    <ReferenceImageThumbnail generation={generation} onPinImage={handlePinImage} />
                   </div>
                 </div>
 
@@ -690,6 +779,26 @@ export function GenerationGallery({
                     <Copy className="h-3.5 w-3.5 absolute top-0 right-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                   <div className="space-y-2 text-xs text-muted-foreground mt-4">
+                    {generation.user && (
+                      <div className="flex items-center gap-2">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="flex-shrink-0"
+                        >
+                          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                        <span className="font-medium">{generation.user.displayName}</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2">
                       <Info className="h-3.5 w-3.5" />
                       <span className="capitalize font-medium">{(generation.modelId || 'unknown').replace('gemini-', '').replace('-', ' ')}</span>
@@ -700,7 +809,7 @@ export function GenerationGallery({
                     </div>
                     
                     {/* Reference Image Thumbnail */}
-                    <ReferenceImageThumbnail generation={generation} />
+                    <ReferenceImageThumbnail generation={generation} onPinImage={handlePinImage} />
                   </div>
                 </div>
 
@@ -856,7 +965,7 @@ export function GenerationGallery({
                   </div>
 
                   {/* Reference Image Thumbnail */}
-                  <ReferenceImageThumbnail generation={generation} />
+                  <ReferenceImageThumbnail generation={generation} onPinImage={handlePinImage} />
                 </div>
               </div>
 

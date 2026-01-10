@@ -32,6 +32,8 @@ model Profile {
   bookmarks      Bookmark[]
   notes          Note[]
   projectChats   ProjectChat[]
+  pinnedImages   PinnedImage[]
+  outputEvents   OutputEvent[]
 
   @@map("profiles")
 }
@@ -47,10 +49,11 @@ model Project {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  owner    Profile         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  sessions Session[]
-  members  ProjectMember[]
-  chats    ProjectChat[]
+  owner        Profile         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  sessions     Session[]
+  members      ProjectMember[]
+  chats        ProjectChat[]
+  pinnedImages PinnedImage[]
 
   @@index([ownerId])
   @@index([isShared, ownerId])
@@ -146,6 +149,7 @@ model Output {
   bookmarks  Bookmark[]
   notes      Note[]
   analysis   OutputAnalysis?
+  events     OutputEvent[]
 
   @@index([generationId])
   @@index([generationId, fileType])
@@ -320,4 +324,41 @@ model ProjectChatMessage {
 
   @@index([chatId])
   @@map("project_chat_messages")
+}
+
+// Project-shared pinned reference images
+model PinnedImage {
+  id        String   @id @default(uuid()) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  imageUrl  String   @map("image_url")
+  label     String?  // Optional user-provided label
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  pinnedBy  String   @map("pinned_by") @db.Uuid // User who pinned the image
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    Profile @relation(fields: [pinnedBy], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([projectId, sortOrder])
+  @@map("pinned_images")
+}
+
+// Output event log (downloads, shares, etc.) for semantic analysis
+model OutputEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  outputId  String   @map("output_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  eventType String   @map("event_type") // 'download', 'share', etc.
+  metadata  Json?    // Optional additional data (e.g., format, resolution)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  output Output  @relation(fields: [outputId], references: [id], onDelete: Cascade)
+  user   Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([outputId])
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt(sort: Desc)])
+  @@map("output_events")
 }

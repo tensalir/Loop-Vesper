@@ -18,6 +18,104 @@ interface PromptEnhancementButtonProps {
 // Glitch characters for scramble effect
 const GLITCH_CHARS = '!@#$%^&*()_+-=[]{}|;:,.<>?~`░▒▓█▄▀■□▪▫●○◆◇★☆'
 
+function approxDataUrlSizeMB(dataUrl: string): number {
+  const base64 = dataUrl.split(',')[1] || ''
+  // base64 length -> bytes: len * 3/4 (approx, ignoring padding)
+  const bytes = Math.floor((base64.length * 3) / 4)
+  return bytes / (1024 * 1024)
+}
+
+async function compressImageBlobToJpegDataUrl(
+  blob: Blob,
+  {
+    maxDimension = 1024,
+    maxSizeMB = 2,
+    initialQuality = 0.82,
+    minQuality = 0.5,
+    maxAttempts = 4,
+  }: {
+    maxDimension?: number
+    maxSizeMB?: number
+    initialQuality?: number
+    minQuality?: number
+    maxAttempts?: number
+  } = {}
+): Promise<string | null> {
+  const objectUrl = URL.createObjectURL(blob)
+  try {
+    const img = new Image()
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new Error('Failed to load image'))
+      img.src = objectUrl
+    })
+
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+
+    // Calculate new dimensions (preserve aspect ratio)
+    let { width, height } = img
+    if (width > maxDimension || height > maxDimension) {
+      const ratio = maxDimension / Math.max(width, height)
+      width = Math.floor(width * ratio)
+      height = Math.floor(height * ratio)
+    }
+
+    canvas.width = width
+    canvas.height = height
+    ctx.drawImage(img, 0, 0, width, height)
+
+    let quality = initialQuality
+    let dataUrl = canvas.toDataURL('image/jpeg', quality)
+    let attempts = 0
+
+    while (approxDataUrlSizeMB(dataUrl) > maxSizeMB && attempts < maxAttempts && quality > minQuality) {
+      attempts += 1
+      quality = Math.max(minQuality, quality - 0.1)
+      dataUrl = canvas.toDataURL('image/jpeg', quality)
+    }
+
+    if (approxDataUrlSizeMB(dataUrl) > maxSizeMB) {
+      return null
+    }
+
+    return dataUrl
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
+
+async function referenceImageToCompressedDataUrl(
+  referenceImage: string | File
+): Promise<string | null> {
+  try {
+    let blob: Blob
+
+    if (referenceImage instanceof File) {
+      blob = referenceImage
+    } else if (typeof referenceImage === 'string') {
+      // Accept data URLs, blob URLs, or http(s) URLs
+      if (
+        !referenceImage.startsWith('data:') &&
+        !referenceImage.startsWith('blob:') &&
+        !referenceImage.startsWith('http')
+      ) {
+        return null
+      }
+      const res = await fetch(referenceImage)
+      if (!res.ok) return null
+      blob = await res.blob()
+    } else {
+      return null
+    }
+
+    return await compressImageBlobToJpegDataUrl(blob)
+  } catch {
+    return null
+  }
+}
+
 // Helper function to create a glitch/scramble effect during transformation
 function morphText(original: string, enhanced: string, progress: number): string {
   if (progress <= 0) return original
@@ -100,69 +198,9 @@ export function PromptEnhancementButton({
     setEnhancing(true)
     
     try {
-      // Convert reference image to base64 if it's a File
-      // COMPRESS to prevent HTTP 413 errors (Vercel limit: 4.5MB)
-      let imageData = null
-      if (referenceImage) {
-        if (referenceImage instanceof File) {
-          // Compress the image before sending
-          imageData = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onload = () => {
-              const dataUrl = reader.result as string
-              
-              // Check size and compress if necessary
-              const img = new Image()
-              img.onload = () => {
-                const canvas = document.createElement('canvas')
-                const ctx = canvas.getContext('2d')
-                
-                if (!ctx) {
-                  resolve(dataUrl) // Fallback to original if canvas not supported
-                  return
-                }
-                
-                // Calculate new dimensions (max 1024px for faster processing)
-                let { width, height } = img
-                if (width > 1024 || height > 1024) {
-                  const ratio = 1024 / Math.max(width, height)
-                  width = Math.floor(width * ratio)
-                  height = Math.floor(height * ratio)
-                }
-                
-                canvas.width = width
-                canvas.height = height
-                ctx.drawImage(img, 0, 0, width, height)
-                
-                // Convert to JPEG at 80% quality
-                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8)
-                
-                // Final size check - reject if still too large
-                const sizeInMB = compressedDataUrl.length / (1024 * 1024)
-                if (sizeInMB > 2) {
-                  console.warn('Compressed image still too large for enhancement, skipping image in enhancement')
-                  resolve('') // Send without image if still too large
-                } else {
-                  resolve(compressedDataUrl)
-                }
-              }
-              img.onerror = () => resolve(dataUrl) // Fallback on error
-              img.src = dataUrl
-            }
-            reader.onerror = () => resolve('')
-            reader.readAsDataURL(referenceImage)
-          })
-        } else if (typeof referenceImage === 'string') {
-          // Already compressed base64, use as-is
-          const sizeInMB = referenceImage.length / (1024 * 1024)
-          if (sizeInMB > 2) {
-            console.warn('Reference image too large for enhancement, skipping')
-            imageData = null // Skip image if too large
-          } else {
-            imageData = referenceImage
-          }
-        }
-      }
+      // Convert reference image (File/URL/dataUrl) to a compressed base64 data URL
+      // to avoid request size issues and to reliably pass an actual image to the API.
+      const imageData = referenceImage ? await referenceImageToCompressedDataUrl(referenceImage) : null
       
       const response = await fetch('/api/prompts/enhance', {
         method: 'POST',
@@ -172,7 +210,7 @@ export function PromptEnhancementButton({
         body: JSON.stringify({
           prompt,
           modelId,
-          referenceImage: imageData,
+          referenceImage: imageData || null,
         }),
       })
 

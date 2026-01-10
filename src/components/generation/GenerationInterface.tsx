@@ -66,6 +66,10 @@ interface GenerationInterfaceProps {
   externalPrompt?: string
   /** Callback when external prompt is consumed */
   onExternalPromptConsumed?: () => void
+  /** External reference image URL to set (from pinned images rail) */
+  externalReferenceImageUrl?: string | null
+  /** Callback when external reference image is consumed */
+  onExternalReferenceImageConsumed?: () => void
 }
 
 export function GenerationInterface({
@@ -79,6 +83,8 @@ export function GenerationInterface({
   isChatOpen = false,
   externalPrompt,
   onExternalPromptConsumed,
+  externalReferenceImageUrl,
+  onExternalReferenceImageConsumed,
 }: GenerationInterfaceProps) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -112,6 +118,24 @@ export function GenerationInterface({
       onExternalPromptConsumed?.()
     }
   }, [externalPrompt, onExternalPromptConsumed])
+  
+  // Handle external reference image from pinned images rail
+  useEffect(() => {
+    if (externalReferenceImageUrl) {
+      if (generationType === 'video') {
+        // Video mode: single reference image (replace)
+        setReferenceImageUrl(externalReferenceImageUrl)
+      } else {
+        // Image mode: append to reference images array (for multi-image editing)
+        // If the URL is already in the array, don't add a duplicate
+        setReferenceImageUrls((prev) => {
+          if (prev.includes(externalReferenceImageUrl)) return prev
+          return [...prev, externalReferenceImageUrl]
+        })
+      }
+      onExternalReferenceImageConsumed?.()
+    }
+  }, [externalReferenceImageUrl, generationType, onExternalReferenceImageConsumed])
   
   /**
    * Dismiss/remove a stuck generation from the UI cache.
@@ -820,7 +844,7 @@ export function GenerationInterface({
           </div>
         ) : (
           <div ref={scrollContentRef} className="pt-24 pb-52 pl-24 xl:pl-48 flex justify-center">
-            <div className="w-full max-w-7xl">
+            <div className="w-full max-w-7xl 2xl:max-w-[1400px] min-[1800px]:max-w-[1600px]">
               {/* Sentinel at TOP for loading older items when scrolling up */}
               <div ref={loadOlderRef} className="h-1 w-full" />
               
@@ -867,7 +891,7 @@ export function GenerationInterface({
       )}
 
       {/* Chat Input - Floating Card at Bottom - Responsive width */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl 2xl:max-w-3xl px-4 xl:px-6 z-30">
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl lg:max-w-3xl xl:max-w-4xl 2xl:max-w-5xl min-[1800px]:max-w-6xl px-4 xl:px-6 z-30">
         <div className="flex items-center gap-3">
           {/* Prompt Bar */}
           <div className="flex-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl p-4">

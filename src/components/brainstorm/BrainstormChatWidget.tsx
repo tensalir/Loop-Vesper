@@ -18,19 +18,10 @@ import {
   Copy,
   Check as CheckIcon,
   GripHorizontal,
-  FileText as BriefingIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 
 interface ChatThread {
   id: string
@@ -78,11 +69,6 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
   // Delete confirmation
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null)
   
-  // Briefing state
-  const [showBriefingModal, setShowBriefingModal] = useState(false)
-  const [briefing, setBriefing] = useState<string>('')
-  const [briefingLoading, setBriefingLoading] = useState(false)
-  const [isSavingBriefing, setIsSavingBriefing] = useState(false)
   
   // Message scroll ref
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -142,60 +128,6 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
       setThreadsLoading(false)
     }
   }, [projectId])
-
-  // Fetch project briefing
-  const fetchBriefing = useCallback(async () => {
-    setBriefingLoading(true)
-    try {
-      const res = await fetch(`/api/projects/${projectId}/briefing`)
-      if (res.ok) {
-        const data = await res.json()
-        setBriefing(data.briefing || '')
-      }
-    } catch (err) {
-      console.error('Failed to fetch briefing:', err)
-    } finally {
-      setBriefingLoading(false)
-    }
-  }, [projectId])
-
-  // Fetch briefing when widget opens
-  useEffect(() => {
-    if (isOpen) {
-      fetchBriefing()
-    }
-  }, [isOpen, fetchBriefing])
-
-  // Load briefing when opening modal
-  useEffect(() => {
-    if (showBriefingModal) {
-      fetchBriefing()
-    }
-  }, [showBriefingModal, fetchBriefing])
-
-  // Save briefing
-  const saveBriefing = async () => {
-    setIsSavingBriefing(true)
-    try {
-      const res = await fetch(`/api/projects/${projectId}/briefing`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ briefing: briefing.trim() || null }),
-      })
-
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({ error: 'Failed to save briefing' }))
-        throw new Error(error.error || 'Failed to save briefing')
-      }
-
-      setShowBriefingModal(false)
-    } catch (err: any) {
-      console.error('Failed to save briefing:', err)
-      alert(err.message || 'Failed to save briefing')
-    } finally {
-      setIsSavingBriefing(false)
-    }
-  }
 
   // Fetch messages for active thread
   const fetchMessages = useCallback(async (threadId: string) => {
@@ -647,13 +579,8 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
               isControlled 
                 ? cn(
                     "fixed bottom-6 animate-in slide-in-from-left-8 fade-in duration-300 ease-out",
-                    // Default: anchor to right edge for smaller screens
-                    "right-4 min-[1400px]:right-8",
-                    // On wide screens (1800px+): position relative to centered content
-                    // This places the panel just to the right of the prompt bar area
-                    // calc(50% + half-content-width + control-bar + gap)
-                    // 50% + 24rem (384px) + 3.5rem (56px) + 1.5rem (24px) = 50% + 29rem
-                    "min-[1800px]:right-auto min-[1800px]:left-[calc(50%+29rem)]"
+                    // Anchor to right edge with responsive margins
+                    "right-4 lg:right-6 xl:right-8 2xl:right-12"
                   )
                 : "fixed bottom-24 right-6 animate-in slide-in-from-bottom-4 fade-in duration-300",
               // Drag state styling
@@ -744,18 +671,6 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
                 <Plus className="w-4 h-4" />
               </button>
             </div>
-            
-            {/* Briefing button - right side */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2 text-xs gap-1"
-              onClick={() => setShowBriefingModal(true)}
-              title="Project briefing (applies to all chats)"
-            >
-              <BriefingIcon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Briefing</span>
-            </Button>
           </div>
 
           {/* Messages area */}
@@ -1087,51 +1002,6 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
         </div>
       )}
 
-      {/* Briefing Modal */}
-      <Dialog open={showBriefingModal} onOpenChange={setShowBriefingModal}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Project Briefing</DialogTitle>
-            <DialogDescription>
-              Add high-level instructions or context that will be included in all chat conversations within this project.
-              This briefing will be automatically added to the system prompt for every new chat, so you don&apos;t need to repeat it.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="flex-1 overflow-auto min-h-[200px]">
-            <Textarea
-              value={briefing}
-              onChange={(e) => setBriefing(e.target.value)}
-              placeholder="E.g., 'This project is for creating product render images. Focus on clean, professional lighting. Use a minimalist aesthetic with neutral backgrounds. All products should be shot from a 45-degree angle.'"
-              className="min-h-[200px] resize-none font-mono text-sm"
-              disabled={briefingLoading || isSavingBriefing}
-            />
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowBriefingModal(false)}
-              disabled={isSavingBriefing}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={saveBriefing}
-              disabled={isSavingBriefing || briefingLoading}
-            >
-              {isSavingBriefing ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save Briefing'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }

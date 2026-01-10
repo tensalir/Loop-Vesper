@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
-import { Settings, Sun, Moon, Lock, Globe, Loader2 } from 'lucide-react'
+import { Settings, Sun, Moon, Lock, Globe, Loader2, FileText } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { FloatingSessionBar } from '@/components/sessions/FloatingSessionBar'
 import { GenerationInterface } from '@/components/generation/GenerationInterface'
 import { BrainstormChatWidget } from '@/components/brainstorm/BrainstormChatWidget'
+import { PinnedImagesRail } from '@/components/projects/PinnedImagesRail'
 import { useSessions } from '@/hooks/useSessions'
 import { Navbar } from '@/components/navbar/Navbar'
 import { SpendingTracker } from '@/components/navbar/SpendingTracker'
@@ -40,6 +41,7 @@ export default function ProjectPage() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [externalPrompt, setExternalPrompt] = useState<string>('')
+  const [pendingPinnedImageUrl, setPendingPinnedImageUrl] = useState<string | null>(null)
   const [showBriefingModal, setShowBriefingModal] = useState(false)
   const [briefing, setBriefing] = useState('')
   const [isSavingBriefing, setIsSavingBriefing] = useState(false)
@@ -442,47 +444,72 @@ export default function ProjectPage() {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Project Title - Top Left, aligned with navbar */}
-        <div className="fixed left-4 top-4 z-40 flex items-center gap-2 h-12 group/title">
-          <h1 className="text-sm font-bold truncate max-w-[240px] tracking-tight" title={projectName}>
-            {projectName}
-          </h1>
-          
-          {project && project.ownerId === currentUserId && (
-            <button
-              onClick={handleTogglePrivacy}
-              disabled={updating}
-              className="opacity-0 group-hover/title:opacity-100 focus:opacity-100 bg-muted/50 hover:bg-muted/80 rounded-full p-0.5 flex items-center gap-0 transition-all duration-200 relative scale-90"
-              title={
-                project.isShared
-                  ? 'Public (visible in Community Creations). Click to make private.'
-                  : 'Private (hidden from Community Creations). Click to make public.'
-              }
-            >
-              {/* Lock Icon - Left */}
-              <div className={`p-1 rounded-full transition-all z-10 ${
-                !project.isShared 
-                  ? 'text-background' 
-                  : 'text-muted-foreground/60'
-              }`}>
-                <Lock className="h-3 w-3" />
-              </div>
-              
-              {/* Globe Icon - Right */}
-              <div className={`p-1 rounded-full transition-all z-10 ${
-                project.isShared 
-                  ? 'text-background' 
-                  : 'text-muted-foreground/60'
-              }`}>
-                <Globe className="h-3 w-3" />
-              </div>
+        <div className="fixed left-4 top-4 z-40 flex flex-col gap-0.5">
+          {/* Row 1: Title + Privacy Toggle */}
+          <div className="flex items-center gap-2 group/title">
+            <h1 className="text-sm font-bold truncate max-w-[240px] tracking-tight" title={projectName}>
+              {projectName}
+            </h1>
+            
+            {project && project.ownerId === currentUserId && (
+              <button
+                onClick={handleTogglePrivacy}
+                disabled={updating}
+                className="opacity-0 group-hover/title:opacity-100 focus:opacity-100 bg-muted/50 hover:bg-muted/80 rounded-full p-0.5 flex items-center gap-0 transition-all duration-200 relative scale-90"
+                title={
+                  project.isShared
+                    ? 'Public (visible in Community Creations). Click to make private.'
+                    : 'Private (hidden from Community Creations). Click to make public.'
+                }
+              >
+                {/* Lock Icon - Left */}
+                <div className={`p-1 rounded-full transition-all z-10 ${
+                  !project.isShared 
+                    ? 'text-background' 
+                    : 'text-muted-foreground/60'
+                }`}>
+                  <Lock className="h-3 w-3" />
+                </div>
+                
+                {/* Globe Icon - Right */}
+                <div className={`p-1 rounded-full transition-all z-10 ${
+                  project.isShared 
+                    ? 'text-background' 
+                    : 'text-muted-foreground/60'
+                }`}>
+                  <Globe className="h-3 w-3" />
+                </div>
 
-              {/* Sliding Background */}
-              <div
-                className={`absolute top-0.5 bottom-0.5 w-5 bg-muted-foreground/80 rounded-full transition-all duration-300 ${
-                  project.isShared ? 'left-[calc(50%-1px)]' : 'left-0.5'
-                }`}
+                {/* Sliding Background */}
+                <div
+                  className={`absolute top-0.5 bottom-0.5 w-5 bg-muted-foreground/80 rounded-full transition-all duration-300 ${
+                    project.isShared ? 'left-[calc(50%-1px)]' : 'left-0.5'
+                  }`}
+                />
+              </button>
+            )}
+          </div>
+          
+          {/* Row 2: Briefing button - styled as a subtle action pill */}
+          <button
+            onClick={handleOpenBriefing}
+            className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/30 hover:bg-muted/50 border border-border/40 text-[10px] font-semibold text-muted-foreground/80 hover:text-foreground transition-all w-fit uppercase tracking-wider"
+            title="Project briefing"
+          >
+            <FileText className="h-3 w-3" />
+            <span>Briefing</span>
+          </button>
+          
+          {/* Row 3: Pinned Images with subtle label */}
+          {params.id && (
+            <div className="flex flex-col gap-1 mt-2 pt-2 border-t border-border/20">
+              <span className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground/40 font-bold">Pinned</span>
+              <PinnedImagesRail
+                projectId={params.id as string}
+                onSelectImage={(url) => setPendingPinnedImageUrl(url)}
+                className="max-w-[240px]"
               />
-            </button>
+            </div>
           )}
         </div>
         
@@ -511,6 +538,8 @@ export default function ProjectPage() {
           isChatOpen={isChatOpen}
           externalPrompt={externalPrompt}
           onExternalPromptConsumed={() => setExternalPrompt('')}
+          externalReferenceImageUrl={pendingPinnedImageUrl}
+          onExternalReferenceImageConsumed={() => setPendingPinnedImageUrl(null)}
         />
       </div>
 

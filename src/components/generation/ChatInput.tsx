@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Image as ImageIcon, ImagePlus, Ratio, ChevronDown, Upload, FolderOpen, X, Circle, GripHorizontal } from 'lucide-react'
+import { Image as ImageIcon, ImagePlus, Ratio, ChevronDown, Upload, FolderOpen, X, Circle, GripHorizontal, Pin } from 'lucide-react'
 import { useModelCapabilities } from '@/hooks/useModelCapabilities'
+import { usePinnedImages } from '@/hooks/usePinnedImages'
+import { useToast } from '@/components/ui/use-toast'
 import { AspectRatioSelector } from './AspectRatioSelector'
 import { ModelPicker } from './ModelPicker'
 import { ImageBrowseModal } from './ImageBrowseModal'
@@ -47,6 +49,9 @@ export function ChatInput({
   onRegisterPasteHandler,
 }: ChatInputProps) {
   const params = useParams()
+  const { toast } = useToast()
+  const projectId = params.id as string | undefined
+  const { pinImage } = usePinnedImages(projectId)
   const [referenceImage, setReferenceImage] = useState<File | null>(null) // Single image (backward compatibility)
   const [referenceImages, setReferenceImages] = useState<File[]>([]) // Multiple images
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([])
@@ -532,6 +537,22 @@ export function ChatInput({
                 >
                   <X className="h-3 w-3" />
                 </button>
+                {/* Pin button - only show if we have a proper URL (not blob) */}
+                {projectId && previewUrl.startsWith('http') && (
+                  <button
+                    onClick={() => {
+                      pinImage({ imageUrl: previewUrl })
+                      toast({
+                        title: 'Image pinned',
+                        description: 'Reference image added to project pins',
+                      })
+                    }}
+                    className="absolute -top-2 -left-2 bg-primary text-primary-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-primary/90 z-10"
+                    title="Pin to project"
+                  >
+                    <Pin className="h-3 w-3" />
+                  </button>
+                )}
                 {supportsMultiImage && imagePreviewUrls.length > 1 && (
                   <div className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                     {index + 1}

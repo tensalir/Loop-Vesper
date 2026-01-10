@@ -246,6 +246,42 @@ async function processGenerationById(
 
     let inlineReferenceImage = referenceImage as string | undefined
     let referenceImageUrl = persistedReferenceUrl as string | undefined
+    let fallbackReferenceImageUrls: string[] = []
+
+    const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '').replace(/\/+$/, '')
+    const getPublicStorageUrl = (bucket: string, path: string): string | null => {
+      if (!SUPABASE_URL) return null
+      return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`
+    }
+
+    // Fallbacks: sometimes only an ID/path is persisted (e.g. client sent referenceImageId
+    // without an inline base64 image). The gallery can still render the thumbnail from the ID,
+    // but the model needs an actual URL/data URL.
+    if (!referenceImageUrl && typeof referenceImagePath === 'string' && referenceImagePath.length > 0) {
+      const bucket = typeof referenceImageBucket === 'string' && referenceImageBucket.length > 0
+        ? referenceImageBucket
+        : 'generated-images'
+      referenceImageUrl = getPublicStorageUrl(bucket, referenceImagePath) || undefined
+    }
+
+    if (!referenceImageUrl && typeof referenceImageId === 'string' && referenceImageId.length > 0) {
+      const bucket = typeof referenceImageBucket === 'string' && referenceImageBucket.length > 0
+        ? referenceImageBucket
+        : 'generated-images'
+
+      const preferredExt =
+        typeof referenceImageMimeType === 'string' && referenceImageMimeType.includes('png')
+          ? 'png'
+          : 'jpg'
+      const altExt = preferredExt === 'jpg' ? 'png' : 'jpg'
+
+      const preferredPath = `references/${generation.userId}/${referenceImageId}.${preferredExt}`
+      const altPath = `references/${generation.userId}/${referenceImageId}.${altExt}`
+
+      referenceImageUrl = getPublicStorageUrl(bucket, preferredPath) || undefined
+      const altUrl = getPublicStorageUrl(bucket, altPath)
+      if (altUrl) fallbackReferenceImageUrls.push(altUrl)
+    }
 
     // Debug: Log what we received from parameters
     console.log(`[${generationId}] Reference image debug:`, {
@@ -273,6 +309,18 @@ async function processGenerationById(
         inlineReferenceImage = await downloadReferenceImageAsDataUrl(referenceImageUrl, referenceImageMimeType)
       } catch (error) {
         console.error(`[${generationId}] Failed to hydrate reference image from storage:`, error)
+        // If we constructed a best-guess URL (e.g. from referenceImageId), try alternate extension.
+        if (!inlineReferenceImage && fallbackReferenceImageUrls.length > 0) {
+          for (const altUrl of fallbackReferenceImageUrls) {
+            try {
+              inlineReferenceImage = await downloadReferenceImageAsDataUrl(altUrl, referenceImageMimeType)
+              referenceImageUrl = altUrl
+              break
+            } catch (_) {
+              // try next
+            }
+          }
+        }
       }
     }
 

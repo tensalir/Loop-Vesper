@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Video as VideoIcon, ImagePlus, Ratio, ChevronDown, X, Upload, FolderOpen, Clock, Loader2, GripHorizontal } from 'lucide-react'
+import { Video as VideoIcon, ImagePlus, Ratio, ChevronDown, X, Upload, FolderOpen, Clock, Loader2, GripHorizontal, Pin } from 'lucide-react'
 import { useModelCapabilities } from '@/hooks/useModelCapabilities'
+import { usePinnedImages } from '@/hooks/usePinnedImages'
+import { useToast } from '@/components/ui/use-toast'
 import { AspectRatioSelector } from './AspectRatioSelector'
 import { ModelPicker } from './ModelPicker'
 import { ImageBrowseModal } from './ImageBrowseModal'
@@ -66,6 +68,9 @@ export function VideoInput({
   onRegisterPasteHandler,
 }: VideoInputProps) {
   const params = useParams()
+  const { toast } = useToast()
+  const projectId = params.id as string | undefined
+  const { pinImage } = usePinnedImages(projectId)
   const [referenceImage, setReferenceImage] = useState<File | null>(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [referenceImageId, setReferenceImageId] = useState<string | null>(null)
@@ -167,15 +172,9 @@ export function VideoInput({
         referenceImage: referenceImage || undefined,
         referenceImageId: referenceImageId || undefined,
       })
-      // Keep the last prompt in the input after generating (users often iterate on it)
-      // Clean up preview URL only if reference isn't locked
-      if (!lockedReferenceImage) {
-        if (imagePreviewUrl) {
-          URL.revokeObjectURL(imagePreviewUrl)
-        }
-        setImagePreviewUrl(null)
-        setReferenceImage(null)
-      }
+      // Keep the last prompt AND reference image after generating (users often iterate).
+      // (ChatInput does the same for images; clearing the reference can cause confusing
+      // mismatches where an old referenceImageId is persisted without an actual image.)
     } catch (error) {
       console.error('Generation error:', error)
     } finally {
@@ -491,6 +490,22 @@ export function VideoInput({
                 title="Remove reference image"
               >
                 <X className="h-3 w-3" />
+              </button>
+            )}
+            {/* Pin button - only show if we have a proper URL (not blob) */}
+            {projectId && imagePreviewUrl && imagePreviewUrl.startsWith('http') && (
+              <button
+                onClick={() => {
+                  pinImage({ imageUrl: imagePreviewUrl })
+                  toast({
+                    title: 'Image pinned',
+                    description: 'Reference image added to project pins',
+                  })
+                }}
+                className="absolute -top-2 -left-2 bg-primary text-primary-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-primary/90 z-10"
+                title="Pin to project"
+              >
+                <Pin className="h-3 w-3" />
               </button>
             )}
           </div>
