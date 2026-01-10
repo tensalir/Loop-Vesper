@@ -242,11 +242,20 @@ export async function POST(request: NextRequest) {
         console.warn(`[Replicate Webhook] Failed to enqueue analysis:`, analysisError.message)
       }
 
-      // Calculate cost
+      // Calculate cost using actual predict_time from Replicate for accurate billing
       const { calculateGenerationCost } = await import('@/lib/cost/calculator')
+      const actualPredictTime = payload.metrics?.predict_time
+      
+      if (actualPredictTime) {
+        console.log(`[Replicate Webhook] Using actual predict time for cost: ${actualPredictTime.toFixed(2)}s`)
+      }
+      
       const costResult = calculateGenerationCost(generation.modelId, {
         outputCount: outputRecords.length,
+        computeTimeSeconds: actualPredictTime, // Pass actual time for accurate billing
       })
+      
+      console.log(`[Replicate Webhook] Cost calculated: $${costResult.cost.toFixed(6)} (${costResult.isActual ? 'actual' : 'estimated'})`)
 
       // Update generation to completed
       await prisma.generation.update({
@@ -257,7 +266,12 @@ export async function POST(request: NextRequest) {
           parameters: {
             ...(generation.parameters as any),
             webhookCompletedAt: new Date().toISOString(),
-            replicatePredictTime: payload.metrics?.predict_time,
+            replicatePredictTime: actualPredictTime,
+            costMetrics: {
+              predictTime: actualPredictTime,
+              isActual: costResult.isActual,
+              unit: costResult.unit,
+            },
           },
         },
       })

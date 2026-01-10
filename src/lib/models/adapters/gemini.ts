@@ -312,14 +312,33 @@ export class GeminiAdapter extends BaseModelAdapter {
       throw new Error('All image generations failed')
     }
 
+    // Aggregate metrics from Replicate fallback (if used)
+    // Calculate total predict time from outputs that came from Replicate
+    const totalPredictTime = outputs.reduce((sum, output) => {
+      const predictTime = output._metrics?.predictTime
+      return sum + (predictTime || 0)
+    }, 0)
+    
+    // Check if any output came from Replicate
+    const usedReplicate = outputs.some(output => output._metrics?.provider === 'replicate')
+    
+    // Clean up internal _metrics field from outputs
+    const cleanOutputs = outputs.map(({ _metrics, ...output }) => output)
+
     return {
       id: `gen-${Date.now()}`,
       status: 'completed',
-      outputs,
+      outputs: cleanOutputs,
       metadata: {
         model: this.config.id,
         prompt: request.prompt,
       },
+      // Include metrics for accurate cost calculation when Replicate fallback was used
+      ...(usedReplicate && totalPredictTime > 0 && {
+        metrics: {
+          predictTime: totalPredictTime,
+        },
+      }),
     }
   }
 
@@ -723,13 +742,15 @@ export class GeminiAdapter extends BaseModelAdapter {
     }
 
     // Resolution mapping - Nano Banana Pro uses "1K", "2K", "4K" strings
-    // DISABLED: Resolution parameter may be causing cold start delays
-    // The model defaults to 1K which is fine for most use cases
-    // if (request.resolution) {
-    //   const resolution = request.resolution === 4096 ? '4K' : request.resolution === 2048 ? '2K' : '1K'
-    //   input.resolution = resolution
-    //   console.log(`[Replicate Fallback] Using resolution: ${resolution}`)
-    // }
+    // According to Gemini API docs: https://ai.google.dev/gemini-api/docs/image-generation
+    // Nano Banana Pro supports 1K (1024px), 2K (2048px), and 4K (4096px) resolutions
+    if (request.resolution) {
+      const resolution = request.resolution === 4096 ? '4K' : request.resolution === 2048 ? '2K' : '1K'
+      input.resolution = resolution
+      console.log(`[Replicate Fallback] Using resolution: ${resolution}`)
+    } else {
+      console.log(`[Replicate Fallback] No resolution specified, using model default (1K)`)
+    }
 
     try {
       // First, fetch the latest version for the model
@@ -876,7 +897,13 @@ export class GeminiAdapter extends BaseModelAdapter {
             throw new Error('No image URL in Replicate response')
           }
 
-          console.log(`[Replicate Fallback] ✅ Image generated successfully`)
+          // Capture actual predict_time for accurate cost calculation
+          const predictTime = statusData.metrics?.predict_time
+          if (predictTime) {
+            console.log(`[Replicate Fallback] ✅ Image generated in ${predictTime.toFixed(2)}s`)
+          } else {
+            console.log(`[Replicate Fallback] ✅ Image generated successfully`)
+          }
 
           // Determine dimensions based on aspect ratio
           const aspectRatioDimensions: Record<string, { width: number; height: number }> = {
@@ -898,6 +925,11 @@ export class GeminiAdapter extends BaseModelAdapter {
             url: outputUrl,
             width: dimensions.width,
             height: dimensions.height,
+            // Include metrics for cost calculation (will be aggregated in main generate)
+            _metrics: {
+              predictTime: predictTime,
+              provider: 'replicate',
+            },
           }
         } else if (statusData.status === 'failed' || statusData.status === 'canceled') {
           // #region agent log

@@ -518,20 +518,40 @@ async function processGenerationById(
       }
 
       // Calculate cost for this generation
+      // Use actual compute time from Replicate API when available for accurate billing
       const { calculateGenerationCost } = await import('@/lib/cost/calculator')
       const totalVideoDuration = outputRecords.reduce((sum, output) => {
         return sum + (output.duration || 0)
       }, 0)
+      
+      // Extract actual predict time from model metrics if available
+      const actualPredictTime = result.metrics?.predictTime
+      if (actualPredictTime) {
+        console.log(`[${generationId}] Using actual predict time for cost: ${actualPredictTime.toFixed(2)}s`)
+      }
+      
       const costResult = calculateGenerationCost(generation.modelId, {
         outputCount: outputRecords.length,
         videoDurationSeconds: totalVideoDuration > 0 ? totalVideoDuration : undefined,
+        computeTimeSeconds: actualPredictTime, // Pass actual time for accurate Replicate billing
       })
+      
+      console.log(`[${generationId}] Cost calculated: $${costResult.cost.toFixed(6)} (${costResult.isActual ? 'actual' : 'estimated'})`)
 
       await prisma.generation.update({
         where: { id: generation.id },
         data: {
           status: 'completed',
           cost: costResult.cost,
+          // Store metrics in parameters for debugging
+          parameters: {
+            ...(generation.parameters as any),
+            costMetrics: {
+              predictTime: actualPredictTime,
+              isActual: costResult.isActual,
+              unit: costResult.unit,
+            },
+          },
         },
       })
 

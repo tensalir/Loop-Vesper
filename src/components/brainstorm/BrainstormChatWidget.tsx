@@ -569,18 +569,33 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
             onDrop={handleDrop}
             className={cn(
               "z-40",
-              // Responsive sizing
-              "w-[320px] 2xl:w-[360px]",
-              "max-w-[calc(100vw-3rem)]",
-              "h-[calc(100vh-10rem)] min-h-[350px] max-h-[700px] xl:max-h-[800px]",
+              // Responsive sizing - wider on larger screens to use available space
+              "w-[320px] lg:w-[360px] xl:w-[400px] 2xl:w-[440px] min-[1800px]:w-[500px]",
+              // Prevent overflow on any screen size
+              "max-w-[calc(100vw-2rem)]",
+              "h-[calc(100vh-10rem)] min-h-[350px] max-h-[700px] xl:max-h-[800px] min-[1800px]:max-h-[850px]",
               "bg-card border rounded-2xl shadow-2xl",
               "flex flex-col overflow-hidden",
               // Position based on whether controlled (from control bar) or standalone
               isControlled 
                 ? cn(
                     "fixed bottom-6 animate-in slide-in-from-left-8 fade-in duration-300 ease-out",
-                    // Anchor to right edge with responsive margins
-                    "right-4 lg:right-6 xl:right-8 2xl:right-12"
+                    // UI/UX Best Practice: "Spatial Awareness" - position relative to sibling elements
+                    // Uses min() to: 1) stay to the right of control bar, 2) never overflow viewport
+                    // Formula: left = min(viewport - chat - margin, center + offset)
+                    // Offset = (prompt-max-width / 2) - padding + gap (where control bar ends)
+                    // 
+                    // Breakpoint calculations (offset, chat-width):
+                    // - default: 21rem offset, 320px (20rem) chat → min(100vw-21rem, 50%+21rem)
+                    // - lg: 24rem offset, 360px (22.5rem) chat → min(100vw-24rem, 50%+24rem)
+                    // - xl: 28rem offset, 400px (25rem) chat → min(100vw-26rem, 50%+28rem)
+                    // - 2xl: 32rem offset, 440px (27.5rem) chat → min(100vw-29rem, 50%+32rem)
+                    // - min-[1800px]: 36rem offset, 500px (31.25rem) chat → min(100vw-33rem, 50%+36rem)
+                    "left-[min(calc(100vw-21rem),calc(50%+21rem))]",
+                    "lg:left-[min(calc(100vw-24rem),calc(50%+24rem))]",
+                    "xl:left-[min(calc(100vw-26rem),calc(50%+28rem))]",
+                    "2xl:left-[min(calc(100vw-29rem),calc(50%+32rem))]",
+                    "min-[1800px]:left-[min(calc(100vw-33rem),calc(50%+36rem))]"
                   )
                 : "fixed bottom-24 right-6 animate-in slide-in-from-bottom-4 fade-in duration-300",
               // Drag state styling

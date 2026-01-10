@@ -1007,7 +1007,7 @@ export function GenerationGallery({
 
                 {/* Hover Overlay - Minimal Krea Style - pointer-events-none to allow image clicks */}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
-                  {/* Top Left - Download + Reuse */}
+                  {/* Top Left - Download + Pin + Reuse */}
                   <div className="absolute top-2 left-2 pointer-events-auto flex items-center gap-1">
                     <button
                       onClick={(e) => {
@@ -1018,6 +1018,17 @@ export function GenerationGallery({
                       title="Download"
                     >
                       <Download className="h-3.5 w-3.5 text-white" />
+                    </button>
+                    {/* Pin button - pin generated output for reuse */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handlePinImage(output.fileUrl)
+                      }}
+                      className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
+                      title="Pin to project"
+                    >
+                      <Pin className="h-3.5 w-3.5 text-white" />
                     </button>
                     <button
                       onClick={(e) => {
@@ -1088,6 +1099,10 @@ export function GenerationGallery({
           }
         }}
         onDownload={handleDownload}
+        onPin={(imageUrl) => {
+          handlePinImage(imageUrl)
+          setLightboxData(null)
+        }}
         onConvertToVideo={
           currentGenerationType === 'image' && lightboxData
             ? () => {

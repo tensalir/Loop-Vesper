@@ -59,6 +59,9 @@ export function ChatInput({
   const [rendersModalOpen, setRendersModalOpen] = useState(false)
   const [stylePopoverOpen, setStylePopoverOpen] = useState(false)
   const [isEnhancing, setIsEnhancing] = useState(false)
+  // Ref guard to avoid race conditions where users click Generate
+  // before React has re-rendered with the latest enhancing state.
+  const isEnhancingRef = useRef(false)
   const [transformedPrompt, setTransformedPrompt] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -141,6 +144,16 @@ export function ChatInput({
   }, [modelConfig, selectedModel, modelParameters])
 
   const handleSubmit = async () => {
+    // Best practice (see `.sentinel.md`): avoid submitting during transient UI state.
+    // While the wand animation runs, the textarea can display `transformedPrompt`
+    // before the enhanced prompt is committed to `prompt`, which leads to stale submissions.
+    if (isEnhancingRef.current) {
+      toast({
+        title: 'Enhancing prompt…',
+        description: 'Wait for the enhancement to finish, then generate.',
+      })
+      return
+    }
     if (!prompt.trim()) return
 
     try {
@@ -163,6 +176,7 @@ export function ChatInput({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
+      if (isEnhancingRef.current) return
       handleSubmit()
     }
   }
@@ -506,6 +520,7 @@ export function ChatInput({
               onPromptChange(enhancedPrompt)
             }}
             onEnhancingChange={(enhancing) => {
+              isEnhancingRef.current = enhancing
               setIsEnhancing(enhancing)
               if (!enhancing) {
                 setTransformedPrompt(null)
@@ -566,7 +581,7 @@ export function ChatInput({
         {/* Generate Button */}
         <Button
           onClick={handleSubmit}
-          disabled={!prompt.trim()}
+          disabled={!prompt.trim() || isEnhancing || transformedPrompt !== null}
           size="default"
           className="h-[52px] px-8 rounded-lg font-semibold shadow-sm hover:shadow transition-all"
         >

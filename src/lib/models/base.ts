@@ -65,6 +65,15 @@ export interface GenerationResponse {
   }>
   error?: string
   metadata?: Record<string, any>
+  /** Metrics from the model provider for accurate cost calculation */
+  metrics?: {
+    /** Actual compute/predict time in seconds (from Replicate, FAL, etc.) */
+    predictTime?: number
+    /** Input token count (for LLM-based pricing) */
+    inputTokenCount?: number
+    /** Output token count (for LLM-based pricing) */
+    outputTokenCount?: number
+  }
 }
 
 export abstract class BaseModelAdapter {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { X, Download, Bookmark, RotateCcw, Check, Video } from 'lucide-react'
+import { X, Download, Bookmark, RotateCcw, Check, Video, Pin } from 'lucide-react'
 import type { Output } from '@/types/generation'
 
 interface ImageLightboxProps {
@@ -15,6 +15,8 @@ interface ImageLightboxProps {
   onDownload: (imageUrl: string, outputId: string, fileType: string) => void
   /** Optional: open the Animate Still flow for this image */
   onConvertToVideo?: () => void
+  /** Optional: pin image to project for reuse as reference */
+  onPin?: (imageUrl: string) => void
 }
 
 export function ImageLightbox({ 
@@ -27,6 +29,7 @@ export function ImageLightbox({
   onReuse,
   onDownload,
   onConvertToVideo,
+  onPin,
 }: ImageLightboxProps) {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -80,6 +83,15 @@ export function ImageLightbox({
           >
             <Download className="h-5 w-5 text-white" />
           </button>
+          {onPin && (
+            <button
+              onClick={() => onPin(imageUrl)}
+              className="p-2 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
+              title="Pin to project"
+            >
+              <Pin className="h-5 w-5 text-white" />
+            </button>
+          )}
           {onConvertToVideo && (
             <button
               onClick={onConvertToVideo}

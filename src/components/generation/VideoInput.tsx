@@ -80,16 +80,19 @@ export function VideoInput({
   const [stylePopoverOpen, setStylePopoverOpen] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [isEnhancing, setIsEnhancing] = useState(false)
+  // Ref guard to avoid race conditions where users click Generate
+  // before React has re-rendered with the latest enhancing state.
+  const isEnhancingRef = useRef(false)
   const [transformedPrompt, setTransformedPrompt] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
-  // Resizable input height - only for overlay mode
-  const [inputHeight, setInputHeight] = useState(48) // Default min height for overlay
+  // Resizable input height - available in both default and overlay modes
+  const [inputHeight, setInputHeight] = useState(52) // Default min height (matches ChatInput)
   const [isResizing, setIsResizing] = useState(false)
   const resizeStartY = useRef(0)
-  const resizeStartHeight = useRef(48)
+  const resizeStartHeight = useRef(52)
   const rafId = useRef<number | null>(null)
-  const currentHeight = useRef(48)
+  const currentHeight = useRef(52)
   
   // Combine external and internal generating state
   const generating = externalGenerating ?? localGenerating
@@ -164,6 +167,15 @@ export function VideoInput({
   }, [modelConfig, selectedModel])
 
   const handleSubmit = async () => {
+    // Avoid submitting while the prompt is mid-transformation (wand animation),
+    // otherwise we can send a stale motion prompt.
+    if (isEnhancingRef.current) {
+      toast({
+        title: 'Enhancing prompt…',
+        description: 'Wait for the enhancement to finish, then generate.',
+      })
+      return
+    }
     if (!prompt.trim()) return
 
     setLocalGenerating(true)
@@ -185,6 +197,7 @@ export function VideoInput({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
+      if (isEnhancingRef.current) return
       handleSubmit()
     }
   }
@@ -272,7 +285,7 @@ export function VideoInput({
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
     // Calculate delta (negative because we're dragging up to expand)
     const delta = resizeStartY.current - clientY
-    const newHeight = Math.min(Math.max(resizeStartHeight.current + delta, 48), 200) // Min 48px, max 200px
+    const newHeight = Math.min(Math.max(resizeStartHeight.current + delta, 52), 300) // Min 52px, max 300px (matches ChatInput)
     
     // Cancel any pending RAF
     if (rafId.current) {
@@ -398,24 +411,22 @@ export function VideoInput({
     >
       {/* Main Input Area - Card Style */}
       <div className="flex items-center gap-3">
-        {/* Input with optional resize handle */}
+        {/* Input with resize handle */}
         <div className="flex-1 relative flex">
-          {/* Resize handle at top of input - only in overlay mode */}
-          {isOverlay && (
-            <div 
-              className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 cursor-ns-resize group"
-              onMouseDown={handleResizeStart}
-              onTouchStart={handleResizeStart}
-            >
-              <div className={`flex items-center justify-center w-12 h-5 rounded-full transition-all ${
-                isResizing 
-                  ? 'bg-primary/20 text-primary' 
-                  : 'bg-muted/80 text-muted-foreground hover:bg-muted hover:text-foreground'
-              }`}>
-                <GripHorizontal className="w-5 h-3" />
-              </div>
+          {/* Resize handle at top of input - available in both default and overlay modes */}
+          <div 
+            className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 cursor-ns-resize group"
+            onMouseDown={handleResizeStart}
+            onTouchStart={handleResizeStart}
+          >
+            <div className={`flex items-center justify-center w-12 h-5 rounded-full transition-all ${
+              isResizing 
+                ? 'bg-primary/20 text-primary' 
+                : 'bg-muted/80 text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}>
+              <GripHorizontal className="w-5 h-3" />
             </div>
-          )}
+          </div>
           
           <Textarea
             placeholder={supportsImageToVideo ? "Describe a video to animate from the reference image, or drag and drop an image here..." : "Describe a video to animate from the reference image..."}
@@ -426,13 +437,13 @@ export function VideoInput({
             }}
             onKeyDown={handleKeyDown}
             data-generation-input="true"
-            style={isOverlay ? { height: `${inputHeight}px` } : undefined}
+            style={{ height: `${inputHeight}px` }}
             className={`resize-none px-4 text-sm rounded-lg bg-white/5 border-white/10 w-full flex-1 custom-scrollbar overflow-y-auto ${
               isResizing ? '' : 'transition-all'
             } ${
               isOverlay 
                 ? 'py-3.5 pr-10' 
-                : 'min-h-[56px] max-h-[140px] py-4 pr-10'
+                : 'py-3 pr-10'
             } ${
               isEnhancing
                 ? 'border-primary/50 bg-primary/5 shadow-lg shadow-primary/10'
@@ -451,6 +462,7 @@ export function VideoInput({
               onPromptChange(enhanced)
             }}
             onEnhancingChange={(enhancing) => {
+              isEnhancingRef.current = enhancing
               setIsEnhancing(enhancing)
               if (!enhancing) {
                 setTransformedPrompt(null)
@@ -517,7 +529,13 @@ export function VideoInput({
           const hasPrompt = prompt.trim().length > 0
           const hasModel = !!selectedModel
           const hasDurationIfRequired = !hasDuration || (parameters.duration && parameters.duration > 0)
-          const canGenerate = hasPrompt && hasModel && hasDurationIfRequired && !generating
+          const canGenerate =
+            hasPrompt &&
+            hasModel &&
+            hasDurationIfRequired &&
+            !generating &&
+            !isEnhancing &&
+            transformedPrompt === null
           
           return (
             <Button

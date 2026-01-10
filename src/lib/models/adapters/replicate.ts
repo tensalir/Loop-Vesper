@@ -44,6 +44,16 @@ export const SEEDREAM_4_CONFIG: ModelConfig = {
       ],
     },
     {
+      name: 'resolution',
+      type: 'select',
+      label: 'Resolution',
+      default: 2048,
+      options: [
+        { label: '2K', value: 2048 },
+        { label: '4K', value: 4096 },
+      ],
+    },
+    {
       name: 'numOutputs',
       type: 'number',
       label: 'Number of outputs',
@@ -237,8 +247,12 @@ export class ReplicateAdapter extends BaseModelAdapter {
 
       // Seedream 4.5 specific parameters
       if (this.config.id === 'replicate-seedream-4') {
-        const size = '2K' // Seedream 4.5 supports: 2K (2048px), 4K (4096px), or custom
+        // Map resolution from request to Seedream 4.5 format: '2K' (2048px) or '4K' (4096px)
+        // Default to 2K if not specified
+        const resolution = parameters?.resolution || request.resolution
+        const size = resolution === 4096 ? '4K' : '2K'
         input.size = size
+        console.log(`[Seedream-4.5] Using resolution: ${size} (from ${resolution || 'default'})`)
         input.sequential_image_generation = numOutputs > 1 ? 'auto' : 'disabled'
         input.max_images = numOutputs
         input.enhance_prompt = true // Enable prompt enhancement for better results
@@ -389,6 +403,12 @@ export class ReplicateAdapter extends BaseModelAdapter {
             throw new Error('No images generated - unexpected output format')
           }
 
+          // Capture metrics for accurate cost calculation
+          const predictTime = statusData.metrics?.predict_time
+          if (predictTime) {
+            console.log(`[Replicate] Prediction completed in ${predictTime.toFixed(2)}s`)
+          }
+
           return {
             id: `replicate-${Date.now()}`,
             status: 'completed',
@@ -400,6 +420,10 @@ export class ReplicateAdapter extends BaseModelAdapter {
             metadata: {
               seed: statusData.metrics?.seed,
               model: request.modelId,
+            },
+            // Return actual metrics for cost calculation
+            metrics: {
+              predictTime: predictTime,
             },
           }
         } else if (statusData.status === 'failed' || statusData.status === 'canceled') {
@@ -580,6 +604,12 @@ export class ReplicateAdapter extends BaseModelAdapter {
             throw new Error('No video generated - unexpected output format')
           }
 
+          // Capture metrics for accurate cost calculation
+          const predictTime = statusData.metrics?.predict_time
+          if (predictTime) {
+            console.log(`[Kling-2.6] Video generated in ${predictTime.toFixed(2)}s`)
+          }
+
           return {
             id: `replicate-kling-${Date.now()}`,
             status: 'completed',
@@ -593,6 +623,10 @@ export class ReplicateAdapter extends BaseModelAdapter {
               model: request.modelId,
               duration,
               hasAudio: generateAudio,
+            },
+            // Return actual metrics for cost calculation
+            metrics: {
+              predictTime: predictTime,
             },
           }
         } else if (statusData.status === 'failed' || statusData.status === 'canceled') {

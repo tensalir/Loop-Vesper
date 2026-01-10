@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Wand2, Loader2 } from 'lucide-react'
 
@@ -186,16 +186,31 @@ export function PromptEnhancementButton({
   const [loading, setLoading] = useState(false)
   const [enhancing, setEnhancing] = useState(false)
 
-  // Notify parent when enhancing state changes
+  const transformIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const stopEnhancingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cleanup intervals/timeouts on unmount to avoid setState-after-unmount.
   useEffect(() => {
-    onEnhancingChange?.(enhancing)
-  }, [enhancing, onEnhancingChange])
+    return () => {
+      if (transformIntervalRef.current) {
+        clearInterval(transformIntervalRef.current)
+        transformIntervalRef.current = null
+      }
+      if (stopEnhancingTimeoutRef.current) {
+        clearTimeout(stopEnhancingTimeoutRef.current)
+        stopEnhancingTimeoutRef.current = null
+      }
+    }
+  }, [])
 
   const handleEnhance = async () => {
-    if (!prompt.trim() || loading) return
+    if (!prompt.trim() || loading || enhancing) return
 
     setLoading(true)
     setEnhancing(true)
+    // IMPORTANT: Propagate enhancing state synchronously so parents can
+    // immediately disable Generate and avoid submitting a stale prompt.
+    onEnhancingChange?.(true)
     
     try {
       // Convert reference image (File/URL/dataUrl) to a compressed base64 data URL
@@ -241,7 +256,11 @@ export function PromptEnhancementButton({
       const stepDuration = duration / steps
       
       let currentStep = 0
-      const transformInterval = setInterval(() => {
+      if (transformIntervalRef.current) {
+        clearInterval(transformIntervalRef.current)
+        transformIntervalRef.current = null
+      }
+      transformIntervalRef.current = setInterval(() => {
         currentStep++
         const progress = Math.min(currentStep / steps, 1)
         const transformedText = morphText(prompt, enhancedPrompt, progress)
@@ -250,16 +269,27 @@ export function PromptEnhancementButton({
         onTextTransform?.(transformedText)
         
         if (progress >= 1) {
-          clearInterval(transformInterval)
+          if (transformIntervalRef.current) {
+            clearInterval(transformIntervalRef.current)
+            transformIntervalRef.current = null
+          }
           // Final update with complete enhanced text
           onEnhancementComplete(enhancedPrompt)
           // Stop enhancing state after transformation completes
-          setTimeout(() => setEnhancing(false), 200)
+          if (stopEnhancingTimeoutRef.current) {
+            clearTimeout(stopEnhancingTimeoutRef.current)
+            stopEnhancingTimeoutRef.current = null
+          }
+          stopEnhancingTimeoutRef.current = setTimeout(() => {
+            setEnhancing(false)
+            onEnhancingChange?.(false)
+          }, 200)
         }
       }, stepDuration)
     } catch (error: any) {
       console.error('Error enhancing prompt:', error)
       setEnhancing(false)
+      onEnhancingChange?.(false)
     } finally {
       setLoading(false)
     }
@@ -272,7 +302,7 @@ export function PromptEnhancementButton({
         variant="ghost"
         size="icon"
         onClick={handleEnhance}
-        disabled={disabled || !prompt.trim() || loading}
+        disabled={disabled || !prompt.trim() || loading || enhancing}
         className="absolute right-3 top-3 h-6 w-6 text-primary hover:text-primary/80 transition-colors disabled:opacity-0 disabled:pointer-events-none"
         title="Enhance prompt with AI"
       >
