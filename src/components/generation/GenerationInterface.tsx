@@ -17,6 +17,17 @@ import { createClient } from '@/lib/supabase/client'
 import { Image as ImageIcon, Video, MessageCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+const DEFAULT_VIDEO_MODEL_ID = 'replicate-kling-2.6'
+
+function getPreferredModelId(type: 'image' | 'video'): string | null {
+  const models = getModelsByType(type)
+  if (type === 'video') {
+    const preferred = models.find((m) => m.id === DEFAULT_VIDEO_MODEL_ID)
+    return preferred?.id ?? models[0]?.id ?? null
+  }
+  return models[0]?.id ?? null
+}
+
 interface PaginatedGenerationsResponse {
   data: GenerationWithOutputs[]
   nextCursor?: string
@@ -278,9 +289,18 @@ export function GenerationInterface({
     
     // Enforce model type per view: image sessions -> image models, video sessions -> video models
     if (!current || current.type !== requiredType) {
-      const fallback = getModelsByType(requiredType)[0]
-      if (fallback) {
-        setSelectedModel(fallback.id)
+      const fallbackId = getPreferredModelId(requiredType)
+      if (fallbackId) {
+        setSelectedModel(fallbackId)
+        if (requiredType === 'video') {
+          // Match Animate Still defaults when entering video view.
+          setParameters({
+            aspectRatio: '16:9',
+            resolution: 720,
+            numOutputs: 1,
+            duration: 5,
+          })
+        }
       }
       return
     }
@@ -638,7 +658,7 @@ export function GenerationInterface({
           aspectRatio: parameters.aspectRatio,
           resolution: parameters.resolution,
           numOutputs: parameters.numOutputs,
-          ...(parameters.duration && { duration: parameters.duration }),
+          ...(generationType === 'video' && parameters.duration && { duration: parameters.duration }),
           ...(referenceImagesData && referenceImagesData.length > 0 && { referenceImages: referenceImagesData }),
           ...(referenceImageData && !referenceImagesData && { referenceImage: referenceImageData }),
           ...(options?.referenceImageId && { referenceImageId: options.referenceImageId }),
@@ -667,11 +687,14 @@ export function GenerationInterface({
     
     // Set parameters
     const genParams = generation.parameters as any
+    const isVideo = generationType === 'video'
     setParameters({
-      aspectRatio: genParams.aspectRatio || '1:1',
-      resolution: genParams.resolution || 1024,
-      numOutputs: genParams.numOutputs || 1,
-      ...(genParams.duration && { duration: genParams.duration }),
+      aspectRatio: genParams.aspectRatio || (isVideo ? '16:9' : '1:1'),
+      resolution: genParams.resolution || (isVideo ? 720 : 1024),
+      numOutputs: genParams.numOutputs || (isVideo ? 1 : 4),
+      ...(isVideo
+        ? { duration: typeof genParams.duration === 'number' ? genParams.duration : 5 }
+        : (typeof genParams.duration === 'number' ? { duration: genParams.duration } : {})),
     })
     
     // Reuse reference images
@@ -737,9 +760,9 @@ export function GenerationInterface({
     // The user will write a video-specific prompt (optionally enhanced).
     setPrompt('')
     // Force default video model when moving into a video session
-    const videoDefault = getModelsByType('video')[0]
-    if (videoDefault) {
-      setSelectedModel(videoDefault.id)
+    const preferredVideoModelId = getPreferredModelId('video')
+    if (preferredVideoModelId) {
+      setSelectedModel(preferredVideoModelId)
     }
     
     // Set the reference image URL for the thumbnail
@@ -747,11 +770,12 @@ export function GenerationInterface({
       setReferenceImageUrl(imageUrl)
     }
     
-    const genParams = generation.parameters as any
     setParameters({
-      aspectRatio: genParams.aspectRatio || '16:9', // Default to 16:9 for video
-      resolution: genParams.resolution || 1024,
-      numOutputs: 1, // Videos typically generate one at a time
+      // Match Animate Still defaults when entering a video session.
+      aspectRatio: '16:9',
+      resolution: 720,
+      numOutputs: 1,
+      duration: 5,
     })
 
     toast({

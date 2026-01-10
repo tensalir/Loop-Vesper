@@ -112,14 +112,17 @@ export function VideoInput({
   // Check if model supports image-to-video (reference images)
   const supportsImageToVideo = modelConfig?.capabilities?.['image-2-video'] === true
   
+  const resolutionParam = modelParameters.find((p) => p.name === 'resolution')
+  const durationParam = modelParameters.find((p) => p.name === 'duration')
+
   // Get resolution options from model config or use defaults
-  const resolutionOptions = modelParameters.find(p => p.name === 'resolution')?.options || [
+  const resolutionOptions = resolutionParam?.options || [
     { label: '720p', value: 720 },
     { label: '1080p', value: 1080 },
   ]
   
   // Get duration options from model config
-  const durationOptions = modelParameters.find(p => p.name === 'duration')?.options || []
+  const durationOptions = durationParam?.options || []
   const hasDuration = durationOptions.length > 0
   
   // Update parameters when model changes if current values aren't supported
@@ -132,9 +135,21 @@ export function VideoInput({
         updates.aspectRatio = modelConfig.defaultAspectRatio || supportedAspectRatios[0]
       }
       
-      // Check resolution
-      if (parameters.resolution > maxResolution) {
+      // Check resolution (prefer allowed options if provided)
+      const allowedResolutions = resolutionOptions.map((o: any) => o.value)
+      if (allowedResolutions.length > 0 && !allowedResolutions.includes(parameters.resolution)) {
+        updates.resolution = resolutionParam?.default ?? allowedResolutions[0]
+      } else if (parameters.resolution > maxResolution) {
         updates.resolution = maxResolution
+      }
+
+      // Check duration (if model exposes duration options)
+      if (durationOptions.length > 0) {
+        const allowedDurations = durationOptions.map((o: any) => o.value)
+        const currentDuration = parameters.duration
+        if (!currentDuration || !allowedDurations.includes(currentDuration)) {
+          updates.duration = durationParam?.default ?? allowedDurations[0]
+        }
       }
       
       if (Object.keys(updates).length > 0) {
