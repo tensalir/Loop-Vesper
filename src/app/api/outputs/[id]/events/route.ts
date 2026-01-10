@@ -59,7 +59,8 @@ export async function POST(
         outputId,
         userId: user.id,
         eventType,
-        metadata: metadata || null,
+        // Only include metadata if it's provided (Prisma JSON fields don't accept null directly)
+        ...(metadata && { metadata }),
       },
     })
 
