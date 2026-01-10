@@ -535,30 +535,11 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
   // Check if widget is being controlled externally (from the control bar)
   const isControlled = onOpenChange !== undefined
 
-  // Extract prompts from AI messages - looks for quoted text or text following "Prompt:" patterns
+  // Extract prompts from AI messages - looks for code blocks and quoted text
   const extractPrompts = (text: string): string[] => {
     const prompts: string[] = []
     
-    // Match text in double quotes that looks like a prompt (more than 20 chars)
-    const quotedMatches = text.match(/"([^"]{20,})"/g)
-    if (quotedMatches) {
-      quotedMatches.forEach(match => {
-        prompts.push(match.slice(1, -1)) // Remove quotes
-      })
-    }
-    
-    // Match text after "Prompt:" or similar labels
-    const labeledMatches = text.match(/(?:Prompt|Try this|Suggested prompt|Here's a prompt)[:\s]+[""]?([^""]+)[""]?/gi)
-    if (labeledMatches) {
-      labeledMatches.forEach(match => {
-        const cleaned = match.replace(/^(?:Prompt|Try this|Suggested prompt|Here's a prompt)[:\s]+[""]?/i, '').replace(/[""]$/, '').trim()
-        if (cleaned.length > 20 && !prompts.includes(cleaned)) {
-          prompts.push(cleaned)
-        }
-      })
-    }
-    
-    // Match code blocks that might contain prompts
+    // Primary: Match code blocks (most reliable for prompt output)
     const codeBlockMatches = text.match(/```(?:prompt)?\n?([\s\S]*?)```/g)
     if (codeBlockMatches) {
       codeBlockMatches.forEach(match => {
@@ -569,7 +550,37 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
       })
     }
     
+    // Secondary: Match text in double quotes that looks like a prompt (more than 30 chars)
+    // Only if no code blocks found
+    if (prompts.length === 0) {
+      const quotedMatches = text.match(/"([^"]{30,})"/g)
+      if (quotedMatches) {
+        quotedMatches.forEach(match => {
+          prompts.push(match.slice(1, -1)) // Remove quotes
+        })
+      }
+    }
+    
     return prompts
+  }
+  
+  // Clean up remaining text after extracting prompts
+  const cleanRemainingText = (text: string): string => {
+    return text
+      // Remove code blocks
+      .replace(/```(?:prompt)?\n?[\s\S]*?```/g, '')
+      // Remove long quoted text
+      .replace(/"[^"]{30,}"/g, '')
+      // Remove markdown headers for prompts: **Prompt 1:**, **1 - Title:**, etc.
+      .replace(/\*\*(?:Prompt\s*)?\d+[^*]*\*\*:?/gi, '')
+      // Remove orphaned ** markers
+      .replace(/\*\*\s*$/gm, '')
+      .replace(/^\s*\*\*/gm, '')
+      // Remove "for a different angle" type transitional text that precedes prompts
+      .replace(/for (?:a different|another|the next) (?:angle|variation|version|scene)[^:]*:?\s*$/gim, '')
+      // Clean up extra newlines
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
   }
 
   // State to track copied prompts
@@ -635,8 +646,14 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
               // Position based on whether controlled (from control bar) or standalone
               isControlled 
                 ? cn(
-                    // Anchor to right edge so it never overflows on smaller desktops
-                    "fixed bottom-6 right-4 min-[1400px]:right-8 animate-in slide-in-from-left-8 fade-in duration-300 ease-out"
+                    "fixed bottom-6 animate-in slide-in-from-left-8 fade-in duration-300 ease-out",
+                    // Default: anchor to right edge for smaller screens
+                    "right-4 min-[1400px]:right-8",
+                    // On wide screens (1800px+): position relative to centered content
+                    // This places the panel just to the right of the prompt bar area
+                    // calc(50% + half-content-width + control-bar + gap)
+                    // 50% + 24rem (384px) + 3.5rem (56px) + 1.5rem (24px) = 50% + 29rem
+                    "min-[1800px]:right-auto min-[1800px]:left-[calc(50%+29rem)]"
                   )
                 : "fixed bottom-24 right-6 animate-in slide-in-from-bottom-4 fade-in duration-300",
               // Drag state styling
@@ -852,28 +869,27 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
                           {/* Render text with prompts extracted into code boxes */}
                           {(() => {
                             const prompts = extractPrompts(displayText)
-                            let remainingText = displayText
                             
                             // If we found prompts, render them specially
                             if (prompts.length > 0) {
+                              const cleanedText = cleanRemainingText(displayText)
+                              
                               return (
                                 <div className="space-y-3">
-                                  {/* Regular text (remove the quoted prompts for cleaner display) */}
-                                  <p className="whitespace-pre-wrap break-words">
-                                    {remainingText
-                                      .replace(/"[^"]{20,}"/g, '') // Remove long quoted text
-                                      .replace(/```(?:prompt)?\n?[\s\S]*?```/g, '') // Remove code blocks
-                                      .replace(/\n{3,}/g, '\n\n') // Clean up extra newlines
-                                      .trim()}
-                                  </p>
+                                  {/* Regular text (cleaned of prompts and their headers) */}
+                                  {cleanedText && (
+                                    <p className="whitespace-pre-wrap break-words">
+                                      {cleanedText}
+                                    </p>
+                                  )}
                                   
                                   {/* Prompt boxes */}
                                   {prompts.map((prompt, idx) => (
                                     <div 
                                       key={idx}
-                                      className="relative group bg-black/20 dark:bg-white/5 border border-border/50 rounded-lg p-3 mt-2"
+                                      className="relative group bg-black/20 dark:bg-white/5 border border-border/50 rounded-lg p-3"
                                     >
-                                      <pre className="text-xs whitespace-pre-wrap break-words font-mono text-foreground/90 pr-16">
+                                      <pre className="text-xs whitespace-pre-wrap break-words font-mono text-foreground/90 pr-16 leading-relaxed">
                                         {prompt}
                                       </pre>
                                       <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

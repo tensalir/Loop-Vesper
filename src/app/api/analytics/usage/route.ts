@@ -64,8 +64,7 @@ export async function GET() {
 
     // Map model IDs to names and calculate percentages
     const topModels = modelUsage.map((usage) => {
-      const model = modelRegistry.getModel(usage.modelId)
-      const config = model?.getConfig()
+      const config = modelRegistry.getModelConfig(usage.modelId)
       const count = usage._count.modelId
       const percentage = totalGenerations > 0 ? (count / totalGenerations) * 100 : 0
 
@@ -90,8 +89,7 @@ export async function GET() {
 
     const providerCounts: Record<string, number> = {}
     for (const usage of allModelUsage) {
-      const model = modelRegistry.getModel(usage.modelId)
-      const config = model?.getConfig()
+      const config = modelRegistry.getModelConfig(usage.modelId)
       const provider = config?.provider || 'Unknown'
       providerCounts[provider] = (providerCounts[provider] || 0) + usage._count.modelId
     }

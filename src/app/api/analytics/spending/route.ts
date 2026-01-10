@@ -82,8 +82,8 @@ export async function GET() {
       byProvider[provider].count += 1
 
       // Get model name for display
-      const model = modelRegistry.getModel(gen.modelId)
-      const modelName = model?.getConfig().name || gen.modelId
+      const config = modelRegistry.getModelConfig(gen.modelId)
+      const modelName = config?.name || gen.modelId
 
       if (!byProvider[provider].models[modelName]) {
         byProvider[provider].models[modelName] = { cost: 0, count: 0, modelId: gen.modelId }

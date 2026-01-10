@@ -107,8 +107,7 @@ export async function GET() {
 
     // Map model IDs to names with provider/type info
     const topModels: TopModel[] = modelUsage.map((usage) => {
-      const model = modelRegistry.getModel(usage.modelId)
-      const config = model?.getConfig()
+      const config = modelRegistry.getModelConfig(usage.modelId)
       
       return {
         modelId: usage.modelId,
@@ -139,8 +138,7 @@ export async function GET() {
     // Reset and recalculate with all models
     const allProviderCounts: Record<string, number> = {}
     for (const usage of allModelUsage) {
-      const model = modelRegistry.getModel(usage.modelId)
-      const config = model?.getConfig()
+      const config = modelRegistry.getModelConfig(usage.modelId)
       const provider = config?.provider || 'Unknown'
       allProviderCounts[provider] = (allProviderCounts[provider] || 0) + usage._count.modelId
     }

@@ -37,23 +37,39 @@ export interface SkillValidation {
 
 // In-memory cache for loaded skills
 const skillCache = new Map<string, { skill: Skill; timestamp: number }>()
-const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes in development
+// In dev, avoid caching so skill edits apply immediately.
+// In prod, a small cache reduces filesystem reads.
+const CACHE_TTL_MS = process.env.NODE_ENV === 'development' ? 0 : 5 * 60 * 1000
 
 /**
  * Get the skills directory path
  */
 function getSkillsDir(): string {
-  return path.join(process.cwd(), 'lib', 'skills')
+  // Prefer the canonical source location.
+  // Fallback supports legacy deployments where skills may be copied to /lib/skills.
+  const candidates = [
+    path.join(process.cwd(), 'src', 'lib', 'skills'),
+    path.join(process.cwd(), 'lib', 'skills'),
+  ]
+
+  for (const dir of candidates) {
+    if (fs.existsSync(dir)) return dir
+  }
+
+  // Return the primary candidate for consistent error paths
+  return candidates[0]
 }
 
 /**
  * Parse YAML-like frontmatter from skill content
  */
 function parseFrontmatter(content: string): { metadata: Partial<SkillMetadata>; body: string } {
-  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/)
+  // Normalize line endings so frontmatter parsing works on Windows (CRLF) and Unix (LF).
+  const normalized = content.replace(/\r\n/g, '\n')
+  const frontmatterMatch = normalized.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/)
   
   if (!frontmatterMatch) {
-    return { metadata: {}, body: content.trim() }
+    return { metadata: {}, body: normalized.trim() }
   }
   
   const [, frontmatter, body] = frontmatterMatch

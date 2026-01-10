@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
 import { getSkillSystemPrompt } from '@/lib/skills/registry'
+import { getModelConfig } from '@/lib/models/registry'
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,6 +26,22 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const userPrompt = (typeof prompt === 'string' ? prompt : String(prompt)).trim()
+    const isPromptRequest =
+      /\b(?:give me|write|generate|create|make)\b[\s\S]{0,80}\bprompt\b/i.test(userPrompt) ||
+      /\bnano\s*banana\s+prompt\b/i.test(userPrompt)
+    const wantsStyleReference =
+      /\bstyle\s*ref(?:erence)?\b/i.test(userPrompt) ||
+      /\buse\s+(?:this|the)\s+(?:image|pic|photo)\s+as\s+(?:a\s+)?style\b/i.test(userPrompt)
+
+    // Determine whether the selected model is a VIDEO model (motion prompt) or IMAGE model.
+    // This is the key nuance for the Animate Still panel: even though an image is attached,
+    // the prompt to enhance is ALWAYS a motion prompt when the target model is video.
+    const selectedModelConfig = getModelConfig(modelId)
+    const isVideoModel =
+      selectedModelConfig?.type === 'video' ||
+      /veo|video|replicate-video|fal-video|gemini-video/i.test(modelId)
 
     // Get model-specific enhancement prompt from database
     const enhancementPrompt = await (prisma as any).promptEnhancementPrompt.findFirst({
@@ -80,34 +97,55 @@ Return ONLY the enhanced prompt text. Nothing else.`
     let requestContent: string
     
     if (referenceImage) {
-      // Image present. If target is VIDEO model, treat as image-to-video guidance (Veo-style).
-      const isVideoModel = /veo|video|replicate-video|fal-video|gemini-video/i.test(modelId)
       if (isVideoModel) {
-        requestContent = `User wants to generate a video guided by a reference image. User's text prompt: "${prompt}"
-Reference image will be provided.
+        requestContent = `User is animating a still image into a video. User's motion prompt: "${userPrompt}"
+Reference image will be provided (treat it as frame 1).
 
-Enhance this for an image-to-video workflow (inspired by Veo best practices):
-- Keep the subject and style consistent with the reference image
-- Add subtle motion cues (camera and subject) appropriate for ~8s
-- Describe lighting, mood, and pacing succinctly
-- Provide a single coherent shot idea (avoid rigid multi-shot lists)
-- If audio ambiance is desired, mention it briefly; otherwise omit
+Enhance this as an image-to-video / motion prompt (aligned with our motion prompt guidelines and Veo-style best practices):
+- Do NOT write a Nano Banana image prompt and do NOT start with "Using the attached image as a style reference...".
+- Treat the reference image as the initial frame; do NOT re-describe the full scene in detail.
+- Describe ONLY what changes over time: subject motion, environmental motion, camera behavior, pacing/timing.
+- Preserve the reference image's style, composition, lighting, and subject identity unless the user explicitly requests changes.
+- Keep it as ONE coherent shot idea suitable for ~4–8 seconds (avoid rigid multi-shot lists).
+- Include audio ambience / SFX / dialogue ONLY if the user explicitly asks for audio; otherwise omit audio.
 
-Return ONLY the enhanced video prompt.`
+Return ONLY the enhanced motion prompt text.`
       } else if (modelId === 'gemini-nano-banana-pro') {
-        requestContent = `User wants to edit an image. Their instruction: "${prompt}"
+        const requiredPrefix = wantsStyleReference
+          ? 'Using the attached image as a style reference for its '
+          : 'Using the attached image, '
+
+        if (isPromptRequest) {
+          requestContent = `User is asking you to WRITE a final Nano Banana prompt that uses the provided reference image.
+User's request: "${userPrompt}"
 Reference image will be provided.
 
-IMPORTANT: For Nano banana pro image editing:
-- Describe ONLY the specific changes to make
-- Use precise, action-oriented language
-- Reference the provided image as "the provided image" or "this image"
-- Focus on what to add, remove, or modify
-- Be concise and specific about placement and style
+CRITICAL REQUIREMENTS:
+- Return ONLY ONE prompt. No titles, no lists, no quotes, no code fences.
+- The prompt MUST start with: "${requiredPrefix}"
+- Immediately after that prefix, include the specific visual qualities you observe in the reference image (color palette, lighting, mood, composition, texture).
+- Then describe the new scene/composition/angles the user wants (keep it coherent and specific).
 
-Enhance this edit instruction to be clearer and more effective. Return ONLY the enhanced edit instruction.`
+Terminology:
+- "Nano Banana" is Gemini's model nickname. Do NOT introduce literal bananas unless the user explicitly requested bananas in the image.
+
+Return ONLY the prompt text.`
+        } else {
+          requestContent = `User wants to edit an image. Their instruction: "${userPrompt}"
+Reference image will be provided.
+
+IMPORTANT: For Nano Banana Pro image editing:
+- Return ONLY the enhanced edit instruction (no explanations, no labels, no quotes, no code fences)
+- Start with: "${requiredPrefix}"
+- Describe exactly what to change AND what to preserve
+- Use precise, action-oriented language and specific placement
+- Keep the original style/lighting unless the user asks to change it
+- "Nano Banana" is a model nickname. Do NOT introduce literal bananas unless explicitly requested
+
+Enhance this instruction to be clearer and more effective. Return ONLY the enhanced edit instruction.`
+        }
       } else if (modelId === 'fal-seedream-v4' || modelId === 'replicate-seedream-4') {
-        requestContent = `User wants to edit an image. Their instruction: "${prompt}"
+        requestContent = `User wants to edit an image. Their instruction: "${userPrompt}"
 Reference image will be provided.
 
 IMPORTANT: For Seedream 4 image editing:
@@ -120,20 +158,18 @@ IMPORTANT: For Seedream 4 image editing:
 Enhance this edit instruction to be clearer and more effective. Return ONLY the enhanced edit instruction.`
       } else {
         // Generic image editing
-        requestContent = `User wants to edit an image. Their instruction: "${prompt}"
+        requestContent = `User wants to edit an image. Their instruction: "${userPrompt}"
 Reference image will be provided.
 
 Enhance this edit instruction to be clearer and more effective. Return ONLY the enhanced edit instruction.`
       }
     } else {
       // No reference image provided — treat as pure text prompt.
-      // If the target is a VIDEO model (e.g., Veo/Gemini video), apply image-to-video best practices.
-      const isVideoModel = /veo|video|replicate-video|fal-video|gemini-video/i.test(modelId)
       if (isVideoModel) {
         // Veo 3.x-style guidance (lightweight, common-sense, non-restrictive)
         // Based on Google's docs about image-to-video and reference images
         // https://ai.google.dev/gemini-api/docs/video?authuser=1&example=dialogue
-        requestContent = `User's video prompt: "${prompt}"
+        requestContent = `User's video prompt: "${userPrompt}"
 Please enhance this for a video generation model while keeping the user's intent. Use practical, non-restrictive guidance inspired by Veo best practices:
 
 Include when useful (omit if not relevant):
@@ -153,7 +189,7 @@ Avoid:
 Return ONLY the enhanced prompt text. Nothing else.`
       } else {
         // Text-to-image mode
-        requestContent = `User's prompt: "${prompt}"
+        requestContent = `User's prompt: "${userPrompt}"
 Please enhance this text-to-image prompt while respecting the user's creative vision.
 
 Guidelines:
