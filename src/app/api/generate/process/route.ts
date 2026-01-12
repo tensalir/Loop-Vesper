@@ -5,6 +5,12 @@ import { uploadBase64ToStorage, uploadUrlToStorage } from '@/lib/supabase/storag
 import { logMetric } from '@/lib/metrics'
 import { downloadReferenceImageAsDataUrl } from '@/lib/reference-images'
 import { Prisma } from '@prisma/client'
+import { 
+  determineProviderRoute, 
+  supportsAutoRouting,
+  addRouteToParameters,
+  type ProviderRouteDecision,
+} from '@/lib/models/routing'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -145,15 +151,7 @@ async function processGenerationById(
       return { id: generationId, status: 'not_found', error: 'Generation not found' }
     }
 
-    // #region agent log
-    console.log(`[DEBUG:B] Process endpoint - id=${generationId}, status=${generation.status}, model=${generation.modelId}, hasWebhookPrediction=${!!(generation.parameters as any)?.replicatePredictionId}`)
-    fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'local-debug',hypothesisId:'B',location:'api/generate/process/route.ts:start',message:'Process endpoint started',data:{generationId,status:generation.status,model:generation.modelId,hasWebhookPrediction:!!(generation.parameters as any)?.replicatePredictionId},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-
     if (generation.status === 'completed' || generation.status === 'failed' || generation.status === 'cancelled') {
-      // #region agent log
-      console.log(`[DEBUG:B] Skipping - terminal status: ${generation.status}`)
-      // #endregion
       return {
         id: generation.id,
         status: 'skipped',
@@ -164,9 +162,6 @@ async function processGenerationById(
     // The generate route submits directly to Replicate with webhook, so we don't need to process again
     const params = generation.parameters as any
     if (params?.replicatePredictionId) {
-      // #region agent log
-      console.log(`[DEBUG:D] Skipping - webhook prediction exists: ${params.replicatePredictionId}`)
-      // #endregion
       console.log(`[${generationId}] Skipping - webhook prediction already submitted: ${params.replicatePredictionId}`)
       await appendLog('process:skipped-webhook-active', { predictionId: params.replicatePredictionId })
       return {
@@ -182,10 +177,6 @@ async function processGenerationById(
     const existingLock = params?.processingStartedAt
     
     if (existingLock && (now - existingLock) < lockWindow) {
-      // #region agent log
-      console.log(`[DEBUG:B] Skipping - already being processed (lock age: ${now - existingLock}ms)`)
-      fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'local-debug',hypothesisId:'B',location:'api/generate/process/route.ts:lock-skip',message:'Skipping - duplicate process call blocked',data:{generationId,lockAge:now-existingLock},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       console.log(`[${generationId}] Skipping - already being processed by another request (${now - existingLock}ms ago)`)
       await appendLog('process:skipped-duplicate', { lockAge: now - existingLock })
       return {
@@ -211,8 +202,83 @@ async function processGenerationById(
       // Continue anyway - the lock is best-effort
     }
 
-    // Get model adapter
-    const model = getModel(generation.modelId)
+    // Determine provider route (Google vs Replicate fallback)
+    let providerRoute: ProviderRouteDecision | null = null
+    let effectiveModelId = generation.modelId
+    
+    if (supportsAutoRouting(generation.modelId)) {
+      await appendLog('routing:check', { modelId: generation.modelId })
+      const routeResult = await determineProviderRoute(generation.modelId)
+      
+      if ('error' in routeResult) {
+        // Both providers are rate limited
+        console.error(`[${generationId}] Provider routing failed:`, routeResult.message)
+        
+        // If queue is enabled, reschedule the job instead of failing
+        if (GENERATION_QUEUE_ENABLED && routeResult.retryAfterSeconds) {
+          await appendLog('routing:reschedule', { retryAfter: routeResult.retryAfterSeconds })
+          // Note: The job will be rescheduled by resolveJobHandle when we return 'failed'
+          // But we can also update the generation with info about why it's delayed
+          await prisma.generation.update({
+            where: { id: generationId },
+            data: {
+              parameters: {
+                ...(generation.parameters as any),
+                routingDelayed: true,
+                routingDelayReason: routeResult.message,
+                routingRetryAt: new Date(Date.now() + (routeResult.retryAfterSeconds * 1000)).toISOString(),
+              },
+            },
+          })
+          return {
+            id: generation.id,
+            status: 'failed', // This will trigger retry via queue
+            error: routeResult.message,
+          }
+        }
+        
+        // No queue, fail immediately
+        await prisma.generation.update({
+          where: { id: generationId },
+          data: {
+            status: 'failed',
+            parameters: {
+              ...(generation.parameters as any),
+              error: routeResult.message,
+              routingError: true,
+            },
+          },
+        })
+        return {
+          id: generation.id,
+          status: 'failed',
+          error: routeResult.message,
+        }
+      }
+      
+      providerRoute = routeResult
+      effectiveModelId = routeResult.effectiveModelId
+      
+      // Log routing decision
+      console.log(`[${generationId}] Provider routing: ${routeResult.originalModelId} -> ${routeResult.effectiveModelId} (${routeResult.reason})`)
+      await appendLog('routing:decision', { 
+        provider: routeResult.provider,
+        original: routeResult.originalModelId,
+        effective: routeResult.effectiveModelId,
+        isFallback: routeResult.isFallback,
+      })
+      
+      // Store routing info in parameters for debugging/billing
+      await prisma.generation.update({
+        where: { id: generationId },
+        data: {
+          parameters: addRouteToParameters(generation.parameters as any, routeResult),
+        },
+      })
+    }
+
+    // Get model adapter (using effective model ID after routing)
+    const model = getModel(effectiveModelId)
     if (!model) {
       await prisma.generation.update({
         where: { id: generationId },
@@ -220,14 +286,14 @@ async function processGenerationById(
           status: 'failed',
           parameters: {
             ...(generation.parameters as any),
-            error: `Model not found: ${generation.modelId}`,
+            error: `Model not found: ${effectiveModelId}`,
           },
         },
       })
       return {
         id: generation.id,
         status: 'failed',
-        error: `Model not found: ${generation.modelId}`,
+        error: `Model not found: ${effectiveModelId}`,
       }
     }
 
@@ -467,6 +533,16 @@ async function processGenerationById(
       // Store original outputs for fallback reference
       const originalOutputs = result.outputs
 
+      const coerceFloatOrNull = (value: any): number | null => {
+        if (value === null || value === undefined) return null
+        if (typeof value === 'number') return Number.isFinite(value) ? value : null
+        if (typeof value === 'string') {
+          const parsed = parseFloat(value)
+          return Number.isFinite(parsed) ? parsed : null
+        }
+        return null
+      }
+
       // Process results - use fallback URL for any failures
       const outputRecords = uploadResults.map((uploadResult, i) => {
         const originalOutput = originalOutputs[i]
@@ -485,7 +561,9 @@ async function processGenerationById(
           fileType: generation.session.type,
           width: originalOutput.width,
           height: originalOutput.height,
-          duration: originalOutput.duration,
+          // Some providers return duration as a string (e.g., "5.041")
+          // Prisma expects Float|null, so coerce safely.
+          duration: coerceFloatOrNull(originalOutput.duration),
         }
       })
 
@@ -530,7 +608,13 @@ async function processGenerationById(
         console.log(`[${generationId}] Using actual predict time for cost: ${actualPredictTime.toFixed(2)}s`)
       }
       
-      const costResult = calculateGenerationCost(generation.modelId, {
+      // Use billing model ID from routing decision if available (for accurate fallback billing)
+      const billingModelId = providerRoute?.billingModelId || generation.modelId
+      if (providerRoute?.isFallback) {
+        console.log(`[${generationId}] Using fallback billing model: ${billingModelId} (original: ${generation.modelId})`)
+      }
+      
+      const costResult = calculateGenerationCost(billingModelId, {
         outputCount: outputRecords.length,
         videoDurationSeconds: totalVideoDuration > 0 ? totalVideoDuration : undefined,
         computeTimeSeconds: actualPredictTime, // Pass actual time for accurate Replicate billing
@@ -550,6 +634,8 @@ async function processGenerationById(
               predictTime: actualPredictTime,
               isActual: costResult.isActual,
               unit: costResult.unit,
+              billingModelId, // Track which model was used for billing
+              wasFallback: providerRoute?.isFallback || false,
             },
           },
         },

@@ -69,9 +69,9 @@ export function Navbar({
       onMouseEnter={() => setIsExpanded(true)}
       onMouseLeave={() => setIsExpanded(false)}
     >
-      {/* Logo - always visible, mint green in dark mode */}
+      {/* Logo - always visible, white in dark mode */}
       <img
-        src={theme === 'light' ? "/images/Loop-Vesper-Black.svg" : "/images/Loop-Vesper-Mint.svg"}
+        src={theme === 'light' ? "/images/Loop-Vesper-Black.svg" : "/images/Loop-Vesper-White.svg"}
         alt="Loop Vesper Logo"
         className={cn(
           "h-4 object-contain cursor-pointer transition-all duration-500 ease-in-out flex-shrink-0",

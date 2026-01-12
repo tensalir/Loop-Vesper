@@ -24,6 +24,51 @@ const formatDate = (date: Date | string | undefined): string => {
   }
 }
 
+// Format model name with provider info from routing decision
+const formatModelWithProvider = (generation: GenerationWithOutputs): { name: string; provider: string | null; isFallback: boolean } => {
+  const params = generation.parameters as any
+  const modelId = generation.modelId || 'unknown'
+  
+  // Check for provider route info (set by the routing system)
+  const providerRoute = params?.providerRoute
+  const costMetrics = params?.costMetrics
+  
+  // Determine provider from routing info or cost metrics
+  let provider: string | null = null
+  let isFallback = false
+  
+  if (providerRoute) {
+    provider = providerRoute.provider === 'google' ? 'Google' : 
+               providerRoute.provider === 'replicate' ? 'Replicate' : null
+    isFallback = providerRoute.isFallback === true
+  } else if (costMetrics?.wasFallback) {
+    // Fallback detection from cost metrics
+    provider = 'Replicate'
+    isFallback = true
+  } else if (costMetrics?.predictTime && modelId.startsWith('gemini-')) {
+    // If we have predictTime on a gemini model, it used Replicate
+    provider = 'Replicate'
+    isFallback = true
+  } else if (modelId.startsWith('gemini-')) {
+    provider = 'Google'
+  } else if (modelId.startsWith('replicate-')) {
+    provider = 'Replicate'
+  }
+  
+  // Format the model name nicely
+  let name = modelId
+    .replace('gemini-', '')
+    .replace('replicate-', '')
+    .replace(/-/g, ' ')
+  
+  // Capitalize each word
+  name = name.split(' ').map(word => 
+    word.charAt(0).toUpperCase() + word.slice(1)
+  ).join(' ')
+  
+  return { name, provider, isFallback }
+}
+
 const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/+$/, '')
 
 const getPublicStorageUrl = (bucket: string, path: string): string | null => {
@@ -824,7 +869,25 @@ export function GenerationGallery({
                     )}
                     <div className="flex items-center gap-2">
                       <Info className="h-3.5 w-3.5" />
-                      <span className="capitalize font-medium">{(generation.modelId || 'unknown').replace('gemini-', '').replace('-', ' ')}</span>
+                      {(() => {
+                        const { name, provider, isFallback } = formatModelWithProvider(generation)
+                        return (
+                          <span className="font-medium">
+                            {name}
+                            {provider && (
+                              <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded ${
+                                isFallback 
+                                  ? 'bg-amber-500/20 text-amber-500' 
+                                  : provider === 'Google' 
+                                    ? 'bg-blue-500/20 text-blue-400'
+                                    : 'bg-purple-500/20 text-purple-400'
+                              }`}>
+                                {provider}{isFallback ? ' (fallback)' : ''}
+                              </span>
+                            )}
+                          </span>
+                        )
+                      })()}
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-muted-foreground/70">Generated:</span>
@@ -980,7 +1043,25 @@ export function GenerationGallery({
                   )}
                   <div className="flex items-center gap-2">
                     <Info className="h-3.5 w-3.5" />
-                    <span className="capitalize font-medium">{(generation.modelId || 'unknown').replace('gemini-', '').replace('-', ' ')}</span>
+                    {(() => {
+                      const { name, provider, isFallback } = formatModelWithProvider(generation)
+                      return (
+                        <span className="font-medium">
+                          {name}
+                          {provider && (
+                            <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded ${
+                              isFallback 
+                                ? 'bg-amber-500/20 text-amber-500' 
+                                : provider === 'Google' 
+                                  ? 'bg-blue-500/20 text-blue-400'
+                                  : 'bg-purple-500/20 text-purple-400'
+                            }`}>
+                              {provider}{isFallback ? ' (fallback)' : ''}
+                            </span>
+                          )}
+                        </span>
+                      )
+                    })()}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground/70">Generated:</span>

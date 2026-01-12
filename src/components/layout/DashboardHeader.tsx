@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { SpendingTracker } from '@/components/navbar/SpendingTracker'
+import { GeminiRateLimitTracker } from '@/components/navbar/GeminiRateLimitTracker'
 import { createClient } from '@/lib/supabase/client'
 import {
   Sun,
@@ -121,6 +122,7 @@ export function DashboardHeader({ className }: DashboardHeaderProps) {
 
         {/* Right side actions */}
         <div className="flex items-center gap-1">
+          <GeminiRateLimitTracker isAdmin={isAdmin} />
           <SpendingTracker isAdmin={isAdmin} />
           <Button
             variant="ghost"

@@ -1,4 +1,6 @@
 import { BaseModelAdapter, GenerationRequest, GenerationResponse, ModelConfig } from '../base'
+import { recordApiCall } from '@/lib/rate-limits/usage'
+import { checkGoogleRateLimit } from '@/lib/rate-limits/trackedFetch'
 
 /**
  * Google Gemini/Vertex AI Adapter
@@ -239,10 +241,10 @@ export class GeminiAdapter extends BaseModelAdapter {
     const referenceImages = request.referenceImages || (request.referenceImage ? [request.referenceImage] : [])
     console.log('Nano banana pro: Reference images count:', referenceImages.length)
     
-    // TEMPORARY: Skip Vertex AI and Gemini API, go directly to Replicate
-    // Reason: Vertex AI returns 404 (model not found), Gemini API quota is 0
-    // TODO: Re-enable Vertex AI/Gemini once quota/access is restored
-    const USE_REPLICATE_DIRECTLY = true
+    // Toggle between Replicate and Gemini API for Nano Banana
+    // Set to false to use Gemini API (AI Studio) directly for speed testing
+    // Set to true to use Replicate fallback
+    const USE_REPLICATE_DIRECTLY = false
     
     if (USE_REPLICATE_DIRECTLY && REPLICATE_API_KEY) {
       console.log('Nano banana pro: Using Replicate directly (Vertex AI/Gemini API temporarily disabled)')
@@ -465,6 +467,13 @@ export class GeminiAdapter extends BaseModelAdapter {
     const location = process.env.GOOGLE_CLOUD_REGION || 'us-central1'
     console.log(`Nano banana pro: Using Vertex AI (region: ${location})`)
     
+    // Track API call for rate limiting (Vertex AI counts as Gemini for rate limits)
+    try {
+      await recordApiCall('gemini', 'gemini-nano-banana-pro', 1)
+    } catch (trackErr) {
+      console.warn('[GeminiAdapter] Failed to track Vertex AI API call:', trackErr)
+    }
+    
     if (!vertexAiClient) {
       throw new Error('Vertex AI client not initialized')
     }
@@ -636,6 +645,13 @@ export class GeminiAdapter extends BaseModelAdapter {
   private async generateImageGeminiAPI(endpoint: string, payload: any): Promise<any> {
     console.log('Nano banana pro: Using Gemini API (AI Studio)')
     
+    // Track API call for rate limiting
+    try {
+      await recordApiCall('gemini', 'gemini-nano-banana-pro', 1)
+    } catch (trackErr) {
+      console.warn('[GeminiAdapter] Failed to track API call:', trackErr)
+    }
+    
     const response = await fetch(`${endpoint}?key=${this.apiKey}`, {
       method: 'POST',
       headers: {
@@ -650,6 +666,9 @@ export class GeminiAdapter extends BaseModelAdapter {
       const error = await response.json()
       console.error('Gemini API error:', error)
       console.error('Request payload (redacted):', JSON.stringify(redactLargeStrings(payload), null, 2))
+      
+      // Check for rate limit and record it
+      checkGoogleRateLimit(error, 'gemini', 'gemini-nano-banana-pro')
       
       // Create error object that includes details for quota detection
       const apiError: any = new Error(error.error?.message || 'Image generation failed')
@@ -709,6 +728,13 @@ export class GeminiAdapter extends BaseModelAdapter {
     }
 
     console.log('[Nano Banana Pro] Using Replicate fallback (google/nano-banana-pro)')
+    
+    // Track API call for rate limiting
+    try {
+      await recordApiCall('replicate', 'replicate-nano-banana', 1)
+    } catch (trackErr) {
+      console.warn('[GeminiAdapter] Failed to track Replicate API call:', trackErr)
+    }
 
     const baseUrl = 'https://api.replicate.com/v1'
 
@@ -1033,6 +1059,13 @@ export class GeminiAdapter extends BaseModelAdapter {
     options: { width: number; height: number; duration: number; resolution: number; aspectRatio: string }
   ): Promise<GenerationResponse> {
     console.log(`[Veo 3.1] Using Gemini API REST (fallback)`)
+    
+    // Track API call for rate limiting
+    try {
+      await recordApiCall('gemini', 'gemini-veo-3.1', 1)
+    } catch (trackErr) {
+      console.warn('[GeminiAdapter] Failed to track Veo API call:', trackErr)
+    }
     
     // Using Veo 3.1 official API endpoint
     const modelId = 'veo-3.1-generate-preview'

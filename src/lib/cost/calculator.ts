@@ -6,6 +6,9 @@
  * - Replicate: https://replicate.com/pricing (compute time based, varies by hardware)
  *   - Pricing is per-second based on actual predict_time from API response
  *   - Different models run on different hardware with different rates
+ * - Kling Official: https://app.klingai.com/global/dev/document-api
+ *   - Pro mode: ~$0.07 per second of video
+ *   - Standard mode: ~$0.035 per second of video
  * - FAL.ai: Pay-per-use, typically similar to Replicate
  */
 
@@ -42,8 +45,10 @@ const MODEL_HARDWARE_MAP: Record<string, string> = {
   'replicate-seedream-4': 'nvidia-a40-large', // Seedream 4.5 runs on A40 Large
   'replicate-reve': 'nvidia-a40',
   'gemini-nano-banana-pro': 'nvidia-a40-large', // When using Replicate fallback
+  'replicate-nano-banana-pro': 'nvidia-a40-large', // Replicate Nano Banana Pro
   // Video models
   'replicate-kling-2.6': 'nvidia-a100-80gb', // Kling uses A100 for video
+  'gemini-veo-3.1': 'nvidia-a100-80gb', // When using Kling fallback
 }
 
 /**
@@ -116,16 +121,37 @@ export function calculateReplicateCost(
  * Based on typical generation times observed in practice
  */
 function getEstimatedComputeTime(modelId: string): number {
-  if (modelId === 'replicate-seedream-4' || modelId === 'gemini-nano-banana-pro') {
+  if (modelId === 'replicate-seedream-4' || modelId === 'gemini-nano-banana-pro' || modelId === 'replicate-nano-banana-pro') {
     return 12 // ~12 seconds for Seedream 4.5 / Nano Banana image generation
   }
   if (modelId === 'replicate-reve') {
     return 8 // ~8 seconds for Reve
   }
-  if (modelId === 'replicate-kling-2.6') {
+  if (modelId === 'replicate-kling-2.6' || modelId === 'gemini-veo-3.1') {
     return 120 // ~2 minutes for Kling video generation
   }
   return 15 // Default estimate
+}
+
+/**
+ * Calculate cost for Kling Official API
+ * Pricing based on video duration and quality mode
+ */
+export function calculateKlingOfficialCost(
+  modelId: string,
+  videoDurationSeconds?: number,
+  mode?: string
+): CostCalculationResult {
+  // Kling pricing: Pro mode ~$0.07/second, Standard ~$0.035/second
+  const isPro = mode === 'pro' || !mode // Default to pro
+  const pricePerSecond = isPro ? 0.07 : 0.035
+  const duration = videoDurationSeconds || 5 // Default 5 seconds
+  
+  return {
+    cost: pricePerSecond * duration,
+    unit: `${duration}s @ $${pricePerSecond.toFixed(3)}/s (${isPro ? 'pro' : 'std'})`,
+    isActual: true, // We know the exact duration
+  }
 }
 
 /**
@@ -185,6 +211,18 @@ export function calculateGenerationCost(
     return calculateReplicateCost(modelId, computeTimeSeconds)
   }
 
+  // For Veo 3.1, check if it's using Kling fallback
+  // (We pass computeTimeSeconds when using Replicate/Kling)
+  if (modelId === 'gemini-veo-3.1' && computeTimeSeconds) {
+    // Using Kling fallback - calculate using Replicate pricing for A100
+    return calculateReplicateCost('replicate-kling-2.6', computeTimeSeconds)
+  }
+
+  // Handle replicate-nano-banana-pro (explicit fallback model ID from routing)
+  if (modelId === 'replicate-nano-banana-pro') {
+    return calculateReplicateCost(modelId, computeTimeSeconds)
+  }
+
   // Determine provider and calculate cost
   if (modelId.startsWith('gemini-') || modelId.includes('veo')) {
     return calculateGeminiCost(modelId, outputCount, videoDurationSeconds)
@@ -196,6 +234,10 @@ export function calculateGenerationCost(
 
   if (modelId.startsWith('fal-')) {
     return calculateFalCost(modelId, computeTimeSeconds)
+  }
+
+  if (modelId.startsWith('kling-')) {
+    return calculateKlingOfficialCost(modelId, videoDurationSeconds)
   }
 
   // Unknown model

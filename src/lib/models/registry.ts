@@ -10,6 +10,10 @@ import {
   REVE_CONFIG,
   KLING_2_6_CONFIG,
 } from './adapters/replicate'
+import {
+  KlingOfficialAdapter,
+  KLING_OFFICIAL_CONFIG,
+} from './adapters/kling'
 
 /**
  * Model Registry
@@ -33,6 +37,9 @@ class ModelRegistry {
     this.register(SEEDREAM_4_CONFIG, ReplicateAdapter)
     this.register(REVE_CONFIG, ReplicateAdapter)
     this.register(KLING_2_6_CONFIG, ReplicateAdapter)
+    
+    // Register Official Kling API (preferred for frame interpolation)
+    this.register(KLING_OFFICIAL_CONFIG, KlingOfficialAdapter)
   }
 
   /**

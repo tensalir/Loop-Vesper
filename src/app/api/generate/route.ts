@@ -55,8 +55,9 @@ export async function POST(request: NextRequest) {
       parameters: requestParameters,
     } = body
     const rawParameters = requestParameters || {}
-    const { referenceImage, referenceImages, referenceImageId, ...otherParameters } = rawParameters
+    const { referenceImage, referenceImages, referenceImageId, endFrameImage, endFrameImageId, ...otherParameters } = rawParameters
     let referencePointer: Record<string, any> | null = null
+    let endFramePointer: Record<string, any> | null = null
 
     // Generate a unique ID for reference images (used before generation is created)
     const referenceGroupId = `refgrp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -96,9 +97,23 @@ export async function POST(request: NextRequest) {
       referencePointer = { referenceImageId }
     }
 
+    // Handle end frame image for frame-to-frame video interpolation (Kling 2.6)
+    if (endFrameImage && typeof endFrameImage === 'string' && endFrameImage.startsWith('data:')) {
+      // End frame is a base64 image - persist to storage
+      const endFrameGroupId = `endframe-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const persistResult = await persistReferenceImage(endFrameImage, user.id, endFrameImageId || endFrameGroupId)
+      if (persistResult?.referenceImageUrl) {
+        endFramePointer = { endFrameImageUrl: persistResult.referenceImageUrl }
+      }
+    } else if (endFrameImage && typeof endFrameImage === 'string' && endFrameImage.startsWith('http')) {
+      // End frame is already a URL
+      endFramePointer = { endFrameImageUrl: endFrameImage }
+    }
+
     const generationParameters = {
       ...otherParameters,
       ...(referencePointer || {}),
+      ...(endFramePointer || {}),
     }
 
     // Validate required fields

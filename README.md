@@ -120,6 +120,11 @@ GEMINI_API_KEY=your-gemini-api-key
 ANTHROPIC_API_KEY=your-anthropic-api-key
 REPLICATE_API_TOKEN=your-replicate-token
 FAL_KEY=your-fal-key
+
+# Kling Official API (for frame-to-frame video interpolation)
+# Get your keys from: https://app.klingai.com/global/dev/document-api
+KLING_ACCESS_KEY=your-kling-access-key
+KLING_SECRET_KEY=your-kling-secret-key
 ```
 
 4. Set up the database:

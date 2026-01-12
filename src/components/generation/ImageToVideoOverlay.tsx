@@ -63,7 +63,7 @@ export function ImageToVideoOverlay({
   
   // Video generation state
   const [prompt, setPrompt] = useState('')
-  const [selectedModel, setSelectedModel] = useState('replicate-kling-2.6')
+  const [selectedModel, setSelectedModel] = useState('kling-official')
   const [parameters, setParameters] = useState({
     aspectRatio: '16:9',
     resolution: 720,
@@ -205,7 +205,12 @@ export function ImageToVideoOverlay({
   // Handle video generation
   const handleGenerate = useCallback(async (
     promptText: string,
-    options?: { referenceImage?: File; referenceImageId?: string }
+    options?: { 
+      referenceImage?: File
+      referenceImageId?: string
+      endFrameImage?: File
+      endFrameImageId?: string
+    }
   ) => {
     const sessionId = await ensureVideoSession()
     if (!sessionId) {
@@ -247,6 +252,16 @@ export function ImageToVideoOverlay({
         })
       }
       
+      // Convert end frame image to base64 if provided
+      let endFrameImageBase64: string | undefined
+      if (options?.endFrameImage) {
+        endFrameImageBase64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.readAsDataURL(options.endFrameImage!)
+        })
+      }
+      
       await generateMutation.mutateAsync({
         sessionId,
         modelId: selectedModel,
@@ -256,6 +271,7 @@ export function ImageToVideoOverlay({
           referenceImage: referenceImageBase64,
           referenceImageId: outputId, // Use outputId as reference ID
           sourceOutputId: outputId, // Link to source image
+          ...(endFrameImageBase64 && { endFrameImage: endFrameImageBase64 }),
         },
       })
       
@@ -596,7 +612,8 @@ export function ImageToVideoOverlay({
 function formatModelName(modelId: string): string {
   const modelNames: Record<string, string> = {
     'gemini-veo-3.1': 'Veo 3.1',
-    'replicate-kling-2.6': 'Kling 2.6 Pro',
+    'kling-official': 'Kling 2.6',
+    'replicate-kling-2.6': 'Kling 2.6 (Replicate)',
     'minimax-video-01': 'MiniMax',
   }
   return modelNames[modelId] || modelId.replace(/-/g, ' ').replace(/^(gemini|replicate|fal)\s*/i, '')

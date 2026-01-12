@@ -1,4 +1,5 @@
 import { BaseModelAdapter, ModelConfig, GenerationRequest, GenerationResponse } from '../base'
+import { recordApiCall } from '@/lib/rate-limits/usage'
 
 // Support both REPLICATE_API_TOKEN (official) and REPLICATE_API_KEY (legacy)
 // Only check env vars on server side (they're not available in browser)
@@ -123,13 +124,14 @@ export const KLING_2_6_CONFIG: ModelConfig = {
   name: 'Kling 2.6 Pro',
   provider: 'Kuaishou (Replicate)',
   type: 'video',
-  description: 'Top-tier image-to-video with cinematic visuals, fluid motion, and native audio generation',
+  description: 'Top-tier image-to-video with cinematic visuals, fluid motion, native audio generation, and frame-to-frame interpolation',
   supportedAspectRatios: ['16:9', '9:16', '1:1'],
   defaultAspectRatio: '16:9',
   maxResolution: 1080,
   capabilities: {
     'text-2-video': true,
     'image-2-video': true,
+    'frame-interpolation': true, // Supports start_image + end_image
     audioGeneration: true,
   },
   parameters: [
@@ -318,6 +320,14 @@ export class ReplicateAdapter extends BaseModelAdapter {
 
       console.log('Using version:', versionHash)
 
+      // Track API call for rate limiting (right before the actual generation request)
+      try {
+        const scope = this.config.id === 'replicate-seedream-4' ? 'global' : 'replicate-nano-banana'
+        await recordApiCall('replicate', scope, 1)
+      } catch (trackErr) {
+        console.warn('[ReplicateAdapter] Failed to track API call:', trackErr)
+      }
+
       // Submit prediction to Replicate
       const response = await fetch(`${this.baseUrl}/predictions`, {
         method: 'POST',
@@ -503,7 +513,18 @@ export class ReplicateAdapter extends BaseModelAdapter {
         console.log('[Kling-2.6] Text-to-video mode (no start_image)')
       }
 
-      console.log('Submitting Kling 2.6 video generation:', { ...input, start_image: startImage ? '[IMAGE]' : undefined })
+      // Check for end frame image (for frame-to-frame interpolation)
+      const endFrameImageUrl = parameters?.endFrameImageUrl
+      if (endFrameImageUrl && typeof endFrameImageUrl === 'string') {
+        input.end_image = endFrameImageUrl
+        console.log('[Kling-2.6] ✅ Frame-to-frame interpolation with end_image')
+      }
+
+      console.log('Submitting Kling 2.6 video generation:', { 
+        ...input, 
+        start_image: startImage ? '[IMAGE]' : undefined,
+        end_image: endFrameImageUrl ? '[IMAGE]' : undefined 
+      })
 
       // First, fetch the latest version for the model
       const modelResponse = await fetch(`${this.baseUrl}/models/${modelPath}`, {
@@ -526,6 +547,13 @@ export class ReplicateAdapter extends BaseModelAdapter {
       }
 
       console.log('Using version:', versionHash)
+
+      // Track API call for rate limiting (right before the actual generation request)
+      try {
+        await recordApiCall('replicate', 'replicate-kling-2.6', 1)
+      } catch (trackErr) {
+        console.warn('[ReplicateAdapter] Failed to track Kling API call:', trackErr)
+      }
 
       // Submit prediction to Replicate
       const response = await fetch(`${this.baseUrl}/predictions`, {

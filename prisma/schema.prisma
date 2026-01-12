@@ -158,25 +158,25 @@ model Output {
 
 // Semantic analysis of outputs (Gemini caption + Claude parsing)
 model OutputAnalysis {
-  id            String    @id @default(uuid()) @db.Uuid
-  outputId      String    @unique @map("output_id") @db.Uuid
-  status        String    @default("queued") // 'queued', 'processing', 'completed', 'failed'
-  attempts      Int       @default(0)
-  lockedAt      DateTime? @map("locked_at")
-  runAfter      DateTime? @map("run_after")
-  error         String?   @db.Text
+  id       String    @id @default(uuid()) @db.Uuid
+  outputId String    @unique @map("output_id") @db.Uuid
+  status   String    @default("queued") // 'queued', 'processing', 'completed', 'failed'
+  attempts Int       @default(0)
+  lockedAt DateTime? @map("locked_at")
+  runAfter DateTime? @map("run_after")
+  error    String?   @db.Text
 
   // Gemini caption results
-  geminiCaption String?   @map("gemini_caption") @db.Text
-  geminiModel   String?   @map("gemini_model")
+  geminiCaption String? @map("gemini_caption") @db.Text
+  geminiModel   String? @map("gemini_model")
 
   // Claude parsing results (structured JSON)
-  claudeParsed  Json?     @map("claude_parsed")
-  claudeModel   String?   @map("claude_model")
+  claudeParsed Json?   @map("claude_parsed")
+  claudeModel  String? @map("claude_model")
 
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  completedAt   DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  completedAt DateTime? @map("completed_at")
 
   output Output @relation(fields: [outputId], references: [id], onDelete: Cascade)
 
@@ -277,9 +277,9 @@ model PromptEnhancementPrompt {
 
 model ProductRender {
   id          String   @id @default(uuid()) @db.Uuid
-  name        String   // Product name / category (e.g., "MCL38")
-  colorway    String?  // Colorway / variant (e.g., "Papaya Orange")
-  angle       String?  // Angle / view (e.g., "front", "side", "3/4", "back")
+  name        String // Product name / category (e.g., "MCL38")
+  colorway    String? // Colorway / variant (e.g., "Papaya Orange")
+  angle       String? // Angle / view (e.g., "front", "side", "3/4", "back")
   sortOrder   Int      @default(0) @map("sort_order") // For ordering within colorway
   imageUrl    String   @map("image_url")
   storagePath String?  @map("storage_path") // Supabase path for local uploads
@@ -316,7 +316,7 @@ model ProjectChat {
 model ProjectChatMessage {
   id        String   @id @default(uuid()) @db.Uuid
   chatId    String   @map("chat_id") @db.Uuid
-  role      String   // 'user' or 'assistant'
+  role      String // 'user' or 'assistant'
   content   String   @db.Text
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -331,7 +331,7 @@ model PinnedImage {
   id        String   @id @default(uuid()) @db.Uuid
   projectId String   @map("project_id") @db.Uuid
   imageUrl  String   @map("image_url")
-  label     String?  // Optional user-provided label
+  label     String? // Optional user-provided label
   sortOrder Int      @default(0) @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at")
   pinnedBy  String   @map("pinned_by") @db.Uuid // User who pinned the image
@@ -350,7 +350,7 @@ model OutputEvent {
   outputId  String   @map("output_id") @db.Uuid
   userId    String   @map("user_id") @db.Uuid
   eventType String   @map("event_type") // 'download', 'share', etc.
-  metadata  Json?    // Optional additional data (e.g., format, resolution)
+  metadata  Json? // Optional additional data (e.g., format, resolution)
   createdAt DateTime @default(now()) @map("created_at")
 
   output Output  @relation(fields: [outputId], references: [id], onDelete: Cascade)
@@ -361,4 +361,22 @@ model OutputEvent {
   @@index([eventType])
   @@index([createdAt(sort: Desc)])
   @@map("output_events")
+}
+
+// API usage counters for rate limiting (multi-user safe with atomic upserts)
+// Used to track requests per minute/month to Google Gemini, Vertex AI, and Replicate
+model ApiUsageCounter {
+  id        String   @id @default(uuid()) @db.Uuid
+  provider  String // 'gemini', 'vertex', 'replicate'
+  scope     String // 'gemini-nano-banana-pro', 'gemini-veo-3.1', 'global'
+  window    String // 'minute' or 'month'
+  bucket    String // e.g., '2026-01-12T09:31Z' for minute, '2026-01' for month
+  count     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([provider, scope, window, bucket])
+  @@index([provider, scope])
+  @@index([bucket])
+  @@map("api_usage_counters")
 }

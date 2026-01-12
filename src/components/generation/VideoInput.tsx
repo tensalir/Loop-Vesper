@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Video as VideoIcon, ImagePlus, Ratio, ChevronDown, X, Upload, FolderOpen, Clock, Loader2, GripHorizontal, Pin } from 'lucide-react'
+import { Video as VideoIcon, ImagePlus, Ratio, ChevronDown, X, Upload, FolderOpen, Clock, Loader2, GripHorizontal, Pin, Plus } from 'lucide-react'
 import { useModelCapabilities } from '@/hooks/useModelCapabilities'
 import { usePinnedImages } from '@/hooks/usePinnedImages'
 import { useToast } from '@/components/ui/use-toast'
@@ -19,7 +19,12 @@ import { PromptEnhancementButton } from './PromptEnhancementButton'
 interface VideoInputProps {
   prompt: string
   onPromptChange: (prompt: string) => void
-  onGenerate: (prompt: string, options?: { referenceImage?: File; referenceImageId?: string }) => void
+  onGenerate: (prompt: string, options?: { 
+    referenceImage?: File
+    referenceImageId?: string
+    endFrameImage?: File
+    endFrameImageId?: string
+  }) => void
   parameters: {
     aspectRatio: string
     resolution: number
@@ -46,6 +51,10 @@ interface VideoInputProps {
   isGenerating?: boolean
   /** Register to receive pasted images from global paste handler */
   onRegisterPasteHandler?: (handler: (files: File[]) => void) => () => void
+  /** Pre-set end frame URL (for frame-to-frame interpolation) */
+  endFrameImageUrl?: string | null
+  /** Override end frame image ID */
+  endFrameImageIdOverride?: string
 }
 
 export function VideoInput({
@@ -66,18 +75,30 @@ export function VideoInput({
   showGenerateButton = true,
   isGenerating: externalGenerating,
   onRegisterPasteHandler,
+  endFrameImageUrl,
+  endFrameImageIdOverride,
 }: VideoInputProps) {
   const params = useParams()
   const { toast } = useToast()
   const projectId = params.id as string | undefined
   const { pinImage } = usePinnedImages(projectId)
+  
+  // Start frame state
   const [referenceImage, setReferenceImage] = useState<File | null>(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [referenceImageId, setReferenceImageId] = useState<string | null>(null)
+  
+  // End frame state (for frame-to-frame interpolation)
+  const [endFrameImage, setEndFrameImage] = useState<File | null>(null)
+  const [endFramePreviewUrl, setEndFramePreviewUrl] = useState<string | null>(null)
+  const [endFrameImageId, setEndFrameImageId] = useState<string | null>(null)
+  
   const [localGenerating, setLocalGenerating] = useState(false)
   const [browseModalOpen, setBrowseModalOpen] = useState(false)
   const [rendersModalOpen, setRendersModalOpen] = useState(false)
   const [stylePopoverOpen, setStylePopoverOpen] = useState(false)
+  const [endFramePopoverOpen, setEndFramePopoverOpen] = useState(false)
+  const [selectingEndFrame, setSelectingEndFrame] = useState(false) // Track if browse modal is for end frame
   const [isDragging, setIsDragging] = useState(false)
   const [isEnhancing, setIsEnhancing] = useState(false)
   // Ref guard to avoid race conditions where users click Generate
@@ -85,6 +106,7 @@ export function VideoInput({
   const isEnhancingRef = useRef(false)
   const [transformedPrompt, setTransformedPrompt] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const endFrameFileInputRef = useRef<HTMLInputElement>(null)
   
   // Resizable input height - available in both default and overlay modes
   const [inputHeight, setInputHeight] = useState(52) // Default min height (matches ChatInput)
@@ -183,6 +205,8 @@ export function VideoInput({
       await onGenerate(prompt, {
         referenceImage: referenceImage || undefined,
         referenceImageId: referenceImageId || undefined,
+        endFrameImage: endFrameImage || undefined,
+        endFrameImageId: endFrameImageId || undefined,
       })
       // Keep the last prompt AND reference image after generating (users often iterate).
       // (ChatInput does the same for images; clearing the reference can cause confusing
@@ -202,7 +226,7 @@ export function VideoInput({
     }
   }
 
-  // Process and add image file (used by both file input and drag-and-drop)
+  // Process and add image file for start frame (used by both file input and drag-and-drop)
   const processImageFile = (file: File) => {
     if (!file.type.startsWith('image/')) return
     
@@ -215,6 +239,51 @@ export function VideoInput({
     setImagePreviewUrl(previewUrl)
     setReferenceImage(file)
     setReferenceImageId(createReferenceId())
+  }
+  
+  // Process and add image file for end frame
+  const processEndFrameFile = (file: File) => {
+    if (!file.type.startsWith('image/')) return
+    
+    // Clean up old preview URL
+    if (endFramePreviewUrl) {
+      URL.revokeObjectURL(endFramePreviewUrl)
+    }
+    // Create new preview URL
+    const previewUrl = URL.createObjectURL(file)
+    setEndFramePreviewUrl(previewUrl)
+    setEndFrameImage(file)
+    setEndFrameImageId(endFrameImageIdOverride || createReferenceId())
+  }
+  
+  // Handle end frame file select
+  const handleEndFrameFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      processEndFrameFile(file)
+    }
+    // Reset input value so the same file can be selected again
+    if (endFrameFileInputRef.current) {
+      endFrameFileInputRef.current.value = ''
+    }
+  }
+  
+  // Handle end frame browse select
+  const handleEndFrameBrowseSelect = async (imageUrl: string) => {
+    try {
+      const response = await fetch(imageUrl)
+      const blob = await response.blob()
+      const file = new File([blob], 'end-frame.png', { type: blob.type })
+      
+      if (endFramePreviewUrl) {
+        URL.revokeObjectURL(endFramePreviewUrl)
+      }
+      setEndFramePreviewUrl(imageUrl)
+      setEndFrameImage(file)
+      setEndFrameImageId(endFrameImageIdOverride || createReferenceId())
+    } catch (error) {
+      console.error('Error loading end frame from URL:', error)
+    }
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -374,14 +443,38 @@ export function VideoInput({
     })()
   }, [referenceImageUrl])
 
-  // Cleanup preview URL on unmount
+  // Hydrate end frame from URL if provided
+  useEffect(() => {
+    if (!endFrameImageUrl) return
+    if (endFramePreviewUrl === endFrameImageUrl && endFrameImage) return
+    ;(async () => {
+      try {
+        const response = await fetch(endFrameImageUrl)
+        const blob = await response.blob()
+        const file = new File([blob], 'end-frame.png', { type: blob.type })
+        if (endFramePreviewUrl && endFramePreviewUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(endFramePreviewUrl)
+        }
+        setEndFramePreviewUrl(endFrameImageUrl)
+        setEndFrameImage(file)
+        setEndFrameImageId(endFrameImageIdOverride || createReferenceId())
+      } catch (err) {
+        console.error('Failed to hydrate endFrameImageUrl:', err)
+      }
+    })()
+  }, [endFrameImageUrl])
+
+  // Cleanup preview URLs on unmount
   useEffect(() => {
     return () => {
       if (imagePreviewUrl) {
         URL.revokeObjectURL(imagePreviewUrl)
       }
+      if (endFramePreviewUrl) {
+        URL.revokeObjectURL(endFramePreviewUrl)
+      }
     }
-  }, [imagePreviewUrl])
+  }, [imagePreviewUrl, endFramePreviewUrl])
 
   // Register paste handler with parent component
   useEffect(() => {
@@ -475,50 +568,117 @@ export function VideoInput({
           />
         </div>
 
-        {/* Reference Image Thumbnail - Left of Generate Button */}
+        {/* Frame Thumbnails - Stacked squares with soft rounded corners */}
         {(referenceImage || imagePreviewUrl) && (
-          <div className="relative group">
-            <div className={`rounded-lg overflow-hidden border-2 border-primary/50 shadow-xl transition-transform duration-300 group-hover:scale-105 ${
-              isOverlay ? 'w-[48px] h-[48px]' : 'w-[56px] h-[56px]'
-            }`}>
-              <img
-                src={imagePreviewUrl || ''}
-                alt="Reference"
-                className="w-full h-full object-cover"
-              />
+          <div className="flex flex-col gap-1.5">
+            {/* Start Frame Thumbnail */}
+            <div className="relative group">
+              <div className={`rounded-md overflow-hidden border-2 border-primary/50 shadow-lg transition-transform duration-300 group-hover:scale-105 ${
+                isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
+              }`}>
+                <img
+                  src={imagePreviewUrl || ''}
+                  alt="Start frame"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              {/* Label on hover */}
+              <div className="absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-full px-1.5 py-0.5 rounded text-[8px] font-semibold uppercase tracking-wider bg-primary/90 text-primary-foreground opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                Start
+              </div>
+              {/* Remove button */}
+              {!lockedReferenceImage && (
+                <button
+                  onClick={() => {
+                    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl)
+                    setImagePreviewUrl(null)
+                    setReferenceImage(null)
+                    setReferenceImageId(null)
+                  }}
+                  className="absolute -top-1 -right-1 bg-background border border-border rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-destructive hover:text-destructive-foreground z-10"
+                  title="Remove start frame"
+                >
+                  <X className="h-2 w-2" />
+                </button>
+              )}
             </div>
-            {/* Hide remove button if reference is locked */}
-            {!lockedReferenceImage && (
-              <button
-                onClick={() => {
-                  if (imagePreviewUrl) {
-                    URL.revokeObjectURL(imagePreviewUrl)
-                  }
-                  setImagePreviewUrl(null)
-                  setReferenceImage(null)
-                  setReferenceImageId(null)
-                }}
-                className="absolute -top-2 -right-2 bg-background border border-border rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-destructive hover:text-destructive-foreground"
-                title="Remove reference image"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-            {/* Pin button - only show if we have a proper URL (not blob) */}
-            {projectId && imagePreviewUrl && imagePreviewUrl.startsWith('http') && (
-              <button
-                onClick={() => {
-                  pinImage({ imageUrl: imagePreviewUrl })
-                  toast({
-                    title: 'Image pinned',
-                    description: 'Reference image added to project pins',
-                  })
-                }}
-                className="absolute -top-2 -left-2 bg-primary text-primary-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-primary/90 z-10"
-                title="Pin to project"
-              >
-                <Pin className="h-3 w-3" />
-              </button>
+
+            {/* End Frame Thumbnail or Empty Placeholder */}
+            {(endFrameImage || endFramePreviewUrl) ? (
+              <div className="relative group">
+                <div className={`rounded-md overflow-hidden border-2 border-amber-500/50 shadow-lg transition-transform duration-300 group-hover:scale-105 ${
+                  isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
+                }`}>
+                  <img
+                    src={endFramePreviewUrl || ''}
+                    alt="End frame"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                {/* Label on hover */}
+                <div className="absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-full px-1.5 py-0.5 rounded text-[8px] font-semibold uppercase tracking-wider bg-amber-500/90 text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  End
+                </div>
+                {/* Remove button */}
+                <button
+                  onClick={() => {
+                    if (endFramePreviewUrl) URL.revokeObjectURL(endFramePreviewUrl)
+                    setEndFramePreviewUrl(null)
+                    setEndFrameImage(null)
+                    setEndFrameImageId(null)
+                  }}
+                  className="absolute -top-1 -right-1 bg-background border border-border rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-destructive hover:text-destructive-foreground z-10"
+                  title="Remove end frame"
+                >
+                  <X className="h-2 w-2" />
+                </button>
+              </div>
+            ) : (
+              /* Empty end frame placeholder */
+              <Popover open={endFramePopoverOpen} onOpenChange={setEndFramePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    className={`rounded-md border-2 border-dashed border-white/20 hover:border-amber-500/50 hover:bg-amber-500/10 transition-all flex items-center justify-center ${
+                      isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
+                    }`}
+                    title="Add end frame (optional)"
+                  >
+                    <Plus className="h-3 w-3 text-muted-foreground/50" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-2 bg-background/95 backdrop-blur-xl border-white/10 rounded-lg" align="start">
+                  <div className="flex flex-col gap-1">
+                    <p className="text-[10px] text-muted-foreground px-2 py-1 mb-1">
+                      Add end frame for video interpolation
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
+                      onClick={() => {
+                        endFrameFileInputRef.current?.click()
+                        setEndFramePopoverOpen(false)
+                      }}
+                    >
+                      <Upload className="h-3.5 w-3.5 mr-2" />
+                      Upload
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
+                      onClick={() => {
+                        setBrowseModalOpen(true)
+                        setEndFramePopoverOpen(false)
+                        setSelectingEndFrame(true)
+                      }}
+                    >
+                      <FolderOpen className="h-3.5 w-3.5 mr-2" />
+                      Browse
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
             )}
           </div>
         )}
@@ -556,6 +716,15 @@ export function VideoInput({
           )
         })()}
       </div>
+      
+      {/* Hidden file input for end frame */}
+      <input
+        ref={endFrameFileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleEndFrameFileSelect}
+      />
 
       {/* Parameter Controls - Compact Row */}
       <div className="flex flex-wrap items-center gap-2">
@@ -639,6 +808,7 @@ export function VideoInput({
           </>
         )}
 
+
         {/* Aspect Ratio Popover */}
         <Popover>
           <PopoverTrigger asChild>
@@ -707,8 +877,18 @@ export function VideoInput({
       {/* Image Browse Modal */}
       <ImageBrowseModal
         isOpen={browseModalOpen}
-        onClose={() => setBrowseModalOpen(false)}
-        onSelectImage={handleBrowseSelect}
+        onClose={() => {
+          setBrowseModalOpen(false)
+          setSelectingEndFrame(false) // Reset flag when closing
+        }}
+        onSelectImage={(imageUrl) => {
+          if (selectingEndFrame) {
+            handleEndFrameBrowseSelect(imageUrl)
+            setSelectingEndFrame(false)
+          } else {
+            handleBrowseSelect(imageUrl)
+          }
+        }}
         projectId={params.id as string}
       />
 

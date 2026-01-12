@@ -29,6 +29,7 @@ export interface ModelConfig {
     'image-2-image'?: boolean
     'text-2-video'?: boolean
     'image-2-video'?: boolean
+    'frame-interpolation'?: boolean // Supports start + end frame video interpolation
     multiImageEditing?: boolean // Supports multiple reference images
     audioGeneration?: boolean // Supports generating audio with video
   }

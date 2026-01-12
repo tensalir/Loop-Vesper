@@ -23,6 +23,7 @@ import { PinnedImagesRail } from '@/components/projects/PinnedImagesRail'
 import { useSessions } from '@/hooks/useSessions'
 import { Navbar } from '@/components/navbar/Navbar'
 import { SpendingTracker } from '@/components/navbar/SpendingTracker'
+import { GeminiRateLimitTracker } from '@/components/navbar/GeminiRateLimitTracker'
 import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import type { Session, Project } from '@/types/project'
@@ -39,7 +40,13 @@ export default function ProjectPage() {
   const [updating, setUpdating] = useState(false)
   const [activeSession, setActiveSession] = useState<Session | null>(null)
   const [generationType, setGenerationType] = useState<'image' | 'video'>('image')
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    // Initialize from DOM class or default to dark
+    if (typeof window !== 'undefined') {
+      return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+    }
+    return 'dark' // Default to dark for SSR
+  })
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [externalPrompt, setExternalPrompt] = useState<string>('')
   const [pendingPinnedImageUrl, setPendingPinnedImageUrl] = useState<string | null>(null)
@@ -54,13 +61,17 @@ export default function ProjectPage() {
   // Use React Query for sessions with intelligent caching
   const { data: sessions = [], isLoading: sessionsLoading } = useSessions(params.id as string)
 
-  // Initialize theme from localStorage
+  // Initialize theme from localStorage or system preference
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
-    if (savedTheme) {
-      setTheme(savedTheme)
-      document.documentElement.classList.toggle('dark', savedTheme === 'dark')
-    }
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    const isDarkClass = document.documentElement.classList.contains('dark')
+    
+    // Priority: localStorage > current DOM class > system preference > default to dark
+    const resolvedTheme = savedTheme || (isDarkClass ? 'dark' : (systemPrefersDark ? 'dark' : 'dark'))
+    
+    setTheme(resolvedTheme)
+    document.documentElement.classList.toggle('dark', resolvedTheme === 'dark')
   }, [])
 
   const toggleTheme = () => {
@@ -416,6 +427,7 @@ export default function ProjectPage() {
 
       {/* Utility Icons - Fixed Top Right */}
       <div className="fixed top-4 right-4 z-50 flex items-center gap-1">
+        <GeminiRateLimitTracker isAdmin={isAdmin} />
         <SpendingTracker isAdmin={isAdmin} />
         <Button
           variant="ghost"

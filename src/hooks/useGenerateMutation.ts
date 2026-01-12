@@ -21,6 +21,9 @@ interface GenerateParams {
     referenceImageId?: string
     /** Links this video generation to a source image output (for animate-still) */
     sourceOutputId?: string
+    /** End frame image base64 for video interpolation (Kling 2.6) */
+    endFrameImage?: string
+    endFrameImageId?: string
   }
 }
 

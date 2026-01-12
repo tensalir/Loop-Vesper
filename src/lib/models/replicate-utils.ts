@@ -250,6 +250,11 @@ export const REPLICATE_MODEL_CONFIGS: Record<string, {
         input.start_image = params.referenceImageUrl
       }
 
+      // Add end image for frame-to-frame interpolation
+      if (params.endFrameImageUrl) {
+        input.end_image = params.endFrameImageUrl
+      }
+
       return input
     },
   },

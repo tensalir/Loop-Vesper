@@ -20,12 +20,25 @@ export async function uploadBase64ToStorage(
 ): Promise<string> {
   try {
     // Extract base64 data and mime type
-    const matches = base64DataUrl.match(/^data:([^;]+);base64,(.+)$/)
-    if (!matches) {
+    // NOTE: Avoid regex here. Very large data URLs can cause RegExp engines to blow the stack.
+    if (typeof base64DataUrl !== 'string' || !base64DataUrl.startsWith('data:')) {
       throw new Error('Invalid base64 data URL format')
     }
 
-    const [, mimeType, base64Data] = matches
+    const commaIndex = base64DataUrl.indexOf(',')
+    if (commaIndex === -1) {
+      throw new Error('Invalid base64 data URL format')
+    }
+
+    const meta = base64DataUrl.slice('data:'.length, commaIndex) // e.g. "image/png;base64" or "image/jpeg;charset=utf-8;base64"
+    const base64Data = base64DataUrl.slice(commaIndex + 1)
+
+    const parts = meta.split(';').filter(Boolean)
+    const mimeType = parts[0] || 'application/octet-stream'
+    const isBase64 = parts.includes('base64')
+    if (!isBase64) {
+      throw new Error('Invalid base64 data URL format')
+    }
     
     // Convert base64 to buffer
     const buffer = Buffer.from(base64Data, 'base64')

@@ -17,7 +17,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Image as ImageIcon, Video, MessageCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const DEFAULT_VIDEO_MODEL_ID = 'replicate-kling-2.6'
+const DEFAULT_VIDEO_MODEL_ID = 'kling-official'
 
 function getPreferredModelId(type: 'image' | 'video'): string | null {
   const models = getModelsByType(type)
@@ -549,7 +549,13 @@ export function GenerationInterface({
 
   const handleGenerate = async (
     prompt: string,
-    options?: { referenceImage?: File; referenceImages?: File[]; referenceImageId?: string }
+    options?: { 
+      referenceImage?: File
+      referenceImages?: File[]
+      referenceImageId?: string
+      endFrameImage?: File
+      endFrameImageId?: string
+    }
   ) => {
     if (!session || !prompt.trim()) return
 
@@ -673,6 +679,21 @@ export function GenerationInterface({
         }
       }
 
+      // Handle end frame image for video interpolation (Kling 2.6)
+      let endFrameImageData: string | undefined
+      if (options?.endFrameImage) {
+        try {
+          endFrameImageData = await compressImage(options.endFrameImage, maxPerImageMB)
+        } catch (error: any) {
+          toast({
+            title: "End frame image too large",
+            description: error.message || 'End frame image is too large. Please use a smaller image.',
+            variant: "destructive",
+          })
+          throw error
+        }
+      }
+
       const result = await generateMutation.mutateAsync({
         sessionId: session.id,
         modelId: selectedModel,
@@ -685,6 +706,9 @@ export function GenerationInterface({
           ...(referenceImagesData && referenceImagesData.length > 0 && { referenceImages: referenceImagesData }),
           ...(referenceImageData && !referenceImagesData && { referenceImage: referenceImageData }),
           ...(options?.referenceImageId && { referenceImageId: options.referenceImageId }),
+          // End frame for video interpolation (Kling 2.6)
+          ...(endFrameImageData && { endFrameImage: endFrameImageData }),
+          ...(options?.endFrameImageId && { endFrameImageId: options.endFrameImageId }),
         },
       })
       
