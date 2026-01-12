@@ -28,7 +28,7 @@ const getPrisma = () => {
     return null
   }
   // Dynamic import to avoid bundling prisma in client
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { prisma } = require('@/lib/prisma')
   return prisma
 }
