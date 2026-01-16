@@ -227,6 +227,103 @@ Camera locked on tripod, completely static. The person slowly raises the coffee 
 
 ---
 
+## Start & End Frame Prompts (Interpolation)
+
+**Models:** VEO 3.1, Kling 2.6
+
+When you have BOTH a starting and ending frame, the prompt describes the **transformation journey** between them—not the frames themselves.
+
+### Core Principles
+
+**The frames are fixed endpoints.** The model already knows what the start and end look like. Your prompt guides HOW the scene transitions between them:
+- What actions or movements occur
+- The emotional/narrative arc
+- Camera behavior during the transition
+- Temporal pacing (sudden, gradual, rhythmic)
+- Audio that reinforces the transformation
+
+**Describe the motion, not the positions.**
+- Wrong: "A woman on a swing, then the swing is empty"
+- Right: "The ghostly woman slowly fades away, vanishing completely, leaving the swing swaying rhythmically on its own"
+
+**Think cinematically about the in-between.**
+What story beats happen? What's the emotional progression?
+
+### Prompt Structure for Interpolation
+
+```
+[Cinematic/style context], [initial state acknowledgment]. [Transformation description with temporal detail]. [End state arrival]. [Audio/atmosphere throughout].
+```
+
+### VEO 3.1 Examples
+
+**Disappearing figure:**
+```
+A cinematic, haunting video. A ghostly woman with long white hair and a flowing dress swings gently on a rope swing beneath a massive, gnarled tree in a foggy, moonlit clearing. The fog thickens and swirls around her, and she slowly fades away, vanishing completely. The empty swing is left swaying rhythmically on its own in the eerie silence.
+```
+
+**Physical transformation:**
+```
+The ginger cat grips the steering wheel, eyes forward with determination. The convertible races along the coastal cliff road, then launches off the edge. The cat's expression shifts from focus to exhilaration as the car arcs through open air, momentarily weightless against the blue sky.
+```
+
+### Kling 2.6 Considerations
+
+Kling responds well to:
+- **Explicit motion verbs**: "transforms", "morphs", "transitions", "shifts gradually"
+- **Temporal markers**: "over the course of...", "as the scene progresses...", "slowly then suddenly"
+- **Camera participation**: The camera can move AS part of the transition narrative
+- **Emotional beats**: Kling handles expressive transitions well—emphasize feeling changes
+
+**Kling interpolation example:**
+```
+The still morning forest gradually awakens. Leaves begin to rustle, first gently, then with increasing energy. Shafts of golden light push through the canopy, creeping across the forest floor. The camera drifts forward slowly, matching the pace of the spreading dawn. Birds begin calling, building from a single note to a full chorus.
+```
+
+### When to Acknowledge Frames vs. Focus on Motion
+
+**Acknowledge frames when:**
+- There's a dramatic visual difference that needs narrative bridging
+- The transformation has clear "before" and "after" states to connect
+- Context helps the model understand the journey (e.g., "from perched on the branch" helps define the takeoff)
+
+**Focus purely on motion when:**
+- The frames are very similar (same scene, slight changes)
+- The motion IS the story (action sequence, subtle shift)
+- Over-describing would constrain the model's creativity
+
+### Common Interpolation Scenarios
+
+**Location change (same subject):**
+```
+She steps through the doorway, the warm interior light giving way to cold blue moonlight. Her expression shifts from comfort to wonder as she takes in the transformed landscape outside.
+```
+
+**Time passage:**
+```
+The afternoon shadows stretch and deepen across the plaza. Crowds thin as the golden hour arrives. The lone street musician continues playing, their music now echoing in the emptier space.
+```
+
+**Emotional shift:**
+```
+His tense shoulders gradually soften. The grip on the letter loosens. A slow exhale. The faintest smile begins at the corners of his mouth as understanding dawns.
+```
+
+**Physical action:**
+```
+The dancer's weight shifts onto her back foot, arms drawing inward. She pauses—then explodes into the leap, body arcing through the air, landing with controlled precision on the opposite mark.
+```
+
+### What NOT to Do
+
+- Don't describe the start frame in detail (the model has it)
+- Don't describe the end frame in detail (the model has it)
+- Don't use static language ("is standing", "appears") — use motion language ("rises", "shifts", "transforms")
+- Don't forget that interpolation benefits from TEMPORAL detail — how long things take, what happens first/second/last
+- Don't ignore audio — sound can bridge visual transitions effectively
+
+---
+
 ## Text-to-Video (T2V)
 
 Combine T2I structure with motion/audio elements:
