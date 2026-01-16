@@ -27,18 +27,32 @@ export interface ProviderLimits {
   monthly: number
 }
 
-// Default limits based on documented/observed rates
-// Google Gemini API Developer tier - conservative estimates
-const DEFAULT_GEMINI_RPM = 10
-const DEFAULT_GEMINI_MONTHLY = 1500
+// Default limits based on Gemini API Tier 3 (Paid tier with >$1000 spend)
+// See: https://ai.google.dev/gemini-api/docs/rate-limits
+// 
+// Tier 3 provides significantly higher limits than Free/Tier 1:
+// - Free tier: 15 RPM, 1,500 RPD
+// - Tier 1: ~60 RPM (varies by model)
+// - Tier 3: 2,000+ RPM for most models
+//
+// Override these via environment variables if needed:
+// - GEMINI_RPM, GEMINI_MONTHLY
+// - GEMINI_NANO_BANANA_RPM, GEMINI_NANO_BANANA_MONTHLY
+// - GEMINI_VEO_RPM, GEMINI_VEO_MONTHLY
 
-// Nano Banana Pro specific (observed to be more restrictive)
-const DEFAULT_NANO_BANANA_RPM = 5
-const DEFAULT_NANO_BANANA_MONTHLY = 1000
+// Google Gemini API Tier 3 limits
+const DEFAULT_GEMINI_RPM = 1000
+const DEFAULT_GEMINI_MONTHLY = 50000
 
-// Veo 3.1 specific (documented as 10 RPM per project)
-const DEFAULT_VEO_RPM = 10
-const DEFAULT_VEO_MONTHLY = 1000
+// Nano Banana (Gemini 2.5 Flash Image) - Tier 3 limits
+// Image generation models typically have slightly lower limits
+const DEFAULT_NANO_BANANA_RPM = 500
+const DEFAULT_NANO_BANANA_MONTHLY = 30000
+
+// Veo 3.1 (Video generation) - Tier 3 limits
+// Video models have lower RPM due to compute requirements
+const DEFAULT_VEO_RPM = 100
+const DEFAULT_VEO_MONTHLY = 5000
 
 // Replicate - generous limits on paid tier
 const DEFAULT_REPLICATE_RPM = 100
