@@ -242,24 +242,118 @@ export function ImageToVideoOverlay({
         }
       )
 
-      // Convert reference image to base64 if provided
-      let referenceImageBase64: string | undefined
-      if (options?.referenceImage) {
-        referenceImageBase64 = await new Promise<string>((resolve) => {
+      // COMPRESS images to prevent HTTP 413 errors (Vercel limit: 4.5MB for request body)
+      // Count total images to determine per-image size budget
+      const imageCount = (options?.referenceImage ? 1 : 0) + (options?.endFrameImage ? 1 : 0)
+      const maxTotalSizeMB = 3.0 // Conservative limit to leave room for other request data
+      const maxPerImageMB = imageCount > 1 
+        ? Math.max(0.8, maxTotalSizeMB / imageCount) // Split budget between images
+        : 2.5 // Single image can be larger
+      const maxDimension = 1920 // Max dimension for video reference images
+      const quality = 0.85
+      
+      // Compress image helper function
+      const compressImage = (file: File, targetMaxMB: number): Promise<string> => {
+        return new Promise((resolve, reject) => {
           const reader = new FileReader()
-          reader.onloadend = () => resolve(reader.result as string)
-          reader.readAsDataURL(options.referenceImage!)
+          reader.onload = () => {
+            const dataUrl = reader.result as string
+            const img = new Image()
+            img.onload = () => {
+              const canvas = document.createElement('canvas')
+              const ctx = canvas.getContext('2d')
+              if (!ctx) {
+                resolve(dataUrl) // Fallback to original if canvas not supported
+                return
+              }
+              
+              // Calculate new dimensions
+              let { width, height } = img
+              if (width > maxDimension || height > maxDimension) {
+                const ratio = maxDimension / Math.max(width, height)
+                width = Math.floor(width * ratio)
+                height = Math.floor(height * ratio)
+              }
+              
+              canvas.width = width
+              canvas.height = height
+              ctx.drawImage(img, 0, 0, width, height)
+              
+              // Convert to JPEG with appropriate quality
+              let compressedDataUrl = canvas.toDataURL('image/jpeg', quality)
+              
+              // If still too large, reduce quality further
+              let currentQuality = quality
+              let attempts = 0
+              while (compressedDataUrl.length / (1024 * 1024) > targetMaxMB && attempts < 3 && currentQuality > 0.5) {
+                currentQuality = Math.max(0.5, currentQuality - 0.1)
+                compressedDataUrl = canvas.toDataURL('image/jpeg', currentQuality)
+                attempts++
+              }
+              
+              // Final size check
+              const sizeInMB = compressedDataUrl.length / (1024 * 1024)
+              if (sizeInMB > targetMaxMB * 1.2) {
+                // Try one more time with even lower quality
+                compressedDataUrl = canvas.toDataURL('image/jpeg', 0.5)
+                const finalSizeMB = compressedDataUrl.length / (1024 * 1024)
+                if (finalSizeMB > targetMaxMB * 1.5) {
+                  reject(new Error(`Image too large after compression (${finalSizeMB.toFixed(2)}MB). Please use a smaller image.`))
+                  return
+                }
+              }
+              
+              resolve(compressedDataUrl)
+            }
+            img.onerror = () => resolve(dataUrl) // Fallback on error
+            img.src = dataUrl
+          }
+          reader.onerror = reject
+          reader.readAsDataURL(file)
         })
       }
+
+      // Convert and compress reference image if provided
+      let referenceImageBase64: string | undefined
+      if (options?.referenceImage) {
+        try {
+          referenceImageBase64 = await compressImage(options.referenceImage, maxPerImageMB)
+        } catch (error: any) {
+          toast({
+            title: 'Image too large',
+            description: error.message || 'Reference image is too large. Please use a smaller image.',
+            variant: 'destructive',
+          })
+          return
+        }
+      }
       
-      // Convert end frame image to base64 if provided
+      // Convert and compress end frame image if provided
       let endFrameImageBase64: string | undefined
       if (options?.endFrameImage) {
-        endFrameImageBase64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader()
-          reader.onloadend = () => resolve(reader.result as string)
-          reader.readAsDataURL(options.endFrameImage!)
+        try {
+          endFrameImageBase64 = await compressImage(options.endFrameImage, maxPerImageMB)
+        } catch (error: any) {
+          toast({
+            title: 'End frame too large',
+            description: error.message || 'End frame image is too large. Please use a smaller image.',
+            variant: 'destructive',
+          })
+          return
+        }
+      }
+      
+      // Validate total size
+      const totalSizeMB = 
+        (referenceImageBase64?.length || 0) / (1024 * 1024) +
+        (endFrameImageBase64?.length || 0) / (1024 * 1024)
+      if (totalSizeMB > maxTotalSizeMB * 1.1) {
+        toast({
+          title: 'Images too large',
+          description: `Total image size (${totalSizeMB.toFixed(1)}MB) exceeds limit. Please use smaller images.`,
+          variant: 'destructive',
         })
+        return
       }
       
       await generateMutation.mutateAsync({
@@ -286,10 +380,18 @@ export function ImageToVideoOverlay({
       
       // Keep overlay open so user can see progress and make more iterations
       // Prompt is preserved for easy iteration
-    } catch (error) {
+    } catch (error: any) {
       console.error('Video generation failed:', error)
+      // Show user-friendly error for HTTP 413
+      if (error.message?.includes('413') || error.message?.includes('Payload Too Large')) {
+        toast({
+          title: 'Request too large',
+          description: 'The image data is too large. Please try with a smaller image.',
+          variant: 'destructive',
+        })
+      }
     }
-  }, [ensureVideoSession, generateMutation, selectedModel, parameters, outputId, refetch, onGenerationStarted, queryClient])
+  }, [ensureVideoSession, generateMutation, selectedModel, parameters, outputId, refetch, onGenerationStarted, queryClient, toast])
   
   // Handle bookmark toggle for video outputs
   const handleToggleBookmark = useCallback(async (outputId: string, isBookmarked: boolean) => {

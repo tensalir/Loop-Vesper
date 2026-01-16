@@ -566,12 +566,15 @@ export function GenerationInterface({
       // Convert reference images File(s) to base64 data URL(s) if provided
       // COMPRESS to prevent HTTP 413 errors (Vercel limit: 4.5MB for request body)
       // When multiple images are present, we need to be more aggressive with compression
-      const imageCount = options?.referenceImages?.length || (options?.referenceImage ? 1 : 0)
-      const maxTotalSizeMB = 3.5 // Leave room for other request data (prompt, parameters, etc.)
+      // NOTE: Count end frame image too, as it contributes to total request body size
+      const referenceImageCount = options?.referenceImages?.length || (options?.referenceImage ? 1 : 0)
+      const endFrameCount = options?.endFrameImage ? 1 : 0
+      const imageCount = referenceImageCount + endFrameCount
+      const maxTotalSizeMB = 3.0 // Conservative limit to leave room for other request data
       const maxPerImageMB = imageCount > 1 
-        ? Math.max(0.5, maxTotalSizeMB / imageCount) // More aggressive for multiple images
-        : 3.0 // Single image can be larger
-      const maxDimension = imageCount > 1 ? 1536 : 2048 // Smaller dimensions for multiple images
+        ? Math.max(0.5, maxTotalSizeMB / imageCount) // Split budget between all images
+        : 2.5 // Single image can be larger (but not too large for Vercel)
+      const maxDimension = imageCount > 1 ? 1536 : 1920 // Smaller dimensions for multiple images
       const quality = imageCount > 1 ? 0.75 : 0.85 // Lower quality for multiple images
       
       const compressImage = (file: File, targetMaxMB: number): Promise<string> => {
