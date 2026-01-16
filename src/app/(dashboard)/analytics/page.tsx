@@ -21,6 +21,7 @@ import {
   Cpu,
   RefreshCcw,
   Play,
+  Download,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 
@@ -126,6 +127,40 @@ interface BackfillStatus {
   }
   pendingBackfill: number
   percentComplete: number
+}
+
+// Types for global event/download statistics
+interface EventStats {
+  available: boolean
+  message?: string
+  summary?: {
+    totalDownloads: number
+    totalOutputsWithDownloads: number
+    totalOutputs: number
+    overallDownloadRate: number
+  }
+  byModel?: Array<{
+    modelId: string
+    modelName: string
+    provider: string
+    type: 'image' | 'video'
+    downloadCount: number
+    outputCount: number
+    downloadRate: number
+  }>
+  byDownloadRate?: Array<{
+    modelId: string
+    modelName: string
+    provider: string
+    type: 'image' | 'video'
+    downloadCount: number
+    outputCount: number
+    downloadRate: number
+  }>
+  cohort?: {
+    uniqueDownloadUsers: number
+    minUsersRequired: number
+  }
 }
 
 // Donut Chart Component
@@ -340,113 +375,6 @@ function MyAnalyticsContent() {
   const [stats, setStats] = useState<MyUsageStats | null>(null)
   const [spending, setSpending] = useState<SpendingStats | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [analysisStatus, setAnalysisStatus] = useState<AnalysisProcessorStatus | null>(null)
-  const [backfillStatus, setBackfillStatus] = useState<BackfillStatus | null>(null)
-  const [analysisBusy, setAnalysisBusy] = useState(false)
-  const [backfillBusy, setBackfillBusy] = useState(false)
-  const [statusBusy, setStatusBusy] = useState(false)
-
-  const refreshAnalysisStatus = async () => {
-    try {
-      setStatusBusy(true)
-      const [processorRes, backfillRes] = await Promise.all([
-        fetch('/api/analyze/process'),
-        fetch('/api/admin/analysis/backfill'),
-      ])
-
-      if (processorRes.ok) {
-        const data: AnalysisProcessorStatus = await processorRes.json()
-        setAnalysisStatus(data)
-      } else {
-        const txt = await processorRes.text().catch(() => '')
-        throw new Error(`Failed to load analysis status (${processorRes.status}): ${txt}`)
-      }
-
-      if (backfillRes.ok) {
-        const data: BackfillStatus = await backfillRes.json()
-        setBackfillStatus(data)
-      } else {
-        const txt = await backfillRes.text().catch(() => '')
-        throw new Error(`Failed to load backfill status (${backfillRes.status}): ${txt}`)
-      }
-    } finally {
-      setStatusBusy(false)
-    }
-  }
-
-  const enqueueBackfillBatch = async () => {
-    try {
-      setBackfillBusy(true)
-      const res = await fetch('/api/admin/analysis/backfill', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ limit: 200 }),
-      })
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '')
-        throw new Error(`Backfill failed (${res.status}): ${txt}`)
-      }
-
-      toast({
-        title: 'Backfill enqueued',
-        description: 'Queued more outputs for semantic analysis.',
-      })
-
-      await refreshAnalysisStatus()
-    } catch (error: any) {
-      console.error('Backfill error:', error)
-      toast({
-        title: 'Backfill failed',
-        description: error.message || 'Could not enqueue backfill.',
-        variant: 'destructive',
-      })
-    } finally {
-      setBackfillBusy(false)
-    }
-  }
-
-  const processNextBatch = async () => {
-    try {
-      setAnalysisBusy(true)
-      const res = await fetch('/api/analyze/process', { method: 'POST' })
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '')
-        throw new Error(`Process failed (${res.status}): ${txt}`)
-      }
-
-      const result = await res.json()
-      
-      // Handle both old format (synchronous) and new format (background processing)
-      if (result.processed !== undefined) {
-        // Old format - synchronous processing completed
-        toast({
-          title: 'Processed batch',
-          description: `Processed ${result.processed ?? 0} item(s). Completed: ${result.completed ?? 0}, Failed: ${result.failed ?? 0}.`,
-        })
-      } else {
-        // New format - background processing started
-        toast({
-          title: 'Processing started',
-          description: `Started processing ${result.claimed ?? 0} item(s) in the background. Processing will continue even if you navigate away.`,
-        })
-      }
-
-      // Refresh status after a short delay to show updated counts
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      await refreshAnalysisStatus()
-    } catch (error: any) {
-      console.error('Process error:', error)
-      toast({
-        title: 'Processing failed',
-        description: error.message || 'Could not process analysis queue.',
-        variant: 'destructive',
-      })
-    } finally {
-      setAnalysisBusy(false)
-    }
-  }
 
   useEffect(() => {
     const fetchData = async () => {
@@ -472,11 +400,6 @@ function MyAnalyticsContent() {
               const spendingData = await spendingResponse.json()
               setSpending(spendingData)
             }
-
-            // Load semantic analysis pipeline status for admins
-            await refreshAnalysisStatus().catch((e) => {
-              console.warn('Failed to load analysis status:', e?.message || e)
-            })
           }
         }
       } catch (error) {
@@ -646,142 +569,6 @@ function MyAnalyticsContent() {
         </Card>
       )}
 
-      {/* Semantic Analysis Controls (Admin Only) */}
-      {isAdmin && (
-        <Card className="border-dashed">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Cpu className="h-5 w-5 text-muted-foreground" />
-              Semantic Analysis (Gemini → Claude)
-            </CardTitle>
-            <CardDescription>
-              Enqueue and process output descriptions. This powers future “what works” insights. Costs apply.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-muted-foreground">
-                {statusBusy ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Refreshing status…
-                  </span>
-                ) : (
-                  <span>
-                    {analysisStatus?.total
-                      ? `Outputs: ${analysisStatus.total.outputs.toLocaleString()} • Completed: ${analysisStatus.total.analyzed.toLocaleString()} • Pending: ${analysisStatus.total.pending.toLocaleString()}`
-                      : 'Status not loaded yet.'}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={refreshAnalysisStatus}
-                  disabled={statusBusy || analysisBusy || backfillBusy}
-                >
-                  <RefreshCcw className="h-4 w-4 mr-2" />
-                  Refresh
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={enqueueBackfillBatch}
-                  disabled={statusBusy || analysisBusy || backfillBusy}
-                >
-                  {backfillBusy ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Layers className="h-4 w-4 mr-2" />
-                  )}
-                  Backfill (200)
-                </Button>
-                <Button
-                  onClick={processNextBatch}
-                  disabled={statusBusy || analysisBusy || backfillBusy}
-                >
-                  {analysisBusy ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Play className="h-4 w-4 mr-2" />
-                  )}
-                  Process batch
-                </Button>
-              </div>
-            </div>
-
-            {/* Progress bars */}
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card className="bg-muted/20">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Coverage</CardTitle>
-                  <CardDescription>
-                    Outputs with analysis records enqueued
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Enqueued</span>
-                    <span className="font-semibold">
-                      {backfillStatus
-                        ? `${backfillStatus.analysis.total.toLocaleString()} / ${backfillStatus.totalOutputs.toLocaleString()}`
-                        : '—'}
-                    </span>
-                  </div>
-                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all"
-                      style={{
-                        width: backfillStatus ? `${Math.min(backfillStatus.percentComplete, 100)}%` : '0%',
-                      }}
-                    />
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {backfillStatus
-                      ? `${backfillStatus.percentComplete}% enqueued • Missing: ${backfillStatus.pendingBackfill.toLocaleString()}`
-                      : '—'}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-muted/20">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Processing</CardTitle>
-                  <CardDescription>
-                    Completed Gemini captions + Claude parsing
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Completed</span>
-                    <span className="font-semibold">
-                      {analysisStatus?.total
-                        ? `${analysisStatus.total.analyzed.toLocaleString()} / ${analysisStatus.total.outputs.toLocaleString()}`
-                        : '—'}
-                    </span>
-                  </div>
-                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-emerald-500 transition-all"
-                      style={{
-                        width: analysisStatus?.total && analysisStatus.total.outputs > 0
-                          ? `${Math.min((analysisStatus.total.analyzed / analysisStatus.total.outputs) * 100, 100)}%`
-                          : '0%',
-                      }}
-                    />
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {analysisStatus?.queue
-                      ? `Queued: ${(analysisStatus.queue.queued || 0).toLocaleString()} • Processing: ${(analysisStatus.queue.processing || 0).toLocaleString()} • Failed: ${(analysisStatus.queue.failed || 0).toLocaleString()}`
-                      : '—'}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Empty State */}
       {(!stats.topModels || stats.topModels.length === 0) && (
         <Card className="border-dashed">
@@ -804,15 +591,146 @@ function GlobalAnalyticsContent() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<GlobalUsageStats | null>(null)
+  const [eventStats, setEventStats] = useState<EventStats | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [analysisStatus, setAnalysisStatus] = useState<AnalysisProcessorStatus | null>(null)
+  const [backfillStatus, setBackfillStatus] = useState<BackfillStatus | null>(null)
+  const [analysisBusy, setAnalysisBusy] = useState(false)
+  const [backfillBusy, setBackfillBusy] = useState(false)
+  const [statusBusy, setStatusBusy] = useState(false)
+
+  const refreshAnalysisStatus = async () => {
+    try {
+      setStatusBusy(true)
+      const [processorRes, backfillRes] = await Promise.all([
+        fetch('/api/analyze/process'),
+        fetch('/api/admin/analysis/backfill'),
+      ])
+
+      if (processorRes.ok) {
+        const data: AnalysisProcessorStatus = await processorRes.json()
+        setAnalysisStatus(data)
+      } else {
+        const txt = await processorRes.text().catch(() => '')
+        throw new Error(`Failed to load analysis status (${processorRes.status}): ${txt}`)
+      }
+
+      if (backfillRes.ok) {
+        const data: BackfillStatus = await backfillRes.json()
+        setBackfillStatus(data)
+      } else {
+        const txt = await backfillRes.text().catch(() => '')
+        throw new Error(`Failed to load backfill status (${backfillRes.status}): ${txt}`)
+      }
+    } finally {
+      setStatusBusy(false)
+    }
+  }
+
+  const enqueueBackfillBatch = async () => {
+    try {
+      setBackfillBusy(true)
+      const res = await fetch('/api/admin/analysis/backfill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 200 }),
+      })
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '')
+        throw new Error(`Backfill failed (${res.status}): ${txt}`)
+      }
+
+      toast({
+        title: 'Backfill enqueued',
+        description: 'Queued more outputs for semantic analysis.',
+      })
+
+      await refreshAnalysisStatus()
+    } catch (error: unknown) {
+      const err = error as Error
+      console.error('Backfill error:', error)
+      toast({
+        title: 'Backfill failed',
+        description: err.message || 'Could not enqueue backfill.',
+        variant: 'destructive',
+      })
+    } finally {
+      setBackfillBusy(false)
+    }
+  }
+
+  const processNextBatch = async () => {
+    try {
+      setAnalysisBusy(true)
+      const res = await fetch('/api/analyze/process', { method: 'POST' })
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '')
+        throw new Error(`Process failed (${res.status}): ${txt}`)
+      }
+
+      const result = await res.json()
+
+      if (result.processed !== undefined) {
+        toast({
+          title: 'Processed batch',
+          description: `Processed ${result.processed ?? 0} item(s). Completed: ${result.completed ?? 0}, Failed: ${result.failed ?? 0}.`,
+        })
+      } else {
+        toast({
+          title: 'Processing started',
+          description: `Started processing ${result.claimed ?? 0} item(s) in the background. Processing will continue even if you navigate away.`,
+        })
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      await refreshAnalysisStatus()
+    } catch (error: unknown) {
+      const err = error as Error
+      console.error('Process error:', error)
+      toast({
+        title: 'Processing failed',
+        description: err.message || 'Could not process analysis queue.',
+        variant: 'destructive',
+      })
+    } finally {
+      setAnalysisBusy(false)
+    }
+  }
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
         setLoading(true)
-        const response = await fetch('/api/analytics/global/usage')
-        if (response.ok) {
-          const data = await response.json()
+        
+        // Fetch global usage stats and event stats in parallel
+        const [usageResponse, eventResponse] = await Promise.all([
+          fetch('/api/analytics/global/usage'),
+          fetch('/api/analytics/global/events'),
+        ])
+
+        if (usageResponse.ok) {
+          const data = await usageResponse.json()
           setStats(data)
+        }
+
+        if (eventResponse.ok) {
+          const data = await eventResponse.json()
+          setEventStats(data)
+        }
+
+        // Check if admin and load analysis status
+        const profileResponse = await fetch('/api/profile')
+        if (profileResponse.ok) {
+          const profile = await profileResponse.json()
+          setIsAdmin(profile.role === 'admin')
+
+          if (profile.role === 'admin') {
+            await refreshAnalysisStatus().catch((e) => {
+              console.warn('Failed to load analysis status:', e?.message || e)
+            })
+          }
         }
       } catch (error) {
         console.error('Error fetching global stats:', error)
@@ -826,6 +744,7 @@ function GlobalAnalyticsContent() {
       }
     }
     fetchStats()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast])
 
   if (loading) {
@@ -971,6 +890,216 @@ function GlobalAnalyticsContent() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Download Statistics - Quality Signal */}
+      {eventStats?.available && eventStats.summary && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5 text-muted-foreground" />
+              Quality Signals (Downloads)
+            </CardTitle>
+            <CardDescription>
+              Download activity indicates which model/prompt combinations produce outputs users value enough to save
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Summary Stats */}
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="text-center p-4 rounded-lg bg-muted/30">
+                <div className="text-2xl font-bold">{eventStats.summary.totalDownloads.toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground">Total Downloads</div>
+              </div>
+              <div className="text-center p-4 rounded-lg bg-muted/30">
+                <div className="text-2xl font-bold">{eventStats.summary.totalOutputsWithDownloads.toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground">Unique Outputs Downloaded</div>
+              </div>
+              <div className="text-center p-4 rounded-lg bg-muted/30">
+                <div className="text-2xl font-bold">{eventStats.summary.overallDownloadRate.toFixed(1)}%</div>
+                <div className="text-xs text-muted-foreground">Overall Download Rate</div>
+              </div>
+            </div>
+
+            {/* Top Models by Download Rate */}
+            {eventStats.byDownloadRate && eventStats.byDownloadRate.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  Models by Download Rate (Quality Signal)
+                </h4>
+                <div className="space-y-2">
+                  {eventStats.byDownloadRate.slice(0, 5).map((model, index) => (
+                    <div key={model.modelId} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="w-2.5 h-2.5 rounded-full" 
+                            style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                          />
+                          <span className="font-medium">{model.modelName}</span>
+                          <span className="text-xs text-muted-foreground">({model.provider})</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-muted-foreground">
+                          <span className="text-xs">{model.downloadCount} downloads</span>
+                          <span className="font-semibold text-foreground">{model.downloadRate.toFixed(1)}%</span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ 
+                            width: `${Math.min(model.downloadRate, 100)}%`, 
+                            backgroundColor: CHART_COLORS[index % CHART_COLORS.length] 
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Higher download rates suggest these models produce outputs users find valuable
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Semantic Analysis Controls (Admin Only) */}
+      {isAdmin && (
+        <Card className="border-dashed">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cpu className="h-5 w-5 text-muted-foreground" />
+              {"Semantic Analysis (Gemini \u2192 Claude)"}
+            </CardTitle>
+            <CardDescription>
+              {"Enqueue and process output descriptions. This powers future \"what works\" insights. Costs apply."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-muted-foreground">
+                {statusBusy ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {"Refreshing status\u2026"}
+                  </span>
+                ) : (
+                  <span>
+                    {analysisStatus?.total
+                      ? `Outputs: ${analysisStatus.total.outputs.toLocaleString()} \u2022 Completed: ${analysisStatus.total.analyzed.toLocaleString()} \u2022 Pending: ${analysisStatus.total.pending.toLocaleString()}`
+                      : 'Status not loaded yet.'}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={refreshAnalysisStatus}
+                  disabled={statusBusy || analysisBusy || backfillBusy}
+                >
+                  <RefreshCcw className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={enqueueBackfillBatch}
+                  disabled={statusBusy || analysisBusy || backfillBusy}
+                >
+                  {backfillBusy ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Layers className="h-4 w-4 mr-2" />
+                  )}
+                  Backfill (200)
+                </Button>
+                <Button
+                  onClick={processNextBatch}
+                  disabled={statusBusy || analysisBusy || backfillBusy}
+                >
+                  {analysisBusy ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4 mr-2" />
+                  )}
+                  Process batch
+                </Button>
+              </div>
+            </div>
+
+            {/* Progress bars */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card className="bg-muted/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Coverage</CardTitle>
+                  <CardDescription>
+                    Outputs with analysis records enqueued
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Enqueued</span>
+                    <span className="font-semibold">
+                      {backfillStatus
+                        ? `${backfillStatus.analysis.total.toLocaleString()} / ${backfillStatus.totalOutputs.toLocaleString()}`
+                        : '\u2014'}
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{
+                        width: backfillStatus ? `${Math.min(backfillStatus.percentComplete, 100)}%` : '0%',
+                      }}
+                    />
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {backfillStatus
+                      ? `${backfillStatus.percentComplete}% enqueued \u2022 Missing: ${backfillStatus.pendingBackfill.toLocaleString()}`
+                      : '\u2014'}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-muted/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Processing</CardTitle>
+                  <CardDescription>
+                    Completed Gemini captions + Claude parsing
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Completed</span>
+                    <span className="font-semibold">
+                      {analysisStatus?.total
+                        ? `${analysisStatus.total.analyzed.toLocaleString()} / ${analysisStatus.total.outputs.toLocaleString()}`
+                        : '\u2014'}
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      style={{
+                        width: analysisStatus?.total && analysisStatus.total.outputs > 0
+                          ? `${Math.min((analysisStatus.total.analyzed / analysisStatus.total.outputs) * 100, 100)}%`
+                          : '0%',
+                      }}
+                    />
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {analysisStatus?.queue
+                      ? `Queued: ${(analysisStatus.queue.queued || 0).toLocaleString()} \u2022 Processing: ${(analysisStatus.queue.processing || 0).toLocaleString()} \u2022 Failed: ${(analysisStatus.queue.failed || 0).toLocaleString()}`
+                      : '\u2014'}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
     </div>
