@@ -553,8 +553,12 @@ export function GenerationInterface({
       referenceImage?: File
       referenceImages?: File[]
       referenceImageId?: string
+      /** Pre-uploaded reference image URL (bypasses 4.5MB limit) */
+      referenceImageUrl?: string
       endFrameImage?: File
       endFrameImageId?: string
+      /** Pre-uploaded end frame URL (bypasses 4.5MB limit) */
+      endFrameImageUrl?: string
     }
   ) => {
     if (!session || !prompt.trim()) return
@@ -563,12 +567,14 @@ export function GenerationInterface({
     const pendingId = `pending-${Date.now()}`
 
     try {
-      // Convert reference images File(s) to base64 data URL(s) if provided
-      // COMPRESS to prevent HTTP 413 errors (Vercel limit: 4.5MB for request body)
-      // When multiple images are present, we need to be more aggressive with compression
-      // NOTE: Count end frame image too, as it contributes to total request body size
-      const referenceImageCount = options?.referenceImages?.length || (options?.referenceImage ? 1 : 0)
-      const endFrameCount = options?.endFrameImage ? 1 : 0
+      // PRIORITY: Use pre-uploaded URLs when available (bypasses Vercel's 4.5MB limit completely)
+      // Only fall back to compression if Files are provided without URLs
+      
+      // Count files that need compression (exclude those with pre-uploaded URLs)
+      const needsReferenceCompression = options?.referenceImage && !options?.referenceImageUrl
+      const needsEndFrameCompression = options?.endFrameImage && !options?.endFrameImageUrl
+      const referenceImageCount = options?.referenceImages?.length || (needsReferenceCompression ? 1 : 0)
+      const endFrameCount = needsEndFrameCompression ? 1 : 0
       const imageCount = referenceImageCount + endFrameCount
       const maxTotalSizeMB = 3.0 // Conservative limit to leave room for other request data
       const maxPerImageMB = imageCount > 1 
@@ -697,6 +703,30 @@ export function GenerationInterface({
         }
       }
 
+      // Build parameters - prefer pre-uploaded URLs over base64 data
+      // Determine reference image data (URL preferred over base64)
+      let finalReferenceImage: string | undefined
+      let finalReferenceImages: string[] | undefined
+      let finalEndFrameImage: string | undefined
+      
+      if (options?.referenceImageUrl) {
+        // Pre-uploaded URL - use directly (bypasses 4.5MB limit!)
+        finalReferenceImage = options.referenceImageUrl
+        console.log('[GenerationInterface] Using pre-uploaded reference URL')
+      } else if (referenceImagesData && referenceImagesData.length > 0) {
+        finalReferenceImages = referenceImagesData
+      } else if (referenceImageData) {
+        finalReferenceImage = referenceImageData
+      }
+      
+      if (options?.endFrameImageUrl) {
+        // Pre-uploaded URL - use directly (bypasses 4.5MB limit!)
+        finalEndFrameImage = options.endFrameImageUrl
+        console.log('[GenerationInterface] Using pre-uploaded end frame URL')
+      } else if (endFrameImageData) {
+        finalEndFrameImage = endFrameImageData
+      }
+      
       const result = await generateMutation.mutateAsync({
         sessionId: session.id,
         modelId: selectedModel,
@@ -706,11 +736,10 @@ export function GenerationInterface({
           resolution: parameters.resolution,
           numOutputs: parameters.numOutputs,
           ...(generationType === 'video' && parameters.duration && { duration: parameters.duration }),
-          ...(referenceImagesData && referenceImagesData.length > 0 && { referenceImages: referenceImagesData }),
-          ...(referenceImageData && !referenceImagesData && { referenceImage: referenceImageData }),
+          ...(finalReferenceImages && finalReferenceImages.length > 0 && { referenceImages: finalReferenceImages }),
+          ...(finalReferenceImage && !finalReferenceImages && { referenceImage: finalReferenceImage }),
           ...(options?.referenceImageId && { referenceImageId: options.referenceImageId }),
-          // End frame for video interpolation (Kling 2.6)
-          ...(endFrameImageData && { endFrameImage: endFrameImageData }),
+          ...(finalEndFrameImage && { endFrameImage: finalEndFrameImage }),
           ...(options?.endFrameImageId && { endFrameImageId: options.endFrameImageId }),
         },
       })

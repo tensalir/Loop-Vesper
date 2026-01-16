@@ -55,15 +55,30 @@ export async function POST(request: NextRequest) {
       parameters: requestParameters,
     } = body
     const rawParameters = requestParameters || {}
-    const { referenceImage, referenceImages, referenceImageId, endFrameImage, endFrameImageId, ...otherParameters } = rawParameters
+    const { 
+      referenceImage, 
+      referenceImages, 
+      referenceImageId, 
+      referenceImageUrl,  // NEW: Pre-uploaded URL (bypasses 4.5MB limit)
+      endFrameImage, 
+      endFrameImageId,
+      endFrameImageUrl,   // NEW: Pre-uploaded URL (bypasses 4.5MB limit) 
+      ...otherParameters 
+    } = rawParameters
     let referencePointer: Record<string, any> | null = null
     let endFramePointer: Record<string, any> | null = null
 
     // Generate a unique ID for reference images (used before generation is created)
     const referenceGroupId = `refgrp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
-    // Handle multiple reference images (preferred) or single image (backward compatibility)
-    if (referenceImages && Array.isArray(referenceImages) && referenceImages.length > 0) {
+    // Handle reference images - PRIORITY: pre-uploaded URL > base64 > referenceImageId
+    if (referenceImageUrl && typeof referenceImageUrl === 'string' && referenceImageUrl.startsWith('http')) {
+      // Pre-uploaded URL - use directly (no upload needed, bypasses 4.5MB limit!)
+      metricMeta.hasReferenceImage = true
+      metricMeta.referenceSource = 'pre-uploaded-url'
+      referencePointer = { referenceImageUrl }
+      console.log(`[generate] Using pre-uploaded reference URL: ${referenceImageUrl.slice(0, 50)}...`)
+    } else if (referenceImages && Array.isArray(referenceImages) && referenceImages.length > 0) {
       // Multiple images - persist all of them to storage, store only URLs
       metricMeta.hasReferenceImage = true
       metricMeta.referenceImageCount = referenceImages.length
@@ -90,15 +105,20 @@ export async function POST(request: NextRequest) {
         }
       }
     } else if (referenceImage && typeof referenceImage === 'string' && referenceImage.startsWith('data:')) {
-      // Single image (backward compatibility)
+      // Single base64 image (backward compatibility)
       metricMeta.hasReferenceImage = true
+      metricMeta.referenceSource = 'base64-upload'
       referencePointer = await persistReferenceImage(referenceImage, user.id, referenceImageId)
     } else if (referenceImageId) {
       referencePointer = { referenceImageId }
     }
 
-    // Handle end frame image for frame-to-frame video interpolation (Kling 2.6)
-    if (endFrameImage && typeof endFrameImage === 'string' && endFrameImage.startsWith('data:')) {
+    // Handle end frame image - PRIORITY: pre-uploaded URL > base64
+    if (endFrameImageUrl && typeof endFrameImageUrl === 'string' && endFrameImageUrl.startsWith('http')) {
+      // Pre-uploaded URL - use directly (no upload needed!)
+      endFramePointer = { endFrameImageUrl }
+      console.log(`[generate] Using pre-uploaded end frame URL: ${endFrameImageUrl.slice(0, 50)}...`)
+    } else if (endFrameImage && typeof endFrameImage === 'string' && endFrameImage.startsWith('data:')) {
       // End frame is a base64 image - persist to storage
       const endFrameGroupId = `endframe-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       const persistResult = await persistReferenceImage(endFrameImage, user.id, endFrameImageId || endFrameGroupId)
@@ -106,7 +126,7 @@ export async function POST(request: NextRequest) {
         endFramePointer = { endFrameImageUrl: persistResult.referenceImageUrl }
       }
     } else if (endFrameImage && typeof endFrameImage === 'string' && endFrameImage.startsWith('http')) {
-      // End frame is already a URL
+      // End frame is already a URL (legacy format)
       endFramePointer = { endFrameImageUrl: endFrameImage }
     }
 

@@ -9,6 +9,7 @@ import { Video as VideoIcon, ImagePlus, Ratio, ChevronDown, X, Upload, FolderOpe
 import { useModelCapabilities } from '@/hooks/useModelCapabilities'
 import { usePinnedImages } from '@/hooks/usePinnedImages'
 import { useToast } from '@/components/ui/use-toast'
+import { useImageUpload } from '@/hooks/useImageUpload'
 import { AspectRatioSelector } from './AspectRatioSelector'
 import { ModelPicker } from './ModelPicker'
 import { ImageBrowseModal } from './ImageBrowseModal'
@@ -22,8 +23,12 @@ interface VideoInputProps {
   onGenerate: (prompt: string, options?: { 
     referenceImage?: File
     referenceImageId?: string
+    /** Pre-uploaded reference image URL (bypasses 4.5MB limit) */
+    referenceImageUrl?: string
     endFrameImage?: File
     endFrameImageId?: string
+    /** Pre-uploaded end frame URL (bypasses 4.5MB limit) */
+    endFrameImageUrl?: string
   }) => void
   parameters: {
     aspectRatio: string
@@ -83,15 +88,23 @@ export function VideoInput({
   const projectId = params.id as string | undefined
   const { pinImage } = usePinnedImages(projectId)
   
+  // Image upload hooks - upload to storage immediately to bypass 4.5MB limit
+  const referenceUpload = useImageUpload({ purpose: 'reference' })
+  const endFrameUpload = useImageUpload({ purpose: 'endframe' })
+  
   // Start frame state
   const [referenceImage, setReferenceImage] = useState<File | null>(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [referenceImageId, setReferenceImageId] = useState<string | null>(null)
+  /** Uploaded URL (from Supabase Storage) - used instead of base64 to bypass Vercel limit */
+  const [uploadedReferenceUrl, setUploadedReferenceUrl] = useState<string | null>(null)
   
   // End frame state (for frame-to-frame interpolation)
   const [endFrameImage, setEndFrameImage] = useState<File | null>(null)
   const [endFramePreviewUrl, setEndFramePreviewUrl] = useState<string | null>(null)
   const [endFrameImageId, setEndFrameImageId] = useState<string | null>(null)
+  /** Uploaded URL (from Supabase Storage) - used instead of base64 to bypass Vercel limit */
+  const [uploadedEndFrameUrl, setUploadedEndFrameUrl] = useState<string | null>(null)
   
   const [localGenerating, setLocalGenerating] = useState(false)
   const [browseModalOpen, setBrowseModalOpen] = useState(false)
@@ -116,7 +129,8 @@ export function VideoInput({
   const rafId = useRef<number | null>(null)
   const currentHeight = useRef(52)
   
-  // Combine external and internal generating state
+  // Combine external and internal generating state + upload progress
+  const isUploading = referenceUpload.isUploading || endFrameUpload.isUploading
   const generating = externalGenerating ?? localGenerating
   const isOverlay = variant === 'overlay'
   
@@ -199,14 +213,27 @@ export function VideoInput({
       return
     }
     if (!prompt.trim()) return
+    
+    // Wait for any pending uploads
+    if (referenceUpload.isUploading || endFrameUpload.isUploading) {
+      toast({
+        title: 'Uploading images…',
+        description: 'Please wait for image upload to complete.',
+      })
+      return
+    }
 
     setLocalGenerating(true)
     try {
       await onGenerate(prompt, {
-        referenceImage: referenceImage || undefined,
+        // Prefer uploaded URL over File (bypasses Vercel 4.5MB limit)
+        referenceImage: uploadedReferenceUrl ? undefined : referenceImage || undefined,
         referenceImageId: referenceImageId || undefined,
-        endFrameImage: endFrameImage || undefined,
+        referenceImageUrl: uploadedReferenceUrl || undefined,
+        // Same for end frame
+        endFrameImage: uploadedEndFrameUrl ? undefined : endFrameImage || undefined,
         endFrameImageId: endFrameImageId || undefined,
+        endFrameImageUrl: uploadedEndFrameUrl || undefined,
       })
       // Keep the last prompt AND reference image after generating (users often iterate).
       // (ChatInput does the same for images; clearing the reference can cause confusing
@@ -227,33 +254,69 @@ export function VideoInput({
   }
 
   // Process and add image file for start frame (used by both file input and drag-and-drop)
-  const processImageFile = (file: File) => {
+  // Uploads immediately to Supabase Storage to bypass Vercel's 4.5MB limit
+  const processImageFile = async (file: File) => {
     if (!file.type.startsWith('image/')) return
     
     // Clean up old preview URL
-    if (imagePreviewUrl) {
+    if (imagePreviewUrl && imagePreviewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(imagePreviewUrl)
     }
-    // Create new preview URL
+    
+    // Create preview URL immediately for instant feedback
     const previewUrl = URL.createObjectURL(file)
     setImagePreviewUrl(previewUrl)
     setReferenceImage(file)
     setReferenceImageId(createReferenceId())
+    setUploadedReferenceUrl(null) // Clear any previous upload
+    
+    // Upload to storage in background
+    try {
+      const uploaded = await referenceUpload.upload(file)
+      setUploadedReferenceUrl(uploaded.url)
+      console.log('[VideoInput] Reference image uploaded:', uploaded.url)
+    } catch (error: any) {
+      console.error('[VideoInput] Failed to upload reference image:', error)
+      toast({
+        title: 'Upload failed',
+        description: error.message || 'Failed to upload image. Will try again on generate.',
+        variant: 'destructive',
+      })
+      // Keep the file - we'll fall back to base64 if upload failed
+    }
   }
   
   // Process and add image file for end frame
-  const processEndFrameFile = (file: File) => {
+  // Uploads immediately to Supabase Storage to bypass Vercel's 4.5MB limit
+  const processEndFrameFile = async (file: File) => {
     if (!file.type.startsWith('image/')) return
     
     // Clean up old preview URL
-    if (endFramePreviewUrl) {
+    if (endFramePreviewUrl && endFramePreviewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(endFramePreviewUrl)
     }
-    // Create new preview URL
+    
+    // Create preview URL immediately for instant feedback
     const previewUrl = URL.createObjectURL(file)
     setEndFramePreviewUrl(previewUrl)
     setEndFrameImage(file)
     setEndFrameImageId(endFrameImageIdOverride || createReferenceId())
+    setUploadedEndFrameUrl(null) // Clear any previous upload
+    
+    // Upload to storage in background
+    try {
+      const uploaded = await endFrameUpload.upload(file)
+      setUploadedEndFrameUrl(uploaded.url)
+      console.log('[VideoInput] End frame uploaded:', uploaded.url)
+    } catch (error: any) {
+      console.error('[VideoInput] Failed to upload end frame:', error)
+      toast({
+        title: 'Upload failed',
+        description: error.message || 'Failed to upload end frame. Will try again on generate.',
+        variant: 'destructive',
+      })
+      // Keep the file - we'll fall back to base64 if upload failed
+    }
   }
   
   // Handle end frame file select
@@ -268,22 +331,18 @@ export function VideoInput({
     }
   }
   
-  // Handle end frame browse select
+  // Handle end frame browse select - image already in storage, just use the URL
   const handleEndFrameBrowseSelect = async (imageUrl: string) => {
-    try {
-      const response = await fetch(imageUrl)
-      const blob = await response.blob()
-      const file = new File([blob], 'end-frame.png', { type: blob.type })
-      
-      if (endFramePreviewUrl) {
-        URL.revokeObjectURL(endFramePreviewUrl)
-      }
-      setEndFramePreviewUrl(imageUrl)
-      setEndFrameImage(file)
-      setEndFrameImageId(endFrameImageIdOverride || createReferenceId())
-    } catch (error) {
-      console.error('Error loading end frame from URL:', error)
+    // Clean up old preview URL
+    if (endFramePreviewUrl && endFramePreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(endFramePreviewUrl)
     }
+    
+    // For images from browse, URL is already in storage - use directly
+    setEndFramePreviewUrl(imageUrl)
+    setUploadedEndFrameUrl(imageUrl) // Already uploaded!
+    setEndFrameImage(null) // No file needed
+    setEndFrameImageId(endFrameImageIdOverride || createReferenceId())
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -399,69 +458,54 @@ export function VideoInput({
   }, [isResizing, handleResizeMove, handleResizeEnd])
 
   const handleBrowseSelect = async (imageUrl: string) => {
-    // Convert URL to File for consistent handling
-    try {
-      const response = await fetch(imageUrl)
-      const blob = await response.blob()
-      const file = new File([blob], 'reference.png', { type: blob.type })
-      
-      // Clean up old preview URL
-      if (imagePreviewUrl) {
-        URL.revokeObjectURL(imagePreviewUrl)
-      }
-      // Set the imageUrl as preview (it's already a valid URL)
-      setImagePreviewUrl(imageUrl)
-      setReferenceImage(file)
-      setReferenceImageId(createReferenceId())
-    } catch (error) {
-      console.error('Error loading image from URL:', error)
+    // Clean up old preview URL if it's a blob
+    if (imagePreviewUrl && imagePreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(imagePreviewUrl)
     }
+    
+    // Image from browse is already in storage - use URL directly (no File needed!)
+    // This bypasses the 4.5MB limit completely
+    setImagePreviewUrl(imageUrl)
+    setUploadedReferenceUrl(imageUrl) // Already uploaded!
+    setReferenceImage(null) // No file needed
+    setReferenceImageId(createReferenceId())
   }
 
   // If a referenceImageUrl is provided from parent (e.g., convert-to-video),
-  // hydrate the local preview + File so it appears in the prompt bar and is
-  // included in the generation request.
+  // use it directly - no need to fetch and create a File since the URL is already in storage.
+  // This bypasses Vercel's 4.5MB limit completely.
   useEffect(() => {
     if (!referenceImageUrl) return
-    // If we've already set a preview for this URL, skip
-    if (imagePreviewUrl === referenceImageUrl && referenceImage) return
-    ;(async () => {
-      try {
-        const response = await fetch(referenceImageUrl)
-        const blob = await response.blob()
-        const file = new File([blob], 'reference.png', { type: blob.type })
-        // Clean up old preview URL
-        if (imagePreviewUrl && imagePreviewUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(imagePreviewUrl)
-        }
-        setImagePreviewUrl(referenceImageUrl)
-        setReferenceImage(file)
-        setReferenceImageId(createReferenceId())
-      } catch (err) {
-        console.error('Failed to hydrate referenceImageUrl for video input:', err)
-      }
-    })()
+    // If we've already set this URL, skip
+    if (uploadedReferenceUrl === referenceImageUrl) return
+    
+    // Clean up old blob preview if any
+    if (imagePreviewUrl && imagePreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(imagePreviewUrl)
+    }
+    
+    // Use URL directly - no File needed since it's already in storage
+    setImagePreviewUrl(referenceImageUrl)
+    setUploadedReferenceUrl(referenceImageUrl)
+    setReferenceImage(null) // No file needed
+    setReferenceImageId(createReferenceId())
   }, [referenceImageUrl])
 
-  // Hydrate end frame from URL if provided
+  // Hydrate end frame from URL if provided - use directly, no File needed
   useEffect(() => {
     if (!endFrameImageUrl) return
-    if (endFramePreviewUrl === endFrameImageUrl && endFrameImage) return
-    ;(async () => {
-      try {
-        const response = await fetch(endFrameImageUrl)
-        const blob = await response.blob()
-        const file = new File([blob], 'end-frame.png', { type: blob.type })
-        if (endFramePreviewUrl && endFramePreviewUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(endFramePreviewUrl)
-        }
-        setEndFramePreviewUrl(endFrameImageUrl)
-        setEndFrameImage(file)
-        setEndFrameImageId(endFrameImageIdOverride || createReferenceId())
-      } catch (err) {
-        console.error('Failed to hydrate endFrameImageUrl:', err)
-      }
-    })()
+    if (uploadedEndFrameUrl === endFrameImageUrl) return
+    
+    // Clean up old blob preview if any
+    if (endFramePreviewUrl && endFramePreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(endFramePreviewUrl)
+    }
+    
+    // Use URL directly - no File needed since it's already in storage
+    setEndFramePreviewUrl(endFrameImageUrl)
+    setUploadedEndFrameUrl(endFrameImageUrl)
+    setEndFrameImage(null) // No file needed
+    setEndFrameImageId(endFrameImageIdOverride || createReferenceId())
   }, [endFrameImageUrl])
 
   // Cleanup preview URLs on unmount
@@ -590,10 +634,11 @@ export function VideoInput({
               {!lockedReferenceImage && (
                 <button
                   onClick={() => {
-                    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl)
+                    if (imagePreviewUrl && imagePreviewUrl.startsWith('blob:')) URL.revokeObjectURL(imagePreviewUrl)
                     setImagePreviewUrl(null)
                     setReferenceImage(null)
                     setReferenceImageId(null)
+                    setUploadedReferenceUrl(null)
                   }}
                   className="absolute -top-1 -right-1 bg-background border border-border rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-destructive hover:text-destructive-foreground z-10"
                   title="Remove start frame"
@@ -622,10 +667,11 @@ export function VideoInput({
                 {/* Remove button */}
                 <button
                   onClick={() => {
-                    if (endFramePreviewUrl) URL.revokeObjectURL(endFramePreviewUrl)
+                    if (endFramePreviewUrl && endFramePreviewUrl.startsWith('blob:')) URL.revokeObjectURL(endFramePreviewUrl)
                     setEndFramePreviewUrl(null)
                     setEndFrameImage(null)
                     setEndFrameImageId(null)
+                    setUploadedEndFrameUrl(null)
                   }}
                   className="absolute -top-1 -right-1 bg-background border border-border rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-destructive hover:text-destructive-foreground z-10"
                   title="Remove end frame"

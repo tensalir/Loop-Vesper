@@ -202,14 +202,74 @@ export function ImageToVideoOverlay({
     return null
   }, [sessionMode, selectedSessionId, newSessionName, onCreateSession])
   
+  // Helper to compress an image File to base64 (fallback when URL upload fails)
+  const compressImageToBase64 = useCallback(async (file: File): Promise<string> => {
+    const maxDimension = 1920
+    const quality = 0.85
+    const maxSizeMB = 2.5
+    
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const dataUrl = reader.result as string
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            resolve(dataUrl)
+            return
+          }
+          
+          let { width, height } = img
+          if (width > maxDimension || height > maxDimension) {
+            const ratio = maxDimension / Math.max(width, height)
+            width = Math.floor(width * ratio)
+            height = Math.floor(height * ratio)
+          }
+          
+          canvas.width = width
+          canvas.height = height
+          ctx.drawImage(img, 0, 0, width, height)
+          
+          let compressedDataUrl = canvas.toDataURL('image/jpeg', quality)
+          let currentQuality = quality
+          let attempts = 0
+          
+          while (compressedDataUrl.length / (1024 * 1024) > maxSizeMB && attempts < 3 && currentQuality > 0.5) {
+            currentQuality = Math.max(0.5, currentQuality - 0.1)
+            compressedDataUrl = canvas.toDataURL('image/jpeg', currentQuality)
+            attempts++
+          }
+          
+          const sizeInMB = compressedDataUrl.length / (1024 * 1024)
+          if (sizeInMB > maxSizeMB * 1.5) {
+            reject(new Error(`Image too large after compression (${sizeInMB.toFixed(2)}MB)`))
+            return
+          }
+          
+          resolve(compressedDataUrl)
+        }
+        img.onerror = () => resolve(dataUrl)
+        img.src = dataUrl
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }, [])
+  
   // Handle video generation
   const handleGenerate = useCallback(async (
     promptText: string,
     options?: { 
       referenceImage?: File
       referenceImageId?: string
+      /** Pre-uploaded reference image URL (bypasses 4.5MB limit) */
+      referenceImageUrl?: string
       endFrameImage?: File
       endFrameImageId?: string
+      /** Pre-uploaded end frame URL (bypasses 4.5MB limit) */
+      endFrameImageUrl?: string
     }
   ) => {
     const sessionId = await ensureVideoSession()
@@ -242,82 +302,21 @@ export function ImageToVideoOverlay({
         }
       )
 
-      // COMPRESS images to prevent HTTP 413 errors (Vercel limit: 4.5MB for request body)
-      // Count total images to determine per-image size budget
-      const imageCount = (options?.referenceImage ? 1 : 0) + (options?.endFrameImage ? 1 : 0)
-      const maxTotalSizeMB = 3.0 // Conservative limit to leave room for other request data
-      const maxPerImageMB = imageCount > 1 
-        ? Math.max(0.8, maxTotalSizeMB / imageCount) // Split budget between images
-        : 2.5 // Single image can be larger
-      const maxDimension = 1920 // Max dimension for video reference images
-      const quality = 0.85
+      // PRIORITY: Use pre-uploaded URLs when available (bypasses Vercel's 4.5MB limit completely)
+      // Only fall back to compression if Files are provided without URLs
       
-      // Compress image helper function
-      const compressImage = (file: File, targetMaxMB: number): Promise<string> => {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = () => {
-            const dataUrl = reader.result as string
-            const img = new Image()
-            img.onload = () => {
-              const canvas = document.createElement('canvas')
-              const ctx = canvas.getContext('2d')
-              if (!ctx) {
-                resolve(dataUrl) // Fallback to original if canvas not supported
-                return
-              }
-              
-              // Calculate new dimensions
-              let { width, height } = img
-              if (width > maxDimension || height > maxDimension) {
-                const ratio = maxDimension / Math.max(width, height)
-                width = Math.floor(width * ratio)
-                height = Math.floor(height * ratio)
-              }
-              
-              canvas.width = width
-              canvas.height = height
-              ctx.drawImage(img, 0, 0, width, height)
-              
-              // Convert to JPEG with appropriate quality
-              let compressedDataUrl = canvas.toDataURL('image/jpeg', quality)
-              
-              // If still too large, reduce quality further
-              let currentQuality = quality
-              let attempts = 0
-              while (compressedDataUrl.length / (1024 * 1024) > targetMaxMB && attempts < 3 && currentQuality > 0.5) {
-                currentQuality = Math.max(0.5, currentQuality - 0.1)
-                compressedDataUrl = canvas.toDataURL('image/jpeg', currentQuality)
-                attempts++
-              }
-              
-              // Final size check
-              const sizeInMB = compressedDataUrl.length / (1024 * 1024)
-              if (sizeInMB > targetMaxMB * 1.2) {
-                // Try one more time with even lower quality
-                compressedDataUrl = canvas.toDataURL('image/jpeg', 0.5)
-                const finalSizeMB = compressedDataUrl.length / (1024 * 1024)
-                if (finalSizeMB > targetMaxMB * 1.5) {
-                  reject(new Error(`Image too large after compression (${finalSizeMB.toFixed(2)}MB). Please use a smaller image.`))
-                  return
-                }
-              }
-              
-              resolve(compressedDataUrl)
-            }
-            img.onerror = () => resolve(dataUrl) // Fallback on error
-            img.src = dataUrl
-          }
-          reader.onerror = reject
-          reader.readAsDataURL(file)
-        })
-      }
-
-      // Convert and compress reference image if provided
-      let referenceImageBase64: string | undefined
-      if (options?.referenceImage) {
+      let referenceImageData: string | undefined
+      let endFrameImageData: string | undefined
+      
+      // Reference image: prefer URL, fall back to compressing File
+      if (options?.referenceImageUrl) {
+        // URL already uploaded to storage - use directly!
+        referenceImageData = options.referenceImageUrl
+        console.log('[ImageToVideoOverlay] Using pre-uploaded reference URL:', referenceImageData.slice(0, 50) + '...')
+      } else if (options?.referenceImage) {
+        // Fall back to compression for Files (legacy path)
         try {
-          referenceImageBase64 = await compressImage(options.referenceImage, maxPerImageMB)
+          referenceImageData = await compressImageToBase64(options.referenceImage)
         } catch (error: any) {
           toast({
             title: 'Image too large',
@@ -328,11 +327,15 @@ export function ImageToVideoOverlay({
         }
       }
       
-      // Convert and compress end frame image if provided
-      let endFrameImageBase64: string | undefined
-      if (options?.endFrameImage) {
+      // End frame: prefer URL, fall back to compressing File
+      if (options?.endFrameImageUrl) {
+        // URL already uploaded to storage - use directly!
+        endFrameImageData = options.endFrameImageUrl
+        console.log('[ImageToVideoOverlay] Using pre-uploaded end frame URL:', endFrameImageData.slice(0, 50) + '...')
+      } else if (options?.endFrameImage) {
+        // Fall back to compression for Files (legacy path)
         try {
-          endFrameImageBase64 = await compressImage(options.endFrameImage, maxPerImageMB)
+          endFrameImageData = await compressImageToBase64(options.endFrameImage)
         } catch (error: any) {
           toast({
             title: 'End frame too large',
@@ -343,18 +346,26 @@ export function ImageToVideoOverlay({
         }
       }
       
-      // Validate total size
-      const totalSizeMB = 
-        (referenceImageBase64?.length || 0) / (1024 * 1024) +
-        (endFrameImageBase64?.length || 0) / (1024 * 1024)
-      if (totalSizeMB > maxTotalSizeMB * 1.1) {
+      // Only validate total size if we're using base64 (URLs don't count toward body limit)
+      const referenceIsBase64 = referenceImageData?.startsWith('data:')
+      const endFrameIsBase64 = endFrameImageData?.startsWith('data:')
+      const maxTotalSizeMB = 3.0
+      const totalBase64SizeMB = 
+        (referenceIsBase64 ? (referenceImageData?.length || 0) / (1024 * 1024) : 0) +
+        (endFrameIsBase64 ? (endFrameImageData?.length || 0) / (1024 * 1024) : 0)
+      if (totalBase64SizeMB > maxTotalSizeMB * 1.1) {
         toast({
           title: 'Images too large',
-          description: `Total image size (${totalSizeMB.toFixed(1)}MB) exceeds limit. Please use smaller images.`,
+          description: `Total image size (${totalBase64SizeMB.toFixed(1)}MB) exceeds limit. Please use smaller images.`,
           variant: 'destructive',
         })
         return
       }
+      
+      // Build parameters - use URL if available, otherwise base64
+      // The API handles both: URLs are passed directly, base64 is uploaded server-side
+      const isReferenceUrl = referenceImageData?.startsWith('http')
+      const isEndFrameUrl = endFrameImageData?.startsWith('http')
       
       await generateMutation.mutateAsync({
         sessionId,
@@ -362,10 +373,13 @@ export function ImageToVideoOverlay({
         prompt: promptText,
         parameters: {
           ...parameters,
-          referenceImage: referenceImageBase64,
           referenceImageId: outputId, // Use outputId as reference ID
           sourceOutputId: outputId, // Link to source image
-          ...(endFrameImageBase64 && { endFrameImage: endFrameImageBase64 }),
+          // Reference image: URL or base64
+          ...(referenceImageData && isReferenceUrl && { referenceImage: referenceImageData }),
+          ...(referenceImageData && !isReferenceUrl && { referenceImage: referenceImageData }),
+          // End frame: URL or base64
+          ...(endFrameImageData && { endFrameImage: endFrameImageData }),
         },
       })
       
