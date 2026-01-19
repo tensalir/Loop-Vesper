@@ -67,6 +67,9 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
+    // If project is shared, show all video iterations; otherwise only current user's
+    const showAllIterations = isOwner || project.isShared
+
     // Query video generations where parameters.sourceOutputId matches
     // Using raw query for JSONB filtering since Prisma's JSON support is limited
     const iterations = await prisma.$queryRaw<Array<{
@@ -98,9 +101,9 @@ export async function GET(
         s.type as session_type
       FROM generations g
       JOIN sessions s ON g.session_id = s.id
-      WHERE g.user_id = ${userId}::uuid
-        AND s.type = 'video'
+      WHERE s.type = 'video'
         AND g.parameters->>'sourceOutputId' = ${outputId}
+        AND (${showAllIterations} OR g.user_id = ${userId}::uuid)
       ORDER BY g.created_at DESC
       LIMIT ${limit}
     `
@@ -159,6 +162,8 @@ export async function GET(
       status: iteration.status,
       cost: iteration.cost ? parseFloat(iteration.cost) : null,
       createdAt: iteration.created_at,
+      // Indicate if current user owns this iteration (for delete permissions in UI)
+      isOwner: iteration.user_id === userId,
       session: {
         id: iteration.session_id,
         name: iteration.session_name,

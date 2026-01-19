@@ -128,10 +128,47 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Verify user has access to this session's project
+    const sessionData = await prisma.session.findUnique({
+      where: { id: sessionId },
+      include: {
+        project: {
+          include: {
+            members: {
+              where: { userId: session.user.id },
+            },
+          },
+        },
+      },
+    })
+
+    if (!sessionData) {
+      return NextResponse.json(
+        { error: 'Session not found' },
+        { status: 404 }
+      )
+    }
+
+    const project = sessionData.project
+    const isOwner = project.ownerId === session.user.id
+    const isMember = project.members.length > 0
+
+    // User must be owner or member to access
+    if (!isOwner && !isMember) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 403 }
+      )
+    }
+
+    // If project is shared, show all generations in the session
+    // If not shared, only show user's own generations
+    const showAllGenerations = isOwner || project.isShared
+
     // Build base where clause
     const baseWhere: any = {
       sessionId,
-      userId: session.user.id, // Only fetch user's own generations
+      ...(showAllGenerations ? {} : { userId: session.user.id }),
     }
 
     // Add keyset cursor for pagination (newest-first: createdAt DESC, id DESC)
@@ -227,9 +264,11 @@ export async function GET(request: NextRequest) {
 
     const bookmarkedOutputIds = new Set(bookmarks.map((b: any) => b.outputId))
 
-    // Add isBookmarked field to outputs and sanitize parameters
+    // Add isBookmarked field to outputs, isOwner field to generations, and sanitize parameters
     const generationsWithBookmarks = data.map((generation: any) => ({
       ...generation,
+      // Indicate if current user owns this generation (for delete permissions in UI)
+      isOwner: generation.userId === session.user.id,
       // Sanitize parameters by default; pass full parameters only in debug mode
       parameters: includeParameters
         ? generation.parameters

@@ -875,8 +875,8 @@ function IterationCard({
               {iteration.status === 'processing' ? 'Creating...' : iteration.status}
             </span>
             
-            {/* Delete button for failed generations */}
-            {iteration.status === 'failed' && onDelete && (
+            {/* Delete button for failed generations - only show for owner */}
+            {iteration.status === 'failed' && onDelete && iteration.isOwner !== false && (
               <button
                 onClick={(e) => {
                   e.stopPropagation()

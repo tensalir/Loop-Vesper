@@ -49,14 +49,18 @@ export async function GET(request: Request) {
       )
     }
 
-    // Filter sessions based on privacy and ownership
+    // Filter sessions based on privacy, ownership, and project sharing settings
     const isOwner = project.ownerId === user.id
+    // If owner OR project is shared, show all sessions
+    // Otherwise only show public sessions
+    const showAllSessions = isOwner || project.isShared
+    
     const sessions = await prisma.session.findMany({
       where: {
         projectId,
-        ...(isOwner
-          ? {} // Owner sees all sessions
-          : { isPrivate: false }), // Non-owners only see public sessions
+        ...(showAllSessions
+          ? {} // Owner or shared project: see all sessions
+          : { isPrivate: false }), // Non-owners on non-shared projects: only public sessions
       },
       orderBy: {
         updatedAt: 'desc',

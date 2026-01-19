@@ -33,5 +33,7 @@ export interface GenerationUser {
 export interface GenerationWithOutputs extends Generation {
   outputs: Output[]
   user?: GenerationUser
+  /** Indicates if the current user owns this generation (for delete permissions) */
+  isOwner?: boolean
 }
 

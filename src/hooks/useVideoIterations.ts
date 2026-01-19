@@ -29,6 +29,8 @@ export interface VideoIteration {
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled'
   cost: number | null
   createdAt: Date
+  /** Indicates if the current user owns this iteration (for delete permissions) */
+  isOwner?: boolean
   session: {
     id: string
     name: string
