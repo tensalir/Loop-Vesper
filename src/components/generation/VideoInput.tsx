@@ -89,8 +89,11 @@ export function VideoInput({
   const { pinImage } = usePinnedImages(projectId)
   
   // Image upload hooks - upload to storage immediately to bypass 4.5MB limit
-  const referenceUpload = useImageUpload({ purpose: 'reference' })
-  const endFrameUpload = useImageUpload({ purpose: 'endframe' })
+  // Best practice: do NOT downscale/resize user images implicitly.
+  // We upload the original file to storage and pass URLs to providers (Kling/Replicate),
+  // which avoids Vercel body-size limits without lossy compression.
+  const referenceUpload = useImageUpload({ purpose: 'reference', compress: false })
+  const endFrameUpload = useImageUpload({ purpose: 'endframe', compress: false })
   
   // Start frame state
   const [referenceImage, setReferenceImage] = useState<File | null>(null)
@@ -203,6 +206,15 @@ export function VideoInput({
   }, [modelConfig, selectedModel])
 
   const handleSubmit = async () => {
+    console.log('[VideoInput] handleSubmit called:', {
+      prompt: prompt.slice(0, 50),
+      isEnhancing: isEnhancingRef.current,
+      isUploading: referenceUpload.isUploading || endFrameUpload.isUploading,
+      uploadedReferenceUrl: uploadedReferenceUrl?.slice(0, 50),
+      referenceImageUrl: referenceImageUrl?.slice(0, 50),
+      selectedModel,
+    })
+    
     // Avoid submitting while the prompt is mid-transformation (wand animation),
     // otherwise we can send a stale motion prompt.
     if (isEnhancingRef.current) {
@@ -225,9 +237,20 @@ export function VideoInput({
 
     setLocalGenerating(true)
     try {
-      // Use uploaded URL, or fall back to the referenceImageUrl prop (for animate-still with existing image)
-      const effectiveReferenceUrl = uploadedReferenceUrl || referenceImageUrl || undefined
-      const effectiveEndFrameUrl = uploadedEndFrameUrl || endFrameImageUrl || undefined
+      // Use uploaded URL, or fall back to the provided URL *only* if it's an HTTP(S) URL.
+      // Some callers may pass a large data URL; treating that as an "uploaded URL" can
+      // exceed body-size limits and/or trigger overlay safety checks.
+      const isHttpUrl = (value: string | null | undefined): boolean =>
+        typeof value === 'string' && value.startsWith('http')
+      const effectiveReferenceUrl = uploadedReferenceUrl || (isHttpUrl(referenceImageUrl) ? referenceImageUrl : undefined)
+      const effectiveEndFrameUrl = uploadedEndFrameUrl || (isHttpUrl(endFrameImageUrl) ? endFrameImageUrl : undefined)
+      
+      console.log('[VideoInput] Calling onGenerate with:', {
+        effectiveReferenceUrl: effectiveReferenceUrl?.slice(0, 50),
+        effectiveEndFrameUrl: effectiveEndFrameUrl?.slice(0, 50),
+        hasReferenceImage: !!referenceImage,
+        referenceImageId,
+      })
       
       await onGenerate(prompt, {
         // Prefer URL over File (bypasses Vercel 4.5MB limit)
@@ -481,37 +504,122 @@ export function VideoInput({
   // This bypasses Vercel's 4.5MB limit completely.
   useEffect(() => {
     if (!referenceImageUrl) return
-    // If we've already set this URL, skip
-    if (uploadedReferenceUrl === referenceImageUrl) return
+    const url = referenceImageUrl
+    const isHttp = typeof url === 'string' && url.startsWith('http')
+    const isData = typeof url === 'string' && url.startsWith('data:')
+
+    // If we've already set this URL as an uploaded HTTP URL, skip
+    if (isHttp && uploadedReferenceUrl === url) return
     
     // Clean up old blob preview if any
     if (imagePreviewUrl && imagePreviewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(imagePreviewUrl)
     }
-    
-    // Use URL directly - no File needed since it's already in storage
-    setImagePreviewUrl(referenceImageUrl)
-    setUploadedReferenceUrl(referenceImageUrl)
-    setReferenceImage(null) // No file needed
-    setReferenceImageId(createReferenceId())
-  }, [referenceImageUrl])
+
+    if (isHttp) {
+      // Use URL directly - no File needed since it's already in storage
+      setImagePreviewUrl(url)
+      setUploadedReferenceUrl(url)
+      setReferenceImage(null) // No file needed
+      setReferenceImageId(createReferenceId())
+      return
+    }
+
+    if (isData) {
+      // Large data URLs should be treated as an image payload (File) rather than a ready-to-use URL.
+      // Convert to a File and upload to storage so we can pass a URL (best practice).
+      setImagePreviewUrl(url)
+      setUploadedReferenceUrl(null)
+      setReferenceImageId(createReferenceId())
+
+      let cancelled = false
+      ;(async () => {
+        try {
+          const response = await fetch(url)
+          const blob = await response.blob()
+          if (cancelled) return
+          const mimeType = blob.type || 'image/jpeg'
+          const ext = mimeType.includes('png') ? 'png' : 'jpg'
+          const file = new File([blob], `reference.${ext}`, { type: mimeType })
+          setReferenceImage(file) // keep as fallback
+
+          // Upload to storage to get a stable URL (avoids base64 request bodies)
+          try {
+            const uploaded = await referenceUpload.upload(file)
+            if (cancelled) return
+            setUploadedReferenceUrl(uploaded.url)
+          } catch (uploadError) {
+            console.error('[VideoInput] Failed to upload reference image converted from data URL:', uploadError)
+          }
+        } catch (error) {
+          console.error('[VideoInput] Failed to convert referenceImageUrl data URL to File:', error)
+        }
+      })()
+
+      return () => {
+        cancelled = true
+      }
+    }
+  }, [referenceImageUrl, uploadedReferenceUrl, imagePreviewUrl, referenceUpload])
 
   // Hydrate end frame from URL if provided - use directly, no File needed
   useEffect(() => {
     if (!endFrameImageUrl) return
-    if (uploadedEndFrameUrl === endFrameImageUrl) return
+    const url = endFrameImageUrl
+    const isHttp = typeof url === 'string' && url.startsWith('http')
+    const isData = typeof url === 'string' && url.startsWith('data:')
+
+    if (isHttp && uploadedEndFrameUrl === url) return
     
     // Clean up old blob preview if any
     if (endFramePreviewUrl && endFramePreviewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(endFramePreviewUrl)
     }
     
-    // Use URL directly - no File needed since it's already in storage
-    setEndFramePreviewUrl(endFrameImageUrl)
-    setUploadedEndFrameUrl(endFrameImageUrl)
-    setEndFrameImage(null) // No file needed
-    setEndFrameImageId(endFrameImageIdOverride || createReferenceId())
-  }, [endFrameImageUrl])
+    if (isHttp) {
+      // Use URL directly - no File needed since it's already in storage
+      setEndFramePreviewUrl(url)
+      setUploadedEndFrameUrl(url)
+      setEndFrameImage(null) // No file needed
+      setEndFrameImageId(endFrameImageIdOverride || createReferenceId())
+      return
+    }
+
+    if (isData) {
+      // Convert data URL to File and upload to storage so we can pass a URL (best practice).
+      setEndFramePreviewUrl(url)
+      setUploadedEndFrameUrl(null)
+      setEndFrameImageId(endFrameImageIdOverride || createReferenceId())
+
+      let cancelled = false
+      ;(async () => {
+        try {
+          const response = await fetch(url)
+          const blob = await response.blob()
+          if (cancelled) return
+          const mimeType = blob.type || 'image/jpeg'
+          const ext = mimeType.includes('png') ? 'png' : 'jpg'
+          const file = new File([blob], `endframe.${ext}`, { type: mimeType })
+          setEndFrameImage(file) // keep as fallback
+
+          // Upload to storage to get a stable URL
+          try {
+            const uploaded = await endFrameUpload.upload(file)
+            if (cancelled) return
+            setUploadedEndFrameUrl(uploaded.url)
+          } catch (uploadError) {
+            console.error('[VideoInput] Failed to upload end frame converted from data URL:', uploadError)
+          }
+        } catch (error) {
+          console.error('[VideoInput] Failed to convert endFrameImageUrl data URL to File:', error)
+        }
+      })()
+
+      return () => {
+        cancelled = true
+      }
+    }
+  }, [endFrameImageUrl, uploadedEndFrameUrl, endFramePreviewUrl, endFrameUpload, endFrameImageIdOverride])
 
   // Cleanup preview URLs on unmount
   useEffect(() => {

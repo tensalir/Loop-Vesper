@@ -14,11 +14,15 @@ if (typeof window === 'undefined' && (!KLING_ACCESS_KEY || !KLING_SECRET_KEY)) {
  * Generate JWT token for Kling API authentication
  * The token is valid for 30 minutes
  */
-function generateKlingJWT(): string {
+function generateKlingJWT(
+  secretOverride?: jwt.Secret,
+  debugMeta?: { usingDecodedSecret?: boolean }
+): string {
   if (!KLING_ACCESS_KEY || !KLING_SECRET_KEY) {
     throw new Error('Kling API credentials not configured')
   }
 
+  const signingSecret = secretOverride ?? KLING_SECRET_KEY
   const now = Math.floor(Date.now() / 1000)
   const payload = {
     iss: KLING_ACCESS_KEY,
@@ -26,13 +30,19 @@ function generateKlingJWT(): string {
     nbf: now - 5, // 5 seconds grace period
   }
 
-  return jwt.sign(payload, KLING_SECRET_KEY, {
+  const token = jwt.sign(payload, signingSecret, {
     algorithm: 'HS256',
     header: {
       alg: 'HS256',
       typ: 'JWT',
     },
   })
+
+  const decoded = jwt.decode(token, { complete: true }) as
+    | { header?: Record<string, any>; payload?: Record<string, any> }
+    | null
+
+  return token
 }
 
 /**
@@ -238,16 +248,28 @@ export class KlingOfficialAdapter extends BaseModelAdapter {
     }
 
     // Submit the video generation task
-    const response = await fetch(`${this.baseUrl}/videos/image2video`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
-    })
+    let response: Response | null = null
+    let submitErrorMessage: string | null = null
 
-    if (!response.ok) {
+    // Kling official API has shown intermittent 401 "Authorization signature is invalid".
+    // We retry a couple times with freshly generated JWTs before failing the generation.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const attemptToken = attempt === 1 ? token : generateKlingJWT()
+
+      response = await fetch(`${this.baseUrl}/videos/image2video`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${attemptToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      })
+
+      if (response.ok) {
+        submitErrorMessage = null
+        break
+      }
+
       let errorMessage = 'Kling API request failed'
       let raw: any = null
       try {
@@ -259,8 +281,24 @@ export class KlingOfficialAdapter extends BaseModelAdapter {
         raw = errorText
         errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`
       }
+
+      submitErrorMessage = errorMessage
       console.error('[Kling-Official] API error:', errorMessage)
-      throw new Error(errorMessage)
+      const submitDateHeader = response.headers.get('date')
+      const submitServerMs = submitDateHeader ? Date.parse(submitDateHeader) : NaN
+      const submitSkewMs = Number.isFinite(submitServerMs) ? submitServerMs - Date.now() : null
+      const shouldRetry =
+        response.status === 401 &&
+        typeof errorMessage === 'string' &&
+        errorMessage.toLowerCase().includes('signature')
+
+      if (!shouldRetry || attempt === 3) {
+        throw new Error(errorMessage)
+      }
+    }
+
+    if (!response) {
+      throw new Error(submitErrorMessage || 'Kling API request failed')
     }
 
     const data = await response.json()
@@ -277,8 +315,17 @@ export class KlingOfficialAdapter extends BaseModelAdapter {
 
     console.log('[Kling-Official] Task submitted:', taskId)
 
+    const taskUrl =
+      typeof (data as any)?.data?.task_url === 'string'
+        ? (data as any)?.data?.task_url
+        : typeof (data as any)?.data?.taskUrl === 'string'
+          ? (data as any)?.data?.taskUrl
+          : null
+    const taskInfo = (data as any)?.data?.task_info
+
     // Poll for results
     let attempts = 0
+    let signatureFailures = 0
     const maxAttempts = 180 // 15 minutes max (video generation takes time)
     
     while (attempts < maxAttempts) {
@@ -287,7 +334,8 @@ export class KlingOfficialAdapter extends BaseModelAdapter {
       // Regenerate token for each poll (in case of long waits)
       const pollToken = generateKlingJWT()
 
-      const statusResponse = await fetch(`${this.baseUrl}/videos/image2video/${taskId}`, {
+      const statusEndpoint = `${this.baseUrl}/videos/image2video?task_id=${taskId}`
+      let statusResponse = await fetch(statusEndpoint, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${pollToken}`,
@@ -296,37 +344,208 @@ export class KlingOfficialAdapter extends BaseModelAdapter {
 
       if (!statusResponse.ok) {
         let errorMessage = `Failed to check task status (${statusResponse.status})`
+        const statusDateHeader = statusResponse.headers.get('date')
+        const statusServerMs = statusDateHeader ? Date.parse(statusDateHeader) : NaN
+        const statusSkewMs = Number.isFinite(statusServerMs) ? statusServerMs - Date.now() : null
         try {
           const errorData = await statusResponse.json()
           errorMessage = errorData.message || errorData.error || errorMessage
         } catch {
           errorMessage = `${statusResponse.status}: ${statusResponse.statusText}`
         }
-        throw new Error(errorMessage)
+
+        if (
+          statusResponse.status === 401 &&
+          typeof errorMessage === 'string' &&
+          errorMessage.toLowerCase().includes('signature') &&
+          typeof KLING_SECRET_KEY === 'string' &&
+          /^[A-Za-z0-9+/]+={0,2}$/.test(KLING_SECRET_KEY) &&
+          KLING_SECRET_KEY.length % 4 === 0
+        ) {
+          try {
+            const decodedSecret = Buffer.from(KLING_SECRET_KEY, 'base64')
+            const altToken = generateKlingJWT(decodedSecret, { usingDecodedSecret: true })
+            const altResponse = await fetch(statusEndpoint, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${altToken}`,
+              },
+            })
+          } catch (_) {
+            // noop
+          }
+        }
+
+        if (
+          statusResponse.status === 401 &&
+          typeof errorMessage === 'string' &&
+          errorMessage.toLowerCase().includes('signature')
+        ) {
+          try {
+            const retryToken = generateKlingJWT()
+            const retryResponse = await fetch(statusEndpoint, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${retryToken}`,
+              },
+            })
+            // IMPORTANT: If we plan to reuse the successful response later in the loop,
+            // we must clone BEFORE reading the body. Otherwise we hit:
+            // "Body is unusable: Body has already been read"
+            const retryResponseForLater = retryResponse.clone()
+            let retryCode: number | null = null
+            try {
+              const retryJson = await retryResponse.json()
+              retryCode = typeof (retryJson as any)?.code === 'number' ? (retryJson as any).code : null
+            } catch {
+              retryCode = null
+            }
+            if (retryResponse.ok) {
+              statusResponse = retryResponseForLater
+              errorMessage = ''
+            }
+          } catch (_) {
+            // noop
+          }
+        }
+
+        if (!statusResponse.ok) {
+          if (
+            statusResponse.status === 401 &&
+            typeof errorMessage === 'string' &&
+            errorMessage.toLowerCase().includes('signature')
+          ) {
+            signatureFailures += 1
+            // Kling status checks can intermittently return 401 even when the submit succeeded.
+            // Treat this as transient: allow a longer streak and reset on any successful poll.
+            if (signatureFailures <= 20) {
+              attempts++
+              continue
+            }
+          }
+          throw new Error(errorMessage)
+        }
       }
 
       const statusData = await statusResponse.json()
+      // Successful HTTP + JSON parse: reset signature failure streak.
+      signatureFailures = 0
       
       if (statusData.code !== 0) {
         throw new Error(statusData.message || `Status check error: ${statusData.code}`)
       }
 
-      const taskStatus = statusData.data?.task_status
-      console.log(`[Kling-Official] Task status: ${taskStatus} (attempt ${attempts + 1})`)
+      const dataField = (statusData as any)?.data
 
-      if (taskStatus === 'succeed') {
+      const normalizeStatus = (value: unknown): string | null => {
+        if (typeof value === 'string' && value.trim().length > 0) return value
+        if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+        return null
+      }
+
+      const pickTaskRecord = (): Record<string, any> | null => {
+        if (!dataField) return null
+        if (Array.isArray(dataField)) {
+          // Prefer matching task_id when the API returns a list/array of task objects.
+          const objectItems = dataField.filter(
+            (item) => item && typeof item === 'object' && !Array.isArray(item)
+          ) as Array<Record<string, any>>
+          const match = objectItems.find((item) => {
+            const id = item.task_id ?? item.taskId ?? item.taskID
+            return id !== undefined && String(id) === String(taskId)
+          })
+          if (match) return match
+          // If the API returned a single task object wrapped in an array, use it.
+          if (objectItems.length === 1) return objectItems[0]
+          // Otherwise we can't safely pick; return null and rely on heuristic status parsing.
+          return null
+        }
+        if (typeof dataField === 'object') return dataField as Record<string, any>
+        return null
+      }
+
+      const taskRecord = pickTaskRecord()
+
+      const taskStatusRaw =
+        normalizeStatus(
+          taskRecord?.task_status ??
+            taskRecord?.taskStatus ??
+            taskRecord?.status ??
+            taskRecord?.task_state ??
+            null
+        ) ??
+        (Array.isArray(dataField)
+          ? (() => {
+              // Some Kling responses appear to return tuple-like arrays. Heuristically
+              // detect a known status string from primitives.
+              const known = new Set([
+                'submitted',
+                'processing',
+                'succeed',
+                'succeeded',
+                'success',
+                'completed',
+                'failed',
+                'error',
+                'running',
+                'queued',
+              ])
+              for (const item of dataField) {
+                if (typeof item === 'string') {
+                  const lowered = item.toLowerCase()
+                  if (known.has(lowered)) return lowered
+                }
+              }
+              return null
+            })()
+          : null)
+
+      const taskStatus = typeof taskStatusRaw === 'string' ? taskStatusRaw : null
+      const taskStatusNormalized = taskStatus ? taskStatus.toLowerCase() : null
+
+      console.log(`[Kling-Official] Task status: ${taskStatusNormalized ?? 'unknown'} (attempt ${attempts + 1})`)
+
+      if (taskStatusNormalized === 'succeed' || taskStatusNormalized === 'succeeded' || taskStatusNormalized === 'success' || taskStatusNormalized === 'completed') {
         // Get the video URL from the result
-        const videos = statusData.data?.task_result?.videos
-        if (!videos || videos.length === 0) {
-          throw new Error('No video generated in result')
+        const taskResult =
+          taskRecord?.task_result ?? taskRecord?.taskResult ?? taskRecord?.result ?? null
+        const videos =
+          (taskResult && typeof taskResult === 'object' ? (taskResult as any).videos : null) ??
+          (taskRecord && typeof taskRecord === 'object' ? (taskRecord as any).videos : null)
+
+        const findHttpUrl = (value: unknown): string | null => {
+          if (typeof value === 'string' && value.startsWith('http')) return value
+          if (value && typeof value === 'object') {
+            for (const k of ['url', 'video_url', 'fileUrl', 'file_url']) {
+              const v = (value as any)[k]
+              if (typeof v === 'string' && v.startsWith('http')) return v
+            }
+          }
+          return null
         }
 
-        const videoUrl = videos[0]?.url
+        const videoUrl =
+          Array.isArray(videos) && videos.length > 0
+            ? findHttpUrl(videos[0])
+            : Array.isArray(dataField)
+              ? (() => {
+                  // Tuple-like fallback: find first http url (prefer .mp4)
+                  const httpStrings = dataField.filter(
+                    (v) => typeof v === 'string' && v.startsWith('http')
+                  ) as string[]
+                  const mp4 = httpStrings.find((u) => u.toLowerCase().includes('.mp4'))
+                  return mp4 || httpStrings[0] || null
+                })()
+              : null
+
         if (!videoUrl) {
           throw new Error('No video URL in result')
         }
 
-        const videoDuration = videos[0]?.duration || duration
+        const videoDuration =
+          Array.isArray(videos) && videos.length > 0 && videos[0] && typeof videos[0] === 'object'
+            ? (videos[0] as any)?.duration || duration
+            : duration
 
         console.log(`[Kling-Official] ✅ Video generated successfully`)
 
@@ -346,8 +565,12 @@ export class KlingOfficialAdapter extends BaseModelAdapter {
             mode,
           },
         }
-      } else if (taskStatus === 'failed') {
-        const errorMsg = statusData.data?.task_status_msg || 'Video generation failed'
+      } else if (taskStatusNormalized === 'failed' || taskStatusNormalized === 'error') {
+        const errorMsg =
+          taskRecord?.task_status_msg ||
+          taskRecord?.taskStatusMsg ||
+          taskRecord?.message ||
+          'Video generation failed'
         throw new Error(errorMsg)
       }
 

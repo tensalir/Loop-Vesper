@@ -17,7 +17,10 @@ import { createClient } from '@/lib/supabase/client'
 import { Image as ImageIcon, Video, MessageCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const DEFAULT_VIDEO_MODEL_ID = 'kling-official'
+// Default to Replicate Kling for reliability. The official Kling API requires
+// separate KLING_ACCESS_KEY / KLING_SECRET_KEY credentials and will fail with
+// "Authorization signature is invalid" when not configured correctly.
+const DEFAULT_VIDEO_MODEL_ID = 'replicate-kling-2.6'
 
 function getPreferredModelId(type: 'image' | 'video'): string | null {
   const models = getModelsByType(type)
@@ -214,6 +217,32 @@ export function GenerationInterface({
   
   // Flatten all pages into a single array
   const generations = infiniteData?.pages.flatMap((page) => page.data) || []
+
+  // If Kling Official is selected but not configured correctly, generations will fail with
+  // "Authorization signature is invalid". Auto-fallback to Replicate Kling so users can keep working.
+  useEffect(() => {
+    if (generationType !== 'video') return
+    if (selectedModel !== 'kling-official') return
+
+    const hasAuthSignatureError = generations.some((gen) => {
+      const err = (gen.parameters as any)?.error
+      return (
+        gen.modelId === 'kling-official' &&
+        gen.status === 'failed' &&
+        typeof err === 'string' &&
+        err.toLowerCase().includes('authorization signature is invalid')
+      )
+    })
+
+    if (!hasAuthSignatureError) return
+
+    setSelectedModel('replicate-kling-2.6')
+    toast({
+      title: 'Switched video model',
+      description:
+        'Kling Official failed authentication (authorization signature invalid). Using Kling 2.6 (Replicate) instead.',
+    })
+  }, [generationType, selectedModel, generations, setSelectedModel, toast])
   
   // Subscribe to real-time updates
   useGenerationsRealtime(session?.id || null, userId)

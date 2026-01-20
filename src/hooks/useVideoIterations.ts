@@ -57,10 +57,14 @@ async function fetchVideoIterations(
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || `HTTP ${response.status}`)
+    const errorMessage = error.error || `HTTP ${response.status}`
+
+    throw new Error(errorMessage)
   }
   
-  return response.json()
+  const data = (await response.json()) as VideoIterationsResponse
+
+  return data
 }
 
 /**

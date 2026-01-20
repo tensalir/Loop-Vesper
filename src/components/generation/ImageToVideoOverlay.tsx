@@ -63,7 +63,7 @@ export function ImageToVideoOverlay({
   
   // Video generation state
   const [prompt, setPrompt] = useState('')
-  const [selectedModel, setSelectedModel] = useState('kling-official')
+  const [selectedModel, setSelectedModel] = useState('replicate-kling-2.6')
   const [parameters, setParameters] = useState({
     aspectRatio: '16:9',
     resolution: 720,
@@ -166,7 +166,15 @@ export function ImageToVideoOverlay({
   
   // Auto-select first video session
   useEffect(() => {
+    console.log('[ImageToVideoOverlay] Session auto-select check:', {
+      videoSessionsCount: videoSessions.length,
+      selectedSessionId,
+      sessionMode,
+      firstSessionId: videoSessions[0]?.id,
+    })
+    
     if (videoSessions.length > 0 && !selectedSessionId) {
+      console.log('[ImageToVideoOverlay] Auto-selecting first session:', videoSessions[0].id)
       setSelectedSessionId(videoSessions[0].id)
       setSessionMode('existing')
     } else if (videoSessions.length === 0) {
@@ -179,17 +187,27 @@ export function ImageToVideoOverlay({
   
   // Handle session creation
   const ensureVideoSession = useCallback(async (): Promise<string | null> => {
+    console.log('[ImageToVideoOverlay] ensureVideoSession called:', {
+      sessionMode,
+      selectedSessionId,
+      newSessionName,
+      hasOnCreateSession: !!onCreateSession,
+    })
+    
     if (sessionMode === 'existing' && selectedSessionId) {
+      console.log('[ImageToVideoOverlay] Using existing session:', selectedSessionId)
       return selectedSessionId
     }
     
     if (sessionMode === 'new' && newSessionName.trim() && onCreateSession) {
+      console.log('[ImageToVideoOverlay] Creating new session:', newSessionName)
       setIsCreatingSession(true)
       try {
         const newSession = await onCreateSession('video', newSessionName.trim())
         if (newSession) {
           setSelectedSessionId(newSession.id)
           setSessionMode('existing')
+          console.log('[ImageToVideoOverlay] New session created:', newSession.id)
           return newSession.id
         }
       } catch (error) {
@@ -199,6 +217,7 @@ export function ImageToVideoOverlay({
       }
     }
     
+    console.log('[ImageToVideoOverlay] ensureVideoSession returning null - conditions not met')
     return null
   }, [sessionMode, selectedSessionId, newSessionName, onCreateSession])
   
@@ -272,11 +291,34 @@ export function ImageToVideoOverlay({
       endFrameImageUrl?: string
     }
   ) => {
+    console.log('[ImageToVideoOverlay] handleGenerate called:', {
+      promptText: promptText.slice(0, 50),
+      hasReferenceImageUrl: !!options?.referenceImageUrl,
+      hasReferenceImage: !!options?.referenceImage,
+      sessionMode,
+      selectedSessionId,
+      videoSessionsCount: videoSessions.length,
+    })
+    
     const sessionId = await ensureVideoSession()
     if (!sessionId) {
-      console.error('No video session available')
+      console.error('[ImageToVideoOverlay] No video session available - ensureVideoSession returned null', {
+        sessionMode,
+        selectedSessionId,
+        newSessionName,
+        hasOnCreateSession: !!onCreateSession,
+      })
+      toast({
+        title: 'No video session selected',
+        description: sessionMode === 'new' 
+          ? 'Please enter a name for the new video session.'
+          : 'Please select a video session or create a new one.',
+        variant: 'destructive',
+      })
       return
     }
+    
+    console.log('[ImageToVideoOverlay] Using session:', sessionId)
     
     try {
       // Immediately reflect "processing" on the source image card(s) in the gallery.
@@ -367,7 +409,16 @@ export function ImageToVideoOverlay({
       const isReferenceUrl = referenceImageData?.startsWith('http')
       const isEndFrameUrl = endFrameImageData?.startsWith('http')
       
-      await generateMutation.mutateAsync({
+      console.log('[ImageToVideoOverlay] Calling generateMutation.mutateAsync with:', {
+        sessionId,
+        modelId: selectedModel,
+        promptLength: promptText.length,
+        hasReferenceImageData: !!referenceImageData,
+        isReferenceUrl: !!isReferenceUrl,
+        sourceOutputId: outputId,
+      })
+      
+      const result = await generateMutation.mutateAsync({
         sessionId,
         modelId: selectedModel,
         prompt: promptText,
@@ -383,6 +434,8 @@ export function ImageToVideoOverlay({
           ...(endFrameImageData && !isEndFrameUrl && { endFrameImage: endFrameImageData }),
         },
       })
+      
+      console.log('[ImageToVideoOverlay] Generation mutation completed:', result)
       
       // Refetch iterations to show the new one
       refetch()
@@ -406,7 +459,7 @@ export function ImageToVideoOverlay({
         })
       }
     }
-  }, [ensureVideoSession, generateMutation, selectedModel, parameters, outputId, refetch, onGenerationStarted, queryClient, toast])
+  }, [ensureVideoSession, generateMutation, selectedModel, parameters, outputId, refetch, onGenerationStarted, queryClient, toast, sessionMode, selectedSessionId, newSessionName, onCreateSession, videoSessions])
   
   // Handle bookmark toggle for video outputs
   const handleToggleBookmark = useCallback(async (outputId: string, isBookmarked: boolean) => {

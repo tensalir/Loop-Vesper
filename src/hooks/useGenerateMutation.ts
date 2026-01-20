@@ -42,33 +42,48 @@ interface GenerateResponse {
 }
 
 async function generateImage(params: GenerateParams): Promise<GenerateResponse> {
+  const body = JSON.stringify(params)
+
   const response = await fetch('/api/generate', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(params),
+    body,
   })
 
+  const responseStatus = response.status
+  const responseOk = response.ok
+  let responseId: string | null = null
+  let responseState: string | null = null
+  let errorMessage: string | null = null
+
+  let data: GenerateResponse | null = null
+
   if (!response.ok) {
-    let errorMessage = `HTTP ${response.status}: ${response.statusText}`
+    errorMessage = `HTTP ${response.status}: ${response.statusText}`
     try {
       const errorData = await response.json()
-      errorMessage = errorData.error || errorData.message || errorMessage
+      errorMessage = errorData?.error || errorData?.message || errorMessage
     } catch {
-      // If response is not JSON, try to get text
       try {
         const text = await response.text()
         errorMessage = text || errorMessage
       } catch {
-        // Last resort: use status
+        // noop
       }
     }
-    throw new Error(errorMessage)
+  } else {
+    data = (await response.json()) as GenerateResponse
+    responseId = data?.id ?? null
+    responseState = (data as any)?.status ?? null
   }
 
-  const data = await response.json()
-  return data
+  if (!responseOk) {
+    throw new Error(errorMessage || `HTTP ${responseStatus}`)
+  }
+
+  return data as GenerateResponse
 }
 
 export function useGenerateMutation() {

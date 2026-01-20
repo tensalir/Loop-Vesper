@@ -174,33 +174,37 @@ async function processGenerationById(
     // This prevents race conditions when both server and frontend trigger process endpoint
     const lockWindow = 60_000 // 60 seconds - if processing started within this window, skip
     const now = Date.now()
-    const existingLock = params?.processingStartedAt
-    
-    if (existingLock && (now - existingLock) < lockWindow) {
-      console.log(`[${generationId}] Skipping - already being processed by another request (${now - existingLock}ms ago)`)
-      await appendLog('process:skipped-duplicate', { lockAge: now - existingLock })
+    const lockExpiry = now - lockWindow
+
+    // True atomic lock in Postgres: only one caller can set processingStartedAt inside the window.
+    // NOTE: We use JSONB operators because `Generation.parameters` is a JSON column.
+    const rowsUpdated = await prisma.$executeRaw`
+      UPDATE "generations"
+      SET "parameters" = jsonb_set(
+        COALESCE("parameters"::jsonb, '{}'::jsonb),
+        '{processingStartedAt}',
+        to_jsonb(${now}::bigint),
+        true
+      )
+      WHERE "id" = ${generationId}::uuid
+        AND (
+          ("parameters"->>'processingStartedAt') IS NULL
+          OR ("parameters"->>'processingStartedAt')::bigint < ${lockExpiry}::bigint
+        )
+    `
+
+    const lockAcquired = typeof rowsUpdated === 'number' ? rowsUpdated > 0 : Boolean(rowsUpdated)
+
+    if (!lockAcquired) {
+      console.log(`[${generationId}] Skipping - already being processed by another request`)
+      await appendLog('process:skipped-duplicate', { lockWindow })
       return {
         id: generation.id,
         status: 'skipped',
       }
     }
 
-    // Set the processing lock atomically
-    try {
-      await prisma.generation.update({
-        where: { id: generationId },
-        data: {
-          parameters: {
-            ...params,
-            processingStartedAt: now,
-          },
-        },
-      })
-      console.log(`[${generationId}] Acquired processing lock at ${now}`)
-    } catch (lockError) {
-      console.error(`[${generationId}] Failed to acquire lock:`, lockError)
-      // Continue anyway - the lock is best-effort
-    }
+    console.log(`[${generationId}] Acquired processing lock at ${now}`)
 
     // Determine provider route (Google vs Replicate fallback)
     let providerRoute: ProviderRouteDecision | null = null
