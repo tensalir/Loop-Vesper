@@ -23,6 +23,7 @@ import {
   useOrganizedProductNames,
   usePrefetchProductRenders,
   isDeprecatedProduct,
+  SENSEWEAR_PRODUCTS,
   type ProductRender,
 } from '@/hooks/useProductRenders'
 
@@ -50,6 +51,12 @@ export function ProductRendersBrowseModal({
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null)
   const [selectedType, setSelectedType] = useState<string>('single') // Default to Single - most commonly used
 
+  // Check if selected product is a Sensewear product (View Type filter doesn't apply to Sensewear)
+  const isSensewearSelected = selectedProduct ? SENSEWEAR_PRODUCTS.includes(selectedProduct) : false
+  
+  // Don't apply type filter for Sensewear products
+  const effectiveType = isSensewearSelected ? undefined : selectedType
+
   // React Query hooks for data fetching with caching
   const {
     data,
@@ -59,7 +66,7 @@ export function ProductRendersBrowseModal({
   } = useProductRenders({
     search: searchQuery,
     name: selectedProduct || undefined,
-    type: selectedType,
+    type: effectiveType,
     enabled: isOpen,
   })
 
@@ -97,12 +104,16 @@ export function ProductRendersBrowseModal({
 
   // Handle product chip click with prefetch on hover
   const handleProductHover = (productName: string) => {
-    prefetch({ name: productName, type: selectedType })
+    // Don't apply type filter for Sensewear products
+    const typeForProduct = SENSEWEAR_PRODUCTS.includes(productName) ? undefined : selectedType
+    prefetch({ name: productName, type: typeForProduct })
   }
 
-  // Handle type change with prefetch on hover
+  // Handle type change with prefetch on hover (only for non-Sensewear products)
   const handleTypeHover = (type: string) => {
-    prefetch({ name: selectedProduct || undefined, type })
+    if (!isSensewearSelected) {
+      prefetch({ name: selectedProduct || undefined, type })
+    }
   }
 
   const renders = data?.renders || []
@@ -214,24 +225,26 @@ export function ProductRendersBrowseModal({
             </div>
           )}
 
-          {/* Type Filter Row - Styled as Segmented Control for Asset Type */}
-          <div className="flex items-center gap-3 pt-3 mt-1 border-t border-border/30">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground w-20">View Type:</span>
-            <Tabs value={selectedType} onValueChange={setSelectedType} className="w-auto">
-              <TabsList className="h-8 bg-muted/50 p-0.5">
-                {RENDER_TYPE_OPTIONS.map((option) => (
-                  <TabsTrigger
-                    key={option.value}
-                    value={option.value}
-                    onMouseEnter={() => handleTypeHover(option.value)}
-                    className="h-7 px-4 text-[11px] data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                  >
-                    {option.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </div>
+          {/* Type Filter Row - Only show for Earplugs (not Sensewear) */}
+          {!isSensewearSelected && (
+            <div className="flex items-center gap-3 pt-3 mt-1 border-t border-border/30">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground w-20">View Type:</span>
+              <Tabs value={selectedType} onValueChange={setSelectedType} className="w-auto">
+                <TabsList className="h-8 bg-muted/50 p-0.5">
+                  {RENDER_TYPE_OPTIONS.map((option) => (
+                    <TabsTrigger
+                      key={option.value}
+                      value={option.value}
+                      onMouseEnter={() => handleTypeHover(option.value)}
+                      className="h-7 px-4 text-[11px] data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                    >
+                      {option.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </div>
+          )}
         </div>
 
         {/* Render Grid */}
