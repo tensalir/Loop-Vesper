@@ -283,6 +283,7 @@ model ProductRender {
   name        String // Product name / category (e.g., "MCL38")
   colorway    String? // Colorway / variant (e.g., "Papaya Orange")
   angle       String? // Angle / view (e.g., "front", "side", "3/4", "back")
+  renderType  String?  @map("render_type") // Type: "single", "pair", or "case"
   sortOrder   Int      @default(0) @map("sort_order") // For ordering within colorway
   imageUrl    String   @map("image_url")
   storagePath String?  @map("storage_path") // Supabase path for local uploads
@@ -293,6 +294,7 @@ model ProductRender {
 
   @@index([name])
   @@index([name, colorway])
+  @@index([name, renderType])
   @@index([source])
   @@map("product_renders")
 }

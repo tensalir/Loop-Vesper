@@ -54,6 +54,7 @@ interface ProductRender {
   name: string
   colorway: string | null
   angle: string | null
+  renderType: string | null
   sortOrder: number
   imageUrl: string
   storagePath: string | null
@@ -93,6 +94,13 @@ const ANGLE_OPTIONS = [
   'other',
 ]
 
+// Render type options
+const RENDER_TYPE_OPTIONS = [
+  { value: 'single', label: 'Single' },
+  { value: 'pair', label: 'Pair' },
+  { value: 'case', label: 'Case' },
+]
+
 export function RendersManagementSettings() {
   const [renders, setRenders] = useState<ProductRender[]>([])
   const [productNames, setProductNames] = useState<string[]>([])
@@ -117,6 +125,7 @@ export function RendersManagementSettings() {
     name: '',
     colorway: '',
     angle: '',
+    renderType: '',
   })
   const [saving, setSaving] = useState(false)
   
@@ -537,6 +546,7 @@ export function RendersManagementSettings() {
       name: render.name,
       colorway: render.colorway || '',
       angle: render.angle || '',
+      renderType: render.renderType || '',
     })
     setEditDialogOpen(true)
   }
@@ -553,6 +563,7 @@ export function RendersManagementSettings() {
           name: editForm.name,
           colorway: editForm.colorway || null,
           angle: editForm.angle || null,
+          renderType: editForm.renderType || null,
         }),
       })
 
@@ -1160,6 +1171,26 @@ export function RendersManagementSettings() {
                   {ANGLE_OPTIONS.map((angle) => (
                     <SelectItem key={angle} value={angle}>
                       {angle}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-renderType">Render Type</Label>
+              <Select
+                value={editForm.renderType || ''}
+                onValueChange={(v) => setEditForm(prev => ({ ...prev, renderType: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {RENDER_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

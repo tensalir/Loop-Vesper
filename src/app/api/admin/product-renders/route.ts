@@ -14,6 +14,7 @@ const PRODUCT_RENDERS_BUCKET = 'product-renders'
  * Body:
  *   - name: Product name (required)
  *   - colorway: Colorway/variant (optional)
+ *   - renderType: Render type - 'single', 'pair', or 'case' (optional)
  *   - image: Base64 data URL of the image (required for local uploads)
  *   - imageUrl: External URL (optional, for Frontify synced items)
  *   - frontifyId: Frontify asset ID (optional)
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, colorway, image, imageUrl, frontifyId } = body
+    const { name, colorway, renderType, image, imageUrl, frontifyId } = body
 
     if (!name) {
       return NextResponse.json({ error: 'Product name is required' }, { status: 400 })
@@ -78,6 +79,7 @@ export async function POST(request: NextRequest) {
       data: {
         name,
         colorway: colorway || null,
+        renderType: renderType || null,
         imageUrl: finalImageUrl,
         storagePath,
         source: frontifyId ? 'frontify' : 'local',

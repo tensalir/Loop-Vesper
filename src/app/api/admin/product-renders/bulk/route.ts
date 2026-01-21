@@ -11,6 +11,7 @@ interface BulkUploadImage {
   base64: string // data URL
   colorway: string
   angle?: string
+  renderType?: string // 'single', 'pair', or 'case'
   sortOrder?: number
 }
 
@@ -21,7 +22,7 @@ interface BulkUploadImage {
  * 
  * Body:
  *   - productName: Product name / category (required)
- *   - images: Array of { id, base64, colorway, angle?, sortOrder? }
+ *   - images: Array of { id, base64, colorway, angle?, renderType?, sortOrder? }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -108,6 +109,7 @@ export async function POST(request: NextRequest) {
             name: productName,
             colorway: image.colorway || null,
             angle: image.angle || null,
+            renderType: image.renderType || null,
             sortOrder: image.sortOrder ?? i,
             imageUrl,
             storagePath,

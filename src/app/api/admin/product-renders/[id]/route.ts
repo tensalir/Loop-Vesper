@@ -36,7 +36,7 @@ export async function PUT(
 
     const { id } = params
     const body = await request.json()
-    const { name, colorway, angle, image } = body
+    const { name, colorway, angle, renderType, image } = body
 
     // Find existing render
     const existing = await prisma.productRender.findUnique({
@@ -59,6 +59,10 @@ export async function PUT(
 
     if (angle !== undefined) {
       updateData.angle = angle || null
+    }
+
+    if (renderType !== undefined) {
+      updateData.renderType = renderType || null
     }
 
     // If new image provided, upload it

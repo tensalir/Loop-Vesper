@@ -6,17 +6,22 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 // Use service role key for server-side storage operations
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 
+// Long-lived cache control for immutable assets (paths include timestamps)
+const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable' // 1 year
+
 /**
  * Upload base64 data URL to Supabase Storage
  * @param base64DataUrl - Data URL format: data:image/png;base64,iVBORw0...
  * @param bucket - Storage bucket name
  * @param path - File path within bucket
+ * @param opts - Optional settings (cacheControl)
  * @returns Public URL of uploaded file
  */
 export async function uploadBase64ToStorage(
   base64DataUrl: string,
   bucket: string,
-  path: string
+  path: string,
+  opts?: { cacheControl?: string }
 ): Promise<string> {
   try {
     // Extract base64 data and mime type
@@ -45,11 +50,13 @@ export async function uploadBase64ToStorage(
 
     // Upload to Supabase Storage
     // Use upsert: true to handle existing files gracefully (e.g., retries, duplicate uploads)
+    // Use cacheControl for long-lived immutable assets (paths typically include timestamps)
     const { data, error } = await supabaseAdmin.storage
       .from(bucket)
       .upload(path, buffer, {
         contentType: mimeType,
         upsert: true, // Allow overwriting existing files
+        cacheControl: opts?.cacheControl || IMMUTABLE_CACHE_CONTROL,
       })
 
     if (error) {
@@ -62,9 +69,10 @@ export async function uploadBase64ToStorage(
       .getPublicUrl(path)
 
     return publicUrlData.publicUrl
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error uploading to storage:', error)
-    throw new Error(`Failed to upload to storage: ${error.message}`)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    throw new Error(`Failed to upload to storage: ${message}`)
   }
 }
 
@@ -73,13 +81,14 @@ export async function uploadBase64ToStorage(
  * @param url - External URL to download and upload (supports http://, https://, and gs://)
  * @param bucket - Storage bucket name
  * @param path - File path within bucket
+ * @param opts - Optional settings (headers for fetch, cacheControl for storage)
  * @returns Public URL of uploaded file
  */
 export async function uploadUrlToStorage(
   url: string,
   bucket: string,
   path: string,
-  opts?: { headers?: Record<string, string> }
+  opts?: { headers?: Record<string, string>; cacheControl?: string }
 ): Promise<string> {
   try {
     let response: Response
@@ -138,11 +147,13 @@ export async function uploadUrlToStorage(
 
     // Upload to Supabase Storage
     // Use upsert: true to handle existing files gracefully (e.g., retries, duplicate uploads)
+    // Use cacheControl for long-lived immutable assets (paths typically include timestamps)
     const { data, error } = await supabaseAdmin.storage
       .from(bucket)
       .upload(path, buffer, {
         contentType,
         upsert: true, // Allow overwriting existing files
+        cacheControl: opts?.cacheControl || IMMUTABLE_CACHE_CONTROL,
       })
 
     if (error) {
@@ -155,9 +166,10 @@ export async function uploadUrlToStorage(
       .getPublicUrl(path)
 
     return publicUrlData.publicUrl
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error uploading URL to storage:', error)
-    throw new Error(`Failed to upload URL to storage: ${error.message}`)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    throw new Error(`Failed to upload URL to storage: ${message}`)
   }
 }
 
@@ -176,9 +188,10 @@ export async function deleteFromStorage(
     if (error) {
       throw new Error(`Storage deletion failed: ${error.message}`)
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting from storage:', error)
-    throw new Error(`Failed to delete from storage: ${error.message}`)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    throw new Error(`Failed to delete from storage: ${message}`)
   }
 }
 

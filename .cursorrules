@@ -60,4 +60,10 @@ We’ve hit a TypeScript build failure from Prisma args:
 - Add `?pgbouncer=true` when using the pooler.
 - Avoid guidance that suggests editing only local `.env` for prod fixes — Vercel uses its own env vars.
 
+## React Best Practices Skill
+- The `react-best-practices` skill from Vercel Engineering is integrated and available.
+- This skill provides comprehensive performance optimization guidelines for React and Next.js.
+- When writing, reviewing, or refactoring React/Next.js code, follow the patterns in `src/lib/skills/react-best-practices.skill.md`.
+- Priority focus areas: eliminating waterfalls, bundle size optimization, server-side performance, and re-render optimization.
+
 
