@@ -315,6 +315,13 @@ Return ONLY the enhanced prompt text. Nothing else.`
       enhancedPrompt = textBlocks[0].text
     }
 
+    // Strip markdown code blocks if Claude wrapped the response in them
+    // Handles both ``` and ```language formats
+    enhancedPrompt = enhancedPrompt
+      .replace(/^```[\w]*\n?/gm, '')  // Remove opening ``` or ```language
+      .replace(/\n?```$/gm, '')        // Remove closing ```
+      .trim()
+
     return NextResponse.json({
       originalPrompt: prompt,
       enhancedPrompt,
