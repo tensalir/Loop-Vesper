@@ -182,14 +182,14 @@ export const KLING_2_6_CONFIG: ModelConfig = {
   name: 'Kling 2.6 Pro',
   provider: 'Kuaishou (Replicate)',
   type: 'video',
-  description: 'Top-tier image-to-video with cinematic visuals, fluid motion, native audio generation, and frame-to-frame interpolation',
+  description: 'Top-tier image-to-video with cinematic visuals, fluid motion, and native audio generation',
   supportedAspectRatios: ['16:9', '9:16', '1:1'],
   defaultAspectRatio: '16:9',
   maxResolution: 1080,
   capabilities: {
     'text-2-video': true,
     'image-2-video': true,
-    'frame-interpolation': true, // Supports start_image + end_image
+    // Note: frame-interpolation NOT supported via Replicate wrapper - use kling-official instead
     audioGeneration: true,
   },
   parameters: [

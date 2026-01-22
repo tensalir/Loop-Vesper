@@ -837,26 +837,29 @@ export function GenerationInterface({
 
       // Build parameters - prefer pre-uploaded URLs over base64 data
       // Determine reference image data (URL preferred over base64)
-      let finalReferenceImage: string | undefined
+      // IMPORTANT: Server expects HTTP URLs as referenceImageUrl, base64 as referenceImage
+      let referenceImageData_: string | undefined // base64 data
+      let referenceImageUrl_: string | undefined // HTTP URL
       let finalReferenceImages: string[] | undefined
-      let finalEndFrameImage: string | undefined
+      let endFrameImageData_: string | undefined // base64 data
+      let endFrameImageUrl_: string | undefined // HTTP URL
       
       if (options?.referenceImageUrl) {
         // Pre-uploaded URL - use directly (bypasses 4.5MB limit!)
-        finalReferenceImage = options.referenceImageUrl
+        referenceImageUrl_ = options.referenceImageUrl
         console.log('[GenerationInterface] Using pre-uploaded reference URL')
       } else if (referenceImagesData && referenceImagesData.length > 0) {
         finalReferenceImages = referenceImagesData
       } else if (referenceImageData) {
-        finalReferenceImage = referenceImageData
+        referenceImageData_ = referenceImageData
       }
       
       if (options?.endFrameImageUrl) {
         // Pre-uploaded URL - use directly (bypasses 4.5MB limit!)
-        finalEndFrameImage = options.endFrameImageUrl
+        endFrameImageUrl_ = options.endFrameImageUrl
         console.log('[GenerationInterface] Using pre-uploaded end frame URL')
       } else if (endFrameImageData) {
-        finalEndFrameImage = endFrameImageData
+        endFrameImageData_ = endFrameImageData
       }
       
       const result = await generateMutation.mutateAsync({
@@ -869,9 +872,13 @@ export function GenerationInterface({
           numOutputs: parameters.numOutputs,
           ...(generationType === 'video' && parameters.duration && { duration: parameters.duration }),
           ...(finalReferenceImages && finalReferenceImages.length > 0 && { referenceImages: finalReferenceImages }),
-          ...(finalReferenceImage && !finalReferenceImages && { referenceImage: finalReferenceImage }),
+          // Reference image: URL goes to referenceImageUrl, base64 goes to referenceImage
+          ...(referenceImageUrl_ && { referenceImageUrl: referenceImageUrl_ }),
+          ...(referenceImageData_ && !referenceImageUrl_ && { referenceImage: referenceImageData_ }),
           ...(options?.referenceImageId && { referenceImageId: options.referenceImageId }),
-          ...(finalEndFrameImage && { endFrameImage: finalEndFrameImage }),
+          // End frame: URL goes to endFrameImageUrl, base64 goes to endFrameImage
+          ...(endFrameImageUrl_ && { endFrameImageUrl: endFrameImageUrl_ }),
+          ...(endFrameImageData_ && !endFrameImageUrl_ && { endFrameImage: endFrameImageData_ }),
           ...(options?.endFrameImageId && { endFrameImageId: options.endFrameImageId }),
         },
       })

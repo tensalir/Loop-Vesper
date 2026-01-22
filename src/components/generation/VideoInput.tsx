@@ -159,6 +159,15 @@ export function VideoInput({
   // Check if model supports image-to-video (reference images)
   const supportsImageToVideo = modelConfig?.capabilities?.['image-2-video'] === true
   
+  // Check if model supports frame interpolation (start + end frames)
+  // Only kling-official and gemini-veo-3.1 support this
+  const supportsFrameInterpolation = modelConfig?.capabilities?.['frame-interpolation'] === true
+
+  // UI controls
+  const showStartFrameControl =
+    supportsImageToVideo && (referenceImage || imagePreviewUrl || !hideReferencePicker)
+  const canPickStartFrame = supportsImageToVideo && !hideReferencePicker && !lockedReferenceImage
+  
   const resolutionParam = modelParameters.find((p) => p.name === 'resolution')
   const durationParam = modelParameters.find((p) => p.name === 'duration')
 
@@ -204,6 +213,23 @@ export function VideoInput({
       }
     }
   }, [modelConfig, selectedModel])
+
+  // Clear end frame when switching to a model that doesn't support frame interpolation
+  useEffect(() => {
+    if (modelConfig && !supportsFrameInterpolation) {
+      // Model doesn't support end frames - clear any selected end frame
+      if (endFrameImage || endFramePreviewUrl || uploadedEndFrameUrl) {
+        console.log('[VideoInput] Clearing end frame - model does not support frame interpolation')
+        if (endFramePreviewUrl && endFramePreviewUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(endFramePreviewUrl)
+        }
+        setEndFramePreviewUrl(null)
+        setEndFrameImage(null)
+        setEndFrameImageId(null)
+        setUploadedEndFrameUrl(null)
+      }
+    }
+  }, [modelConfig, supportsFrameInterpolation])
 
   const handleSubmit = async () => {
     console.log('[VideoInput] handleSubmit called:', {
@@ -725,8 +751,8 @@ export function VideoInput({
           />
         </div>
 
-        {/* Frame Thumbnails - Stacked squares with soft rounded corners */}
-        {(referenceImage || imagePreviewUrl) && (
+        {/* Start/End frame controls - Right of prompt (hidden if model doesn't support input images) */}
+        {showStartFrameControl && (
           <div className="flex flex-col gap-1.5">
             {/* Start Frame Thumbnail */}
             <div className="relative group">
@@ -734,17 +760,86 @@ export function VideoInput({
               <div className="absolute left-1/2 -translate-x-1/2 -top-5 px-1.5 py-0.5 rounded text-[8px] font-semibold uppercase tracking-wider bg-primary/90 text-primary-foreground opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
                 Start
               </div>
-              <div className={`rounded-md overflow-hidden border-2 border-primary/50 shadow-lg transition-transform duration-300 group-hover:scale-105 ${
-                isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
-              }`}>
-                <img
-                  src={imagePreviewUrl || ''}
-                  alt="Start frame"
-                  className="w-full h-full object-cover"
-                />
-              </div>
+
+              {canPickStartFrame ? (
+                <Popover open={stylePopoverOpen} onOpenChange={setStylePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      disabled={generating || isUploading}
+                      className="p-0 bg-transparent"
+                      title={referenceImage || imagePreviewUrl ? 'Change start frame' : 'Add start frame (optional)'}
+                    >
+                      {referenceImage || imagePreviewUrl ? (
+                        <div
+                          className={`rounded-md overflow-hidden border-2 border-primary/50 shadow-lg transition-transform duration-300 group-hover:scale-105 ${
+                            isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
+                          }`}
+                        >
+                          <img
+                            src={imagePreviewUrl || ''}
+                            alt="Start frame"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          className={`rounded-md border-2 border-dashed border-white/20 hover:border-primary/50 hover:bg-primary/10 transition-all flex items-center justify-center ${
+                            isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
+                          }`}
+                        >
+                          <ImagePlus className="h-3.5 w-3.5 text-muted-foreground/70" />
+                        </div>
+                      )}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-40 p-2 bg-background/95 backdrop-blur-xl border-white/10 rounded-lg"
+                    align="start"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
+                        onClick={() => {
+                          fileInputRef.current?.click()
+                          setStylePopoverOpen(false)
+                        }}
+                      >
+                        <Upload className="h-3.5 w-3.5 mr-2" />
+                        Upload
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
+                        onClick={() => {
+                          setBrowseModalOpen(true)
+                          setStylePopoverOpen(false)
+                        }}
+                      >
+                        <FolderOpen className="h-3.5 w-3.5 mr-2" />
+                        Browse
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                // Locked / hidden-picker mode: show thumbnail only (no placeholder)
+                (referenceImage || imagePreviewUrl) && (
+                  <div
+                    className={`rounded-md overflow-hidden border-2 border-primary/50 shadow-lg ${
+                      isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
+                    }`}
+                  >
+                    <img src={imagePreviewUrl || ''} alt="Start frame" className="w-full h-full object-cover" />
+                  </div>
+                )
+              )}
+
               {/* Remove button */}
-              {!lockedReferenceImage && (
+              {!lockedReferenceImage && (referenceImage || imagePreviewUrl) && (
                 <button
                   onClick={() => {
                     if (imagePreviewUrl && imagePreviewUrl.startsWith('blob:')) URL.revokeObjectURL(imagePreviewUrl)
@@ -761,83 +856,97 @@ export function VideoInput({
               )}
             </div>
 
-            {/* End Frame Thumbnail or Empty Placeholder */}
-            {(endFrameImage || endFramePreviewUrl) ? (
-              <div className="relative group">
-                <div className={`rounded-md overflow-hidden border-2 border-amber-500/50 shadow-lg transition-transform duration-300 group-hover:scale-105 ${
-                  isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
-                }`}>
-                  <img
-                    src={endFramePreviewUrl || ''}
-                    alt="End frame"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                {/* Label below thumbnail */}
-                <div className="absolute left-1/2 -translate-x-1/2 -bottom-5 px-1.5 py-0.5 rounded text-[8px] font-semibold uppercase tracking-wider bg-amber-500/90 text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                  End
-                </div>
-                {/* Remove button */}
-                <button
-                  onClick={() => {
-                    if (endFramePreviewUrl && endFramePreviewUrl.startsWith('blob:')) URL.revokeObjectURL(endFramePreviewUrl)
-                    setEndFramePreviewUrl(null)
-                    setEndFrameImage(null)
-                    setEndFrameImageId(null)
-                    setUploadedEndFrameUrl(null)
-                  }}
-                  className="absolute -top-1 -right-1 bg-background border border-border rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-destructive hover:text-destructive-foreground z-10"
-                  title="Remove end frame"
-                >
-                  <X className="h-2 w-2" />
-                </button>
-              </div>
-            ) : (
-              /* Empty end frame placeholder */
-              <Popover open={endFramePopoverOpen} onOpenChange={setEndFramePopoverOpen}>
-                <PopoverTrigger asChild>
-                  <button
-                    className={`rounded-md border-2 border-dashed border-white/20 hover:border-amber-500/50 hover:bg-amber-500/10 transition-all flex items-center justify-center ${
+            {/* End Frame Thumbnail or Empty Placeholder - only show for models that support frame interpolation */}
+            {supportsFrameInterpolation && (
+              (referenceImage || imagePreviewUrl) ? (
+                (endFrameImage || endFramePreviewUrl) ? (
+                  <div className="relative group">
+                    <div className={`rounded-md overflow-hidden border-2 border-amber-500/50 shadow-lg transition-transform duration-300 group-hover:scale-105 ${
                       isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
-                    }`}
-                    title="Add end frame (optional)"
-                  >
-                    <Plus className="h-3 w-3 text-muted-foreground/50" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-48 p-2 bg-background/95 backdrop-blur-xl border-white/10 rounded-lg" align="start">
-                  <div className="flex flex-col gap-1">
-                    <p className="text-[10px] text-muted-foreground px-2 py-1 mb-1">
-                      Add end frame for video interpolation
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
+                    }`}>
+                      <img
+                        src={endFramePreviewUrl || ''}
+                        alt="End frame"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    {/* Label below thumbnail */}
+                    <div className="absolute left-1/2 -translate-x-1/2 -bottom-5 px-1.5 py-0.5 rounded text-[8px] font-semibold uppercase tracking-wider bg-amber-500/90 text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                      End
+                    </div>
+                    {/* Remove button */}
+                    <button
                       onClick={() => {
-                        endFrameFileInputRef.current?.click()
-                        setEndFramePopoverOpen(false)
+                        if (endFramePreviewUrl && endFramePreviewUrl.startsWith('blob:')) URL.revokeObjectURL(endFramePreviewUrl)
+                        setEndFramePreviewUrl(null)
+                        setEndFrameImage(null)
+                        setEndFrameImageId(null)
+                        setUploadedEndFrameUrl(null)
                       }}
+                      className="absolute -top-1 -right-1 bg-background border border-border rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-destructive hover:text-destructive-foreground z-10"
+                      title="Remove end frame"
                     >
-                      <Upload className="h-3.5 w-3.5 mr-2" />
-                      Upload
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
-                      onClick={() => {
-                        setBrowseModalOpen(true)
-                        setEndFramePopoverOpen(false)
-                        setSelectingEndFrame(true)
-                      }}
-                    >
-                      <FolderOpen className="h-3.5 w-3.5 mr-2" />
-                      Browse
-                    </Button>
+                      <X className="h-2 w-2" />
+                    </button>
                   </div>
-                </PopoverContent>
-              </Popover>
+                ) : (
+                  /* Empty end frame placeholder */
+                  <Popover open={endFramePopoverOpen} onOpenChange={setEndFramePopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        className={`rounded-md border-2 border-dashed border-white/20 hover:border-amber-500/50 hover:bg-amber-500/10 transition-all flex items-center justify-center ${
+                          isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
+                        }`}
+                        title="Add end frame (optional)"
+                      >
+                        <Plus className="h-3 w-3 text-muted-foreground/50" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-48 p-2 bg-background/95 backdrop-blur-xl border-white/10 rounded-lg" align="start">
+                      <div className="flex flex-col gap-1">
+                        <p className="text-[10px] text-muted-foreground px-2 py-1 mb-1">
+                          Add end frame for video interpolation
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
+                          onClick={() => {
+                            endFrameFileInputRef.current?.click()
+                            setEndFramePopoverOpen(false)
+                          }}
+                        >
+                          <Upload className="h-3.5 w-3.5 mr-2" />
+                          Upload
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
+                          onClick={() => {
+                            setBrowseModalOpen(true)
+                            setEndFramePopoverOpen(false)
+                            setSelectingEndFrame(true)
+                          }}
+                        >
+                          <FolderOpen className="h-3.5 w-3.5 mr-2" />
+                          Browse
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )
+              ) : (
+                // Disabled placeholder until start frame is chosen
+                <div
+                  className={`rounded-md border-2 border-dashed border-white/10 bg-white/5 opacity-40 flex items-center justify-center ${
+                    isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
+                  }`}
+                  title="Add a start frame first"
+                >
+                  <Plus className="h-3 w-3 text-muted-foreground/50" />
+                </div>
+              )
             )}
           </div>
         )}
@@ -885,6 +994,17 @@ export function VideoInput({
         onChange={handleEndFrameFileSelect}
       />
 
+      {/* Hidden file input for start frame */}
+      {supportsImageToVideo && !hideReferencePicker && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
+      )}
+
       {/* Parameter Controls - Compact Row */}
       <div className="flex flex-wrap items-center gap-2">
         {/* Model Picker - Inline */}
@@ -896,75 +1016,24 @@ export function VideoInput({
           />
         </div>
 
-        {/* Style/Image Input - Popover with Upload/Browse (hidden in locked mode) */}
-        {!hideReferencePicker && (
-          <>
-            <Popover open={stylePopoverOpen} onOpenChange={setStylePopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={generating}
-                  className="h-8 px-3 rounded-lg bg-white/5 border-white/10 hover:bg-white/10 transition-colors"
-                >
-                  <ImagePlus className="h-3.5 w-3.5" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-40 p-2 bg-background/95 backdrop-blur-xl border-white/10 rounded-lg" align="start">
-                <div className="flex flex-col gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
-                    onClick={() => {
-                      fileInputRef.current?.click()
-                      setStylePopoverOpen(false)
-                    }}
-                  >
-                    <Upload className="h-3.5 w-3.5 mr-2" />
-                    Upload
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
-                    onClick={() => {
-                      setBrowseModalOpen(true)
-                      setStylePopoverOpen(false)
-                    }}
-                  >
-                    <FolderOpen className="h-3.5 w-3.5 mr-2" />
-                    Browse
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileSelect}
+        {/* Start frame picker moved to right of prompt (above). */}
+        {!hideReferencePicker && supportsImageToVideo && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={generating}
+            className="h-8 px-3 rounded-lg bg-white/5 border-white/10 hover:bg-white/10 transition-colors"
+            onClick={() => setRendersModalOpen(true)}
+            title="Browse product renders"
+          >
+            <img
+              src="/images/Loop-Favicon-(White).png"
+              alt="Loop"
+              width={14}
+              height={14}
+              className="w-3.5 h-3.5 rounded-full"
             />
-
-            {/* Renders Button - Product renders quick access */}
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={generating}
-              className="h-8 px-3 rounded-lg bg-white/5 border-white/10 hover:bg-white/10 transition-colors"
-              onClick={() => setRendersModalOpen(true)}
-              title="Browse product renders"
-            >
-              <img
-                src="/images/Loop-Favicon-(White).png"
-                alt="Loop"
-                width={14}
-                height={14}
-                className="w-3.5 h-3.5 rounded-full"
-              />
-            </Button>
-          </>
+          </Button>
         )}
 
 

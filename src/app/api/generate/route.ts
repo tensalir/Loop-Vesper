@@ -109,6 +109,13 @@ export async function POST(request: NextRequest) {
       metricMeta.hasReferenceImage = true
       metricMeta.referenceSource = 'base64-upload'
       referencePointer = await persistReferenceImage(referenceImage, user.id, referenceImageId)
+    } else if (referenceImage && typeof referenceImage === 'string' && referenceImage.startsWith('http')) {
+      // BACKWARD COMPATIBILITY: referenceImage sent as URL (should be referenceImageUrl)
+      // Treat it like referenceImageUrl to avoid breaking older clients
+      metricMeta.hasReferenceImage = true
+      metricMeta.referenceSource = 'legacy-url-in-referenceImage'
+      referencePointer = { referenceImageUrl: referenceImage }
+      console.log(`[generate] LEGACY: referenceImage sent as URL, treating as referenceImageUrl: ${referenceImage.slice(0, 50)}...`)
     } else if (referenceImageId) {
       referencePointer = { referenceImageId }
     }

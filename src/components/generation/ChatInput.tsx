@@ -582,48 +582,163 @@ export function ChatInput({
           />
         </div>
 
-        {/* Reference Image Thumbnails - Left of Generate Button */}
-        {imagePreviewUrls.length > 0 && (
+        {/* Reference Image Picker - Right of prompt (hidden if model doesn't support input images) */}
+        {supportsImageEditing && (
           <div className="flex items-center gap-2">
-            {imagePreviewUrls.map((previewUrl, index) => (
-              <div key={index} className="relative group">
-                <div className="w-[52px] h-[52px] rounded-lg overflow-hidden border-2 border-primary shadow-md">
-                  <img
-                    src={previewUrl}
-                    alt={`Reference ${index + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <button
-                  onClick={() => handleRemoveImage(index)}
-                  className="absolute -top-2 -right-2 bg-background border border-border rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-destructive hover:text-destructive-foreground z-10"
-                  title="Remove reference image"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-                {/* Pin button - only show if we have a proper URL (not blob) */}
-                {projectId && previewUrl.startsWith('http') && (
+            {/* Selected images (compact) */}
+            {supportsMultiImage &&
+              imagePreviewUrls.map((previewUrl, index) => (
+                <div key={index} className="relative group">
+                  <div className="rounded-md overflow-hidden border-2 border-primary/50 shadow-lg transition-transform duration-300 group-hover:scale-105 w-[32px] h-[32px]">
+                    <img
+                      src={previewUrl}
+                      alt={`Reference ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
                   <button
-                    onClick={() => {
-                      pinImage({ imageUrl: previewUrl })
-                      toast({
-                        title: 'Image pinned',
-                        description: 'Reference image added to project pins',
-                      })
-                    }}
-                    className="absolute -top-2 -left-2 bg-primary text-primary-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-primary/90 z-10"
-                    title="Pin to project"
+                    onClick={() => handleRemoveImage(index)}
+                    className="absolute -top-1 -right-1 bg-background border border-border rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-destructive hover:text-destructive-foreground z-10"
+                    title="Remove reference image"
                   >
-                    <Pin className="h-3 w-3" />
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                  {/* Pin button - only show if we have a proper URL (not blob) */}
+                  {projectId && previewUrl.startsWith('http') && (
+                    <button
+                      onClick={() => {
+                        pinImage({ imageUrl: previewUrl })
+                        toast({
+                          title: 'Image pinned',
+                          description: 'Reference image added to project pins',
+                        })
+                      }}
+                      className="absolute -top-1 -left-1 bg-primary text-primary-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-primary/90 z-10"
+                      title="Pin to project"
+                    >
+                      <Pin className="h-2.5 w-2.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+
+            {/* Add / Replace control */}
+            {supportsMultiImage ? (
+              <Popover open={stylePopoverOpen} onOpenChange={setStylePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={isGenerating}
+                    className="rounded-md border-2 border-dashed border-white/20 hover:border-primary/50 hover:bg-primary/10 transition-all flex items-center justify-center w-[32px] h-[32px]"
+                    title="Add reference image"
+                  >
+                    <ImagePlus className="h-3.5 w-3.5 text-muted-foreground/70" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-40 p-2" align="start">
+                  <div className="flex flex-col gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start h-8 text-xs"
+                      onClick={() => {
+                        fileInputRef.current?.click()
+                        setStylePopoverOpen(false)
+                      }}
+                    >
+                      <Upload className="h-3.5 w-3.5 mr-2" />
+                      Upload
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start h-8 text-xs"
+                      onClick={() => {
+                        setBrowseModalOpen(true)
+                        setStylePopoverOpen(false)
+                      }}
+                    >
+                      <FolderOpen className="h-3.5 w-3.5 mr-2" />
+                      Browse
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <div className="relative group">
+                <Popover open={stylePopoverOpen} onOpenChange={setStylePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      disabled={isGenerating}
+                      className={`rounded-md transition-all flex items-center justify-center w-[32px] h-[32px] ${
+                        imagePreviewUrls.length > 0
+                          ? 'border-2 border-primary/50 shadow-lg hover:shadow'
+                          : 'border-2 border-dashed border-white/20 hover:border-primary/50 hover:bg-primary/10'
+                      }`}
+                      title={imagePreviewUrls.length > 0 ? 'Change reference image' : 'Add reference image'}
+                    >
+                      {imagePreviewUrls.length > 0 ? (
+                        <img
+                          src={imagePreviewUrls[0]}
+                          alt="Reference"
+                          className="w-full h-full object-cover rounded-[4px]"
+                        />
+                      ) : (
+                        <ImagePlus className="h-3.5 w-3.5 text-muted-foreground/70" />
+                      )}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-40 p-2" align="start">
+                    <div className="flex flex-col gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start h-8 text-xs"
+                        onClick={() => {
+                          fileInputRef.current?.click()
+                          setStylePopoverOpen(false)
+                        }}
+                      >
+                        <Upload className="h-3.5 w-3.5 mr-2" />
+                        Upload
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start h-8 text-xs"
+                        onClick={() => {
+                          setBrowseModalOpen(true)
+                          setStylePopoverOpen(false)
+                        }}
+                      >
+                        <FolderOpen className="h-3.5 w-3.5 mr-2" />
+                        Browse
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                {imagePreviewUrls.length > 0 && (
+                  <button
+                    onClick={() => handleRemoveImage(0)}
+                    className="absolute -top-1 -right-1 bg-background border border-border rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-destructive hover:text-destructive-foreground z-10"
+                    title="Remove reference image"
+                  >
+                    <X className="h-2.5 w-2.5" />
                   </button>
                 )}
-                {supportsMultiImage && imagePreviewUrls.length > 1 && (
-                  <div className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                    {index + 1}
-                  </div>
-                )}
               </div>
-            ))}
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple={supportsMultiImage}
+              className="hidden"
+              onChange={handleFileSelect}
+            />
           </div>
         )}
         
@@ -649,56 +764,7 @@ export function ChatInput({
           />
         </div>
 
-        {/* Style/Image Input - Popover with Upload/Browse - Only show if model supports editing */}
-        {supportsImageEditing && (
-          <Popover open={stylePopoverOpen} onOpenChange={setStylePopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 px-3 rounded-lg"
-              >
-                <ImagePlus className="h-3.5 w-3.5" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-40 p-2" align="start">
-              <div className="flex flex-col gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-start h-8 text-xs"
-                  onClick={() => {
-                    fileInputRef.current?.click()
-                    setStylePopoverOpen(false)
-                  }}
-                >
-                  <Upload className="h-3.5 w-3.5 mr-2" />
-                  Upload
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-start h-8 text-xs"
-                  onClick={() => {
-                    setBrowseModalOpen(true)
-                    setStylePopoverOpen(false)
-                  }}
-                >
-                  <FolderOpen className="h-3.5 w-3.5 mr-2" />
-                  Browse
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple={supportsMultiImage}
-          className="hidden"
-          onChange={handleFileSelect}
-        />
+        {/* Style/Image Input moved to right of prompt (above). */}
 
         {/* Renders Button - Product renders quick access */}
         {supportsImageEditing && (

@@ -1080,41 +1080,67 @@ export class GeminiAdapter extends BaseModelAdapter {
       prompt: request.prompt,
     }
 
-    // Check for reference image - can be base64 (referenceImage) or URL (referenceImageUrl)
-    // Veo 3.1 requires inline base64 data, not fileUri
-    let imageBytes: Buffer | null = null
-    let contentType: string = 'image/jpeg'
-    
-    if (request.referenceImage && typeof request.referenceImage === 'string' && request.referenceImage.startsWith('data:')) {
+    // Helper to parse image from base64 data URL or HTTP URL
+    const parseImageInput = async (
+      dataUrl: string | undefined,
+      httpUrl: string | undefined,
+      label: string
+    ): Promise<{ bytes: Buffer; contentType: string } | null> => {
       // Handle base64 data URL directly
-      console.log(`[Veo 3.1] Using reference image from base64 data URL`)
-      const dataUrlMatch = request.referenceImage.match(/^data:([^;]+);base64,(.+)$/)
-      if (dataUrlMatch) {
-        const [, mimeType, base64Data] = dataUrlMatch
-        contentType = mimeType || 'image/jpeg'
-        imageBytes = Buffer.from(base64Data, 'base64')
-      } else {
-        console.warn(`[Veo 3.1] Invalid base64 format, ignoring reference image`)
-      }
-    } else if ((request as any).referenceImageUrl) {
-      // Handle URL - download first
-      console.log(`[Veo 3.1] Downloading reference image from URL: ${(request as any).referenceImageUrl}`)
-      try {
-        const imageResponse = await fetch((request as any).referenceImageUrl)
-        if (!imageResponse.ok) {
-          throw new Error(`Failed to fetch reference image: ${imageResponse.statusText}`)
+      if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
+        console.log(`[Veo 3.1] Using ${label} from base64 data URL`)
+        // Use indexOf/slice instead of regex to avoid stack overflow on large strings
+        const commaIndex = dataUrl.indexOf(',')
+        if (commaIndex === -1) {
+          console.warn(`[Veo 3.1] Invalid base64 format for ${label}, ignoring`)
+          return null
         }
-        
-        const imageBuffer = await imageResponse.arrayBuffer()
-        imageBytes = Buffer.from(imageBuffer)
-        contentType = imageResponse.headers.get('content-type') || 'image/jpeg'
-      } catch (error: any) {
-        console.error(`[Veo 3.1] Failed to download reference image:`, error)
-        imageBytes = null
+        const metaSection = dataUrl.slice(5, commaIndex) // Skip "data:"
+        const base64Data = dataUrl.slice(commaIndex + 1)
+        const mimeMatch = metaSection.match(/^([^;]+)/)
+        const contentType = mimeMatch ? mimeMatch[1] : 'image/jpeg'
+        return { bytes: Buffer.from(base64Data, 'base64'), contentType }
       }
-    } else {
-      console.log(`[Veo 3.1] No reference image provided, generating text-to-video`)
+      
+      // Handle URL - download first
+      if (httpUrl && typeof httpUrl === 'string' && httpUrl.startsWith('http')) {
+        console.log(`[Veo 3.1] Downloading ${label} from URL: ${httpUrl.slice(0, 50)}...`)
+        try {
+          const imageResponse = await fetch(httpUrl)
+          if (!imageResponse.ok) {
+            throw new Error(`Failed to fetch ${label}: ${imageResponse.statusText}`)
+          }
+          const imageBuffer = await imageResponse.arrayBuffer()
+          const contentType = imageResponse.headers.get('content-type') || 'image/jpeg'
+          return { bytes: Buffer.from(imageBuffer), contentType }
+        } catch (error: any) {
+          console.error(`[Veo 3.1] Failed to download ${label}:`, error)
+          return null
+        }
+      }
+      
+      return null
     }
+
+    // Check for start frame (reference image) - can be base64 (referenceImage) or URL (referenceImageUrl)
+    // Veo 3.1 requires inline base64 data, not fileUri
+    const startFrame = await parseImageInput(
+      request.referenceImage,
+      (request as any).referenceImageUrl,
+      'start frame'
+    )
+    
+    if (!startFrame) {
+      console.log(`[Veo 3.1] No start frame provided, generating text-to-video`)
+    }
+    
+    // Check for end frame (for frame interpolation)
+    // Veo 3.1 uses 'lastFrame' parameter for the ending frame
+    const endFrame = await parseImageInput(
+      (request.parameters as any)?.endFrameImage,
+      (request.parameters as any)?.endFrameImageUrl,
+      'end frame (lastFrame)'
+    )
     
     // Build instance object according to Veo 3.1 API docs
     // https://ai.google.dev/gemini-api/docs/video
@@ -1124,14 +1150,16 @@ export class GeminiAdapter extends BaseModelAdapter {
     
     // For image-to-video, use 'image' parameter directly (not referenceImages)
     // referenceImages is for style/content guidance with up to 3 images
-    if (imageBytes) {
-      const base64Image = imageBytes.toString('base64')
+    if (startFrame) {
+      const base64Image = startFrame.bytes.toString('base64')
       // Image-to-video uses direct 'image' field in instance
       cleanInstance.image = {
-        bytesBase64Encoded: base64Image,
-        mimeType: contentType,
+        inlineData: {
+          mimeType: startFrame.contentType,
+          data: base64Image,
+        },
       }
-      console.log(`[Veo 3.1] Added starting frame image (${base64Image.length} chars, ${contentType})`)
+      console.log(`[Veo 3.1] Added starting frame image (${base64Image.length} chars, ${startFrame.contentType})`)
     }
     
     // Build payload with separate 'parameters' object (per REST API docs)
@@ -1144,6 +1172,20 @@ export class GeminiAdapter extends BaseModelAdapter {
         // Duration in seconds as number (not string!)
         durationSeconds: duration,
       },
+    }
+    
+    // Add end frame (lastFrame) for frame interpolation if provided
+    // Per docs: "The ending frame is passed as a generation constraint in the config"
+    // https://ai.google.dev/gemini-api/docs/video#using-first-and-last-video-frames
+    if (endFrame) {
+      const base64EndImage = endFrame.bytes.toString('base64')
+      payload.parameters.lastFrame = {
+        inlineData: {
+          mimeType: endFrame.contentType,
+          data: base64EndImage,
+        },
+      }
+      console.log(`[Veo 3.1] Added ending frame (lastFrame) for interpolation (${base64EndImage.length} chars, ${endFrame.contentType})`)
     }
     
     console.log(`[Veo 3.1] Calling API with ${duration}s video, ${options.resolution}p, ${options.aspectRatio}`)
@@ -1171,8 +1213,9 @@ export class GeminiAdapter extends BaseModelAdapter {
       
       console.log('[Veo 3.1] Generation started', {
         operation: operationName,
-        referenceImageAttached: Boolean(cleanInstance.referenceImages && cleanInstance.referenceImages.length > 0),
-        referenceImageFormat: cleanInstance.referenceImages?.[0] ? 'inline-base64' : 'none',
+        startFrameAttached: Boolean(startFrame),
+        endFrameAttached: Boolean(endFrame),
+        mode: startFrame && endFrame ? 'frame-interpolation' : startFrame ? 'image-to-video' : 'text-to-video',
       })
       
       // Poll operation until complete (max 5 minutes)
@@ -1206,7 +1249,8 @@ export class GeminiAdapter extends BaseModelAdapter {
           console.log('[Veo 3.1] Video ready', {
             videoUri,
             operation: operationName,
-            referenceImageAttached: Boolean(cleanInstance.referenceImages && cleanInstance.referenceImages.length > 0),
+            startFrameAttached: Boolean(startFrame),
+            endFrameAttached: Boolean(endFrame),
           })
           
           // Return the video URI - it will be downloaded by the background processor
@@ -1305,6 +1349,7 @@ export const VEO_3_1_CONFIG: ModelConfig = {
   capabilities: {
     'text-2-video': true,
     'image-2-video': true,
+    'frame-interpolation': true, // Supports first + last frame interpolation
   },
   pricing: {
     perSecond: 0.05,

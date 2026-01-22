@@ -17,12 +17,19 @@ interface GenerateParams {
     resolution: number
     numOutputs: number
     duration?: number
+    /** Reference image base64 data URL */
     referenceImage?: string
+    /** Reference image pre-uploaded HTTP URL (preferred over base64) */
+    referenceImageUrl?: string
     referenceImageId?: string
+    /** Multiple reference images (for models that support it) */
+    referenceImages?: string[]
     /** Links this video generation to a source image output (for animate-still) */
     sourceOutputId?: string
-    /** End frame image base64 for video interpolation (Kling 2.6) */
+    /** End frame image base64 for video interpolation (Kling 2.6, Veo 3.1) */
     endFrameImage?: string
+    /** End frame pre-uploaded HTTP URL (preferred over base64) */
+    endFrameImageUrl?: string
     endFrameImageId?: string
   }
 }
