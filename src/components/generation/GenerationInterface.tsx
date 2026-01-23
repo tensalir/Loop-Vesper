@@ -633,6 +633,7 @@ export function GenerationInterface({
   // Observe scroll content height changes to detect late-loading layout shifts (images, virtualizer, dynamic import)
   // Track previous height to only scroll when content grows (not shrinks due to cancelled generations)
   const previousContentHeightRef = useRef<number>(0)
+  const scrollDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   
   useEffect(() => {
     if (isLoading) return
@@ -657,24 +658,43 @@ export function GenerationInterface({
       const shouldScrollForPending = pendingScrollToBottomRef.current
       
       if (shouldScrollForPending) {
-        scrollToBottomNow('session-load')
-        // Clear pending once we are actually at (or extremely near) the bottom
-        const afterDistance =
-          container.scrollHeight - container.scrollTop - container.clientHeight
-        if (afterDistance < 2) {
-          pendingScrollToBottomRef.current = false
-        } else {
-          sessionAutoScrollAttemptCountRef.current += 1
-          // Avoid infinite loops if something is truly off; fall back to non-pending behavior.
-          if (sessionAutoScrollAttemptCountRef.current >= 6) {
-            pendingScrollToBottomRef.current = false
-          }
+        // Debounce scroll calls to prevent jitter during rapid resize events
+        // Only scroll after 50ms of no further resize events
+        if (scrollDebounceTimerRef.current) {
+          clearTimeout(scrollDebounceTimerRef.current)
         }
+        
+        scrollDebounceTimerRef.current = setTimeout(() => {
+          scrollDebounceTimerRef.current = null
+          
+          // Check again if we still need to scroll (might have been cleared)
+          if (!pendingScrollToBottomRef.current) return
+          
+          scrollToBottomNow('session-load')
+          
+          // Clear pending once we are actually at (or extremely near) the bottom
+          const afterDistance =
+            container.scrollHeight - container.scrollTop - container.clientHeight
+          if (afterDistance < 10) { // Slightly larger threshold for more reliable settling
+            pendingScrollToBottomRef.current = false
+          } else {
+            sessionAutoScrollAttemptCountRef.current += 1
+            // Avoid infinite loops if something is truly off; fall back to non-pending behavior.
+            if (sessionAutoScrollAttemptCountRef.current >= 6) {
+              pendingScrollToBottomRef.current = false
+            }
+          }
+        }, 50)
       }
     })
 
     observer.observe(contentEl)
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      if (scrollDebounceTimerRef.current) {
+        clearTimeout(scrollDebounceTimerRef.current)
+      }
+    }
   }, [session?.id, isLoading, generations.length, scrollToBottomNow])
 
   // Handle scrolling: on session load completion and new items
@@ -1154,7 +1174,7 @@ export function GenerationInterface({
   return (
     <div className="flex-1 flex flex-col relative">
       {/* Gallery Area - Always show, even if empty */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-grid-soft">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-grid-soft" style={{ scrollbarGutter: 'stable' }}>
         {isLoading ? (
           // Loading state
           <div className="h-full pl-[var(--dock-left-gutter)] flex items-center justify-center">

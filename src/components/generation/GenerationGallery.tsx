@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, forwardRef } from 'react'
+import { useState, useRef, useCallback, useEffect, forwardRef, useMemo } from 'react'
 import Image from 'next/image'
 import { Download, RotateCcw, Info, Copy, Bookmark, Check, Video, Wand2, X, Trash2, Pin, ArrowDownRight } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -202,8 +202,9 @@ const ReferenceImageThumbnail = ({ generation, onPinImage }: ReferenceImageThumb
 }
 
 /**
- * Video card with auto aspect ratio detection and hover overlay actions.
+ * Video card with stable aspect ratio from output dimensions or params.
  * Uses object-contain to avoid cropping regardless of the video's actual dimensions.
+ * Aspect ratio is computed upfront to prevent layout shifts on video load.
  */
 interface VideoCardWithOverlayProps {
   output: any
@@ -226,15 +227,15 @@ function VideoCardWithOverlay({
   onToggleBookmark,
   onToggleApproval,
 }: VideoCardWithOverlayProps) {
-  const [aspectRatio, setAspectRatio] = useState<string>(fallbackAspectRatio.replace(':', ' / '))
-  
-  const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    const video = e.currentTarget
-    if (video.videoWidth && video.videoHeight) {
-      // Use actual video dimensions for aspect ratio
-      setAspectRatio(`${video.videoWidth} / ${video.videoHeight}`)
+  // Compute stable aspect ratio upfront - prefer output dimensions, then fallback
+  const aspectRatio = useMemo(() => {
+    // If we have stored dimensions from the output, use them (most accurate)
+    if (output.width && output.height) {
+      return `${output.width} / ${output.height}`
     }
-  }
+    // Otherwise use the generation parameter aspect ratio
+    return fallbackAspectRatio.replace(':', ' / ')
+  }, [output.width, output.height, fallbackAspectRatio])
   
   return (
     <div
@@ -249,7 +250,7 @@ function VideoCardWithOverlay({
         src={output.fileUrl}
         className="w-full h-full object-contain"
         controls
-        onLoadedMetadata={handleLoadedMetadata}
+        preload="metadata"
       />
 
       {/* Hover Overlay with Actions (no convert-to-video button in video view) */}
@@ -417,14 +418,58 @@ export function GenerationGallery({
   )
 
   // Virtualizer for efficient rendering of large lists
-  // Estimate accounts for: card min-height (320px) + padding + content + bottom spacing (pb-12 = 48px)
-  // Using a conservative estimate to prevent overlap - cards can grow with content
-  // The virtualizer will automatically measure actual heights via measureElement ref
+  // Smart row height estimator based on generation parameters to reduce layout shift
+  const estimateRowHeight = useCallback((index: number): number => {
+    const gen = generationsRef.current[index]
+    if (!gen) return 600 // fallback
+    
+    // Layout constants
+    const LEFT_PANEL_WIDTH = 384 // w-96
+    const GAP = 24 // gap-6
+    const BOTTOM_PADDING = 48 // pb-12
+    const MIN_PANEL_HEIGHT = 320
+    const GRID_GAP = 16 // gap-4
+    
+    // Get container width (approximate if not available)
+    const containerWidth = scrollContainerRef?.current?.clientWidth || 1200
+    // Subtract left panel, gap, and some margin for the max-w-5xl constraint
+    const rightSideWidth = Math.min(containerWidth - LEFT_PANEL_WIDTH - GAP - 48, 1280) // max-w-5xl ≈ 1280px
+    
+    const params = gen.parameters as any
+    const aspectRatioStr = params?.aspectRatio || '1:1'
+    const [w, h] = aspectRatioStr.split(':').map(Number)
+    const aspectRatio = w && h ? w / h : 1
+    
+    const isVideo = allModels.find(m => m.id === gen.modelId)?.type === 'video'
+    const numOutputs = gen.outputs?.length || (params?.numOutputs || (isVideo ? 1 : 4))
+    
+    let rightSideHeight: number
+    
+    if (isVideo) {
+      // Videos: single column, one card
+      const cardWidth = Math.min(rightSideWidth, 640) // max-w-2xl
+      const cardHeight = cardWidth / aspectRatio
+      rightSideHeight = cardHeight
+    } else {
+      // Images: 2-column grid
+      const cardWidth = (rightSideWidth - GRID_GAP) / 2
+      const cardHeight = cardWidth / aspectRatio
+      const rows = Math.ceil(numOutputs / 2)
+      rightSideHeight = rows * cardHeight + (rows - 1) * GRID_GAP
+    }
+    
+    // Row height = max of left panel min-height and right side height, plus bottom padding
+    const rowHeight = Math.max(MIN_PANEL_HEIGHT, rightSideHeight) + BOTTOM_PADDING
+    
+    // Add some buffer for safety
+    return Math.round(rowHeight + 24)
+  }, [allModels])
+  
   const virtualizer = useVirtualizer({
     count: generations.length,
     getScrollElement: () => scrollContainerRef?.current ?? null,
     getItemKey,
-    estimateSize: () => 600, // Estimated row height in pixels (conservative to prevent overlap)
+    estimateSize: estimateRowHeight,
     overscan: 5, // Render 5 extra items above/below viewport for smooth scrolling
   })
 
