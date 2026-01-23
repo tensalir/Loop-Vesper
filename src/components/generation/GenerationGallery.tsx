@@ -983,14 +983,44 @@ export function GenerationGallery({
                   </div>
                 ) : (
                   <div className="flex-1 grid grid-cols-2 gap-4 max-w-5xl">
-                    {Array.from({ length: numOutputs }).map((_, idx) => (
-                      <GenerationProgress 
-                        key={`${stableKey}-progress-${idx}`}
-                        estimatedTime={25}
-                        aspectRatio={(generation.parameters as any)?.aspectRatio}
-                        isVideo={false}
-                      />
-                    ))}
+                    {Array.from({ length: numOutputs }).map((_, idx) => {
+                      // Calculate estimated time based on model type and parameters
+                      const getEstimatedTime = (): number => {
+                        if (isVideoModel) {
+                          // Video generation takes longer
+                          const duration = params?.duration || 5
+                          const resolution = params?.resolution || 720
+                          // Base estimate: ~60-120s for videos, scaled by duration and resolution
+                          let estimate = 90
+                          if (duration >= 8) estimate += 30
+                          if (resolution >= 1080) estimate += 30
+                          if (resolution >= 2160) estimate += 60 // 4K takes even longer
+                          return estimate
+                        }
+                        // Image generation
+                        const resolution = params?.resolution || 1024
+                        // Base estimate: ~20-40s for images, scaled by resolution
+                        let estimate = 25
+                        if (resolution >= 2048) estimate += 10
+                        if (resolution >= 4096) estimate += 20
+                        return estimate
+                      }
+                      
+                      // Get the start time: prefer processingStartedAt, fall back to createdAt
+                      const startedAt = typeof params?.processingStartedAt === 'number'
+                        ? params.processingStartedAt
+                        : createdAtMs
+                      
+                      return (
+                        <GenerationProgress 
+                          key={`${stableKey}-progress-${idx}`}
+                          estimatedTime={getEstimatedTime()}
+                          aspectRatio={params?.aspectRatio}
+                          isVideo={isVideoModel}
+                          startedAt={startedAt}
+                        />
+                      )
+                    })}
                   </div>
                 )}
               </div>

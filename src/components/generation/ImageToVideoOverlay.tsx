@@ -833,6 +833,25 @@ function formatModelName(modelId: string): string {
 /**
  * Card showing a single video iteration
  */
+/**
+ * Format seconds to MM:SS display
+ */
+function formatTimeForCard(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = Math.floor(totalSeconds % 60)
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+/**
+ * Easing-based progress calculation for video iterations
+ * Uses asymptotic curve: approaches 99% but never reaches it
+ */
+function calculateIterationProgress(elapsedSeconds: number, estimatedTime: number): number {
+  const k = 3 / estimatedTime
+  const rawProgress = 1 - Math.exp(-k * elapsedSeconds)
+  return Math.min(rawProgress * 100, 99)
+}
+
 function IterationCard({ 
   iteration,
   onReuseParameters,
@@ -853,6 +872,38 @@ function IterationCard({
   // Auto-detect aspect ratio from video metadata
   const fallbackAspectRatio = (iteration.parameters as any)?.aspectRatio || '16:9'
   const [aspectRatio, setAspectRatio] = useState<string>(fallbackAspectRatio.replace(':', ' / '))
+  
+  // Progress tracking for processing iterations
+  const params = iteration.parameters as any
+  const processingStartedAt = typeof params?.processingStartedAt === 'number'
+    ? params.processingStartedAt
+    : new Date(iteration.createdAt).getTime()
+  
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => {
+    if (iteration.status !== 'processing') return 0
+    return Math.max(0, (Date.now() - processingStartedAt) / 1000)
+  })
+  
+  // Update elapsed time for processing iterations
+  useEffect(() => {
+    if (iteration.status !== 'processing') return
+    
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - processingStartedAt) / 1000
+      setElapsedSeconds(Math.max(0, elapsed))
+    }, 500)
+    
+    return () => clearInterval(interval)
+  }, [iteration.status, processingStartedAt])
+  
+  // Calculate estimated time based on parameters (videos take ~60-120s)
+  const duration = params?.duration || 5
+  const resolution = params?.resolution || 720
+  let estimatedTime = 90
+  if (duration >= 8) estimatedTime += 30
+  if (resolution >= 1080) estimatedTime += 30
+  
+  const displayProgress = Math.round(calculateIterationProgress(elapsedSeconds, estimatedTime))
   
   const handleLoadedMetadata = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {
     const video = e.currentTarget
@@ -974,12 +1025,26 @@ function IterationCard({
           </>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/50 backdrop-blur-sm group/placeholder">
-            <div className={`p-3 rounded-full ${statusColors[iteration.status].split(' ')[0]} border border-border mb-3`}>
+            <div className={`p-3 rounded-full ${statusColors[iteration.status].split(' ')[0]} border border-border mb-2`}>
               <StatusIcon className={`h-6 w-6 ${iteration.status === 'processing' ? 'animate-spin' : ''}`} />
             </div>
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              {iteration.status === 'processing' ? 'Creating...' : iteration.status}
-            </span>
+            
+            {iteration.status === 'processing' ? (
+              <>
+                {/* Progress percentage */}
+                <span className="text-xl font-bold text-primary tabular-nums mb-1">
+                  {displayProgress}%
+                </span>
+                {/* Elapsed time */}
+                <span className="text-[10px] text-muted-foreground tabular-nums">
+                  {formatTimeForCard(elapsedSeconds)} elapsed
+                </span>
+              </>
+            ) : (
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                {iteration.status}
+              </span>
+            )}
             
             {/* Delete button for failed generations - only show for owner */}
             {iteration.status === 'failed' && onDelete && iteration.isOwner !== false && (

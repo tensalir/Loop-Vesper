@@ -1,105 +1,81 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
+import { Loader2 } from 'lucide-react'
 
 interface GenerationProgressProps {
   estimatedTime?: number // in seconds
   onComplete?: () => void
   aspectRatio?: string
   isVideo?: boolean
+  startedAt?: number // timestamp in ms (from processingStartedAt or createdAt)
 }
 
-// Specific customer insights from Loop Earplugs research (18,176 reviews & 14,536 tickets)
-// Based on Deep-dive session 5 - Untapped use cases analysis
-// Keep these short, concrete, and "scene-like" — they show real use cases and frustrations.
-const CUSTOMER_INSIGHTS = [
-  // Sleep Aid use cases (3,368 reviews)
-  'Sleep is the #1 use case—3,368 reviews mention using Loop for snoring partners and street noise.',
-  'Side sleepers struggle with earplugs that create pressure points—Loop&apos;s low profile solves this.',
-  'Light sleepers wake up to every noise—Loop helps them stay asleep through partner snoring and traffic.',
-  'Shift workers can&apos;t sleep during the day due to daytime noise—Loop blocks it out between shifts.',
-  'Urban sleepers deal with constant traffic and city noise—Loop makes their bedrooms quieter.',
+/**
+ * Format seconds to MM:SS display
+ */
+function formatTime(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = Math.floor(totalSeconds % 60)
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+/**
+ * Easing-based progress calculation that:
+ * - Reaches ~95% around the estimated time
+ * - Continues creeping slowly up to 99% for slow generations
+ * - Never hits 100% (that happens when the component unmounts)
+ * 
+ * Uses an asymptotic curve: progress = 1 - e^(-k * t)
+ * where k is calibrated so we hit ~95% at estimatedTime
+ */
+function calculateProgress(elapsedSeconds: number, estimatedTime: number): number {
+  // k = -ln(1 - 0.95) / estimatedTime ≈ 3 / estimatedTime
+  // This gives us ~95% at estimatedTime
+  const k = 3 / estimatedTime
   
-  // Noise Sensitivity use cases (2,702 reviews)
-  'Neurodivergent students get overwhelmed in loud classrooms—Loop helps them focus without feeling isolated.',
-  'Busy parents need relief from household chaos—Loop takes the edge off screaming kids and appliances.',
-  'HSPs (highly sensitive people) struggle in crowded spaces—Loop helps them manage sensory overload.',
-  'Open office workers can&apos;t concentrate with constant chatter—Loop mutes distractions while keeping conversations audible.',
-  'Social butterflies with sensory issues want to enjoy gatherings—Loop lets them participate without overwhelm.',
+  // Asymptotic curve: approaches 1 but never reaches it
+  const rawProgress = 1 - Math.exp(-k * elapsedSeconds)
   
-  // Concerts/Music Events (1,505 reviews)
-  'Concert‑goers want to protect hearing without muffling music—Loop preserves sound quality while reducing volume.',
-  'Festival attendees struggle with bass from neighboring stages—Loop helps them sleep at multi‑day events.',
-  'Musicians need earplugs that preserve tonal balance—Loop outperforms foam plugs for sound clarity.',
-  
-  // Workplace Productivity
-  'Remote workers can&apos;t focus in noisy cafés or open‑plan homes—Loop creates a quiet workspace anywhere.',
-  'Teachers get overwhelmed by loud classrooms and hallways—Loop helps them stay calm without isolating themselves.',
-  
-  // Travel/Commuting (568 tickets)
-  'Frequent business travelers struggle with airplane cabin noise—Loop makes long flights more comfortable.',
-  'Family travelers need to manage noise for both adults and kids—Loop helps everyone sleep better on trips.',
-  'Commuters get overwhelmed by rush hour chaos—Loop makes trains and buses feel less stressful.',
-  
-  // Parenting/Household
-  'Parents need to hear their kids but reduce overwhelming noise—Loop takes the edge off without blocking everything.',
-  
-  // Motorcycle Riding (623 tickets)
-  'Motorcyclists get fatigued from constant wind noise—Loop reduces wind roar while keeping essential sounds audible.',
-  'Riders need earplugs that fit comfortably under helmets—Loop&apos;s low profile works for long rides.',
-  
-  // Tinnitus/Hearing Protection
-  'Tinnitus sufferers need to protect their ears from further damage—Loop helps prevent flare‑ups after loud events.',
-  
-  // Sports and Exercise (454 tickets)
-  'Gym enthusiasts find class music too loud—Loop reduces volume while keeping safety cues and instructor voices clear.',
-  'Outdoor cyclists struggle with wind noise—Loop reduces fatigue on long rides while maintaining traffic awareness.',
-  'Team sports coaches need to communicate clearly in loud environments—Loop helps them hear players without overwhelm.',
-]
+  // Cap at 99% - the final 1% is "reserved" for actual completion
+  return Math.min(rawProgress * 100, 99)
+}
 
 export function GenerationProgress({
   estimatedTime = 30,
   onComplete,
   aspectRatio = '1:1',
   isVideo = false,
+  startedAt,
 }: GenerationProgressProps) {
-  const [startTime] = useState(() => Date.now())
-  const [displayProgress, setDisplayProgress] = useState(0)
-  const [currentInsightIndex, setCurrentInsightIndex] = useState(() => 
-    Math.floor(Math.random() * CUSTOMER_INSIGHTS.length)
-  )
-  const [insightFading, setInsightFading] = useState(false)
+  // Use provided startedAt or fall back to current time
+  const actualStartTime = useMemo(() => startedAt || Date.now(), [startedAt])
+  
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => {
+    return Math.max(0, (Date.now() - actualStartTime) / 1000)
+  })
 
-  // Update progress on interval
+  // Update elapsed time on interval
   useEffect(() => {
     const interval = setInterval(() => {
-      const elapsedSeconds = (Date.now() - startTime) / 1000
-      const progressRatio = Math.min(elapsedSeconds / estimatedTime, 0.95)
-      setDisplayProgress(Math.round(progressRatio * 100))
+      const elapsed = (Date.now() - actualStartTime) / 1000
+      setElapsedSeconds(Math.max(0, elapsed))
     }, 500)
 
     return () => clearInterval(interval)
-  }, [startTime, estimatedTime])
+  }, [actualStartTime])
 
-  // Rotate insights every 5 seconds with fade effect
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setInsightFading(true)
-      setTimeout(() => {
-        setCurrentInsightIndex(prev => (prev + 1) % CUSTOMER_INSIGHTS.length)
-        setInsightFading(false)
-      }, 300)
-    }, 5000)
-
-    return () => clearInterval(interval)
-  }, [])
+  // Calculate display progress using easing curve
+  const displayProgress = Math.round(calculateProgress(elapsedSeconds, estimatedTime))
+  
+  // Calculate estimated remaining time (only show if we have a reasonable estimate)
+  const estimatedRemaining = Math.max(0, estimatedTime - elapsedSeconds)
+  const showRemaining = elapsedSeconds < estimatedTime * 1.5 // Hide if way over estimate
 
   const getAspectRatioStyle = (ratio: string) => {
     return ratio.replace(':', ' / ')
   }
 
-  const currentInsight = CUSTOMER_INSIGHTS[currentInsightIndex]
-  
   // Calculate the perimeter percentage for the border animation
   const borderProgress = displayProgress / 100
 
@@ -153,22 +129,27 @@ export function GenerationProgress({
 
       {/* Main content */}
       <div className="absolute inset-0 flex flex-col items-center justify-center p-4 sm:p-6">
-        {/* Title (percentage is intentionally hidden because it's not truly accurate) */}
-        <div className="relative mb-3">
-          <span className="text-lg sm:text-xl font-semibold text-primary tracking-tight">
-            Did you know?
-          </span>
+        {/* Spinner icon */}
+        <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 text-primary animate-spin mb-3" />
+        
+        {/* Title */}
+        <div className="text-sm sm:text-base font-medium text-foreground/80 mb-2">
+          {isVideo ? 'Generating video' : 'Generating image'}
         </div>
 
-        {/* Customer insight - more specific, more room */}
-        <div className="max-w-[320px] text-center px-2">
-          <p 
-            className={`text-xs sm:text-sm text-muted-foreground leading-relaxed transition-all duration-300 ${
-              insightFading ? 'opacity-0 translate-y-1' : 'opacity-100 translate-y-0'
-            }`}
-          >
-            {currentInsight}
-          </p>
+        {/* Large percentage */}
+        <div className="text-3xl sm:text-4xl font-bold text-primary tabular-nums mb-2">
+          {displayProgress}%
+        </div>
+
+        {/* Timer info */}
+        <div className="flex flex-col items-center gap-0.5 text-xs text-muted-foreground">
+          <span className="tabular-nums">{formatTime(elapsedSeconds)} elapsed</span>
+          {showRemaining && estimatedRemaining > 0 && (
+            <span className="tabular-nums text-muted-foreground/70">
+              ~{formatTime(estimatedRemaining)} remaining
+            </span>
+          )}
         </div>
       </div>
     </div>
