@@ -143,7 +143,7 @@ if (typeof window === 'undefined') {
           if (!credentials.private_key) {
             console.error('[Vertex AI] ERROR: Credentials JSON missing private_key field')
           } else {
-            console.log(`[Vertex AI]   Private key: ${credentials.private_key.substring(0, 30)}... (present)`)
+            console.log(`[Vertex AI]   Private key: present (length: ${credentials.private_key.length})`)
           }
           
           if (credentials.project_id && credentials.project_id !== projectId) {

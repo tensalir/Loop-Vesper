@@ -7,17 +7,25 @@ import { prisma } from '@/lib/prisma'
 export const dynamic = 'force-dynamic'
 
 /**
- * Debug endpoint to check for stuck processing generations
+ * Debug endpoint to check for stuck processing generations.
+ * Restricted to development or admin users in production.
  */
 export async function GET(request: NextRequest) {
+  // Gate: Only allow in development or for admin users
+  if (process.env.NODE_ENV === 'production') {
+    const { requireAdmin } = await import('@/lib/api/auth')
+    const result = await requireAdmin()
+    if (result.response) return result.response
+  }
+
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -27,7 +35,7 @@ export async function GET(request: NextRequest) {
     
     const stuckGenerations = await prisma.generation.findMany({
       where: {
-        userId: session.user.id, // Only own generations
+        userId: user.id, // Only own generations
         status: 'processing',
         createdAt: {
           lt: fiveMinutesAgo,

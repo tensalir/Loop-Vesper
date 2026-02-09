@@ -1,6 +1,7 @@
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import { DashboardSidebar } from '@/components/layout/DashboardSidebar'
 import { DashboardHeader } from '@/components/layout/DashboardHeader'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 export default function DashboardLayout({
   children,
@@ -20,7 +21,9 @@ export default function DashboardLayout({
           {/* Page content */}
           <main className="flex-1 overflow-y-auto">
             <div className="p-4 md:p-6 lg:p-8">
-              {children}
+              <ErrorBoundary>
+                {children}
+              </ErrorBoundary>
             </div>
           </main>
         </div>

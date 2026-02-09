@@ -253,15 +253,15 @@ export async function POST(request: NextRequest) {
       const { createRouteHandlerClient } = await import('@supabase/auth-helpers-nextjs')
       const { cookies } = await import('next/headers')
       const supabase = createRouteHandlerClient({ cookies })
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { user } } = await supabase.auth.getUser()
 
-      if (!session) {
+      if (!user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
       // Check admin role
       const profile = await prisma.profile.findUnique({
-        where: { id: session.user.id },
+        where: { id: user.id },
         select: { role: true },
       })
 
@@ -438,14 +438,14 @@ export async function GET(request: NextRequest) {
       const { createRouteHandlerClient } = await import('@supabase/auth-helpers-nextjs')
       const { cookies } = await import('next/headers')
       const supabase = createRouteHandlerClient({ cookies })
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { user } } = await supabase.auth.getUser()
 
-      if (!session) {
+      if (!user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
       const profile = await prisma.profile.findUnique({
-        where: { id: session.user.id },
+        where: { id: user.id },
         select: { role: true },
       })
 

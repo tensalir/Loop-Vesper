@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/api/auth'
 
-// Diagnostic endpoint to check environment variables (remove after debugging)
+// Diagnostic endpoint to check environment variables
+// Restricted to admin users only
 export async function GET() {
+  const result = await requireAdmin()
+  if (result.response) return result.response
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   const databaseUrl = process.env.DATABASE_URL
@@ -20,7 +25,7 @@ export async function GET() {
     },
     replicate: {
       hasToken: Boolean(replicateToken),
-      tokenPrefix: replicateToken?.substring(0, 3) || null,
+      tokenLength: replicateToken?.length || 0,
     },
     nodeEnv: process.env.NODE_ENV,
   })

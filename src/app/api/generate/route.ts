@@ -10,6 +10,9 @@ import {
   supportsWebhook, 
   REPLICATE_MODEL_CONFIGS 
 } from '@/lib/models/replicate-utils'
+import { validateBody, GenerateRequestSchema } from '@/lib/api/validation'
+import { generateLimiter } from '@/lib/api/rate-limit'
+import { appendDebugLog } from '@/lib/api/debug-log'
 
 const GENERATION_QUEUE_ENABLED = process.env.GENERATION_QUEUE_ENABLED === 'true'
 // Enable webhook-based generation for Replicate models (eliminates timeout issues)
@@ -18,6 +21,7 @@ const GENERATION_QUEUE_ENABLED = process.env.GENERATION_QUEUE_ENABLED === 'true'
 const USE_REPLICATE_WEBHOOKS = process.env.USE_REPLICATE_WEBHOOKS === 'true' // Default: DISABLED until webhooks work
 
 export async function POST(request: NextRequest) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let generation: any = null
   const startedAt = Date.now()
   let metricStatus: 'success' | 'error' = 'success'
@@ -35,34 +39,31 @@ export async function POST(request: NextRequest) {
 
     // Check authentication
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session) {
+    if (authError || !user) {
       return respond({ error: 'Unauthorized' }, 401)
     }
 
-    const user = session.user
+    // Rate limit check
+    const rateLimited = generateLimiter.check(user.id)
+    if (rateLimited) return rateLimited
 
-    // Parse request body
-    const body = await request.json()
-    const {
-      sessionId,
-      modelId,
-      prompt,
-      negativePrompt,
-      parameters: requestParameters,
-    } = body
-    const rawParameters = requestParameters || {}
+    // Parse and validate request body
+    const validation = await validateBody(request, GenerateRequestSchema)
+    if (validation.error) return validation.error
+    const { sessionId, modelId, prompt, negativePrompt, parameters: requestParameters } = validation.data
+    const rawParameters = (requestParameters || {}) as Record<string, any>
     const { 
       referenceImage, 
       referenceImages, 
       referenceImageId, 
-      referenceImageUrl,  // NEW: Pre-uploaded URL (bypasses 4.5MB limit)
+      referenceImageUrl,  // Pre-uploaded URL (bypasses 4.5MB limit)
       endFrameImage, 
       endFrameImageId,
-      endFrameImageUrl,   // NEW: Pre-uploaded URL (bypasses 4.5MB limit) 
+      endFrameImageUrl,   // Pre-uploaded URL (bypasses 4.5MB limit) 
       ...otherParameters 
     } = rawParameters
     let referencePointer: Record<string, any> | null = null
@@ -143,16 +144,9 @@ export async function POST(request: NextRequest) {
       ...(endFramePointer || {}),
     }
 
-    // Validate required fields
+    // Track metrics
     metricMeta.sessionId = sessionId
     metricMeta.modelId = modelId
-
-    if (!sessionId || !modelId || !prompt) {
-      return respond(
-        { error: 'Missing required fields: sessionId, modelId, prompt' },
-        400
-      )
-    }
 
     // SECURITY: Verify user has access to this session via project ownership, membership, or public project
     const sessionRecord = await prisma.session.findFirst({
@@ -249,16 +243,7 @@ export async function POST(request: NextRequest) {
       console.log(`[${generation.id}] Job enqueued for background processor`)
     }
     // Best-effort: add initial debug log
-    try {
-      const existing = await prisma.generation.findUnique({ where: { id: generation.id } })
-      const prev = (existing?.parameters as any) || {}
-      const logs = Array.isArray(prev.debugLogs) ? prev.debugLogs : []
-      logs.push({ at: new Date().toISOString(), step: 'generate:create' })
-      await prisma.generation.update({
-        where: { id: generation.id },
-        data: { parameters: { ...prev, debugLogs: logs.slice(-100), lastStep: 'generate:create' } },
-      })
-    } catch (_) {}
+    await appendDebugLog(generation.id, 'generate:create')
 
     if (!GENERATION_QUEUE_ENABLED) {
       const baseUrl = request.nextUrl.origin
@@ -332,12 +317,8 @@ export async function POST(request: NextRequest) {
             const processUrl = `${baseUrl}/api/generate/process`
             console.log(`[${generation.id}] Attempt ${i + 1}/${retries}: Calling ${processUrl}`)
             
-            // Debug: Log whether secret is available
             const hasSecret = Boolean(process.env.INTERNAL_API_SECRET)
-            const secretPreview = process.env.INTERNAL_API_SECRET 
-              ? `${process.env.INTERNAL_API_SECRET.substring(0, 4)}...${process.env.INTERNAL_API_SECRET.substring(process.env.INTERNAL_API_SECRET.length - 4)}`
-              : 'NOT SET'
-            console.log(`[${generation.id}] Internal secret available: ${hasSecret}, preview: ${secretPreview}`)
+            console.log(`[${generation.id}] Internal secret available: ${hasSecret}`)
             
             // Use AbortController so we can handle timeout gracefully
             const controller = new AbortController()
@@ -380,16 +361,7 @@ export async function POST(request: NextRequest) {
             
             if (response.ok) {
               console.log(`[${generation.id}] Background processing triggered successfully`)
-              try {
-                const existing = await prisma.generation.findUnique({ where: { id: generation.id } })
-                const prev = (existing?.parameters as any) || {}
-                const logs = Array.isArray(prev.debugLogs) ? prev.debugLogs : []
-                logs.push({ at: new Date().toISOString(), step: 'process:triggered' })
-                await prisma.generation.update({
-                  where: { id: generation.id },
-                  data: { parameters: { ...prev, debugLogs: logs.slice(-100), lastStep: 'process:triggered' } },
-                })
-              } catch (_) {}
+              await appendDebugLog(generation.id, 'process:triggered')
               return
             }
             
@@ -419,16 +391,7 @@ export async function POST(request: NextRequest) {
               },
             }).catch(console.error)
             
-            try {
-              const existing = await prisma.generation.findUnique({ where: { id: generation.id } })
-              const prev = (existing?.parameters as any) || {}
-              const logs = Array.isArray(prev.debugLogs) ? prev.debugLogs : []
-              logs.push({ at: new Date().toISOString(), step: 'process:trigger-failed-http', status: response.status, error: errorText?.slice(0, 200) })
-              await prisma.generation.update({
-                where: { id: generation.id },
-                data: { parameters: { ...prev, debugLogs: logs.slice(-100), lastStep: 'process:trigger-failed-http' } },
-              })
-            } catch (_) {}
+            await appendDebugLog(generation.id, 'process:trigger-failed-http', { status: response.status, error: errorText?.slice(0, 200) })
             return // Exit after marking failed
             
           } catch (error: any) {
@@ -445,16 +408,7 @@ export async function POST(request: NextRequest) {
               console.log(`[${generation.id}] Trigger timed out waiting for response - this is NORMAL`)
               console.log(`[${generation.id}] Processing is likely running. Frontend fallback will also trigger.`)
               
-              try {
-                const existing = await prisma.generation.findUnique({ where: { id: generation.id } })
-                const prev = (existing?.parameters as any) || {}
-                const logs = Array.isArray(prev.debugLogs) ? prev.debugLogs : []
-                logs.push({ at: new Date().toISOString(), step: 'process:trigger-timeout-expected', note: 'Request likely received, processing continues' })
-                await prisma.generation.update({
-                  where: { id: generation.id },
-                  data: { parameters: { ...prev, debugLogs: logs.slice(-100), lastStep: 'process:trigger-timeout-expected' } },
-                })
-              } catch (_) {}
+              await appendDebugLog(generation.id, 'process:trigger-timeout-expected', { note: 'Request likely received, processing continues' })
               
               // Do NOT mark as failed - let processing continue
               return
@@ -481,14 +435,7 @@ export async function POST(request: NextRequest) {
                 },
               }).catch(console.error)
               try {
-                const existing = await prisma.generation.findUnique({ where: { id: generation.id } })
-                const prev = (existing?.parameters as any) || {}
-                const logs = Array.isArray(prev.debugLogs) ? prev.debugLogs : []
-                logs.push({ at: new Date().toISOString(), step: 'process:trigger-failed-exception', error: errorMessage })
-                await prisma.generation.update({
-                  where: { id: generation.id },
-                  data: { parameters: { ...prev, debugLogs: logs.slice(-100), lastStep: 'process:trigger-failed-exception' } },
-                })
+                await appendDebugLog(generation.id, 'process:trigger-failed-exception', { error: errorMessage })
               } catch (_) {}
             } else {
               await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)))

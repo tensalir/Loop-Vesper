@@ -97,12 +97,12 @@ export async function GET(request: NextRequest) {
     const authStart = Date.now()
     const supabase = createRouteHandlerClient({ cookies })
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
     authDuration = Date.now() - authStart
 
-    if (authError || !session) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
         project: {
           include: {
             members: {
-              where: { userId: session.user.id },
+              where: { userId: user.id },
             },
           },
         },
@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
     }
 
     const project = sessionData.project
-    const isOwner = project.ownerId === session.user.id
+    const isOwner = project.ownerId === user.id
     const isMember = project.members.length > 0
     const isPublicProject = project.isShared === true
 
@@ -184,7 +184,7 @@ export async function GET(request: NextRequest) {
     const baseWhere: any = {
       sessionId,
       status: { not: 'dismissed' },
-      ...(showAllGenerations ? {} : { userId: session.user.id }),
+      ...(showAllGenerations ? {} : { userId: user.id }),
     }
 
     // Add keyset cursor for pagination (newest-first: createdAt DESC, id DESC)
@@ -282,7 +282,7 @@ export async function GET(request: NextRequest) {
         ? await (prisma as any).bookmark.findMany({
             where: {
               outputId: { in: outputIds },
-              userId: session.user.id,
+              userId: user.id,
             },
             select: {
               outputId: true,
@@ -298,7 +298,7 @@ export async function GET(request: NextRequest) {
       const result: any = {
         ...generation,
         // Indicate if current user owns this generation (for delete permissions in UI)
-        isOwner: generation.userId === session.user.id,
+        isOwner: generation.userId === user.id,
         // Sanitize parameters by default; pass full parameters only in debug mode
         parameters: includeParameters
           ? generation.parameters

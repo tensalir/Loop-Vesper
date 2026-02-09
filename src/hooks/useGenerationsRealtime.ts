@@ -248,7 +248,6 @@ export function useGenerationsRealtime(sessionId: string | null, userId: string 
           lastEventRef.current = eventKey
           
           console.log('🔴 Generation change detected:', payload.eventType, newData?.id, newData?.status)
-
           // CRITICAL: Skip any events for dismissed/deleted generations
           // This prevents them from reappearing after user removes them
           if (newData?.id && isGenerationDismissed(sessionId, newData.id)) {

@@ -15,17 +15,17 @@ export async function GET() {
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // SECURITY: Only admins can view rate limits
     const profile = await prisma.profile.findUnique({
-      where: { id: session.user.id },
+      where: { id: user.id },
       select: { role: true },
     })
 

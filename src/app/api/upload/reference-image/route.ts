@@ -26,13 +26,13 @@ export async function POST(request: NextRequest) {
   try {
     // Auth check
     const supabase = createRouteHandlerClient({ cookies })
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    if (authError || !session) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = session.user.id
+    const userId = user.id
 
     // Parse multipart form data
     const formData = await request.formData()

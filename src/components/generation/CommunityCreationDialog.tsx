@@ -221,6 +221,7 @@ export function CommunityCreationDialog({
               <div className="mt-3 pt-3 border-t border-border/50">
                 <div className="text-xs text-muted-foreground/70 mb-1.5">Reference Image:</div>
                 <div className="w-16 h-16 rounded-lg overflow-hidden border border-border/50">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img 
                     src={referenceImageUrl} 
                     alt="Reference" 

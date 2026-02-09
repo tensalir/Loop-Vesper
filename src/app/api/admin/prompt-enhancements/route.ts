@@ -6,15 +6,15 @@ import { prisma } from '@/lib/prisma'
 export async function GET() {
   try {
     const supabase = createRouteHandlerClient({ cookies })
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { user } } = await supabase.auth.getUser()
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Check if user is admin
     const profile = await prisma.profile.findUnique({
-      where: { id: session.user.id }
+      where: { id: user.id }
     })
 
     if (profile && 'role' in profile && profile.role !== 'admin') {
@@ -35,15 +35,15 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const supabase = createRouteHandlerClient({ cookies })
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { user } } = await supabase.auth.getUser()
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Check if user is admin
     const profile = await prisma.profile.findUnique({
-      where: { id: session.user.id }
+      where: { id: user.id }
     })
 
     if (profile && 'role' in profile && profile.role !== 'admin') {
@@ -59,8 +59,8 @@ export async function POST(request: NextRequest) {
         systemPrompt,
         modelIds,
         isActive,
-        createdBy: session.user.id,
-        updatedBy: session.user.id,
+        createdBy: user.id,
+        updatedBy: user.id,
       }
     })
 

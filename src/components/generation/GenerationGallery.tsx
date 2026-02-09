@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, forwardRef, useMemo } from 'react'
+import { useState, useRef, useCallback, useEffect, forwardRef, useMemo, memo } from 'react'
 import Image from 'next/image'
 import { Download, RotateCcw, Info, Copy, Bookmark, Check, Video, Wand2, X, Trash2, Pin, ArrowDownRight } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -14,120 +14,22 @@ import { GenerationProgress } from './GenerationProgress'
 import { ImageLightbox } from './ImageLightbox'
 import { ImageToVideoOverlay } from './ImageToVideoOverlay'
 import { VideoIterationsStackHint } from './VideoIterationsStackHint'
+import {
+  formatDate,
+  formatModelWithProvider,
+  getPublicStorageUrl,
+  normalizeReferenceImageUrl,
+  getReferenceImageUrls,
+} from './gallery-utils'
 
-// Safe date formatter
-const formatDate = (date: Date | string | undefined): string => {
-  if (!date) return 'Unknown date'
-  try {
-    return new Date(date).toLocaleDateString()
-  } catch (error) {
-    return 'Invalid date'
-  }
-}
-
-// Format model name with provider info from routing decision
-const formatModelWithProvider = (generation: GenerationWithOutputs): { name: string; provider: string | null; isFallback: boolean } => {
-  const params = generation.parameters as any
-  const modelId = generation.modelId || 'unknown'
-  
-  // Check for provider route info (set by the routing system)
-  const providerRoute = params?.providerRoute
-  const costMetrics = params?.costMetrics
-  
-  // Determine provider from routing info or cost metrics
-  let provider: string | null = null
-  let isFallback = false
-  
-  if (providerRoute) {
-    provider = providerRoute.provider === 'google' ? 'Google' : 
-               providerRoute.provider === 'replicate' ? 'Replicate' : null
-    isFallback = providerRoute.isFallback === true
-  } else if (costMetrics?.wasFallback) {
-    // Fallback detection from cost metrics
-    provider = 'Replicate'
-    isFallback = true
-  } else if (costMetrics?.predictTime && modelId.startsWith('gemini-')) {
-    // If we have predictTime on a gemini model, it used Replicate
-    provider = 'Replicate'
-    isFallback = true
-  } else if (modelId.startsWith('gemini-')) {
-    provider = 'Google'
-  } else if (modelId.startsWith('replicate-')) {
-    provider = 'Replicate'
-  }
-  
-  // Format the model name nicely
-  let name = modelId
-    .replace('gemini-', '')
-    .replace('replicate-', '')
-    .replace(/-/g, ' ')
-  
-  // Capitalize each word
-  name = name.split(' ').map(word => 
-    word.charAt(0).toUpperCase() + word.slice(1)
-  ).join(' ')
-  
-  return { name, provider, isFallback }
-}
-
-const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/+$/, '')
-
-const getPublicStorageUrl = (bucket: string, path: string): string | null => {
-  if (!SUPABASE_URL) return null
-  return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`
-}
-
-const normalizeReferenceImageUrl = (value: unknown): string | null => {
-  if (typeof value !== 'string') return null
-  if (value.startsWith('http') || value.startsWith('data:')) return value
-  return null
-}
-
-// Helper to extract reference image URLs from generation parameters
-const getReferenceImageUrls = (generation: GenerationWithOutputs): string[] => {
-  const params = generation.parameters as any
-  const urls: string[] = []
-  
-  // Prefer referenceImages array (multiple images)
-  if (Array.isArray(params.referenceImages) && params.referenceImages.length > 0) {
-    for (const candidate of params.referenceImages) {
-      const normalized = normalizeReferenceImageUrl(candidate)
-      if (normalized) urls.push(normalized)
-    }
-  }
-
-  // Fallback: referenceImageUrl directly (single image)
-  if (urls.length === 0 && params.referenceImageUrl) {
-    const normalized = normalizeReferenceImageUrl(params.referenceImageUrl)
-    if (normalized) urls.push(normalized)
-  }
-
-  // If we have a persisted path, we can construct the public URL
-  if (urls.length === 0 && params.referenceImagePath) {
-    const bucket = params.referenceImageBucket || 'generated-images'
-    const constructed = getPublicStorageUrl(bucket, params.referenceImagePath)
-    if (constructed) urls.push(constructed)
-  }
-  
-  // Check for referenceImageId - would need to construct URL
-  if (urls.length === 0 && params.referenceImageId) {
-    const bucket = params.referenceImageBucket || 'generated-images'
-    const mime: string | undefined = params.referenceImageMimeType
-    const ext = typeof mime === 'string' && mime.includes('png') ? 'png' : 'jpg'
-    const path = `references/${generation.userId}/${params.referenceImageId}.${ext}`
-    const constructed = getPublicStorageUrl(bucket, path)
-    if (constructed) urls.push(constructed)
-  }
-  
-  return urls
-}
+// Utility functions imported from ./gallery-utils
 
 interface ReferenceImageThumbnailProps {
   generation: GenerationWithOutputs
   onPinImage?: (url: string) => void
 }
 
-const ReferenceImageThumbnail = ({ generation, onPinImage }: ReferenceImageThumbnailProps) => {
+const ReferenceImageThumbnail = memo(function ReferenceImageThumbnail({ generation, onPinImage }: ReferenceImageThumbnailProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const urls = getReferenceImageUrls(generation)
   if (urls.length === 0) return null
@@ -151,6 +53,7 @@ const ReferenceImageThumbnail = ({ generation, onPinImage }: ReferenceImageThumb
           onMouseEnter={() => setHoveredIndex(0)}
           onMouseLeave={() => setHoveredIndex(null)}
         >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={urls[0]} alt="Reference" className="w-full h-full object-cover" loading="lazy" />
           {onPinImage && hoveredIndex === 0 && (
             <button
@@ -199,7 +102,7 @@ const ReferenceImageThumbnail = ({ generation, onPinImage }: ReferenceImageThumb
       )}
     </div>
   )
-}
+})
 
 /**
  * Video card with stable aspect ratio from output dimensions or params.
@@ -217,7 +120,7 @@ interface VideoCardWithOverlayProps {
   onToggleApproval: (outputId: string, isApproved: boolean) => void
 }
 
-function VideoCardWithOverlay({
+const VideoCardWithOverlay = memo(function VideoCardWithOverlay({
   output,
   generation,
   fallbackAspectRatio,
@@ -309,7 +212,7 @@ function VideoCardWithOverlay({
       </div>
     </div>
   )
-}
+})
 
 interface GenerationGalleryProps {
   /**
@@ -807,6 +710,16 @@ export function GenerationGallery({
 
   // If no scroll container ref provided, fall back to non-virtualized rendering
   const useVirtualization = !!scrollContainerRef?.current && generations.length > 10
+  
+  // #region agent log
+  useEffect(() => {
+    const processingGens = generations.filter(g => g.status === 'processing');
+    if (processingGens.length > 0) {
+      const summary = processingGens.map(g => ({id:g.id,clientId:g.clientId,numOutputs:(g.parameters as any)?.numOutputs||1}));
+      fetch('http://127.0.0.1:7246/ingest/3373e882-99ce-4b60-8658-40ddbcfb2d4b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'GenerationGallery.tsx:render',message:'Rendering processing generations',data:{totalCount:generations.length,processingCount:processingGens.length,processingSummary:summary},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D,E'})}).catch(()=>{});
+    }
+  }, [generations]);
+  // #endregion
 
   return (
     <>
@@ -900,6 +813,9 @@ export function GenerationGallery({
           
           // Processing generation layout
           if (generation.status === 'processing') {
+            // #region agent log
+            fetch('http://127.0.0.1:7246/ingest/3373e882-99ce-4b60-8658-40ddbcfb2d4b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'GenerationGallery.tsx:renderRow:processing',message:'Rendering processing row',data:{id:generation.id,clientId:generation.clientId,stableKey,index:virtualRow.index,promptSnippet:generation.prompt?.slice(0,50)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'G'})}).catch(()=>{});
+            // #endregion
             const modelConfig = allModels.find(m => m.id === generation.modelId)
             const modelName = modelConfig?.name || 'Unknown Model'
             const numOutputs = (generation.parameters as any)?.numOutputs || 1

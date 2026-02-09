@@ -12,11 +12,11 @@ export async function GET(
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -57,7 +57,7 @@ export async function GET(
                 ownerId: true,
                 isShared: true,
                 members: {
-                  where: { userId: session.user.id },
+                  where: { userId: user.id },
                   select: { userId: true },
                 },
               },
@@ -76,7 +76,7 @@ export async function GET(
 
     // Check access
     const project = generation.session.project
-    const isProjectOwner = project.ownerId === session.user.id
+    const isProjectOwner = project.ownerId === user.id
     const isMember = project.members.length > 0
     const isPublicProject = project.isShared === true
 
@@ -93,7 +93,7 @@ export async function GET(
       ? await prisma.bookmark.findMany({
           where: {
             outputId: { in: outputIds },
-            userId: session.user.id,
+            userId: user.id,
           },
           select: { outputId: true },
         })
@@ -120,7 +120,7 @@ export async function GET(
       createdAt: generation.createdAt,
       outputs: outputsWithBookmarks,
       // Include ownership flag for UI
-      isOwner: generation.userId === session.user.id,
+      isOwner: generation.userId === user.id,
     })
   } catch (error: any) {
     console.error('Error fetching generation:', error)
@@ -139,11 +139,11 @@ export async function PATCH(
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -179,7 +179,7 @@ export async function PATCH(
     }
 
     // Verify ownership
-    if (generation.userId !== session.user.id) {
+    if (generation.userId !== user.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 403 }
@@ -213,11 +213,11 @@ export async function DELETE(
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -243,7 +243,7 @@ export async function DELETE(
     }
 
     // Verify ownership
-    if (generation.userId !== session.user.id) {
+    if (generation.userId !== user.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 403 }

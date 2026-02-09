@@ -8,27 +8,27 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Get or create profile
     let profile = await prisma.profile.findUnique({
-      where: { id: session.user.id },
+      where: { id: user.id },
     })
 
     if (!profile) {
       // Create profile if it doesn't exist (default role: user)
       profile = await prisma.profile.create({
         data: {
-          id: session.user.id,
-          username: session.user.email?.split('@')[0] || null,
-          displayName: session.user.user_metadata?.full_name || null,
-          avatarUrl: session.user.user_metadata?.avatar_url || null,
+          id: user.id,
+          username: user.email?.split('@')[0] || null,
+          displayName: user.user_metadata?.full_name || null,
+          avatarUrl: user.user_metadata?.avatar_url || null,
           role: UserRole.user, // Default role for new users
         },
       })
@@ -48,11 +48,11 @@ export async function PATCH(request: NextRequest) {
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -61,7 +61,7 @@ export async function PATCH(request: NextRequest) {
 
     // Update profile (note: role cannot be changed via this endpoint for security)
     const profile = await prisma.profile.upsert({
-      where: { id: session.user.id },
+      where: { id: user.id },
       update: {
         displayName: displayName?.trim() || null,
         username: username?.trim() || null,
@@ -69,7 +69,7 @@ export async function PATCH(request: NextRequest) {
         updatedAt: new Date(),
       },
       create: {
-        id: session.user.id,
+        id: user.id,
         displayName: displayName?.trim() || null,
         username: username?.trim() || null,
         avatarUrl: avatarUrl || null,

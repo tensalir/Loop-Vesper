@@ -14,10 +14,10 @@ export async function GET(_request: NextRequest) {
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    if (!session) {
+    if (!user) {
       metricStatus = 'error'
       statusCode = 401
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -25,7 +25,7 @@ export async function GET(_request: NextRequest) {
 
     // SECURITY: Require admin role for admin endpoints
     const profile = await prisma.profile.findUnique({
-      where: { id: session.user.id },
+      where: { id: user.id },
       select: { role: true },
     })
 

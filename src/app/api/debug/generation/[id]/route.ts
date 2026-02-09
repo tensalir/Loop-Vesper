@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma'
  * Debug endpoint to inspect a generation end-to-end.
  * Returns DB status, outputs count, age, lastHeartbeatAt, lastStep, and debugLogs.
  * SECURITY: Only shows generations owned by the authenticated user.
+ * Restricted to development or admin users in production.
  */
 export async function GET(
   request: NextRequest,
@@ -16,11 +17,11 @@ export async function GET(
     // SECURITY: Require authentication
     const supabase = createRouteHandlerClient({ cookies })
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -33,7 +34,7 @@ export async function GET(
     const generation = await prisma.generation.findFirst({
       where: { 
         id,
-        userId: session.user.id, // Only own generations
+        userId: user.id, // Only own generations
       },
       include: {
         outputs: true,

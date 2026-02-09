@@ -966,6 +966,7 @@ export function VideoInput({
                       isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
                     }`}
                   >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={imagePreviewUrl || ''} alt="Start frame" className="w-full h-full object-cover" />
                   </div>
                 )

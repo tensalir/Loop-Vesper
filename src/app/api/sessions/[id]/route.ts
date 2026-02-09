@@ -10,11 +10,11 @@ export async function PATCH(
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -28,7 +28,7 @@ export async function PATCH(
       include: { project: true },
     })
 
-    if (!existingSession || existingSession.project.ownerId !== session.user.id) {
+    if (!existingSession || existingSession.project.ownerId !== user.id) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 })
     }
 
@@ -60,11 +60,11 @@ export async function DELETE(
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -76,7 +76,7 @@ export async function DELETE(
       include: { project: true },
     })
 
-    if (!existingSession || existingSession.project.ownerId !== session.user.id) {
+    if (!existingSession || existingSession.project.ownerId !== user.id) {
       return NextResponse.json(
         { error: 'Session not found or unauthorized' },
         { status: 404 }
