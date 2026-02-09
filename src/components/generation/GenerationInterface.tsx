@@ -1199,11 +1199,6 @@ export function GenerationInterface({
     const seenClientIds = new Map<string, GenerationWithOutputs>()
     const deduped: GenerationWithOutputs[] = []
     
-    // #region agent log
-    const inputSummary = generations.slice(0,10).map(g => ({id:g.id,clientId:g.clientId,status:g.status}));
-    fetch('http://127.0.0.1:7246/ingest/3373e882-99ce-4b60-8658-40ddbcfb2d4b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'GenerationInterface.tsx:displayGenerations',message:'Building display list',data:{inputCount:generations.length,inputSummary},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
-    
     for (const gen of generations) {
       // Skip duplicate by id
       if (seenIds.has(gen.id)) continue
@@ -1233,11 +1228,6 @@ export function GenerationInterface({
       seenIds.add(gen.id)
       deduped.push(gen)
     }
-    
-    // #region agent log
-    const outputSummary = deduped.slice(0,10).map(g => ({id:g.id,clientId:g.clientId,status:g.status}));
-    fetch('http://127.0.0.1:7246/ingest/3373e882-99ce-4b60-8658-40ddbcfb2d4b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'GenerationInterface.tsx:displayGenerations:end',message:'Display list built',data:{inputCount:generations.length,outputCount:deduped.length,outputSummary},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     
     // Reverse so oldest is at top, newest at bottom
     return deduped.reverse()

@@ -711,16 +711,6 @@ export function GenerationGallery({
   // If no scroll container ref provided, fall back to non-virtualized rendering
   const useVirtualization = !!scrollContainerRef?.current && generations.length > 10
   
-  // #region agent log
-  useEffect(() => {
-    const processingGens = generations.filter(g => g.status === 'processing');
-    if (processingGens.length > 0) {
-      const summary = processingGens.map(g => ({id:g.id,clientId:g.clientId,numOutputs:(g.parameters as any)?.numOutputs||1}));
-      fetch('http://127.0.0.1:7246/ingest/3373e882-99ce-4b60-8658-40ddbcfb2d4b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'GenerationGallery.tsx:render',message:'Rendering processing generations',data:{totalCount:generations.length,processingCount:processingGens.length,processingSummary:summary},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D,E'})}).catch(()=>{});
-    }
-  }, [generations]);
-  // #endregion
-
   return (
     <>
       <div 
@@ -813,9 +803,6 @@ export function GenerationGallery({
           
           // Processing generation layout
           if (generation.status === 'processing') {
-            // #region agent log
-            fetch('http://127.0.0.1:7246/ingest/3373e882-99ce-4b60-8658-40ddbcfb2d4b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'GenerationGallery.tsx:renderRow:processing',message:'Rendering processing row',data:{id:generation.id,clientId:generation.clientId,stableKey,index:virtualRow.index,promptSnippet:generation.prompt?.slice(0,50)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'G'})}).catch(()=>{});
-            // #endregion
             const modelConfig = allModels.find(m => m.id === generation.modelId)
             const modelName = modelConfig?.name || 'Unknown Model'
             const numOutputs = (generation.parameters as any)?.numOutputs || 1

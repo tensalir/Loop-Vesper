@@ -855,10 +855,6 @@ export class GeminiAdapter extends BaseModelAdapter {
 
       console.log(`[Replicate Fallback] Prediction started: ${predictionId}`)
       console.log(`[Replicate Fallback] Full prediction response:`, JSON.stringify(data, null, 2))
-      // #region agent log
-      console.log(`[DEBUG:E] Replicate prediction started: ${predictionId}, status=${data.status}`)
-      fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'local-debug',hypothesisId:'C',location:'gemini.ts:generateImageReplicate',message:'Replicate prediction started - polling',data:{predictionId,initialStatus:data.status,urls:data.urls,model:data.model,version:data.version?.substring(0,20)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
 
       // Poll for results (max 10 minutes - same as Seedream adapter)
       let attempts = 0
@@ -908,9 +904,6 @@ export class GeminiAdapter extends BaseModelAdapter {
         console.log(`[Replicate Fallback] Status: ${statusData.status} (attempt ${attempts + 1})`)
 
         if (statusData.status === 'succeeded') {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gemini.ts:792',message:'Replicate prediction SUCCEEDED',data:{predictionId,attempts:attempts+1,hasOutput:!!statusData.output},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-          // #endregion
           let outputUrl: string | null = null
 
           if (Array.isArray(statusData.output) && statusData.output.length > 0) {
@@ -958,23 +951,14 @@ export class GeminiAdapter extends BaseModelAdapter {
             },
           }
         } else if (statusData.status === 'failed' || statusData.status === 'canceled') {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'local-debug',hypothesisId:'D',location:'gemini.ts:polling-failed',message:'Replicate prediction FAILED',data:{predictionId,status:statusData.status,error:statusData.error,attempts:attempts+1},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
           throw new Error(`Replicate generation failed: ${statusData.error || 'Unknown error'}`)
         }
 
         attempts++
       }
 
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'local-debug',hypothesisId:'D',location:'gemini.ts:polling-timeout',message:'Replicate polling TIMEOUT',data:{predictionId,maxAttempts,totalWaitSec:maxAttempts*5},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       throw new Error('Replicate generation timeout')
     } catch (error: any) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e6034d14-134b-41df-97f8-0c4119e294f2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'local-debug',hypothesisId:'D',location:'gemini.ts:replicate-error',message:'Replicate threw error',data:{errorMessage:error?.message,errorName:error?.name},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       console.error('[Replicate Fallback] Error:', error.message)
       throw error
     }

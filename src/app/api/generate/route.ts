@@ -21,7 +21,6 @@ const GENERATION_QUEUE_ENABLED = process.env.GENERATION_QUEUE_ENABLED === 'true'
 const USE_REPLICATE_WEBHOOKS = process.env.USE_REPLICATE_WEBHOOKS === 'true' // Default: DISABLED until webhooks work
 
 export async function POST(request: NextRequest) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let generation: any = null
   const startedAt = Date.now()
   let metricStatus: 'success' | 'error' = 'success'
