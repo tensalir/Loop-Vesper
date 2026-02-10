@@ -385,3 +385,74 @@ model ApiUsageCounter {
   @@index([bucket])
   @@map("api_usage_counters")
 }
+
+// --- Monday–Figma–Frontify sync (chronology and mapping) ---
+
+model SyncLink {
+  id               String   @id @default(uuid()) @db.Uuid
+  mondayItemId     String?  @map("monday_item_id")
+  mondayBoardId    String?  @map("monday_board_id")
+  figmaFileKey     String?  @map("figma_file_key")
+  figmaNodeId      String?  @map("figma_node_id")
+  frontifyAssetId  String?  @map("frontify_asset_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  events    SyncEvent[]
+  revisions SyncRevision[]
+
+  @@unique([mondayItemId, mondayBoardId])
+  @@unique([figmaFileKey, figmaNodeId])
+  @@unique([frontifyAssetId])
+  @@index([mondayItemId])
+  @@index([figmaFileKey])
+  @@index([frontifyAssetId])
+  @@map("sync_links")
+}
+
+model SyncEvent {
+  id              String   @id @default(uuid()) @db.Uuid
+  idempotencyKey  String   @unique @map("idempotency_key")
+  linkId          String?  @map("link_id") @db.Uuid
+  source          String   // 'monday' | 'figma' | 'frontify'
+  externalId      String   @map("external_id")
+  version         String
+  occurredAt      DateTime @map("occurred_at")
+  kind            String   // 'revision' | 'feedback' | 'approval'
+  payload         Json     // full normalized event
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  link SyncLink? @relation(fields: [linkId], references: [id], onDelete: SetNull)
+
+  @@index([linkId, occurredAt(sort: Asc)])
+  @@index([source, externalId])
+  @@index([occurredAt(sort: Desc)])
+  @@map("sync_events")
+}
+
+model SyncRevision {
+  id        String   @id @default(uuid()) @db.Uuid
+  linkId    String   @map("link_id") @db.Uuid
+  source    String
+  version   String
+  payload   Json     // materialized latest revision
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  link SyncLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@unique([linkId, source])
+  @@index([linkId])
+  @@map("sync_revisions")
+}
+
+model SyncCursor {
+  id         String   @id @default(uuid()) @db.Uuid
+  integration String  // 'monday', 'figma', 'frontify'
+  cursorKey  String   @map("cursor_key") // e.g. boardId, fileKey, projectId
+  cursor     String   // opaque cursor (timestamp, id, etc.)
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([integration, cursorKey])
+  @@index([integration])
+  @@map("sync_cursors")
+}

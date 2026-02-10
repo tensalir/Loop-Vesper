@@ -34,10 +34,33 @@ export interface ProductRenderFromFrontify {
 const FRONTIFY_API_URL = 'https://api.frontify.com/graphql'
 
 /**
- * Check if Frontify integration is configured
+ * Check if Frontify integration is configured (Bearer token + project ID).
+ * For OAuth2, use getFrontifyAccessToken() and pass projectId explicitly.
  */
 export function isFrontifyConfigured(): boolean {
   return !!(process.env.FRONTIFY_API_TOKEN && process.env.FRONTIFY_PROJECT_ID)
+}
+
+/** Project ID from env (optional). */
+export function getFrontifyProjectId(): string | null {
+  return process.env.FRONTIFY_PROJECT_ID ?? null
+}
+
+/** Asset record for Sigil: full metadata + URLs for decomposition. */
+export interface FrontifyAssetForSigil {
+  id: string
+  title: string
+  description?: string
+  previewUrl: string
+  downloadUrl: string
+  tags: string[]
+  createdAt: string
+  modifiedAt: string
+}
+
+/** Get auth token: prefer FRONTIFY_API_TOKEN (PAT), else null (caller may use OAuth). */
+function getFrontifyToken(): string | null {
+  return process.env.FRONTIFY_API_TOKEN ?? null
 }
 
 /**
@@ -207,6 +230,108 @@ export async function getFrontifyAssetDetails(assetId: string): Promise<ProductR
   } catch (error) {
     console.error('[Frontify] Failed to fetch asset details:', error)
     return null
+  }
+}
+
+/**
+ * Fetch assets from a Frontify library for Sigil ingestion.
+ * Returns full asset list with tags; filter by tags client-side if needed.
+ * Uses FRONTIFY_API_TOKEN and projectId (from env or passed).
+ */
+export async function fetchFrontifyAssetsForSigil(options?: {
+  projectId?: string
+  search?: string
+  limit?: number
+  page?: number
+  /** If set, only return assets that have ALL of these tags (client-side filter). */
+  requiredTags?: string[]
+}): Promise<{ assets: FrontifyAssetForSigil[]; total: number }> {
+  const projectId = options?.projectId ?? getFrontifyProjectId()
+  const token = getFrontifyToken()
+  if (!token || !projectId) {
+    console.log('[Frontify] Sigil: missing FRONTIFY_API_TOKEN or FRONTIFY_PROJECT_ID')
+    return { assets: [], total: 0 }
+  }
+
+  const limit = Math.min(options?.limit ?? 100, 100)
+
+  const query = `
+    query GetLibraryAssetsForSigil($projectId: ID!, $first: Int!, $search: String) {
+      library(id: $projectId) {
+        assets(first: $first, search: $search) {
+          edges {
+            node {
+              id
+              title
+              description
+              previewUrl(width: 1200, height: 1200)
+              downloadUrl
+              tags { value }
+              createdAt
+              modifiedAt
+            }
+          }
+        }
+      }
+    }
+  `
+
+  try {
+    const response = await fetch(FRONTIFY_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query,
+        variables: {
+          projectId,
+          first: limit,
+          search: options?.search || null,
+        },
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Frontify API error: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    if (data.errors) {
+      console.error('[Frontify] GraphQL errors:', data.errors)
+      throw new Error(`Frontify GraphQL error: ${data.errors[0]?.message}`)
+    }
+
+    const edges = data.data?.library?.assets?.edges ?? []
+    const total = edges.length
+
+    const assets: FrontifyAssetForSigil[] = edges.map((edge: any) => {
+      const asset = edge.node
+      return {
+        id: asset.id,
+        title: asset.title || 'Untitled',
+        description: asset.description ?? undefined,
+        previewUrl: asset.previewUrl || asset.downloadUrl,
+        downloadUrl: asset.downloadUrl,
+        tags: asset.tags?.map((t: any) => t.value) ?? [],
+        createdAt: asset.createdAt ?? '',
+        modifiedAt: asset.modifiedAt ?? '',
+      }
+    })
+
+    const requiredTags = options?.requiredTags
+    if (requiredTags && requiredTags.length > 0) {
+      const filtered = assets.filter((a) =>
+        requiredTags.every((tag) => a.tags.some((t) => t.toLowerCase() === tag.toLowerCase()))
+      )
+      return { assets: filtered, total: filtered.length }
+    }
+
+    return { assets, total }
+  } catch (error) {
+    console.error('[Frontify] Failed to fetch assets for Sigil:', error)
+    return { assets: [], total: 0 }
   }
 }
 

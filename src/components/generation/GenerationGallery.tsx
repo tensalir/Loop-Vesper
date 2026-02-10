@@ -525,6 +525,38 @@ export function GenerationGallery({
     }
   }
 
+  const handleApplySigil = async (outputId: string) => {
+    try {
+      const res = await fetch('/api/sigil/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          outputId,
+          intent: {
+            cta: 'Shop Now',
+            channel: 'instagram_feed',
+            language: 'en',
+            formatId: '4x5',
+          },
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Sigil failed')
+      toast({
+        title: data.valid ? 'Layout generated' : 'Layout generated (check violations)',
+        description: data.spec?.rationale ?? `${data.spec?.textBlocks?.length ?? 0} text blocks`,
+        variant: data.valid ? 'default' : 'default',
+      })
+    } catch (error) {
+      console.error('Sigil error:', error)
+      toast({
+        title: 'Sigil failed',
+        description: error instanceof Error ? error.message : 'Could not generate layout',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const handleToggleBookmark = async (outputId: string, isBookmarked: boolean) => {
     if (!sessionId) return
     
@@ -1381,7 +1413,7 @@ export function GenerationGallery({
                     </button>
                   </div>
                   
-                  {/* Bottom Left - Reuse + Pin */}
+                  {/* Bottom Left - Reuse + Pin + Apply Sigil (layout) */}
                   <div className="absolute bottom-2 left-2 pointer-events-auto flex items-center gap-1">
                     <button
                       onClick={(e) => {
@@ -1403,6 +1435,18 @@ export function GenerationGallery({
                     >
                       <Pin className="h-3.5 w-3.5 text-white" />
                     </button>
+                    {output.fileType === 'image' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleApplySigil(output.id)
+                        }}
+                        className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
+                        title="Apply Sigil (on-brand layout)"
+                      >
+                        <Wand2 className="h-3.5 w-3.5 text-white" />
+                      </button>
+                    )}
                   </div>
                   
                   {/* Bottom Right - Use as Reference (positioned left of the VideoIterationsStackHint video button) */}

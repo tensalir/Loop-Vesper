@@ -1,0 +1,271 @@
+/**
+ * Loop-Vesper Design Tokens
+ * =========================
+ * Shareable CSS custom properties extracted from Loop-Vesper's design system.
+ * 
+ * Source of truth: src/app/globals.css
+ * Last updated: 2026-02-03
+ * 
+ * Usage:
+ *   @import 'path/to/tokens.css';
+ *   
+ *   .my-element {
+ *     background: hsl(var(--background));
+ *     color: hsl(var(--foreground));
+ *   }
+ * 
+ * All color tokens use HSL channel values (H S% L%) without the hsl() wrapper,
+ * allowing flexible alpha manipulation: hsl(var(--primary) / 0.5)
+ */
+
+/* =============================================================================
+   COLOR TOKENS - Light Mode (Default)
+   ============================================================================= */
+
+:root {
+  /* --------------------------------------------------------------------------
+     Surface Colors
+     -------------------------------------------------------------------------- */
+  --background: 35 20% 97%;           /* Warm cream - main app background */
+  --foreground: 0 0% 10%;             /* Deep charcoal - primary text */
+  
+  --card: 0 0% 100%;                  /* Pure white - card surfaces */
+  --card-foreground: 0 0% 10%;        /* Card text color */
+  
+  --popover: 0 0% 100%;               /* Popover/dropdown surfaces */
+  --popover-foreground: 0 0% 10%;     /* Popover text color */
+  
+  /* --------------------------------------------------------------------------
+     Brand / Accent Colors
+     -------------------------------------------------------------------------- */
+  --primary: 263 66% 44%;             /* Purple - primary brand accent */
+  --primary-foreground: 0 0% 100%;    /* Text on primary surfaces */
+  
+  --accent: 263 66% 44%;              /* Purple - interactive accent */
+  --accent-foreground: 0 0% 100%;     /* Text on accent surfaces */
+  
+  /* --------------------------------------------------------------------------
+     Semantic Colors
+     -------------------------------------------------------------------------- */
+  --secondary: 35 25% 92%;            /* Soft warm gray - secondary surfaces */
+  --secondary-foreground: 0 0% 10%;   /* Text on secondary surfaces */
+  
+  --muted: 35 15% 90%;                /* Muted warm gray - subtle backgrounds */
+  --muted-foreground: 0 0% 45%;       /* De-emphasized text */
+  
+  --destructive: 0 72% 51%;           /* Red - errors, dangerous actions */
+  --destructive-foreground: 0 0% 100%;
+  
+  /* --------------------------------------------------------------------------
+     Border & Input Colors
+     -------------------------------------------------------------------------- */
+  --border: 35 10% 88%;               /* Soft border color */
+  --input: 35 10% 88%;                /* Input field borders */
+  --ring: 263 66% 44%;                /* Focus ring color */
+
+  /* ==========================================================================
+     RADIUS TOKENS
+     ========================================================================== */
+  --radius: 0.75rem;                  /* Base border radius (12px) */
+  /* Derived radii (use in Tailwind or calc):
+     - Large:  var(--radius)                = 0.75rem (12px)
+     - Medium: calc(var(--radius) - 2px)    = ~10px
+     - Small:  calc(var(--radius) - 4px)    = ~8px
+  */
+
+  /* ==========================================================================
+     LAYOUT TOKENS - Dock/Prompt Bar System
+     ========================================================================== */
+  --dock-bottom: 1.5rem;              /* Distance from viewport bottom (24px) */
+  --dock-gap: 1rem;                   /* Gap between dock elements (16px) */
+  --dock-left-gutter: 6rem;           /* Left padding for session bar (96px) */
+  --dock-panel-w: 320px;              /* Brainstorm panel width */
+  --dock-prompt-max-w: 42rem;         /* Prompt bar max-width (672px) */
+  --dock-prompt-max-w-multi: 48rem;   /* Multi-image mode max-width (768px) */
+}
+
+/* =============================================================================
+   COLOR TOKENS - Dark Mode
+   ============================================================================= */
+
+.dark {
+  /* --------------------------------------------------------------------------
+     Surface Colors
+     -------------------------------------------------------------------------- */
+  --background: 0 0% 8%;              /* Deep dark background */
+  --foreground: 0 0% 98%;             /* Almost white text */
+  
+  --card: 0 0% 12%;                   /* Slightly elevated card surface */
+  --card-foreground: 0 0% 98%;
+  
+  --popover: 0 0% 12%;                /* Popover surfaces */
+  --popover-foreground: 0 0% 98%;
+  
+  /* --------------------------------------------------------------------------
+     Brand / Accent Colors
+     -------------------------------------------------------------------------- */
+  --primary: 131 100% 85%;            /* Mint green - primary brand accent */
+  --primary-foreground: 0 0% 10%;     /* Dark text on mint surfaces */
+  
+  --accent: 131 100% 85%;             /* Mint green - interactive accent */
+  --accent-foreground: 0 0% 10%;
+  
+  /* --------------------------------------------------------------------------
+     Semantic Colors
+     -------------------------------------------------------------------------- */
+  --secondary: 0 0% 16%;              /* Dark gray secondary surface */
+  --secondary-foreground: 0 0% 98%;
+  
+  --muted: 0 0% 18%;                  /* Muted dark surface */
+  --muted-foreground: 0 0% 60%;       /* De-emphasized text */
+  
+  --destructive: 0 72% 55%;           /* Slightly brighter red for dark mode */
+  --destructive-foreground: 0 0% 100%;
+  
+  /* --------------------------------------------------------------------------
+     Border & Input Colors
+     -------------------------------------------------------------------------- */
+  --border: 0 0% 20%;                 /* Subtle dark border */
+  --input: 0 0% 20%;
+  --ring: 131 100% 85%;               /* Mint focus ring */
+}
+
+/* =============================================================================
+   LAYOUT TOKENS - Responsive Breakpoints
+   ============================================================================= */
+
+/* Large screens (lg: 1024px+) */
+@media (min-width: 1024px) {
+  :root {
+    --dock-panel-w: 360px;
+    --dock-prompt-max-w: 48rem;       /* 768px */
+    --dock-prompt-max-w-multi: 56rem; /* 896px */
+  }
+}
+
+/* Extra large screens (xl: 1280px+) */
+@media (min-width: 1280px) {
+  :root {
+    --dock-left-gutter: 12rem;        /* 192px */
+    --dock-panel-w: 400px;
+    --dock-prompt-max-w: 56rem;       /* 896px */
+    --dock-prompt-max-w-multi: 64rem; /* 1024px */
+  }
+}
+
+/* 2xl screens (1536px+) */
+@media (min-width: 1536px) {
+  :root {
+    --dock-panel-w: 440px;
+    --dock-prompt-max-w: 64rem;       /* 1024px */
+    --dock-prompt-max-w-multi: 72rem; /* 1152px */
+  }
+}
+
+/* Ultra-wide screens (1800px+) */
+@media (min-width: 1800px) {
+  :root {
+    --dock-panel-w: 500px;
+    --dock-prompt-max-w: 72rem;       /* 1152px */
+    --dock-prompt-max-w-multi: 80rem; /* 1280px */
+  }
+}
+
+/* =============================================================================
+   SHADOW TOKENS
+   
+   Soft, modern shadows with low opacity for a refined, minimal aesthetic.
+   These override Tailwind defaults when this file is imported.
+   ============================================================================= */
+
+.shadow-sm {
+  box-shadow: 
+    0 1px 3px 0 rgba(0, 0, 0, 0.04),
+    0 1px 2px 0 rgba(0, 0, 0, 0.02);
+}
+
+.shadow {
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.06),
+    0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.shadow-lg {
+  box-shadow: 
+    0 10px 15px -3px rgba(0, 0, 0, 0.08),
+    0 4px 6px -2px rgba(0, 0, 0, 0.04);
+}
+
+/* =============================================================================
+   MOTION TOKENS (as CSS custom properties for JavaScript access)
+   ============================================================================= */
+
+:root {
+  /* Duration tokens */
+  --duration-instant: 0ms;
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+  --duration-slow: 400ms;
+  --duration-slower: 1000ms;
+  
+  /* Easing tokens */
+  --ease-default: ease;
+  --ease-in: ease-in;
+  --ease-out: ease-out;
+  --ease-in-out: ease-in-out;
+}
+
+/* =============================================================================
+   TYPOGRAPHY TOKENS
+   ============================================================================= */
+
+:root {
+  /* Font families */
+  --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Avantt', var(--font-sans);  /* Bold display font */
+  
+  /* Font weights */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  
+  /* Line heights */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+}
+
+/* =============================================================================
+   SPACING SCALE (reference - use Tailwind classes or these values directly)
+   ============================================================================= */
+
+:root {
+  /* Base unit: 4px */
+  --space-0: 0;
+  --space-1: 0.25rem;   /* 4px */
+  --space-2: 0.5rem;    /* 8px */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px */
+  --space-5: 1.25rem;   /* 20px */
+  --space-6: 1.5rem;    /* 24px */
+  --space-8: 2rem;      /* 32px */
+  --space-10: 2.5rem;   /* 40px */
+  --space-12: 3rem;     /* 48px */
+  --space-16: 4rem;     /* 64px */
+  --space-20: 5rem;     /* 80px */
+  --space-24: 6rem;     /* 96px */
+}
+
+/* =============================================================================
+   Z-INDEX SCALE
+   ============================================================================= */
+
+:root {
+  --z-dropdown: 50;
+  --z-sticky: 100;
+  --z-modal: 200;
+  --z-popover: 300;
+  --z-tooltip: 400;
+  --z-toast: 500;
+}
