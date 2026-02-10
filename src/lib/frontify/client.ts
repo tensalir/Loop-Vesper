@@ -37,8 +37,8 @@ const FRONTIFY_API_URL = 'https://api.frontify.com/graphql'
  * Check if Frontify integration is configured (Bearer token + project ID).
  * For OAuth2, use getFrontifyAccessToken() and pass projectId explicitly.
  */
-export function isFrontifyConfigured(): boolean {
-  return !!(process.env.FRONTIFY_API_TOKEN && process.env.FRONTIFY_PROJECT_ID)
+export function isFrontifyConfigured(accessToken?: string | null): boolean {
+  return !!((accessToken ?? process.env.FRONTIFY_API_TOKEN) && process.env.FRONTIFY_PROJECT_ID)
 }
 
 /** Project ID from env (optional). */
@@ -59,8 +59,8 @@ export interface FrontifyAssetForSigil {
 }
 
 /** Get auth token: prefer FRONTIFY_API_TOKEN (PAT), else null (caller may use OAuth). */
-function getFrontifyToken(): string | null {
-  return process.env.FRONTIFY_API_TOKEN ?? null
+function getFrontifyToken(accessToken?: string | null): string | null {
+  return accessToken ?? process.env.FRONTIFY_API_TOKEN ?? null
 }
 
 /**
@@ -73,13 +73,15 @@ export async function fetchFrontifyAssets(options?: {
   search?: string
   tags?: string[]
   limit?: number
+  accessToken?: string
 }): Promise<ProductRenderFromFrontify[]> {
-  if (!isFrontifyConfigured()) {
+  const token = getFrontifyToken(options?.accessToken)
+  if (!isFrontifyConfigured(token)) {
     console.log('[Frontify] Not configured, skipping fetch')
     return []
   }
 
-  const token = process.env.FRONTIFY_API_TOKEN!
+  const authToken = token!
   const projectId = process.env.FRONTIFY_PROJECT_ID!
   const limit = options?.limit || 100
 
@@ -112,7 +114,7 @@ export async function fetchFrontifyAssets(options?: {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${authToken}`,
       },
       body: JSON.stringify({
         query,
@@ -245,9 +247,10 @@ export async function fetchFrontifyAssetsForSigil(options?: {
   page?: number
   /** If set, only return assets that have ALL of these tags (client-side filter). */
   requiredTags?: string[]
+  accessToken?: string
 }): Promise<{ assets: FrontifyAssetForSigil[]; total: number }> {
   const projectId = options?.projectId ?? getFrontifyProjectId()
-  const token = getFrontifyToken()
+  const token = getFrontifyToken(options?.accessToken)
   if (!token || !projectId) {
     console.log('[Frontify] Sigil: missing FRONTIFY_API_TOKEN or FRONTIFY_PROJECT_ID')
     return { assets: [], total: 0 }

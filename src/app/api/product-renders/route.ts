@@ -3,6 +3,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { fetchFrontifyAssets, isFrontifyConfigured, type ProductRenderFromFrontify } from '@/lib/frontify/client'
+import { getFrontifyAccessTokenFromCookies } from '@/lib/frontify/oauth'
 
 // Deprecated product models to filter out (Carry variants are Case type renders, not separate products)
 const DEPRECATED_PRODUCTS = [
@@ -18,8 +19,12 @@ const FRONTIFY_CACHE_TTL_MS = 3 * 60 * 1000 // 3 minutes
 /**
  * Get cached Frontify assets or fetch fresh data
  */
-async function getCachedFrontifyAssets(search: string | undefined): Promise<ProductRenderFromFrontify[]> {
-  const cacheKey = search || ''
+async function getCachedFrontifyAssets(
+  search: string | undefined,
+  accessToken: string | null
+): Promise<ProductRenderFromFrontify[]> {
+  const tokenScope = accessToken ? accessToken.slice(-8) : 'env'
+  const cacheKey = `${tokenScope}:${search || ''}`
   const now = Date.now()
   
   // Check cache
@@ -29,7 +34,7 @@ async function getCachedFrontifyAssets(search: string | undefined): Promise<Prod
   }
   
   // Fetch fresh data
-  const data = await fetchFrontifyAssets({ search })
+  const data = await fetchFrontifyAssets({ search, accessToken: accessToken ?? undefined })
   
   // Update cache
   frontifyCache.set(cacheKey, { data, timestamp: now })
@@ -69,6 +74,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search') || undefined
+    const frontifyAccessToken = getFrontifyAccessTokenFromCookies(cookies())
     const source = searchParams.get('source') || 'all'
     const nameFilter = searchParams.get('name') || undefined
     const typeFilter = searchParams.get('type') || undefined
@@ -99,7 +105,8 @@ export async function GET(request: NextRequest) {
     // Determine what to fetch
     const shouldFetchLocal = source !== 'frontify'
     const skipFrontify = typeFilter && typeFilter !== 'all'
-    const shouldFetchFrontify = source !== 'local' && !skipFrontify && isFrontifyConfigured()
+    const shouldFetchFrontify =
+      source !== 'local' && !skipFrontify && isFrontifyConfigured(frontifyAccessToken)
 
     // Start both fetches in parallel (avoid waterfall)
     const localRendersPromise = shouldFetchLocal
@@ -114,7 +121,7 @@ export async function GET(request: NextRequest) {
       : Promise.resolve([])
 
     const frontifyAssetsPromise = shouldFetchFrontify
-      ? getCachedFrontifyAssets(search).catch(error => {
+      ? getCachedFrontifyAssets(search, frontifyAccessToken).catch(error => {
           console.error('[product-renders] Frontify fetch error:', error)
           return [] as ProductRenderFromFrontify[]
         })
@@ -170,6 +177,7 @@ export async function GET(request: NextRequest) {
       productNames,
       renderTypes,
       frontifyConfigured: isFrontifyConfigured(),
+      frontifyOAuthConnected: !!frontifyAccessToken,
     })
 
     // Add cache headers for browser/CDN caching
