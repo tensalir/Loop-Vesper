@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getFileComments } from '@/lib/figma/client'
-import { persistEvents, toFeedbackEvent } from '@/lib/sync/normalize'
+import { persistEvent, persistEvents, toFeedbackEvent } from '@/lib/sync/normalize'
 import type { CreativeWorkItem } from '@/lib/sync/contracts'
 
 export const dynamic = 'force-dynamic'

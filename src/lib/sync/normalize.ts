@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import type {
   SyncEventPayload,
   RevisionEvent,
@@ -92,7 +93,7 @@ export async function persistEvent(input: PersistEventInput): Promise<{ id: stri
       version: payload.version,
       occurredAt,
       kind: payload.kind,
-      payload: payload as unknown as Record<string, unknown>,
+      payload: payload as unknown as Prisma.InputJsonValue,
     },
     select: { id: true },
   })

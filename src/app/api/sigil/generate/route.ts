@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   } else if (outputId) {
     const output = await prisma.output.findUnique({
       where: { id: outputId },
-      select: { fileUrl: string, fileType: string },
+      select: { fileUrl: true, fileType: true },
     })
     if (!output || output.fileType !== 'image') {
       return NextResponse.json(
