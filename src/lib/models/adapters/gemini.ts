@@ -59,6 +59,82 @@ const isRateLimitError = (error: any): boolean => {
   return status === 429 || status === 'RESOURCE_EXHAUSTED'
 }
 
+/**
+ * Parse Gemini API response for safety blocks, content filters, and other rejection reasons.
+ * Google's API can return 200 OK but with no image data when content is blocked.
+ * 
+ * Response structure:
+ * - candidates[0].finishReason: "SAFETY", "RECITATION", "OTHER", etc.
+ * - candidates[0].safetyRatings: [{ category, probability, blocked }]
+ * - promptFeedback.blockReason: "SAFETY", "OTHER"
+ * - promptFeedback.safetyRatings: [{ category, probability, blocked }]
+ */
+const parseGeminiContentBlock = (data: any): string | null => {
+  // Check prompt-level blocking first (entire prompt was rejected)
+  const promptFeedback = data?.promptFeedback
+  if (promptFeedback?.blockReason) {
+    const blockedCategories = (promptFeedback.safetyRatings || [])
+      .filter((r: any) => r.blocked || r.probability === 'HIGH')
+      .map((r: any) => r.category?.replace('HARM_CATEGORY_', '').toLowerCase().replace(/_/g, ' '))
+      .filter(Boolean)
+    
+    const categoryInfo = blockedCategories.length > 0
+      ? ` (categories: ${blockedCategories.join(', ')})`
+      : ''
+    
+    return `Prompt blocked by Google content safety filter${categoryInfo}. Try rephrasing your prompt to avoid restricted content.`
+  }
+
+  // Check candidate-level finish reason
+  const candidate = data?.candidates?.[0]
+  if (candidate?.finishReason && candidate.finishReason !== 'STOP' && candidate.finishReason !== 'MAX_TOKENS') {
+    const finishReason = candidate.finishReason
+    
+    if (finishReason === 'SAFETY') {
+      const blockedCategories = (candidate.safetyRatings || [])
+        .filter((r: any) => r.blocked || r.probability === 'HIGH')
+        .map((r: any) => r.category?.replace('HARM_CATEGORY_', '').toLowerCase().replace(/_/g, ' '))
+        .filter(Boolean)
+      
+      const categoryInfo = blockedCategories.length > 0
+        ? ` (categories: ${blockedCategories.join(', ')})`
+        : ''
+      
+      return `Image generation blocked by Google content safety filter${categoryInfo}. Try rephrasing your prompt to avoid restricted content.`
+    }
+    
+    if (finishReason === 'RECITATION') {
+      return 'Image generation blocked: response too similar to copyrighted material. Try a more original prompt.'
+    }
+    
+    if (finishReason === 'BLOCKLIST') {
+      return 'Prompt contains terms on the blocklist. Please rephrase and try again.'
+    }
+    
+    if (finishReason === 'PROHIBITED_CONTENT') {
+      return 'Prompt was flagged as containing prohibited content. Please rephrase and try again.'
+    }
+    
+    if (finishReason === 'SPII') {
+      return 'Prompt may contain sensitive personally identifiable information. Please rephrase and try again.'
+    }
+    
+    if (finishReason === 'IMAGE_SAFETY') {
+      return 'Generated image was blocked by safety filters. Try a different prompt or subject.'
+    }
+    
+    // Generic non-STOP finish reason
+    return `Image generation ended unexpectedly (reason: ${finishReason}). Try rephrasing your prompt.`
+  }
+
+  // Check if candidates array is empty (another form of blocking)
+  if (data?.candidates && data.candidates.length === 0) {
+    return 'No image candidates returned. The prompt may have been filtered by Google content safety. Try rephrasing.'
+  }
+
+  return null // No content block detected
+}
+
 const redactLargeStrings = (value: any, maxLen = 256) => {
   const seen = new WeakSet<object>()
   const walk = (v: any): any => {
@@ -495,17 +571,26 @@ export class GeminiAdapter extends BaseModelAdapter {
 
       // Extract image from response
       const response = result.response
+      
+      // Check for content safety blocks BEFORE looking for image data
+      // Vertex AI uses the same response structure as Gemini API
+      const vertexContentBlock = parseGeminiContentBlock(response)
+      if (vertexContentBlock) {
+        console.error('[Vertex AI] Content blocked by safety filter:', vertexContentBlock)
+        throw new Error(vertexContentBlock)
+      }
+      
       const candidates = response.candidates || []
       
       if (candidates.length === 0) {
-        console.error('Vertex AI response missing candidates:', JSON.stringify(result, null, 2))
-        throw new Error('No candidates in response')
+        console.error('Vertex AI response missing candidates:', JSON.stringify(redactLargeStrings(result), null, 2))
+        throw new Error('No image candidates returned from Vertex AI. The prompt may have been filtered by content safety. Try rephrasing.')
       }
       
       const content = candidates[0]?.content
       if (!content || !content.parts) {
-        console.error('Vertex AI response missing content parts:', JSON.stringify(result, null, 2))
-        throw new Error('No content parts in response')
+        console.error('Vertex AI response missing content parts:', JSON.stringify(redactLargeStrings(result), null, 2))
+        throw new Error('No content parts in Vertex AI response. Try a different prompt.')
       }
       
       const imagePart = content.parts.find(
@@ -513,8 +598,8 @@ export class GeminiAdapter extends BaseModelAdapter {
       )
 
       if (!imagePart?.inlineData?.data) {
-        console.error('Vertex AI response missing image data:', JSON.stringify(result, null, 2))
-        throw new Error('No image data in response')
+        console.error('Vertex AI response missing image data:', JSON.stringify(redactLargeStrings(result), null, 2))
+        throw new Error('No image data in Vertex AI response. The API returned a successful status but no image. This may be a transient issue — please try again.')
       }
 
       // Determine dimensions based on aspect ratio
@@ -684,14 +769,23 @@ export class GeminiAdapter extends BaseModelAdapter {
 
     const data = await response.json()
 
+    // Check for content safety blocks BEFORE looking for image data
+    // Google can return 200 OK but with blocked content (no image)
+    const contentBlock = parseGeminiContentBlock(data)
+    if (contentBlock) {
+      console.error('Nano banana pro: Content blocked by safety filter:', contentBlock)
+      console.error('Nano banana pro: Full response:', JSON.stringify(redactLargeStrings(data), null, 2))
+      throw new Error(contentBlock)
+    }
+
     // Extract image from response
     const imagePart = data.candidates?.[0]?.content?.parts?.find(
       (part: any) => part.inlineData?.mimeType?.startsWith('image/')
     )
 
     if (!imagePart?.inlineData?.data) {
-      console.error('Gemini response missing image data:', JSON.stringify(data, null, 2))
-      throw new Error('No image data in response')
+      console.error('Gemini response missing image data:', JSON.stringify(redactLargeStrings(data), null, 2))
+      throw new Error('No image data in Gemini response. The API returned a successful status but no image. This may be a transient issue — please try again.')
     }
 
     // Determine dimensions based on aspect ratio (from official Gemini docs)

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { useToast } from '@/components/ui/use-toast'
 import { Wand2, Loader2 } from 'lucide-react'
 
 interface PromptEnhancementButtonProps {
@@ -183,6 +184,7 @@ export function PromptEnhancementButton({
   onTextTransform,
   disabled = false,
 }: PromptEnhancementButtonProps) {
+  const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [enhancing, setEnhancing] = useState(false)
 
@@ -288,6 +290,15 @@ export function PromptEnhancementButton({
       }, stepDuration)
     } catch (error: any) {
       console.error('Error enhancing prompt:', error)
+      
+      // Surface the error to the user - previously this was silent
+      const errorMsg = error?.message || 'Unknown error'
+      toast({
+        title: 'Prompt enhancement failed',
+        description: errorMsg.length > 200 ? errorMsg.slice(0, 200) + '...' : errorMsg,
+        variant: 'destructive',
+      })
+      
       setEnhancing(false)
       onEnhancingChange?.(false)
     } finally {
