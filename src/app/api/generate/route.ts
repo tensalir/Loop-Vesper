@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { getModel } from '@/lib/models/registry'
 import { logMetric } from '@/lib/metrics'
+import { classifyError } from '@/lib/errors/classification'
 import { persistReferenceImage, persistReferenceImages } from '@/lib/reference-images'
 import { 
   submitReplicatePrediction, 
@@ -467,9 +468,11 @@ export async function POST(request: NextRequest) {
       message: 'Generation started. Poll for updates.',
     })
   } catch (error: any) {
-    console.error('Generation error:', error)
+    const errorMsg = error.message || 'Generation failed'
+    const classified = classifyError(errorMsg)
+    console.error(`Generation error [${classified.label}]:`, error)
     metricStatus = 'error'
-    statusCode = 500
+    statusCode = classified.httpStatus
     
     // Update generation status to failed if we created it
     if (generation) {
@@ -479,7 +482,15 @@ export async function POST(request: NextRequest) {
           status: 'failed',
           parameters: {
             ...(generation.parameters as any),
-            error: error.message,
+            error: errorMsg,
+            errorContext: {
+              message: errorMsg,
+              category: classified.category,
+              httpStatus: classified.httpStatus,
+              label: classified.label,
+              isRetryable: classified.isRetryable,
+              timestamp: new Date().toISOString(),
+            },
           }
         },
       }).catch(console.error)
@@ -489,9 +500,10 @@ export async function POST(request: NextRequest) {
       { 
         id: generation?.id,
         status: 'failed',
-        error: error.message || 'Generation failed' 
+        error: errorMsg,
+        errorCategory: classified.category,
       },
-      500
+      classified.httpStatus
     )
   } finally {
     logMetric({

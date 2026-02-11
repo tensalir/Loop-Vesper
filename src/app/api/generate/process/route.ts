@@ -5,6 +5,7 @@ import { uploadBase64ToStorage, uploadUrlToStorage } from '@/lib/supabase/storag
 import { logMetric } from '@/lib/metrics'
 import { downloadReferenceImageAsDataUrl } from '@/lib/reference-images'
 import { Prisma } from '@prisma/client'
+import { classifyError } from '@/lib/errors/classification'
 import { 
   determineProviderRoute, 
   supportsAutoRouting,
@@ -27,6 +28,10 @@ type GenerationProcessResult = {
   id: string
   status: 'completed' | 'failed' | 'skipped' | 'not_found'
   error?: string
+  /** Classified HTTP status for this specific result (used by POST handler) */
+  errorHttpStatus?: number
+  /** Error category for dashboard triage */
+  errorCategory?: string
   outputCount?: number
 }
 
@@ -656,9 +661,15 @@ async function processGenerationById(
     }
 
     if (result.status === 'failed') {
+      const errorMsg = result.error || 'Generation failed'
+      const classified = classifyError(errorMsg)
       const errorContext = {
-        message: result.error || 'Generation failed',
+        message: errorMsg,
         type: 'ModelGenerationError',
+        category: classified.category,
+        httpStatus: classified.httpStatus,
+        label: classified.label,
+        isRetryable: classified.isRetryable,
         timestamp: new Date().toISOString(),
         userId: generation.userId,
       }
@@ -670,18 +681,20 @@ async function processGenerationById(
           parameters: {
             ...(generation.parameters as any),
             error: errorContext.message,
-            errorContext, // Store full error context for debugging
+            errorContext, // Store full error context for debugging + dashboard triage
           },
         },
       })
 
-      console.log(`[${generationId}] Generation failed for user ${generation.userId}:`, errorContext.message)
-      await appendLog('process:failed', { error: result.error, userId: generation.userId })
+      console.log(`[${generationId}] Generation failed [${classified.label}] for user ${generation.userId}:`, errorContext.message)
+      await appendLog('process:failed', { error: result.error, category: classified.category, userId: generation.userId })
 
       return {
         id: generation.id,
         status: 'failed',
-        error: result.error || 'Generation failed',
+        error: errorMsg,
+        errorHttpStatus: classified.httpStatus,
+        errorCategory: classified.category,
       }
     }
 
@@ -693,6 +706,8 @@ async function processGenerationById(
     }
   } catch (error: any) {
     console.error('Background generation error:', error)
+    const errorMsg = error.message || 'Generation failed'
+    const classified = classifyError(errorMsg)
 
     try {
       const generation = await prisma.generation.findUnique({
@@ -701,8 +716,12 @@ async function processGenerationById(
 
       if (generation) {
         const errorContext = {
-          message: error.message || 'Generation failed',
+          message: errorMsg,
           type: error.name || 'UnknownError',
+          category: classified.category,
+          httpStatus: classified.httpStatus,
+          label: classified.label,
+          isRetryable: classified.isRetryable,
           stack: error.stack || undefined,
           timestamp: new Date().toISOString(),
           userId: generation.userId,
@@ -715,13 +734,13 @@ async function processGenerationById(
             parameters: {
               ...(generation.parameters as any),
               error: errorContext.message,
-              errorContext, // Store full error context for debugging
+              errorContext, // Store full error context for debugging + dashboard triage
             },
           },
         })
         
-        // Log with user context for easier debugging
-        console.error(`[${generationId}] Generation failed for user ${generation.userId}:`, errorContext)
+        // Log with user context and classification for easier debugging
+        console.error(`[${generationId}] Generation failed [${classified.label}] for user ${generation.userId}:`, errorContext)
       }
     } catch (updateError) {
       console.error('Failed to update generation status:', updateError)
@@ -730,7 +749,9 @@ async function processGenerationById(
     return {
       id: generationId,
       status: 'failed',
-      error: error.message || 'Generation failed',
+      error: errorMsg,
+      errorHttpStatus: classified.httpStatus,
+      errorCategory: classified.category,
     }
   } finally {
     stopHeartbeatRef?.()
@@ -838,10 +859,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    metricMeta.results = results.map((r) => ({ id: r.id, status: r.status }))
+    metricMeta.results = results.map((r) => ({ id: r.id, status: r.status, errorCategory: r.errorCategory }))
 
-    const hasFailure = results.some((r) => r.status === 'failed')
-    const httpStatus = hasFailure ? 500 : 200
+    const failedResults = results.filter((r) => r.status === 'failed')
+    const hasFailure = failedResults.length > 0
+    
+    // Use the classified HTTP status instead of blanket 500.
+    // For single-result requests, use the specific error's HTTP status.
+    // For batch requests, pick the "worst" status (highest priority error).
+    let httpStatus = 200
+    if (hasFailure) {
+      if (failedResults.length === 1) {
+        httpStatus = failedResults[0].errorHttpStatus || 500
+      } else {
+        // Multiple failures: prioritize by severity (500 > 502 > 429 > 422)
+        const statusPriority: Record<number, number> = { 500: 4, 502: 3, 429: 2, 422: 1, 400: 0 }
+        httpStatus = failedResults.reduce((worst, r) => {
+          const status = r.errorHttpStatus || 500
+          return (statusPriority[status] ?? 0) > (statusPriority[worst] ?? 0) ? status : worst
+        }, failedResults[0].errorHttpStatus || 500)
+      }
+    }
 
     if (handles.length === 1 && !handles[0].job) {
       return respond(results[0], httpStatus)
@@ -857,12 +895,14 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Background generation error:', error)
     metricStatus = 'error'
+    const classified = classifyError(error.message || '')
     return respond(
       {
         error: error.message || 'Generation failed',
         status: 'failed',
+        errorCategory: classified.category,
       },
-      500
+      classified.httpStatus
     )
   } finally {
     logMetric({

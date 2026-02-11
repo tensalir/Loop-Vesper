@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
 import { getSkillSystemPrompt } from '@/lib/skills/registry'
 import { getModelConfig } from '@/lib/models/registry'
+import { classifyError } from '@/lib/errors/classification'
 
 // Default to Sonnet 4.5 - configurable via ANTHROPIC_PROMPT_ENHANCE_MODEL env var
 const DEFAULT_PROMPT_ENHANCE_MODEL = 'claude-sonnet-4-5-20250929'
@@ -328,18 +329,35 @@ Return ONLY the enhanced prompt text. Nothing else.`
       enhancementPromptId: enhancementPrompt?.id,
     })
   } catch (error: any) {
-    console.error('Error enhancing prompt:', error)
+    const errorMsg = error.message || 'Failed to enhance prompt'
+    const classified = classifyError(errorMsg)
+    console.error(`Error enhancing prompt [${classified.label}]:`, error)
     
-    if (error.status === 401) {
+    // Anthropic-specific: 401 = bad API key, 429 = rate limited, 529 = overloaded
+    const anthropicStatus = error.status || error.statusCode
+    let httpStatus = classified.httpStatus
+    let errorCategory = classified.category
+    
+    if (anthropicStatus === 401) {
+      httpStatus = 401
+      errorCategory = 'auth'
       return NextResponse.json(
-        { error: 'Invalid API key. Please configure ANTHROPIC_API_KEY' },
-        { status: 500 }
+        { error: 'Invalid API key. Please configure ANTHROPIC_API_KEY', errorCategory },
+        { status: httpStatus }
       )
+    }
+    
+    if (anthropicStatus === 429) {
+      httpStatus = 429
+      errorCategory = 'rate_limited'
+    } else if (anthropicStatus === 529 || anthropicStatus === 503) {
+      httpStatus = 502
+      errorCategory = 'upstream_unavailable'
     }
 
     return NextResponse.json(
-      { error: 'Failed to enhance prompt', details: error.message },
-      { status: 500 }
+      { error: 'Failed to enhance prompt', details: errorMsg, errorCategory },
+      { status: httpStatus }
     )
   }
 }
