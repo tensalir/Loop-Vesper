@@ -326,6 +326,7 @@ export class GeminiAdapter extends BaseModelAdapter {
       console.log('Nano banana pro: Using Replicate directly (Vertex AI/Gemini API temporarily disabled)')
       const numImages = request.numOutputs || 1
       const outputs: any[] = []
+      let lastReplicateError: string | null = null
       
       for (let i = 0; i < numImages; i++) {
         console.log(`Nano banana pro: Generating image ${i + 1}/${numImages} via Replicate`)
@@ -338,12 +339,13 @@ export class GeminiAdapter extends BaseModelAdapter {
             await new Promise(resolve => setTimeout(resolve, 2000))
           }
         } catch (error: any) {
-          console.error(`Nano banana pro: Replicate image ${i + 1}/${numImages} failed:`, error.message)
+          lastReplicateError = error.message || 'Unknown error'
+          console.error(`Nano banana pro: Replicate image ${i + 1}/${numImages} failed:`, lastReplicateError)
         }
       }
       
       if (outputs.length === 0) {
-        throw new Error('All image generations failed via Replicate')
+        throw new Error(lastReplicateError || 'All image generations failed via Replicate')
       }
       
       return {
@@ -367,6 +369,7 @@ export class GeminiAdapter extends BaseModelAdapter {
     // Generate images sequentially (one at a time) to avoid rate limits
     // This prevents parallel request storms that trigger 429 errors
     const outputs: any[] = []
+    let lastError: string | null = null
     
     for (let i = 0; i < numImages; i++) {
       console.log(`Nano banana pro: Generating image ${i + 1}/${numImages}`)
@@ -380,14 +383,16 @@ export class GeminiAdapter extends BaseModelAdapter {
           await new Promise(resolve => setTimeout(resolve, IMAGE_GENERATION_DELAY_MS))
         }
       } catch (error: any) {
-        console.error(`Nano banana pro: Image ${i + 1}/${numImages} failed:`, error.message)
+        lastError = error.message || 'Unknown error'
+        console.error(`Nano banana pro: Image ${i + 1}/${numImages} failed:`, lastError)
         // Continue to next image even if one fails
-        // We'll throw if all fail at the end
+        // We'll throw with the actual error if all fail at the end
       }
     }
 
     if (outputs.length === 0) {
-      throw new Error('All image generations failed')
+      // Propagate the actual error instead of a generic message
+      throw new Error(lastError || 'All image generations failed')
     }
 
     // Aggregate metrics from Replicate fallback (if used)
