@@ -75,7 +75,8 @@ export async function runMatcher(): Promise<MatcherResult> {
     }
   }
 
-  const frontifyTitles = Array.from(frontifyByAssetId.entries()).map(([assetId, v]) => ({
+  const frontifyEntries = Array.from(frontifyByAssetId.entries())
+  const frontifyTitles = frontifyEntries.map(([assetId, v]) => ({
     assetId,
     linkId: v.linkId,
     title: (v.title ?? '').toLowerCase(),
@@ -104,7 +105,8 @@ export async function runMatcher(): Promise<MatcherResult> {
     let rationale = ''
 
     if (finalLink) {
-      for (const [assetId, v] of frontifyByAssetId) {
+      for (let i = 0; i < frontifyEntries.length; i++) {
+        const [assetId, v] = frontifyEntries[i]
         if (v.downloadUrl && v.downloadUrl.trim() === finalLink) {
           matchedAssetId = assetId
           confidence = 1
@@ -114,7 +116,8 @@ export async function runMatcher(): Promise<MatcherResult> {
       }
       if (!matchedAssetId && finalLink) {
         const normalizedFinal = finalLink.toLowerCase()
-        for (const [assetId, v] of frontifyByAssetId) {
+        for (let i = 0; i < frontifyEntries.length; i++) {
+          const [assetId, v] = frontifyEntries[i]
           if (v.downloadUrl && v.downloadUrl.toLowerCase() === normalizedFinal) {
             matchedAssetId = assetId
             confidence = 0.98
