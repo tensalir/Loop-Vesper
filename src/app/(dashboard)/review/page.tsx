@@ -29,11 +29,11 @@ export default function ReviewPage() {
   const { data: approvedAssetsRaw = [], isLoading: assetsLoading } = useApprovedAssets({})
 
   const monthOptions = useMemo(() => {
-    const set = new Set(approvedAssetsRaw.map((a) => a.month).filter(Boolean))
+    const set = new Set(approvedAssetsRaw.map((a) => a.month).filter((v): v is string => Boolean(v)))
     return Array.from(set).sort()
   }, [approvedAssetsRaw])
   const batchOptions = useMemo(() => {
-    const set = new Set(approvedAssetsRaw.map((a) => a.batch).filter(Boolean))
+    const set = new Set(approvedAssetsRaw.map((a) => a.batch).filter((v): v is string => Boolean(v)))
     return Array.from(set).sort()
   }, [approvedAssetsRaw])
 
