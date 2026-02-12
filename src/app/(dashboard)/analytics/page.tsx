@@ -22,8 +22,23 @@ import {
   RefreshCcw,
   Play,
   Download,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  Lightbulb,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
+
+// Insight types
+interface Insight {
+  id: string
+  type: 'opportunity' | 'warning' | 'success' | 'neutral'
+  title: string
+  description: string
+  actionable?: string
+  metrics?: Record<string, number | string>
+  confidence: number
+}
 
 // Color palette for charts and bars
 const CHART_COLORS = [
@@ -369,11 +384,110 @@ function ColoredProgressBar({
   )
 }
 
+// Insight Card Component
+function InsightCard({ insight }: { insight: Insight }) {
+  const typeConfig = {
+    warning: {
+      icon: AlertTriangle,
+      color: '#ef4444',
+      bgColor: 'rgba(239, 68, 68, 0.1)',
+      label: 'Warning',
+    },
+    opportunity: {
+      icon: Lightbulb,
+      color: '#f59e0b',
+      bgColor: 'rgba(245, 158, 11, 0.1)',
+      label: 'Opportunity',
+    },
+    success: {
+      icon: CheckCircle2,
+      color: '#10b981',
+      bgColor: 'rgba(16, 185, 129, 0.1)',
+      label: 'Success',
+    },
+    neutral: {
+      icon: Info,
+      color: '#6b7280',
+      bgColor: 'rgba(107, 114, 128, 0.1)',
+      label: 'Info',
+    },
+  }
+
+  const config = typeConfig[insight.type]
+  const Icon = config.icon
+
+  return (
+    <Card className="relative overflow-hidden">
+      <div 
+        className="absolute top-0 left-0 w-1 h-full" 
+        style={{ backgroundColor: config.color }}
+      />
+      <CardHeader className="pb-3">
+        <div className="flex items-start gap-3">
+          <div 
+            className="p-2 rounded-lg flex-shrink-0 mt-0.5" 
+            style={{ backgroundColor: config.bgColor }}
+          >
+            <Icon className="h-4 w-4" style={{ color: config.color }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span 
+                className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                style={{ 
+                  backgroundColor: config.bgColor,
+                  color: config.color,
+                }}
+              >
+                {config.label}
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                {Math.round(insight.confidence * 100)}% confidence
+              </span>
+            </div>
+            <CardTitle className="text-base leading-snug">{insight.title}</CardTitle>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          {insight.description}
+        </p>
+        
+        {insight.actionable && (
+          <div 
+            className="text-sm p-3 rounded-lg border-l-2"
+            style={{ 
+              borderLeftColor: config.color,
+              backgroundColor: config.bgColor,
+            }}
+          >
+            <p className="font-medium text-foreground mb-1">💡 Suggested Action</p>
+            <p className="text-muted-foreground leading-relaxed">{insight.actionable}</p>
+          </div>
+        )}
+        
+        {insight.metrics && Object.keys(insight.metrics).length > 0 && (
+          <div className="flex flex-wrap gap-3 pt-1">
+            {Object.entries(insight.metrics).map(([key, value]) => (
+              <div key={key} className="text-xs">
+                <span className="text-muted-foreground">{key}: </span>
+                <span className="font-semibold">{value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function MyAnalyticsContent() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<MyUsageStats | null>(null)
   const [spending, setSpending] = useState<SpendingStats | null>(null)
+  const [insights, setInsights] = useState<Insight[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
@@ -401,6 +515,13 @@ function MyAnalyticsContent() {
               setSpending(spendingData)
             }
           }
+        }
+
+        // Fetch insights
+        const insightsResponse = await fetch('/api/analytics/insights?scope=my')
+        if (insightsResponse.ok) {
+          const insightsData = await insightsResponse.json()
+          setInsights(insightsData.insights || [])
         }
       } catch (error) {
         console.error('Error fetching analytics:', error)
@@ -489,6 +610,26 @@ function MyAnalyticsContent() {
           />
         )}
       </div>
+
+      {/* Insights Section */}
+      {insights.length > 0 && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold mb-1 flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-muted-foreground" />
+              Insights & Recommendations
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Actionable patterns detected from your usage data
+            </p>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {insights.map((insight) => (
+              <InsightCard key={insight.id} insight={insight} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Usage Distribution + Model Cards */}
       {stats.topModels && stats.topModels.length > 0 && stats.totalGenerations > 0 && (
@@ -592,6 +733,7 @@ function GlobalAnalyticsContent() {
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<GlobalUsageStats | null>(null)
   const [eventStats, setEventStats] = useState<EventStats | null>(null)
+  const [insights, setInsights] = useState<Insight[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [analysisStatus, setAnalysisStatus] = useState<AnalysisProcessorStatus | null>(null)
   const [backfillStatus, setBackfillStatus] = useState<BackfillStatus | null>(null)
@@ -732,6 +874,13 @@ function GlobalAnalyticsContent() {
             })
           }
         }
+
+        // Fetch insights (global scope)
+        const insightsResponse = await fetch('/api/analytics/insights?scope=global')
+        if (insightsResponse.ok) {
+          const insightsData = await insightsResponse.json()
+          setInsights(insightsData.insights || [])
+        }
       } catch (error) {
         console.error('Error fetching global stats:', error)
         toast({
@@ -841,6 +990,26 @@ function GlobalAnalyticsContent() {
           accentColor="#10b981"
         />
       </div>
+
+      {/* Insights Section */}
+      {insights.length > 0 && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold mb-1 flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-muted-foreground" />
+              Global Insights & Trends
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Aggregated patterns from workspace usage
+            </p>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {insights.map((insight) => (
+              <InsightCard key={insight.id} insight={insight} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Usage Distribution + Model Cards */}
       {stats.topModels && stats.topModels.length > 0 && (stats.totalGenerations || 0) > 0 && (
@@ -1113,9 +1282,9 @@ export default function AnalyticsPage() {
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Analytics & Insights</h1>
         <p className="text-muted-foreground">
-          Understand your generation patterns and see how they compare globally
+          Understand what works, optimize efficiency, and discover usage patterns that drive value
         </p>
       </div>
 
