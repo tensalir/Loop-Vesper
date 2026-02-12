@@ -112,9 +112,12 @@ export async function GET(request: NextRequest) {
     const allMoods = profiles.map(p => p.mood).filter((m): m is string => m !== null)
 
     const semanticPatterns = {
-      topSubjects: calculateTagDistribution(allSubjects, profiles.length).slice(0, 10),
-      topStyles: calculateTagDistribution(allStyles, profiles.length).slice(0, 8),
-      topMoods: calculateTagDistribution(allMoods, profiles.length).slice(0, 6),
+      topSubjects: calculateTagDistribution(allSubjects, profiles.length).slice(0, 10)
+        .map(t => ({ subject: t.tag, count: t.count })),
+      topStyles: calculateTagDistribution(allStyles, profiles.length).slice(0, 8)
+        .map(t => ({ style: t.tag, count: t.count })),
+      topMoods: calculateTagDistribution(allMoods, profiles.length).slice(0, 6)
+        .map(t => ({ mood: t.tag, count: t.count })),
     }
 
     // Calculate model affinity (which models for which subjects/styles)
@@ -134,8 +137,10 @@ export async function GET(request: NextRequest) {
 
         return {
           modelName: config?.name || modelId,
-          topSubjects: calculateTagDistribution(modelSubjects, modelProfiles.length).slice(0, 5),
-          topStyles: calculateTagDistribution(modelStyles, modelProfiles.length).slice(0, 3),
+          topSubjects: calculateTagDistribution(modelSubjects, modelProfiles.length).slice(0, 5)
+            .map(t => ({ subject: t.tag, count: t.count })),
+          topStyles: calculateTagDistribution(modelStyles, modelProfiles.length).slice(0, 3)
+            .map(t => ({ style: t.tag, count: t.count })),
           totalGenerations: modelProfiles.length,
         }
       })
