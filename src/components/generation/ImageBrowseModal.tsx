@@ -236,7 +236,7 @@ export function ImageBrowseModal({
                 ))}
 
                 {/* Infinite scroll sentinel */}
-                <div ref={sentinelRef} className="h-1" />
+                <div ref={sentinelRef as React.RefObject<HTMLDivElement>} className="h-1" />
                 {crossQuery.isFetchingNextPage && (
                   <div className="flex justify-center py-4">
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -313,7 +313,7 @@ function ImageGrid({
       </div>
 
       {/* Infinite scroll sentinel */}
-      <div ref={sentinelRef} className="h-1" />
+      <div ref={sentinelRef as React.RefObject<HTMLDivElement>} className="h-1" />
 
       {isFetchingMore && (
         <div className="flex justify-center py-4">

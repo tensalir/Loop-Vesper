@@ -112,7 +112,7 @@ export function useLoadMoreObserver(
   isFetchingNextPage: boolean,
   fetchNextPage: () => void
 ) {
-  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
   const observerCallback = useCallback(
     (entries: IntersectionObserverEntry[]) => {

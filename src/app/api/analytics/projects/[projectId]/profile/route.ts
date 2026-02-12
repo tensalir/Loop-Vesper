@@ -72,7 +72,6 @@ export async function GET(
         },
         analysis: {
           status: 'completed',
-          claudeParsed: { not: null },
         },
       },
       include: {

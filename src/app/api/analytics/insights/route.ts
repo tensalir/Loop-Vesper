@@ -151,6 +151,7 @@ export async function GET(request: NextRequest) {
     // Calculate convergence signals (patterns in keeper outputs)
     const keepers = profiles.filter(p => p.isKeeper)
     const totalKeepers = keepers.length
+    let convergenceSignals: AnalyticsInsightInput['convergenceSignals'] = undefined
 
     if (totalKeepers > 0) {
       const keeperSubjects = keepers.flatMap(p => p.subjects)
@@ -197,7 +198,7 @@ export async function GET(request: NextRequest) {
         .filter(m => m.keeperCount >= 2)
         .sort((a, b) => b.convergenceRate - a.convergenceRate)
 
-      var convergenceSignals = {
+      convergenceSignals = {
         keeperSubjects: subjectConvergence.slice(0, 5),
         keeperStyles: styleConvergence.slice(0, 5),
         keeperMoods: moodConvergence.slice(0, 3),
