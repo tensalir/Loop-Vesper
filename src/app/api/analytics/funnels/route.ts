@@ -183,7 +183,7 @@ export async function GET(request: NextRequest) {
 
     // Convert to funnel metrics
     const funnels: FunnelMetrics[] = []
-    for (const [key, bucket] of funnelData.entries()) {
+    for (const [key, bucket] of Array.from(funnelData.entries())) {
       const funnel = calculateFunnelMetrics(key, bucket.label, {
         [FUNNEL_STAGES.GENERATED]: bucket.generated.size,
         [FUNNEL_STAGES.ANALYZED]: bucket.analyzed.size,
