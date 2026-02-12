@@ -23,14 +23,15 @@ function normalizeName(s: string): string {
 
 /** Simple similarity: share of words in common (word set overlap). */
 function nameSimilarity(a: string, b: string): number {
-  const wa = new Set(normalizeName(a).split(/\s+/).filter(Boolean))
-  const wb = new Set(normalizeName(b).split(/\s+/).filter(Boolean))
-  if (wa.size === 0 || wb.size === 0) return 0
+  const wordsA = normalizeName(a).split(/\s+/).filter(Boolean)
+  const wordsB = normalizeName(b).split(/\s+/).filter(Boolean)
+  const wb = new Set(wordsB)
+  if (wordsA.length === 0 || wb.size === 0) return 0
   let hit = 0
-  for (const w of wa) {
+  wordsA.forEach((w) => {
     if (wb.has(w)) hit++
-  }
-  return hit / Math.max(wa.size, wb.size)
+  })
+  return hit / Math.max(wordsA.length, wb.size)
 }
 
 export interface MatcherResult {
