@@ -13,7 +13,6 @@ import {
 } from '@/lib/analytics/cohorts'
 import {
   extractSemanticProfile,
-  type IntentCategory,
 } from '@/lib/analytics/taxonomy'
 
 export const dynamic = 'force-dynamic'
