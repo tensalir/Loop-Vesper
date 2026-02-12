@@ -88,7 +88,25 @@ export interface ApprovalEvent {
   payload?: Record<string, unknown>
 }
 
-export type SyncEventPayload = RevisionEvent | FeedbackEvent | ApprovalEvent
+/** Match event: cross-source match result for auditing (Monday ↔ Figma ↔ Frontify). */
+export interface MatchEvent {
+  idempotencyKey: string
+  source: EventSource
+  externalId: string
+  version: string
+  occurredAt: string
+  kind: 'match'
+  /** Matched Frontify asset id when link matched to canonical approved. */
+  matchedFrontifyAssetId?: string
+  /** Match confidence 0–1. */
+  matchConfidence: number
+  /** Rationale: final_link | figma_file_key | naming. */
+  matchRationale: string
+  linkId?: string
+  payload?: Record<string, unknown>
+}
+
+export type SyncEventPayload = RevisionEvent | FeedbackEvent | ApprovalEvent | MatchEvent
 
 /** Authority domain for conflict policy: Monday = workflow/status, Figma = creative/localization. */
 export type AuthorityDomain = 'monday_workflow' | 'figma_creative'

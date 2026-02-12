@@ -9,7 +9,6 @@ import {
   FolderKanban,
   CheckCircle,
   Bookmark,
-  Settings,
   BarChart3,
 } from 'lucide-react'
 
@@ -52,17 +51,12 @@ const mainNavItems: NavItem[] = [
   },
 ]
 
-// Bottom section - Bookmarks, Settings
-const bottomNavItems: NavItem[] = [
+// Below divider - Bookmarks
+const secondaryNavItems: NavItem[] = [
   {
     title: 'Bookmarks',
     href: '/bookmarks',
     icon: Bookmark,
-  },
-  {
-    title: 'Settings',
-    href: '/settings',
-    icon: Settings,
   },
 ]
 
@@ -143,9 +137,9 @@ export function DashboardSidebar({ className }: DashboardSidebarProps) {
         {/* Divider */}
         <div className="my-3 h-px bg-border/50" />
 
-        {/* Bottom Section - Bookmarks, Settings */}
-        <div className="space-y-1 mt-auto">
-          {bottomNavItems.map((item) => (
+        {/* Secondary - Bookmarks */}
+        <div className="space-y-1">
+          {secondaryNavItems.map((item) => (
             <NavLink key={item.href} item={item} />
           ))}
         </div>

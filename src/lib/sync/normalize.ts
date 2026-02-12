@@ -10,6 +10,7 @@ import type {
   RevisionEvent,
   FeedbackEvent,
   ApprovalEvent,
+  MatchEvent,
   CreativeWorkItem,
   EventSource,
 } from './contracts'
@@ -42,6 +43,9 @@ export async function resolveOrCreateLink(link: CreativeWorkItem | undefined): P
           : []),
         ...(link.figmaFileKey && link.figmaNodeId
           ? [{ figmaFileKey: link.figmaFileKey, figmaNodeId: link.figmaNodeId }]
+          : []),
+        ...(link.figmaFileKey && !link.figmaNodeId
+          ? [{ figmaFileKey: link.figmaFileKey, figmaNodeId: null }]
           : []),
         ...(link.frontifyAssetId ? [{ frontifyAssetId: link.frontifyAssetId }] : []),
       ].filter(Boolean),
@@ -199,5 +203,33 @@ export function toApprovalEvent(
     frontifyAssetId,
     status,
     payload: options?.payload,
+  }
+}
+
+/** Build a MatchEvent (cross-source match for auditing). */
+export function toMatchEvent(
+  linkId: string,
+  mondayItemId: string,
+  occurredAt: string,
+  options: {
+    matchedFrontifyAssetId?: string
+    matchConfidence: number
+    matchRationale: string
+    payload?: Record<string, unknown>
+  }
+): MatchEvent {
+  const idempotencyKey = `match:monday:${mondayItemId}`
+  return {
+    idempotencyKey,
+    source: 'monday',
+    externalId: mondayItemId,
+    version: normalizeOccurredAt(occurredAt),
+    occurredAt: normalizeOccurredAt(occurredAt),
+    kind: 'match',
+    linkId,
+    matchedFrontifyAssetId: options.matchedFrontifyAssetId,
+    matchConfidence: options.matchConfidence,
+    matchRationale: options.matchRationale,
+    payload: options.payload,
   }
 }

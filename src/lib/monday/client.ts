@@ -68,6 +68,52 @@ export async function fetchBoardItems(
   boardId: string | number,
   limit = 100
 ): Promise<MondayItem[]> {
+  const data = await fetchBoardItemsPage(String(boardId), limit, null)
+  return data.items
+}
+
+export interface BoardItemsPageResult {
+  items: MondayItem[]
+  cursor: string | null
+}
+
+/**
+ * Fetch one page of board items. Pass cursor from previous page for next page (use null for first page).
+ */
+export async function fetchBoardItemsPage(
+  boardId: string,
+  limit: number,
+  cursor: string | null
+): Promise<BoardItemsPageResult> {
+  if (cursor) {
+    const query = `
+      query ($limit: Int!, $cursor: String!) {
+        next_items_page(limit: $limit, cursor: $cursor) {
+          cursor
+          items {
+            id
+            name
+            column_values {
+              id
+              title
+              text
+              value
+              type
+            }
+          }
+        }
+      }
+    `
+    const data = await mondayGraphql<{ next_items_page?: { cursor?: string; items?: MondayItem[] } }>(
+      query,
+      { limit, cursor }
+    )
+    const page = data?.next_items_page
+    return {
+      items: page?.items ?? [],
+      cursor: page?.cursor ?? null,
+    }
+  }
   const query = `
     query ($boardId: ID!, $limit: Int!) {
       boards(ids: [$boardId]) {
@@ -91,12 +137,38 @@ export async function fetchBoardItems(
     }
   `
   const data = await mondayGraphql<MondayBoardItemsResponse['data']>(query, {
-    boardId: String(boardId),
+    boardId,
     limit,
   })
   const board = data?.boards?.[0]
   const items = board?.items_page?.items ?? []
-  return items
+  const nextCursor = board?.items_page?.cursor ?? null
+  return { items, cursor: nextCursor }
+}
+
+/**
+ * Fetch all items from a board using cursor pagination (active items; archived require known IDs per Monday API).
+ */
+export async function fetchAllBoardItems(
+  boardId: string | number,
+  options?: { pageSize?: number; maxItems?: number }
+): Promise<MondayItem[]> {
+  const pageSize = options?.pageSize ?? 100
+  const maxItems = options?.maxItems ?? 10_000
+  const collected: MondayItem[] = []
+  let cursor: string | null = null
+  const boardIdStr = String(boardId)
+  while (collected.length < maxItems) {
+    const { items, cursor: nextCursor } = await fetchBoardItemsPage(
+      boardIdStr,
+      pageSize,
+      cursor
+    )
+    collected.push(...items)
+    if (!nextCursor || items.length === 0) break
+    cursor = nextCursor
+  }
+  return collected.slice(0, maxItems)
 }
 
 /**

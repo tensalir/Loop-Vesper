@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Loader2, Plus } from 'lucide-react'
@@ -23,14 +23,9 @@ export default function ProjectsPage() {
     isFetchingNextPage,
     hasNextPage,
     fetchNextPage,
-  } = useProjectsInfinite(20)
+  } = useProjectsInfinite(20, projectScope)
 
-  const myProjects = useMemo(() => {
-    if (!profile?.id) return []
-    return projects.filter((project) => project.ownerId === profile.id)
-  }, [projects, profile?.id])
-
-  const visibleProjects = projectScope === 'mine' ? myProjects : projects
+  const visibleProjects = projects
   const visibleCountLabel = projectScope === 'mine'
     ? `${visibleProjects.length} ${visibleProjects.length === 1 ? 'project' : 'projects'} you own`
     : `${visibleProjects.length} ${visibleProjects.length === 1 ? 'project' : 'projects'} available`
@@ -93,7 +88,7 @@ export default function ProjectsPage() {
             <p className="text-muted-foreground">Loading projects...</p>
           </div>
         </div>
-      ) : projects.length === 0 ? (
+      ) : visibleProjects.length === 0 && projectScope === 'all' ? (
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
           <div className="text-center">
             <h2 className="text-2xl font-semibold mb-2">No projects yet</h2>

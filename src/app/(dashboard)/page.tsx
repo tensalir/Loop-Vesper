@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useProjects } from '@/hooks/useProjects'
-import { useApprovedOutputs } from '@/hooks/useApprovedOutputs'
 import { useCommunityCreations, type CommunityCreation } from '@/hooks/useCommunityCreations'
 import { useProfile } from '@/hooks/useProfile'
 import { NewProjectDialog } from '@/components/projects/NewProjectDialog'
@@ -18,12 +17,9 @@ import type { Project } from '@/types/project'
 import {
   Plus,
   FolderKanban,
-  CheckCircle,
-  Bookmark,
   ArrowRight,
   Sparkles,
   Play,
-  ImageIcon,
   User,
   ChevronLeft,
   ChevronRight,
@@ -41,7 +37,6 @@ export default function DashboardPage() {
   
   const { data: profile } = useProfile()
   const { data: projects = [], isLoading: projectsLoading } = useProjects()
-  const { data: approvedOutputs = [] } = useApprovedOutputs()
   const { 
     data: communityCreations = [], 
     isLoading: communityLoading,
@@ -125,24 +120,6 @@ export default function DashboardPage() {
           </Button>
         )}
 
-        <Link href="/review">
-          <Button variant="outline" className="gap-2">
-            <CheckCircle className="h-4 w-4" />
-            Review
-            {approvedOutputs.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 text-xs bg-primary/10 rounded-full">
-                {approvedOutputs.length}
-              </span>
-            )}
-          </Button>
-        </Link>
-
-        <Link href="/bookmarks">
-          <Button variant="outline" className="gap-2">
-            <Bookmark className="h-4 w-4" />
-            Bookmarks
-          </Button>
-        </Link>
       </div>
 
       {/* Recent Projects Section */}

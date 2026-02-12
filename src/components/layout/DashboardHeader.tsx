@@ -137,6 +137,16 @@ export function DashboardHeader({ className }: DashboardHeaderProps) {
               <Sun className="h-4 w-4" />
             )}
           </Button>
+          <Link href="/settings">
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Settings"
+              className="h-9 w-9"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          </Link>
           <Button
             variant="ghost"
             size="icon"

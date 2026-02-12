@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 50)
     const cursorParam = searchParams.get('cursor')
+    const scope = searchParams.get('scope') // 'mine' = only owned projects
     
     // Parse keyset cursor (format: "updated_at,id")
     let cursorUpdatedAt: Date | null = null
@@ -60,6 +61,7 @@ export async function GET(request: NextRequest) {
 
     // Single optimized SQL query using LATERAL joins
     // This fetches projects with owner, session count, and latest thumbnail in one query
+    const isMineOnly = scope === 'mine'
     const projects = await prisma.$queryRaw<Array<{
       id: string
       name: string
@@ -82,21 +84,23 @@ export async function GET(request: NextRequest) {
         
         UNION
         
-        -- Projects the user is explicitly a member of
+        -- Projects the user is explicitly a member of (skip when scope=mine)
         SELECT p.id, p.name, p.description, p.owner_id, p.is_shared,
                p.created_at, p.updated_at, FALSE as is_owner
         FROM projects p
         INNER JOIN project_members pm ON p.id = pm.project_id
         WHERE pm.user_id = ${userId}::uuid
+          AND ${!isMineOnly}::boolean
         
         UNION
         
-        -- Public shared projects from other users
+        -- Public shared projects from other users (skip when scope=mine)
         SELECT p.id, p.name, p.description, p.owner_id, p.is_shared,
                p.created_at, p.updated_at, FALSE as is_owner
         FROM projects p
         WHERE p.is_shared = TRUE
           AND p.owner_id != ${userId}::uuid
+          AND ${!isMineOnly}::boolean
       )
       SELECT 
         ap.id,

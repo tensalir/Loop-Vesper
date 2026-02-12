@@ -74,3 +74,12 @@ export function recordProjectionFailure(
     meta: { direction, linkId, error },
   })
 }
+
+/** Metrics for January paid social experiment batch: matched, unmatched, Figma-readable, approved canonical. */
+export interface SyncBatchMetrics {
+  mondayLinkCount: number
+  figmaReadableCount: number
+  approvedCanonicalCount: number
+  matchedCount: number
+  unmatchedCount: number
+}

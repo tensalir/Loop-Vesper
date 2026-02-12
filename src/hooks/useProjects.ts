@@ -30,14 +30,19 @@ type ProjectsPage = ProjectsResponse
 async function fetchProjectsPage({
   pageParam,
   pageSize,
+  scope,
 }: {
   pageParam: string | null
   pageSize: number
+  scope?: 'all' | 'mine'
 }): Promise<ProjectsPage> {
   const searchParams = new URLSearchParams()
   searchParams.set('limit', String(pageSize))
   if (pageParam) {
     searchParams.set('cursor', pageParam)
+  }
+  if (scope === 'mine') {
+    searchParams.set('scope', 'mine')
   }
 
   const response = await fetch(`/api/projects/with-thumbnails?${searchParams.toString()}`, {
@@ -71,11 +76,11 @@ export function useProjects() {
   })
 }
 
-export function useProjectsInfinite(pageSize = 20) {
+export function useProjectsInfinite(pageSize = 20, scope: 'all' | 'mine' = 'all') {
   const query = useInfiniteQuery({
-    queryKey: ['projects', 'infinite', pageSize],
+    queryKey: ['projects', 'infinite', pageSize, scope],
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => fetchProjectsPage({ pageParam, pageSize }),
+    queryFn: ({ pageParam }) => fetchProjectsPage({ pageParam, pageSize, scope }),
     getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.nextCursor : null),
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
