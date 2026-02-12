@@ -721,6 +721,22 @@ export function VideoInput({
     }
   }, [referenceImageUrl, uploadedReferenceUrl, imagePreviewUrl, referenceUpload])
 
+  // Clear end frame when in locked mode (animate-still overlay)
+  // In locked mode, we only want the start frame - any lingering end frame state
+  // from previous interactions should be cleared
+  useEffect(() => {
+    if (lockedReferenceImage) {
+      // Clean up old blob preview if any
+      if (endFramePreviewUrl && endFramePreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(endFramePreviewUrl)
+      }
+      setEndFramePreviewUrl(null)
+      setEndFrameImage(null)
+      setEndFrameImageId(null)
+      setUploadedEndFrameUrl(null)
+    }
+  }, [lockedReferenceImage]) // Only run when lockedReferenceImage changes
+  
   // Hydrate end frame from URL if provided - use directly, no File needed
   useEffect(() => {
     if (!endFrameImageUrl) return

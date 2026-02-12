@@ -720,6 +720,7 @@ export function ImageToVideoOverlay({
                 <div className="space-y-3 pt-2 border-t border-border/50">
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Generation Settings</label>
                   <VideoInput
+                    key={outputId} // Force fresh instance for each source image
                     prompt={prompt}
                     onPromptChange={setPrompt}
                     onGenerate={handleGenerate}
