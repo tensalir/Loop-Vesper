@@ -751,36 +751,48 @@ export function GenerationGallery({
                 className="pb-12"
               >
                 <div className="flex gap-6 items-start">
-                  {/* Left Side: Prompt Display with Cancelled State */}
-                  <div className="w-96 flex-shrink-0 bg-prompt-card rounded-xl p-6 border border-destructive/50 flex flex-col relative" style={{ minHeight: '320px' }}>
-                  <div className="absolute top-2 left-2 px-2 py-1 bg-destructive/20 text-destructive text-xs font-medium rounded z-10">
-                    Cancelled
-                  </div>
-                  <div className="flex-1 overflow-hidden hover:overflow-y-auto transition-all group relative mt-6">
-                    <p 
-                      className="text-base font-normal leading-relaxed text-foreground/90 cursor-pointer hover:text-primary transition-colors"
-                      onClick={() => handleCopyPrompt(generation.prompt)}
-                      title="Click to copy"
-                    >
-                      {generation.prompt}
-                    </p>
-                    <Copy className="h-3.5 w-3.5 absolute top-0 right-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  <div className="space-y-2 text-xs text-muted-foreground mt-4">
-                    <div className="flex items-center gap-2 text-destructive/80">
-                      <Info className="h-3.5 w-3.5" />
-                      <span className="font-medium">Cancelled</span>
+                  {/* Left Side: Prompt Display with Cancelled State and Rerun below */}
+                  <div className="w-96 flex-shrink-0 flex flex-col">
+                    <div className="bg-prompt-card rounded-xl p-6 border border-destructive/50 flex flex-col relative" style={{ minHeight: '320px' }}>
+                      <div className="absolute top-2 left-2 px-2 py-1 bg-destructive/20 text-destructive text-xs font-medium rounded z-10">
+                        Cancelled
+                      </div>
+                      <div className="flex-1 overflow-hidden hover:overflow-y-auto transition-all group relative mt-6">
+                        <p 
+                          className="text-base font-normal leading-relaxed text-foreground/90 cursor-pointer hover:text-primary transition-colors"
+                          onClick={() => handleCopyPrompt(generation.prompt)}
+                          title="Click to copy"
+                        >
+                          {generation.prompt}
+                        </p>
+                        <Copy className="h-3.5 w-3.5 absolute top-0 right-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <div className="space-y-2 text-xs text-muted-foreground mt-4">
+                        <div className="flex items-center gap-2 text-destructive/80">
+                          <Info className="h-3.5 w-3.5" />
+                          <span className="font-medium">Cancelled</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground/70">Model:</span>
+                          <span className="font-medium">{(generation.modelId || 'unknown').replace('gemini-', '').replace('fal-', '')}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground/70">Generated:</span>
+                          <span className="font-medium">{formatDate(generation.createdAt)}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground/70">Model:</span>
-                      <span className="font-medium">{(generation.modelId || 'unknown').replace('gemini-', '').replace('fal-', '')}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground/70">Generated:</span>
-                      <span className="font-medium">{formatDate(generation.createdAt)}</span>
-                    </div>
+                    
+                    {/* Rerun button - outside panel, bottom right */}
+                    {onRerunGeneration && (
+                      <button
+                        onClick={() => onRerunGeneration(generation)}
+                        className="text-xs text-muted-foreground/70 hover:text-primary transition-colors self-end mt-1"
+                      >
+                        Rerun
+                      </button>
+                    )}
                   </div>
-                </div>
                 {/* Right Side: Empty/Cancelled State */}
                 <div className="flex-1 max-w-5xl flex items-center justify-center" style={{ minHeight: '320px' }}>
                   <div className="bg-muted/20 rounded-xl p-8 border border-destructive/30 text-center">
@@ -915,10 +927,10 @@ export function GenerationGallery({
                     </div>
                     
                     {/* Rerun button - outside panel, bottom right */}
-                    {onRerunGeneration && generation.isOwner !== false && (
+                    {onRerunGeneration && (
                       <button
                         onClick={() => onRerunGeneration(generation)}
-                        className="text-xs text-muted-foreground/50 hover:text-primary transition-colors self-end mt-1"
+                        className="text-xs text-muted-foreground/70 hover:text-primary transition-colors self-end mt-1"
                       >
                         Rerun
                       </button>
@@ -1013,36 +1025,48 @@ export function GenerationGallery({
                 className="pb-12"
               >
                 <div className="flex gap-6 items-start">
-                  {/* Left Side: Prompt Display with Error State */}
-                  <div className="w-96 flex-shrink-0 bg-destructive/10 rounded-xl p-6 border border-destructive/50 flex flex-col" style={{ minHeight: '320px' }}>
-                  <div className="flex-1 overflow-hidden hover:overflow-y-auto transition-all group relative" style={{ maxHeight: '200px' }}>
-                    <p 
-                      className="text-base font-normal leading-relaxed text-foreground/90 cursor-pointer hover:text-primary transition-colors"
-                      onClick={() => handleCopyPrompt(generation.prompt)}
-                      title="Click to copy"
-                    >
-                      {generation.prompt}
-                    </p>
-                    <Copy className="h-3.5 w-3.5 absolute top-0 right-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  <div className="space-y-2 text-xs text-muted-foreground mt-4">
-                    <div className="flex items-center gap-2 text-destructive">
-                      <Info className="h-3.5 w-3.5" />
-                      <span className="font-medium">Failed</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground/70">Model:</span>
-                      <span className="font-medium">{(generation.modelId || 'unknown').replace('gemini-', '').replace('fal-', '')}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground/70">Generated:</span>
-                      <span className="font-medium">{formatDate(generation.createdAt)}</span>
+                  {/* Left Side: Prompt Display with Error State and Rerun below */}
+                  <div className="w-96 flex-shrink-0 flex flex-col">
+                    <div className="bg-destructive/10 rounded-xl p-6 border border-destructive/50 flex flex-col" style={{ minHeight: '320px' }}>
+                      <div className="flex-1 overflow-hidden hover:overflow-y-auto transition-all group relative" style={{ maxHeight: '200px' }}>
+                        <p 
+                          className="text-base font-normal leading-relaxed text-foreground/90 cursor-pointer hover:text-primary transition-colors"
+                          onClick={() => handleCopyPrompt(generation.prompt)}
+                          title="Click to copy"
+                        >
+                          {generation.prompt}
+                        </p>
+                        <Copy className="h-3.5 w-3.5 absolute top-0 right-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <div className="space-y-2 text-xs text-muted-foreground mt-4">
+                        <div className="flex items-center gap-2 text-destructive">
+                          <Info className="h-3.5 w-3.5" />
+                          <span className="font-medium">Failed</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground/70">Model:</span>
+                          <span className="font-medium">{(generation.modelId || 'unknown').replace('gemini-', '').replace('fal-', '')}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground/70">Generated:</span>
+                          <span className="font-medium">{formatDate(generation.createdAt)}</span>
+                        </div>
+                        
+                        {/* Reference Image Thumbnail */}
+                        <ReferenceImageThumbnail generation={generation} onPinImage={handlePinImage} />
+                      </div>
                     </div>
                     
-                    {/* Reference Image Thumbnail */}
-                    <ReferenceImageThumbnail generation={generation} onPinImage={handlePinImage} />
+                    {/* Rerun button - outside panel, bottom right */}
+                    {onRerunGeneration && (
+                      <button
+                        onClick={() => onRerunGeneration(generation)}
+                        className="text-xs text-muted-foreground/70 hover:text-primary transition-colors self-end mt-1"
+                      >
+                        Rerun
+                      </button>
+                    )}
                   </div>
-                </div>
 
                 {/* Right Side: Error Message */}
                 <div className="flex-1 max-w-5xl flex items-center">
@@ -1152,10 +1176,10 @@ export function GenerationGallery({
                     </div>
                     
                     {/* Rerun button - outside panel, bottom right */}
-                    {onRerunGeneration && generation.isOwner !== false && (
+                    {onRerunGeneration && (
                       <button
                         onClick={() => onRerunGeneration(generation)}
-                        className="text-xs text-muted-foreground/50 hover:text-primary transition-colors self-end mt-1"
+                        className="text-xs text-muted-foreground/70 hover:text-primary transition-colors self-end mt-1"
                       >
                         Rerun
                       </button>
@@ -1283,10 +1307,10 @@ export function GenerationGallery({
                   </div>
                   
                   {/* Rerun button - outside panel, bottom right */}
-                  {onRerunGeneration && generation.isOwner !== false && (
+                  {onRerunGeneration && (
                     <button
                       onClick={() => onRerunGeneration(generation)}
-                      className="text-xs text-muted-foreground/50 hover:text-primary transition-colors self-end mt-1"
+                      className="text-xs text-muted-foreground/70 hover:text-primary transition-colors self-end mt-1"
                     >
                       Rerun
                     </button>

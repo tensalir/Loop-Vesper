@@ -59,6 +59,25 @@ const isRateLimitError = (error: any): boolean => {
   return status === 429 || status === 'RESOURCE_EXHAUSTED'
 }
 
+// Check if error is a transient upstream error (502/503/504) that should be retried
+const isTransientError = (error: any): boolean => {
+  const status = error?.status || error?.code || error?.error?.code
+  if ([502, 503, 504].includes(status)) return true
+
+  const msg = (error?.message || '').toLowerCase()
+  return (
+    msg.includes('service unavailable') ||
+    msg.includes('503') ||
+    msg.includes('bad gateway') ||
+    msg.includes('502') ||
+    msg.includes('gateway timeout') ||
+    msg.includes('504') ||
+    msg.includes('econnreset') ||
+    msg.includes('socket hang up') ||
+    msg.includes('fetch failed')
+  )
+}
+
 /**
  * Parse Gemini API response for safety blocks, content filters, and other rejection reasons.
  * Google's API can return 200 OK but with no image data when content is blocked.
@@ -425,7 +444,7 @@ export class GeminiAdapter extends BaseModelAdapter {
     }
   }
 
-  // Generate single image with retry logic for 429 errors
+  // Generate single image with retry logic for 429 and transient (502/503/504) errors
   private async generateSingleImageWithRetry(
     endpoint: string,
     request: GenerationRequest,
@@ -445,7 +464,6 @@ export class GeminiAdapter extends BaseModelAdapter {
         if (isQuotaExhaustedError(error)) {
           console.error(`Nano banana pro: Quota exhausted (limit: 0 or daily quota).`)
           
-          // Try Replicate fallback if available
           if (REPLICATE_API_KEY) {
             console.log(`Nano banana pro: Attempting Replicate fallback (google/nano-banana-pro)...`)
             try {
@@ -459,22 +477,40 @@ export class GeminiAdapter extends BaseModelAdapter {
           throw new Error('Quota exhausted. Please check your API quota limits or try again later.')
         }
         
-        // Only retry on 429 rate limit errors
-        if (isRateLimitError(error) && attempt < MAX_RETRY_ATTEMPTS) {
-          // Exponential backoff with jitter: 1-2s, 2-4s, 4-8s, 8-16s, 16-32s
-          const baseDelay = Math.pow(2, attempt - 1) * 1000
-          const jitter = Math.random() * baseDelay
+        // Retry on 429 rate limit errors OR transient upstream errors (502/503/504)
+        const retryable = isRateLimitError(error) || isTransientError(error)
+        if (retryable && attempt < MAX_RETRY_ATTEMPTS) {
+          const errorType = isRateLimitError(error) ? '429 rate limit' : `${error?.status || '5xx'} transient`
+          // Shorter backoff for transient errors (they usually resolve quickly)
+          // 429: 1-2s, 2-4s, 4-8s, 8-16s  |  503: 2-4s, 4-8s, 6-12s, 8-16s
+          const baseDelay = isTransientError(error) && !isRateLimitError(error)
+            ? Math.min((attempt + 1) * 2000, 16000)
+            : Math.pow(2, attempt - 1) * 1000
+          const jitter = Math.random() * baseDelay * 0.5
           const delay = baseDelay + jitter
           
           console.log(
-            `Nano banana pro: Image ${imageIndex}/${totalImages} - Rate limit (429) on attempt ${attempt}/${MAX_RETRY_ATTEMPTS}. Retrying in ${Math.round(delay)}ms...`
+            `Nano banana pro: Image ${imageIndex}/${totalImages} - ${errorType} on attempt ${attempt}/${MAX_RETRY_ATTEMPTS}. Retrying in ${Math.round(delay)}ms...`
           )
           
           await new Promise(resolve => setTimeout(resolve, delay))
           continue
         }
         
-        // Not a retryable error or max retries reached
+        // Retries exhausted on transient errors — try Replicate as last resort
+        if (isTransientError(error) && REPLICATE_API_KEY) {
+          console.log(`Nano banana pro: Google API persistently unavailable after ${attempt} attempts. Falling back to Replicate...`)
+          try {
+            return await this.generateImageReplicate(request)
+          } catch (replicateError: any) {
+            console.error(`Nano banana pro: Replicate fallback also failed:`, replicateError.message)
+            throw new Error(
+              'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.'
+            )
+          }
+        }
+        
+        // Not a retryable error or max retries reached with no fallback
         throw error
       }
     }
@@ -705,14 +741,24 @@ export class GeminiAdapter extends BaseModelAdapter {
         throw new Error('Quota exhausted. Please check your API quota limits or try again later.')
       }
       
-      // Only fallback to Gemini API if it's not a quota issue and we have an API key
-      if (this.apiKey && !isQuotaExhaustedError(error)) {
+      // On transient errors (502/503/504), propagate up to the retry loop
+      // so it can retry with backoff and eventually fall back to Replicate.
+      // Don't waste time trying the Gemini API REST fallback — when Google's
+      // infrastructure is overloaded, both Vertex AI and AI Studio are affected.
+      if (isTransientError(error)) {
+        const transientErr: any = new Error(error.message || 'Service temporarily unavailable')
+        transientErr.status = error?.status || 503
+        transientErr.code = error?.code
+        throw transientErr
+      }
+      
+      // For non-transient, non-quota errors: fall back to Gemini API REST
+      if (this.apiKey) {
         console.log('Falling back to Gemini API due to Vertex AI error')
         const endpoint = `${this.baseUrl}/models/gemini-3-pro-image-preview:generateContent`
         try {
           return await this.generateImageGeminiAPI(endpoint, payload)
         } catch (fallbackError: any) {
-          // If Gemini API also has quota issues, try Replicate as final fallback
           if (isQuotaExhaustedError(fallbackError)) {
             console.log('[Gemini API] Quota exhausted, trying Replicate fallback...')
             if (REPLICATE_API_KEY) {
