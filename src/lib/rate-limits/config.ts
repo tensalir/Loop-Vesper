@@ -8,7 +8,8 @@
 export type RateLimitProvider = 'gemini' | 'vertex' | 'replicate' | 'kling'
 export type RateLimitWindow = 'minute' | 'month'
 export type RateLimitScope = 
-  | 'gemini-nano-banana-pro' 
+  | 'gemini-nano-banana-pro'
+  | 'gemini-nano-banana-2'
   | 'gemini-veo-3.1' 
   | 'replicate-kling-2.6'
   | 'replicate-nano-banana'
@@ -68,7 +69,7 @@ const DEFAULT_KLING_MONTHLY = 500
 export function getRateLimits(provider: RateLimitProvider, scope: RateLimitScope): ProviderLimits {
   // Check for scope-specific overrides first
   if (provider === 'gemini' || provider === 'vertex') {
-    if (scope === 'gemini-nano-banana-pro') {
+    if (scope === 'gemini-nano-banana-pro' || scope === 'gemini-nano-banana-2') {
       return {
         rpm: parseInt(process.env.GEMINI_NANO_BANANA_RPM || '', 10) || DEFAULT_NANO_BANANA_RPM,
         monthly: parseInt(process.env.GEMINI_NANO_BANANA_MONTHLY || '', 10) || DEFAULT_NANO_BANANA_MONTHLY,
@@ -133,6 +134,9 @@ export function getProviderForModel(modelId: string): RateLimitProvider {
 export function getScopeForModel(modelId: string): RateLimitScope {
   if (modelId === 'gemini-nano-banana-pro') {
     return 'gemini-nano-banana-pro'
+  }
+  if (modelId === 'gemini-nano-banana-2') {
+    return 'gemini-nano-banana-2'
   }
   if (modelId === 'gemini-veo-3.1') {
     return 'gemini-veo-3.1'

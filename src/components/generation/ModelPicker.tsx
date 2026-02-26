@@ -23,7 +23,7 @@ export function ModelPicker({
   generationType,
 }: ModelPickerProps) {
   const [open, setOpen] = useState(false)
-  const [pinnedModels, setPinnedModels] = useState<string[]>(['gemini-nano-banana-pro'])
+  const [pinnedModels, setPinnedModels] = useState<string[]>(['gemini-nano-banana-pro', 'gemini-nano-banana-2'])
 
   // Use React Query hook for caching models
   const { data: models = [], isLoading: loading } = useModels(generationType)

@@ -39,6 +39,10 @@ const FALLBACK_MAPPINGS: Record<string, { replicateModelId: string; replicateBil
     replicateModelId: 'replicate-nano-banana-pro',
     replicateBillingId: 'replicate-nano-banana-pro',
   },
+  'gemini-nano-banana-2': {
+    replicateModelId: 'replicate-nano-banana-pro',
+    replicateBillingId: 'replicate-nano-banana-pro',
+  },
   'gemini-veo-3.1': {
     replicateModelId: 'replicate-kling-2.6',
     replicateBillingId: 'replicate-kling-2.6',
@@ -50,6 +54,7 @@ const FALLBACK_MAPPINGS: Record<string, { replicateModelId: string; replicateBil
  */
 const REVERSE_MAPPINGS: Record<string, string> = {
   'replicate-nano-banana-pro': 'gemini-nano-banana-pro',
+  'replicate-nano-banana-2': 'gemini-nano-banana-2',
   'replicate-kling-2.6': 'gemini-veo-3.1',
 }
 
@@ -65,6 +70,7 @@ export function supportsAutoRouting(modelId: string): boolean {
  */
 function getScopeForModel(modelId: string): RateLimitScope {
   if (modelId === 'gemini-nano-banana-pro') return 'gemini-nano-banana-pro'
+  if (modelId === 'gemini-nano-banana-2') return 'gemini-nano-banana-2'
   if (modelId === 'gemini-veo-3.1') return 'gemini-veo-3.1'
   if (modelId === 'replicate-kling-2.6') return 'replicate-kling-2.6'
   if (modelId === 'replicate-nano-banana-pro') return 'replicate-nano-banana'

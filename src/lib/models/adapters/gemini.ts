@@ -312,6 +312,15 @@ export class GeminiAdapter extends BaseModelAdapter {
     }
   }
 
+  /** Resolve the Gemini API model name from the internal config id */
+  private get apiModelName(): string {
+    return GEMINI_API_MODEL_MAP[this.config.id] || 'gemini-3-pro-image-preview'
+  }
+
+  private get modelLabel(): string {
+    return this.config.name
+  }
+
   async generate(request: GenerationRequest): Promise<GenerationResponse> {
     this.validateRequest(request)
 
@@ -331,10 +340,11 @@ export class GeminiAdapter extends BaseModelAdapter {
   }
 
   private async generateImage(request: GenerationRequest): Promise<GenerationResponse> {
-    console.log('Nano banana pro: Starting image generation')
-    console.log('Nano banana pro: Prompt:', request.prompt)
+    const label = this.modelLabel
+    console.log(`${label}: Starting image generation`)
+    console.log(`${label}: Prompt:`, request.prompt)
     const referenceImages = request.referenceImages || (request.referenceImage ? [request.referenceImage] : [])
-    console.log('Nano banana pro: Reference images count:', referenceImages.length)
+    console.log(`${label}: Reference images count:`, referenceImages.length)
     
     // Toggle between Replicate and Gemini API for Nano Banana
     // Set to false to use Google's Gemini API directly (PREFERRED - faster and cheaper)
@@ -342,13 +352,13 @@ export class GeminiAdapter extends BaseModelAdapter {
     const USE_REPLICATE_DIRECTLY = false
     
     if (USE_REPLICATE_DIRECTLY && REPLICATE_API_KEY) {
-      console.log('Nano banana pro: Using Replicate directly (Vertex AI/Gemini API temporarily disabled)')
+      console.log(`${label}: Using Replicate directly (Vertex AI/Gemini API temporarily disabled)`)
       const numImages = request.numOutputs || 1
       const outputs: any[] = []
       let lastReplicateError: string | null = null
       
       for (let i = 0; i < numImages; i++) {
-        console.log(`Nano banana pro: Generating image ${i + 1}/${numImages} via Replicate`)
+        console.log(`${label}: Generating image ${i + 1}/${numImages} via Replicate`)
         try {
           const output = await this.generateImageReplicate(request)
           outputs.push(output)
@@ -359,7 +369,7 @@ export class GeminiAdapter extends BaseModelAdapter {
           }
         } catch (error: any) {
           lastReplicateError = error.message || 'Unknown error'
-          console.error(`Nano banana pro: Replicate image ${i + 1}/${numImages} failed:`, lastReplicateError)
+          console.error(`${label}: Replicate image ${i + 1}/${numImages} failed:`, lastReplicateError)
         }
       }
       
@@ -379,9 +389,7 @@ export class GeminiAdapter extends BaseModelAdapter {
       }
     }
     
-    // Gemini 3 Pro Image (Nano banana pro) endpoint
-    // Uses Vertex AI if configured, otherwise falls back to Gemini API directly
-    const endpoint = `${this.baseUrl}/models/gemini-3-pro-image-preview:generateContent`
+    const endpoint = `${this.baseUrl}/models/${this.apiModelName}:generateContent`
 
     const numImages = request.numOutputs || 1
     
@@ -391,7 +399,7 @@ export class GeminiAdapter extends BaseModelAdapter {
     let lastError: string | null = null
     
     for (let i = 0; i < numImages; i++) {
-      console.log(`Nano banana pro: Generating image ${i + 1}/${numImages}`)
+      console.log(`${label}: Generating image ${i + 1}/${numImages}`)
       
       try {
         const output = await this.generateSingleImageWithRetry(endpoint, request, i + 1, numImages)
@@ -403,7 +411,7 @@ export class GeminiAdapter extends BaseModelAdapter {
         }
       } catch (error: any) {
         lastError = error.message || 'Unknown error'
-        console.error(`Nano banana pro: Image ${i + 1}/${numImages} failed:`, lastError)
+        console.error(`${label}: Image ${i + 1}/${numImages} failed:`, lastError)
         // Continue to next image even if one fails
         // We'll throw with the actual error if all fail at the end
       }
@@ -444,13 +452,13 @@ export class GeminiAdapter extends BaseModelAdapter {
     }
   }
 
-  // Generate single image with retry logic for 429 and transient (502/503/504) errors
   private async generateSingleImageWithRetry(
     endpoint: string,
     request: GenerationRequest,
     imageIndex: number,
     totalImages: number
   ): Promise<any> {
+    const label = this.modelLabel
     let lastError: any = null
     
     for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
@@ -459,51 +467,45 @@ export class GeminiAdapter extends BaseModelAdapter {
       } catch (error: any) {
         lastError = error
         
-        // Check if it's a quota exhaustion error (limit: 0, daily quota)
-        // Try Replicate fallback instead of failing
         if (isQuotaExhaustedError(error)) {
-          console.error(`Nano banana pro: Quota exhausted (limit: 0 or daily quota).`)
+          console.error(`${label}: Quota exhausted (limit: 0 or daily quota).`)
           
           if (REPLICATE_API_KEY) {
-            console.log(`Nano banana pro: Attempting Replicate fallback (google/nano-banana-pro)...`)
+            console.log(`${label}: Attempting Replicate fallback (google/nano-banana-pro)...`)
             try {
               return await this.generateImageReplicate(request)
             } catch (replicateError: any) {
-              console.error(`Nano banana pro: Replicate fallback also failed:`, replicateError.message)
-              throw new Error('All APIs exhausted (Vertex AI, Gemini API, Replicate). Please try again later.')
+            console.error(`${label}: Replicate fallback also failed:`, replicateError.message)
+                throw new Error('All APIs exhausted (Vertex AI, Gemini API, Replicate). Please try again later.')
+              }
             }
+            
+            throw new Error('Quota exhausted. Please check your API quota limits or try again later.')
           }
           
-          throw new Error('Quota exhausted. Please check your API quota limits or try again later.')
-        }
-        
-        // Retry on 429 rate limit errors OR transient upstream errors (502/503/504)
-        const retryable = isRateLimitError(error) || isTransientError(error)
-        if (retryable && attempt < MAX_RETRY_ATTEMPTS) {
-          const errorType = isRateLimitError(error) ? '429 rate limit' : `${error?.status || '5xx'} transient`
-          // Shorter backoff for transient errors (they usually resolve quickly)
-          // 429: 1-2s, 2-4s, 4-8s, 8-16s  |  503: 2-4s, 4-8s, 6-12s, 8-16s
-          const baseDelay = isTransientError(error) && !isRateLimitError(error)
-            ? Math.min((attempt + 1) * 2000, 16000)
-            : Math.pow(2, attempt - 1) * 1000
-          const jitter = Math.random() * baseDelay * 0.5
-          const delay = baseDelay + jitter
-          
-          console.log(
-            `Nano banana pro: Image ${imageIndex}/${totalImages} - ${errorType} on attempt ${attempt}/${MAX_RETRY_ATTEMPTS}. Retrying in ${Math.round(delay)}ms...`
-          )
+          const retryable = isRateLimitError(error) || isTransientError(error)
+          if (retryable && attempt < MAX_RETRY_ATTEMPTS) {
+            const errorType = isRateLimitError(error) ? '429 rate limit' : `${error?.status || '5xx'} transient`
+            const baseDelay = isTransientError(error) && !isRateLimitError(error)
+              ? Math.min((attempt + 1) * 2000, 16000)
+              : Math.pow(2, attempt - 1) * 1000
+            const jitter = Math.random() * baseDelay * 0.5
+            const delay = baseDelay + jitter
+            
+            console.log(
+              `${label}: Image ${imageIndex}/${totalImages} - ${errorType} on attempt ${attempt}/${MAX_RETRY_ATTEMPTS}. Retrying in ${Math.round(delay)}ms...`
+            )
           
           await new Promise(resolve => setTimeout(resolve, delay))
           continue
         }
         
-        // Retries exhausted on transient errors — try Replicate as last resort
         if (isTransientError(error) && REPLICATE_API_KEY) {
-          console.log(`Nano banana pro: Google API persistently unavailable after ${attempt} attempts. Falling back to Replicate...`)
+          console.log(`${label}: Google API persistently unavailable after ${attempt} attempts. Falling back to Replicate...`)
           try {
             return await this.generateImageReplicate(request)
           } catch (replicateError: any) {
-            console.error(`Nano banana pro: Replicate fallback also failed:`, replicateError.message)
+            console.error(`${label}: Replicate fallback also failed:`, replicateError.message)
             throw new Error(
               'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.'
             )
@@ -560,15 +562,16 @@ export class GeminiAdapter extends BaseModelAdapter {
       },
     }
 
-    // Add aspect ratio and resolution configuration if provided
     if (request.aspectRatio || request.resolution) {
+      const resolutionToSize = (res: number): string => {
+        if (res === 4096) return '4K'
+        if (res === 2048) return '2K'
+        if (res === 512) return '512px'
+        return '1K'
+      }
       payload.generationConfig.imageConfig = {
         ...(request.aspectRatio && { aspectRatio: request.aspectRatio }),
-        // Convert resolution number to imageSize string (1K, 2K, 4K) for Gemini 3 Pro Image
-        // Resolution values: 1024 -> "1K", 2048 -> "2K", 4096 -> "4K"
-        ...(request.resolution && {
-          imageSize: request.resolution === 4096 ? '4K' : request.resolution === 2048 ? '2K' : '1K'
-        }),
+        ...(request.resolution && { imageSize: resolutionToSize(request.resolution) }),
       }
     }
 
@@ -581,12 +584,12 @@ export class GeminiAdapter extends BaseModelAdapter {
   }
 
   private async generateImageVertexAI(request: GenerationRequest, payload: any): Promise<any> {
+    const label = this.modelLabel
     const location = process.env.GOOGLE_CLOUD_REGION || 'us-central1'
-    console.log(`Nano banana pro: Using Vertex AI (region: ${location})`)
+    console.log(`${label}: Using Vertex AI (region: ${location})`)
     
-    // Track API call for rate limiting (Vertex AI counts as Gemini for rate limits)
     try {
-      await recordApiCall('gemini', 'gemini-nano-banana-pro', 1)
+      await recordApiCall('gemini', this.config.id, 1)
     } catch (trackErr) {
       console.warn('[GeminiAdapter] Failed to track Vertex AI API call:', trackErr)
     }
@@ -596,11 +599,8 @@ export class GeminiAdapter extends BaseModelAdapter {
     }
     
     try {
-      // Use preview.getGenerativeModel() for preview models like gemini-3-pro-image-preview
-      // Note: Some preview models may not be available via Vertex AI SDK yet
-      // If this fails with 404, the model might only be available via Gemini API
       const model = vertexAiClient.preview.getGenerativeModel({
-        model: 'gemini-3-pro-image-preview',
+        model: this.apiModelName,
       })
 
       console.log('[Vertex AI] Model initialized, calling generateContent...')
@@ -673,14 +673,11 @@ export class GeminiAdapter extends BaseModelAdapter {
       const errorMessage = error?.message || String(error)
       const errorString = String(error)
       
-      // Check for 404 - model not found (might not be available via Vertex AI SDK)
       if (error?.code === 404 || error?.status === 404 || errorMessage.includes('404') || errorMessage.includes('was not found')) {
-        console.error('[Vertex AI] ⚠️  Model not found (404) - gemini-3-pro-image-preview may not be available via Vertex AI SDK yet')
-        console.error('[Vertex AI]   This preview model might only be accessible via Gemini API (AI Studio)')
+        console.error(`[Vertex AI] ⚠️  Model not found (404) - ${this.apiModelName} may not be available via Vertex AI SDK yet`)
         console.error('[Vertex AI]   Falling back to Gemini API...')
-        // Don't throw - let it fall through to Gemini API fallback
         if (this.apiKey) {
-          const endpoint = `${this.baseUrl}/models/gemini-3-pro-image-preview:generateContent`
+          const endpoint = `${this.baseUrl}/models/${this.apiModelName}:generateContent`
           return await this.generateImageGeminiAPI(endpoint, payload)
         }
         throw new Error('Model not available via Vertex AI. Please use Gemini API (AI Studio) instead.')
@@ -752,10 +749,9 @@ export class GeminiAdapter extends BaseModelAdapter {
         throw transientErr
       }
       
-      // For non-transient, non-quota errors: fall back to Gemini API REST
       if (this.apiKey) {
         console.log('Falling back to Gemini API due to Vertex AI error')
-        const endpoint = `${this.baseUrl}/models/gemini-3-pro-image-preview:generateContent`
+        const endpoint = `${this.baseUrl}/models/${this.apiModelName}:generateContent`
         try {
           return await this.generateImageGeminiAPI(endpoint, payload)
         } catch (fallbackError: any) {
@@ -779,11 +775,11 @@ export class GeminiAdapter extends BaseModelAdapter {
   }
 
   private async generateImageGeminiAPI(endpoint: string, payload: any): Promise<any> {
-    console.log('Nano banana pro: Using Gemini API (AI Studio)')
+    const label = this.modelLabel
+    console.log(`${label}: Using Gemini API (AI Studio)`)
     
-    // Track API call for rate limiting
     try {
-      await recordApiCall('gemini', 'gemini-nano-banana-pro', 1)
+      await recordApiCall('gemini', this.config.id, 1)
     } catch (trackErr) {
       console.warn('[GeminiAdapter] Failed to track API call:', trackErr)
     }
@@ -796,15 +792,14 @@ export class GeminiAdapter extends BaseModelAdapter {
       body: JSON.stringify(payload),
     })
 
-    console.log('Nano banana pro: Response status:', response.status)
+    console.log(`${label}: Response status:`, response.status)
 
     if (!response.ok) {
       const error = await response.json()
       console.error('Gemini API error:', error)
       console.error('Request payload (redacted):', JSON.stringify(redactLargeStrings(payload), null, 2))
       
-      // Check for rate limit and record it
-      checkGoogleRateLimit(error, 'gemini', 'gemini-nano-banana-pro')
+      checkGoogleRateLimit(error, 'gemini', this.config.id)
       
       // Create error object that includes details for quota detection
       const apiError: any = new Error(error.error?.message || 'Image generation failed')
@@ -816,7 +811,7 @@ export class GeminiAdapter extends BaseModelAdapter {
       throw apiError
     }
     
-    console.log('Nano banana pro: Response OK, parsing data')
+    console.log(`${label}: Response OK, parsing data`)
 
     const data = await response.json()
 
@@ -824,8 +819,8 @@ export class GeminiAdapter extends BaseModelAdapter {
     // Google can return 200 OK but with blocked content (no image)
     const contentBlock = parseGeminiContentBlock(data)
     if (contentBlock) {
-      console.error('Nano banana pro: Content blocked by safety filter:', contentBlock)
-      console.error('Nano banana pro: Full response:', JSON.stringify(redactLargeStrings(data), null, 2))
+      console.error(`${label}: Content blocked by safety filter:`, contentBlock)
+      console.error(`${label}: Full response:`, JSON.stringify(redactLargeStrings(data), null, 2))
       throw new Error(contentBlock)
     }
 
@@ -1465,6 +1460,16 @@ export class GeminiAdapter extends BaseModelAdapter {
   }
 }
 
+/**
+ * Maps internal model IDs to the Gemini API model name used in endpoints.
+ * Nano Banana Pro → gemini-3-pro-image-preview
+ * Nano Banana 2  → gemini-3.1-flash-image-preview
+ */
+const GEMINI_API_MODEL_MAP: Record<string, string> = {
+  'gemini-nano-banana-pro': 'gemini-3-pro-image-preview',
+  'gemini-nano-banana-2': 'gemini-3.1-flash-image-preview',
+}
+
 // Model configurations based on official Gemini API docs
 // https://ai.google.dev/gemini-api/docs/image-generation
 export const NANO_BANANA_CONFIG: ModelConfig = {
@@ -1473,15 +1478,14 @@ export const NANO_BANANA_CONFIG: ModelConfig = {
   provider: 'Google',
   type: 'image',
   description: 'Gemini 3 Pro Image - Advanced image generation with superior quality',
-  maxResolution: 4096, // Max dimension for 4K resolution (actual dimensions vary by aspect ratio)
+  maxResolution: 4096,
   defaultAspectRatio: '1:1',
-  // All 10 supported aspect ratios from official Gemini API documentation
   supportedAspectRatios: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
   capabilities: {
     editing: true,
     'text-2-image': true,
-    multiImageEditing: true, // Gemini 3 Pro Image supports multiple reference images
-    maxReferenceImages: 14, // Per Gemini API docs: up to 14 reference images
+    multiImageEditing: true,
+    maxReferenceImages: 14,
   },
   pricing: {
     perImage: 0.01,
@@ -1503,6 +1507,50 @@ export const NANO_BANANA_CONFIG: ModelConfig = {
       label: 'Resolution',
       default: 1024,
       options: [
+        { label: '1K', value: 1024 },
+        { label: '2K', value: 2048 },
+        { label: '4K', value: 4096 },
+      ],
+    },
+  ],
+}
+
+export const NANO_BANANA_2_CONFIG: ModelConfig = {
+  id: 'gemini-nano-banana-2',
+  name: 'Nano Banana 2',
+  provider: 'Google',
+  type: 'image',
+  description: 'Gemini 3.1 Flash Image - Fast, high-efficiency image generation optimized for speed',
+  maxResolution: 4096,
+  defaultAspectRatio: '1:1',
+  supportedAspectRatios: ['1:1', '1:4', '1:8', '2:3', '3:2', '3:4', '4:1', '4:3', '4:5', '5:4', '8:1', '9:16', '16:9', '21:9'],
+  capabilities: {
+    editing: true,
+    'text-2-image': true,
+    multiImageEditing: true,
+    maxReferenceImages: 14,
+  },
+  pricing: {
+    perImage: 0.01,
+    currency: 'USD',
+  },
+  parameters: [
+    {
+      name: 'numOutputs',
+      type: 'select',
+      label: 'Images',
+      default: 1,
+      options: [
+        { label: '1 image', value: 1 },
+      ],
+    },
+    {
+      name: 'resolution',
+      type: 'select',
+      label: 'Resolution',
+      default: 1024,
+      options: [
+        { label: '0.5K', value: 512 },
         { label: '1K', value: 1024 },
         { label: '2K', value: 2048 },
         { label: '4K', value: 4096 },

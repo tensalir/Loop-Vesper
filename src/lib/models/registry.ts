@@ -2,6 +2,7 @@ import { BaseModelAdapter, ModelConfig } from './base'
 import {
   GeminiAdapter,
   NANO_BANANA_CONFIG,
+  NANO_BANANA_2_CONFIG,
   VEO_3_1_CONFIG,
 } from './adapters/gemini'
 import {
@@ -32,6 +33,7 @@ class ModelRegistry {
   private registerDefaultModels() {
     // Register Google Gemini models
     this.register(NANO_BANANA_CONFIG, GeminiAdapter)
+    this.register(NANO_BANANA_2_CONFIG, GeminiAdapter)
     this.register(VEO_3_1_CONFIG, GeminiAdapter)
     
     // Register Replicate models

@@ -45,6 +45,7 @@ const MODEL_HARDWARE_MAP: Record<string, string> = {
   'replicate-seedream-4': 'nvidia-a40-large', // Seedream 4.5 runs on A40 Large
   'replicate-reve': 'nvidia-a40',
   'gemini-nano-banana-pro': 'nvidia-a40-large', // When using Replicate fallback
+  'gemini-nano-banana-2': 'nvidia-a40-large', // When using Replicate fallback
   'replicate-nano-banana-pro': 'nvidia-a40-large', // Replicate Nano Banana Pro
   // Video models
   'replicate-kling-2.6': 'nvidia-a100-80gb', // Kling uses A100 for video
@@ -59,13 +60,11 @@ export function calculateGeminiCost(
   outputCount: number = 1,
   videoDurationSeconds?: number
 ): CostCalculationResult {
-  // Gemini Nano Banana Pro - Image generation
-  if (modelId === 'gemini-nano-banana-pro') {
-    // ~$0.01 per image (approximate, based on documentation)
+  if (modelId === 'gemini-nano-banana-pro' || modelId === 'gemini-nano-banana-2') {
     return {
       cost: 0.01 * outputCount,
       unit: `per image (${outputCount} image${outputCount > 1 ? 's' : ''})`,
-      isActual: false, // Gemini doesn't provide exact billing in API
+      isActual: false,
     }
   }
 
@@ -121,8 +120,8 @@ export function calculateReplicateCost(
  * Based on typical generation times observed in practice
  */
 function getEstimatedComputeTime(modelId: string): number {
-  if (modelId === 'replicate-seedream-4' || modelId === 'gemini-nano-banana-pro' || modelId === 'replicate-nano-banana-pro') {
-    return 12 // ~12 seconds for Seedream 4.5 / Nano Banana image generation
+  if (modelId === 'replicate-seedream-4' || modelId === 'gemini-nano-banana-pro' || modelId === 'gemini-nano-banana-2' || modelId === 'replicate-nano-banana-pro') {
+    return 12
   }
   if (modelId === 'replicate-reve') {
     return 8 // ~8 seconds for Reve
@@ -204,10 +203,7 @@ export function calculateGenerationCost(
 ): CostCalculationResult {
   const { outputCount = 1, videoDurationSeconds, computeTimeSeconds } = options
 
-  // For Nano Banana Pro, check if it's using Replicate fallback
-  // (We pass computeTimeSeconds when using Replicate)
-  if (modelId === 'gemini-nano-banana-pro' && computeTimeSeconds) {
-    // Using Replicate fallback - calculate using Replicate pricing
+  if ((modelId === 'gemini-nano-banana-pro' || modelId === 'gemini-nano-banana-2') && computeTimeSeconds) {
     return calculateReplicateCost(modelId, computeTimeSeconds)
   }
 
