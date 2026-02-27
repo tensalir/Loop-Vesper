@@ -694,7 +694,7 @@ export function ProjectClientShell({
               <button
                 onClick={handleTogglePrivacy}
                 disabled={updating}
-                className="opacity-0 group-hover/title:opacity-100 focus:opacity-100 bg-muted/50 hover:bg-muted/80 rounded-full p-0.5 flex items-center gap-0 transition-all duration-200 relative scale-90"
+                className="bg-muted/50 hover:bg-muted/80 rounded-full p-0.5 flex items-center gap-0 transition-all duration-200 relative scale-90"
                 title={
                   project.isShared
                     ? 'Public (visible in Community Creations). Click to make private.'

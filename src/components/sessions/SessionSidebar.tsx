@@ -339,38 +339,39 @@ export function SessionSidebar({
                               </p>
                             )}
                           </div>
-                          {/* Top Right: Menu and Privacy Toggle */}
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {/* Three Dots Menu */}
+                          <div className="flex items-center gap-1">
+                            {/* Three Dots Menu - hover only */}
                             {isOwner && (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button
-                                    onClick={(e) => e.stopPropagation()}
-                                    className={`p-1 rounded hover:bg-white/10 ${
-                                      activeSession?.id === session.id ? 'text-primary-foreground' : 'text-muted-foreground'
-                                    }`}
-                                  >
-                                    <MoreVertical className="h-3.5 w-3.5" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleRenameStart(session, e); }}>
-                                    <Pencil className="h-3.5 w-3.5 mr-2" />
-                                    Rename
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem 
-                                    onClick={(e) => { e.stopPropagation(); handleDeleteStart(session, e); }}
-                                    className="text-destructive focus:text-destructive"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button
+                                      onClick={(e) => e.stopPropagation()}
+                                      className={`p-1 rounded hover:bg-white/10 ${
+                                        activeSession?.id === session.id ? 'text-primary-foreground' : 'text-muted-foreground'
+                                      }`}
+                                    >
+                                      <MoreVertical className="h-3.5 w-3.5" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleRenameStart(session, e); }}>
+                                      <Pencil className="h-3.5 w-3.5 mr-2" />
+                                      Rename
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                      onClick={(e) => { e.stopPropagation(); handleDeleteStart(session, e); }}
+                                      className="text-destructive focus:text-destructive"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
                             )}
                             
-                            {/* Privacy Toggle */}
+                            {/* Privacy Toggle - always visible */}
                             {isOwner ? (
                               <button
                                 onClick={(e) => handleTogglePrivacy(session, e)}
