@@ -1,5 +1,6 @@
 import { BaseModelAdapter, GenerationRequest, GenerationResponse, ModelConfig } from '../base'
 import { recordApiCall } from '@/lib/rate-limits/usage'
+import { getScopeForModel } from '@/lib/rate-limits/config'
 import { checkGoogleRateLimit } from '@/lib/rate-limits/trackedFetch'
 
 /**
@@ -589,7 +590,7 @@ export class GeminiAdapter extends BaseModelAdapter {
     console.log(`${label}: Using Vertex AI (region: ${location})`)
     
     try {
-      await recordApiCall('gemini', this.config.id, 1)
+      await recordApiCall('gemini', getScopeForModel(this.config.id), 1)
     } catch (trackErr) {
       console.warn('[GeminiAdapter] Failed to track Vertex AI API call:', trackErr)
     }
@@ -779,7 +780,7 @@ export class GeminiAdapter extends BaseModelAdapter {
     console.log(`${label}: Using Gemini API (AI Studio)`)
     
     try {
-      await recordApiCall('gemini', this.config.id, 1)
+      await recordApiCall('gemini', getScopeForModel(this.config.id), 1)
     } catch (trackErr) {
       console.warn('[GeminiAdapter] Failed to track API call:', trackErr)
     }
