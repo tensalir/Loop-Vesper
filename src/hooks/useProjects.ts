@@ -8,8 +8,7 @@ interface ProjectsResponse {
 }
 
 async function fetchProjects(): Promise<(Project & { thumbnailUrl?: string | null })[]> {
-  // Ensure we don't read a cached HTTP response after mutations (e.g. delete).
-  const response = await fetch('/api/projects/with-thumbnails', { cache: 'no-store' })
+  const response = await fetch('/api/projects/with-thumbnails?scope=mine', { cache: 'no-store' })
   
   if (!response.ok) {
     throw new Error('Failed to fetch projects')
@@ -67,7 +66,7 @@ async function fetchProjectsPage({
 
 export function useProjects() {
   return useQuery({
-    queryKey: ['projects'],
+    queryKey: ['projects', 'mine'],
     queryFn: fetchProjects,
     staleTime: 5 * 60 * 1000, // 5 minutes - projects rarely change
     gcTime: 30 * 60 * 1000, // 30 minutes - keep in memory for faster navigation

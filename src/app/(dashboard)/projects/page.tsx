@@ -13,7 +13,7 @@ import type { Project } from '@/types/project'
 
 export default function ProjectsPage() {
   const [showNewProject, setShowNewProject] = useState(false)
-  const [projectScope, setProjectScope] = useState<'all' | 'mine'>('all')
+  const [projectScope, setProjectScope] = useState<'all' | 'mine'>('mine')
   const queryClient = useQueryClient()
   
   const { data: profile } = useProfile()
@@ -67,11 +67,11 @@ export default function ProjectsPage() {
           className="w-full sm:w-auto"
         >
           <TabsList className="grid w-full grid-cols-2 sm:w-[320px]">
-            <TabsTrigger value="all">
-              All Projects
-            </TabsTrigger>
             <TabsTrigger value="mine">
               My Projects
+            </TabsTrigger>
+            <TabsTrigger value="all">
+              All Projects
             </TabsTrigger>
           </TabsList>
         </Tabs>
