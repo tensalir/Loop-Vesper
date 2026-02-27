@@ -14,6 +14,8 @@ import { AspectRatioSelector } from './AspectRatioSelector'
 import { ModelPicker } from './ModelPicker'
 import { ImageBrowseModal } from './ImageBrowseModal'
 import { ProductRendersBrowseModal } from './ProductRendersBrowseModal'
+import { PdfBucketRail, PDF_BUCKET_MIME } from './PdfBucketRail'
+import { usePdfIngestion } from '@/hooks/usePdfIngestion'
 import { useParams } from 'next/navigation'
 import { PromptEnhancementButton } from './PromptEnhancementButton'
 
@@ -94,6 +96,9 @@ export function VideoInput({
   // which avoids Vercel body-size limits without lossy compression.
   const referenceUpload = useImageUpload({ purpose: 'reference', compress: false })
   const endFrameUpload = useImageUpload({ purpose: 'endframe', compress: false })
+  
+  // PDF ingestion
+  const { ingestPdf } = usePdfIngestion(projectId || '')
   
   // Start frame state
   const [referenceImage, setReferenceImage] = useState<File | null>(null)
@@ -396,9 +401,23 @@ export function VideoInput({
     }
   }
 
+  // Route PDF files to the ingestion pipeline
+  const processPdfFile = useCallback((file: File) => {
+    if (!projectId) {
+      toast({ title: 'No project', description: 'PDF upload requires a project context.' })
+      return
+    }
+    ingestPdf(file)
+    toast({ title: 'Processing PDF...', description: `Extracting images from ${file.name}` })
+  }, [projectId, ingestPdf, toast])
+
   // Process and add image file for start frame (used by both file input and drag-and-drop)
   // Uploads immediately to Supabase Storage to bypass Vercel's 4.5MB limit
   const processImageFile = async (file: File) => {
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      processPdfFile(file)
+      return
+    }
     if (!file.type.startsWith('image/')) return
     
     // Clean up old preview URL
@@ -546,7 +565,8 @@ export function VideoInput({
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (!supportsImageToVideo) return
+    const hasBucketDrag = Array.from(e.dataTransfer.types).includes(PDF_BUCKET_MIME)
+    if (!supportsImageToVideo && !hasBucketDrag) return
     setIsDragging(true)
   }
 
@@ -572,12 +592,17 @@ export function VideoInput({
     e.preventDefault()
     e.stopPropagation()
     setIsDragging(false)
+
+    const bucketUrl = e.dataTransfer.getData(PDF_BUCKET_MIME)
+    if (bucketUrl) {
+      handleBrowseSelect(bucketUrl)
+      return
+    }
     
     if (!supportsImageToVideo) return
     
     const files = Array.from(e.dataTransfer.files)
     if (files.length > 0) {
-      // For video, only use the first image file
       const imageFile = files.find(file => file.type.startsWith('image/'))
       if (imageFile) {
         processImageFile(imageFile)
@@ -834,6 +859,11 @@ export function VideoInput({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* PDF Bucket Rail - above the input area */}
+      {projectId && supportsImageToVideo && (
+        <PdfBucketRail projectId={projectId} />
+      )}
+
       {/* Main Input Area - Card Style */}
       <div className="flex items-center gap-3">
         {/* Input with resize handle */}
@@ -1165,7 +1195,7 @@ export function VideoInput({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,.pdf,application/pdf"
           className="hidden"
           onChange={handleFileSelect}
         />

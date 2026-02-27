@@ -35,6 +35,7 @@ model Profile {
   projectChats   ProjectChat[]
   pinnedImages   PinnedImage[]
   outputEvents   OutputEvent[]
+  pdfBuckets     PdfBucket[]
 
   @@map("profiles")
 }
@@ -55,6 +56,7 @@ model Project {
   members      ProjectMember[]
   chats        ProjectChat[]
   pinnedImages PinnedImage[]
+  pdfBuckets   PdfBucket[]
 
   @@index([ownerId])
   @@index([isShared, ownerId])
@@ -384,6 +386,49 @@ model ApiUsageCounter {
   @@index([provider, scope])
   @@index([bucket])
   @@map("api_usage_counters")
+}
+
+// --- PDF Buckets (per-user reference image extraction from PDFs) ---
+
+model PdfBucket {
+  id          String   @id @default(uuid()) @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  fileName    String   @map("file_name")
+  storagePath String?  @map("storage_path") // Original PDF in Supabase Storage
+  status      String   @default("processing") // 'processing', 'completed', 'failed'
+  pageCount   Int?     @map("page_count")
+  error       String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    Profile        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  images  PdfBucketImage[]
+
+  @@index([projectId, userId])
+  @@index([userId])
+  @@map("pdf_buckets")
+}
+
+model PdfBucketImage {
+  id          String   @id @default(uuid()) @db.Uuid
+  bucketId    String   @map("bucket_id") @db.Uuid
+  imageUrl    String   @map("image_url")
+  storagePath String   @map("storage_path")
+  width       Int?
+  height      Int?
+  pageIndex   Int?     @map("page_index") // PDF page the image was found on
+  sortOrder   Int      @default(0) @map("sort_order")
+  label       String? // Optional AI-generated or user label
+  source      String   @default("embedded") // 'embedded', 'rendered', 'segmented'
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  bucket PdfBucket @relation(fields: [bucketId], references: [id], onDelete: Cascade)
+
+  @@index([bucketId])
+  @@index([bucketId, sortOrder])
+  @@map("pdf_bucket_images")
 }
 
 // --- Monday–Figma–Frontify sync (chronology and mapping) ---

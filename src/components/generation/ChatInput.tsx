@@ -18,6 +18,8 @@ import { ModelPicker } from './ModelPicker'
 import { ImageBrowseModal } from './ImageBrowseModal'
 import { ProductRendersBrowseModal } from './ProductRendersBrowseModal'
 import { PromptEnhancementButton } from './PromptEnhancementButton'
+import { PdfBucketRail, PDF_BUCKET_MIME } from './PdfBucketRail'
+import { usePdfIngestion } from '@/hooks/usePdfIngestion'
 import { useParams } from 'next/navigation'
 
 
@@ -92,6 +94,9 @@ export function ChatInput({
   const rafId = useRef<number | null>(null)
   const currentHeight = useRef(52)
   
+  // PDF ingestion
+  const { ingestPdf, isProcessing: isPdfProcessing } = usePdfIngestion(projectId || '')
+
   // Keep ref in sync with state
   useEffect(() => {
     currentHeight.current = inputHeight
@@ -224,9 +229,23 @@ export function ChatInput({
     }
   }
 
+  // Route PDF files to the ingestion pipeline
+  const processPdfFile = useCallback((file: File) => {
+    if (!projectId) {
+      toast({ title: 'No project', description: 'PDF upload requires a project context.' })
+      return
+    }
+    ingestPdf(file)
+    toast({ title: 'Processing PDF...', description: `Extracting images from ${file.name}` })
+  }, [projectId, ingestPdf, toast])
+
   // Process and add image files (used by both file input and drag-and-drop)
   // Uses functional state updates to ensure correct behavior when called from stale closures (e.g., paste handlers)
   const processImageFiles = (files: File[]) => {
+    // Route any PDF files to the PDF ingestion pipeline
+    const pdfFiles = files.filter(file => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'))
+    pdfFiles.forEach(processPdfFile)
+
     const imageFiles = files.filter(file => file.type.startsWith('image/'))
     
     if (imageFiles.length === 0) return
@@ -295,24 +314,29 @@ export function ChatInput({
     }
   }
 
-  // Drag-and-drop handlers
+  // Drag-and-drop handlers (accept both images and PDFs)
+  const hasPdfInDrag = (e: React.DragEvent) => {
+    return Array.from(e.dataTransfer.items).some(
+      (item) => item.type === 'application/pdf'
+    )
+  }
+
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (!supportsImageEditing) return
+    const hasBucketDrag = Array.from(e.dataTransfer.types).includes(PDF_BUCKET_MIME)
+    if (!supportsImageEditing && !hasPdfInDrag(e) && !hasBucketDrag) return
     setIsDragging(true)
   }
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (!supportsImageEditing) return
   }
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    // Only set dragging to false if we're leaving the drop zone entirely
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX
     const y = e.clientY
@@ -325,8 +349,12 @@ export function ChatInput({
     e.preventDefault()
     e.stopPropagation()
     setIsDragging(false)
-    
-    if (!supportsImageEditing) return
+
+    const bucketUrl = e.dataTransfer.getData(PDF_BUCKET_MIME)
+    if (bucketUrl) {
+      handleBrowseSelect(bucketUrl)
+      return
+    }
     
     const files = Array.from(e.dataTransfer.files)
     processImageFiles(files)
@@ -584,7 +612,7 @@ export function ChatInput({
   return (
     <div 
       className={`space-y-3 transition-all ${
-        isDragging && supportsImageEditing
+        isDragging
           ? 'ring-2 ring-primary ring-offset-2 rounded-lg p-2 -m-2 bg-primary/5'
           : ''
       }`}
@@ -593,12 +621,17 @@ export function ChatInput({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* PDF Bucket Rail - above the input area */}
+      {projectId && supportsImageEditing && (
+        <PdfBucketRail projectId={projectId} />
+      )}
+
       {/* Main Input Area - Card Style */}
       <div className="flex items-center gap-3">
         {/* Input column with optional thumbnails above (for multi-image models) */}
         <div className="flex-1 flex flex-col gap-2">
-          {/* Multi-image thumbnails above textarea (Krea-style) */}
-          {supportsMultiImage && supportsImageEditing && imagePreviewUrls.length > 0 && (
+          {/* Reference image bar - always visible when model supports editing */}
+          {supportsMultiImage && supportsImageEditing && (
             <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
               {imagePreviewUrls.map((previewUrl, index) => (
                 <div key={index} className="relative group flex-shrink-0">
@@ -759,55 +792,10 @@ export function ChatInput({
           </div>
         </div>
 
-        {/* Reference Image Picker - Right of prompt (for single-image editing models OR multi-image with no images yet) */}
-        {supportsImageEditing && (
+        {/* Reference Image Picker - Right of prompt (single-image editing models only) */}
+        {supportsImageEditing && !supportsMultiImage && (
           <div className="flex items-center gap-2">
-            {/* For multi-image models with no images: show add button on the right */}
-            {supportsMultiImage && imagePreviewUrls.length === 0 && (
-              <Popover open={stylePopoverOpen} onOpenChange={setStylePopoverOpen}>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    disabled={isGenerating}
-                    className="rounded-md border-2 border-dashed border-white/20 hover:border-primary/50 hover:bg-primary/10 transition-all flex items-center justify-center w-[32px] h-[32px]"
-                    title="Add reference image"
-                  >
-                    <ImagePlus className="h-3.5 w-3.5 text-muted-foreground/70" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-40 p-2" align="start">
-                  <div className="flex flex-col gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start h-8 text-xs"
-                      onClick={() => {
-                        fileInputRef.current?.click()
-                        setStylePopoverOpen(false)
-                      }}
-                    >
-                      <Upload className="h-3.5 w-3.5 mr-2" />
-                      Upload
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start h-8 text-xs"
-                      onClick={() => {
-                        setBrowseModalOpen(true)
-                        setStylePopoverOpen(false)
-                      }}
-                    >
-                      <FolderOpen className="h-3.5 w-3.5 mr-2" />
-                      Browse
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            )}
-
-            {/* Single-image editing model: show on the right */}
-            {!supportsMultiImage && (
+            {(
               <div className="relative group">
                 <Popover open={stylePopoverOpen} onOpenChange={setStylePopoverOpen}>
                   <PopoverTrigger asChild>
@@ -877,12 +865,23 @@ export function ChatInput({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
-              multiple={supportsMultiImage}
+              accept="image/*,.pdf,application/pdf"
               className="hidden"
               onChange={handleFileSelect}
             />
           </div>
+        )}
+
+        {/* Hidden file input for multi-image models (no right-side picker) */}
+        {supportsImageEditing && supportsMultiImage && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,.pdf,application/pdf"
+            multiple
+            className="hidden"
+            onChange={handleFileSelect}
+          />
         )}
         
         {/* Generate Button */}

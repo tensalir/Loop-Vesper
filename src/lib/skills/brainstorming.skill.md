@@ -51,24 +51,26 @@ If the user explicitly asks for a final prompt they can use (e.g., "give me a pr
 
 ### CRITICAL: When User Has Attached an Image
 
-**If the user has attached an image in this conversation and asks for prompts, you MUST use the Nano Banana image editing format.** This is non-negotiable.
+**Do not force one prompt format for all image-based requests.** First classify user intent, then choose the right format:
 
-**REQUIRED FORMAT - Every prompt MUST begin with:**
-```
-Using the attached image as a style reference for its [list specific visual qualities you observe], [describe the new scene/variation]. Preserve [what to keep]. Match [specific characteristics] exactly.
-```
+1. **Style-only transfer** (user says "style reference", "use this style", etc.)
+   - Start with `Using the attached image ONLY as a style reference...`
+   - Extract visual treatment (color, lighting, texture, mood)
+   - Explicitly block composition carry-over: "Do NOT reproduce [subjects/objects/layout]"
+   - Apply style to a new subject and ask for a fresh composition
 
-**Why this matters:** Nano Banana (Gemini's image generation) needs explicit instructions to use the attached image. Without "Using the attached image..." at the start, the model ignores your reference image entirely.
+2. **Composition-preserving reference** (user says "same layout", "recreate this setup", "match composition")
+   - Start with `Using the attached image as a reference for BOTH style and composition...`
+   - State exactly what composition elements to preserve
+   - Specify what new content should change
 
-**WRONG (will ignore the reference image):**
-```
-Over-the-shoulder perspective following climber on ridge, massive peak looming ahead, orange tents visible on distant plateau...
-```
+3. **Semantic edit instruction** (user says "change/remove/add X", "keep everything else")
+   - Use direct edit language: `In the provided image, change only ... while preserving ...`
+   - Be explicit about unchanged anchors (identity, lighting, background, framing)
 
-**CORRECT (properly references the attached image):**
-```
-Using the attached image as a style reference for its dramatic triangular mountain peak, orange expedition tents, blue-grey atmospheric sky, golden hour lighting on peaks, and cinematic landscape photography style. Over-the-shoulder perspective following climber on ridge, hands gripping rocky terrain in foreground, same tents visible on distant plateau. Preserve the color grading, atmospheric haze, and epic scale exactly.
-```
+4. **Multi-image composition / identity tasks**
+   - Name each reference role clearly (subject identity, product, style, background)
+   - Specify blend priorities and preservation constraints
 
 ### What to Extract from the Reference Image
 
@@ -79,11 +81,11 @@ Before writing any prompt, analyze the attached image and identify:
 - **Composition style**: framing, depth, focal points
 - **Distinctive elements**: objects, textures, recurring motifs
 
-Then explicitly instruct the model to match these in your prompt.
+Then explicitly instruct the model to match or preserve these based on the user's intent (style-only, composition, or semantic edit).
 
 ### Multiple Prompts = Multiple Variations, Same Format
 
-When generating 3 prompt variations, each one must still start with "Using the attached image as a style reference..." - just with different scene descriptions:
+When generating 3 prompt variations for style-reference requests, each variation should keep the same style extraction and blocking rules, with different scene descriptions:
 
 ```
 Using the attached image as a style reference for its [same extracted qualities]. [Variation 1 scene description]. Match the [characteristics] exactly.

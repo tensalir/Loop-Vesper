@@ -13,6 +13,25 @@ Craft prompts by understanding how diffusion models interpret language—not by 
 
 **Iteration reality:** Expect 50-100+ generations for video, 10-30 for images.
 
+## Nano Banana 2 vs Pro (Model Selection Heuristic)
+
+When the user asks which Nano Banana model to use, apply this default:
+
+- **Nano Banana 2 (`gemini-3.1-flash-image-preview`)**: default for fast iteration, high-volume exploration, and multi-turn ideation.
+- **Nano Banana Pro (`gemini-3-pro-image-preview`)**: use when the user wants polished production assets, stronger precision for text/layout-heavy visuals, or complex instruction fidelity.
+
+If unsure, start with Nano Banana 2 for exploration and switch to Pro for final passes.
+
+## Output Controls (Use When Relevant)
+
+For Gemini image models, mention these optional controls only when they materially help:
+
+- **Aspect ratio** via `image_config.aspect_ratio` (e.g., `1:1`, `16:9`, `9:16`)
+- **Resolution** via `image_config.image_size` (`512px`, `1K`, `2K`, `4K`) — use uppercase `K`
+- **Response modalities** when image-only output is preferred (`response_modalities: ["IMAGE"]`)
+
+Avoid adding config noise when the user only wants help improving prompt wording.
+
 ## When the User Provides a Style Reference Image
 
 **THIS IS A NANO BANANA WORKFLOW.** When a user attaches an image and says "use this as a style reference" (or similar), they intend to use Nano Banana/Gemini's native image generation with the attached image as input.

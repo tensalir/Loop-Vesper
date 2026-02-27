@@ -61,6 +61,8 @@ export async function POST(request: NextRequest) {
     const isVideoModel =
       selectedModelConfig?.type === 'video' ||
       /veo|video|replicate-video|fal-video|gemini-video/i.test(modelId)
+    const isNanoBananaModel = modelId === 'gemini-nano-banana-pro' || modelId === 'gemini-nano-banana-2'
+    const isNanoBananaPro = modelId === 'gemini-nano-banana-pro'
 
     // Get model-specific enhancement prompt from database
     const enhancementPrompt = await (prisma as any).promptEnhancementPrompt.findFirst({
@@ -129,7 +131,7 @@ Enhance this as an image-to-video / motion prompt (aligned with our motion promp
 - Include audio ambience / SFX / dialogue ONLY if the user explicitly asks for audio; otherwise omit audio.
 
 Return ONLY the enhanced motion prompt text.`
-      } else if (modelId === 'gemini-nano-banana-pro') {
+      } else if (isNanoBananaModel) {
         // Determine the appropriate prefix based on reference type
         let requiredPrefix: string
         if (wantsStyleOnly) {
@@ -172,6 +174,10 @@ REQUIRED PROMPT STRUCTURE:
 4. Then describe the user's NEW subject/scene: "Apply this visual style to: [user's completely different subject]"
 5. End with: "Create a fresh composition appropriate for this new subject."
 
+Model context:
+- Selected model: ${modelId}
+- ${isNanoBananaPro ? 'Nano Banana Pro is optimized for higher-fidelity, production-ready assets and precise text/layout rendering.' : 'Nano Banana 2 is optimized for faster iteration and broad, high-volume ideation workflows.'}
+
 Terminology:
 - "Nano Banana" is Gemini's model nickname. Do NOT introduce literal bananas unless the user explicitly requested bananas.
 
@@ -188,6 +194,10 @@ CRITICAL REQUIREMENTS:
 - Immediately after that prefix, include the specific visual qualities you observe in the reference image (color palette, lighting, mood, composition, texture).
 - Then describe the new scene/composition/angles the user wants (keep it coherent and specific).
 
+Model context:
+- Selected model: ${modelId}
+- ${isNanoBananaPro ? 'Favor stronger precision for typography, composition, and polished asset quality when relevant.' : 'Favor concise, flexible phrasing suited for rapid multi-turn iteration and experimentation.'}
+
 Terminology:
 - "Nano Banana" is Gemini's model nickname. Do NOT introduce literal bananas unless the user explicitly requested bananas in the image.
 
@@ -197,13 +207,15 @@ Return ONLY the prompt text.`
           requestContent = `User wants to edit an image. Their instruction: "${userPrompt}"
 Reference image will be provided.
 
-IMPORTANT: For Nano Banana Pro image editing:
+IMPORTANT: For Nano Banana image editing:
 - Return ONLY the enhanced edit instruction (no explanations, no labels, no quotes, no code fences)
 - Start with: "${requiredPrefix}"
 - Describe exactly what to change AND what to preserve
 - Use precise, action-oriented language and specific placement
 - Keep the original style/lighting unless the user asks to change it
 - "Nano Banana" is a model nickname. Do NOT introduce literal bananas unless explicitly requested
+- Selected model: ${modelId}
+- ${isNanoBananaPro ? 'Use tighter precision suitable for production-ready assets.' : 'Optimize for clarity and iterative editing speed; keep instructions concise and unambiguous.'}
 
 Enhance this instruction to be clearer and more effective. Return ONLY the enhanced edit instruction.`
         }

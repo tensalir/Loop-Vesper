@@ -52,6 +52,7 @@ const nextConfig = {
         fs: false,
         dns: false,
         child_process: false,
+        canvas: false,
       }
     }
     return config
