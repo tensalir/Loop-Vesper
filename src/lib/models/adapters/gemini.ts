@@ -800,7 +800,7 @@ export class GeminiAdapter extends BaseModelAdapter {
       console.error('Gemini API error:', error)
       console.error('Request payload (redacted):', JSON.stringify(redactLargeStrings(payload), null, 2))
       
-      checkGoogleRateLimit(error, 'gemini', this.config.id)
+      checkGoogleRateLimit(error, 'gemini', getScopeForModel(this.config.id))
       
       // Create error object that includes details for quota detection
       const apiError: any = new Error(error.error?.message || 'Image generation failed')
