@@ -12,13 +12,13 @@ Vesper exists to close those gaps. Software for a team of ten, not a platform fo
 
 ## What it does
 
-A project-based workspace where the Studio team generates images and videos across multiple models (Gemini, Replicate, FAL.ai, Kling) with a built-in prompt enhancer powered by Claude. Sessions function as scoped workspaces within a project. Every generation is tracked, every output stored.
+A project-based workspace where the Studio team generates images and videos across multiple models (Gemini, Replicate, Kling) with a built-in prompt enhancer powered by Claude. Sessions function as scoped workspaces within a project. Every generation is tracked, every output stored.
 
 ## Key capabilities
 
 **Prompt enhancement.** Claude-powered prompt refinement with model-specific strategies and reference image analysis. Linked to the Loop product catalogue so prompts stay on-brand without manual copy-paste.
 
-**Multi-model generation.** Adapter architecture supporting Gemini Flash Image, Veo 3.1, Replicate Seedream, FAL.ai Seedream, and Kling. Switch models without switching tools.
+**Multi-model generation.** Adapter architecture supporting Gemini Flash Image, Veo 3.1, Replicate Seedream, and Kling. Additional model adapters (including FAL.ai) exist in code but are not yet registered in the active runtime. Switch models without switching tools.
 
 **Animate still.** A popup that lets you go from image to video without leaving the page. A small thing in isolation, but in a production flow where you are constantly evaluating images and deciding which to animate, it removes a real friction point.
 
@@ -37,7 +37,7 @@ A project-based workspace where the Studio team generates images and videos acro
 | Auth | Supabase Auth with role-based access |
 | Storage | Supabase Storage (CDN) |
 | Real-time | Supabase Realtime subscriptions |
-| AI | Google Gemini, Anthropic Claude, Replicate, FAL.ai, Kling |
+| AI | Google Gemini, Anthropic Claude, Replicate, Kling |
 
 ```
 app/                      # Next.js pages
@@ -55,29 +55,15 @@ prisma/
 
 ## Getting started
 
-Prerequisites: Node.js 18+, Supabase account.
+Prerequisites: Node.js 18+, Supabase account, API access for the generation providers you plan to use.
 
 ```bash
 git clone https://github.com/tensalir/Loop-Vesper.git
 cd Loop-Vesper
 npm install
-cp .env.example .env.local
 ```
 
-Add your keys to `.env.local`:
-
-```
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
-DATABASE_URL=...
-GEMINI_API_KEY=...
-ANTHROPIC_API_KEY=...
-REPLICATE_API_TOKEN=...
-FAL_KEY=...
-KLING_ACCESS_KEY=...
-KLING_SECRET_KEY=...
-```
+Configure your local project settings with the required database, storage, auth, and provider credentials. See the repo's configuration example for the full list of required fields.
 
 ```bash
 npm run prisma:push
@@ -88,14 +74,14 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Documentation
 
-- [Product Requirements](./PRD.md)
-- [Architecture](./ARCHITECTURE.md)
-- [Quick Start](./QUICKSTART.md)
-- [Gemini Setup](./GEMINI_SETUP.md)
-- [Replicate Setup](./REPLICATE_SETUP.md)
-- [FAL.ai Setup](./FAL_SETUP.md)
-- [Prompt Enhancement](./PROMPT_ENHANCEMENT_FEATURE.md)
-- [User Roles](./USER_ROLES_SETUP.md)
+- [Product Requirements](./docs/architecture/PRD.md)
+- [Architecture](./docs/architecture/ARCHITECTURE.md)
+- [Quick Start](./docs/getting-started/QUICKSTART.md)
+- [Gemini Setup](./docs/integrations/GEMINI_SETUP.md)
+- [Replicate Setup](./docs/integrations/REPLICATE_SETUP.md)
+- [FAL.ai Setup](./docs/integrations/FAL_SETUP.md)
+- [Prompt Enhancement](./docs/operations/PROMPT_ENHANCEMENT_FEATURE.md)
+- [User Roles](./docs/database/USER_ROLES_SETUP.md)
 
 ## What comes next
 
