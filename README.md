@@ -1,238 +1,102 @@
-# Latentia
+# Vesper
 
-Your intelligent AI canvas for generating images and videos with state-of-the-art AI models.
+> Internal AI image and video generation platform for Loop Earplugs. Built for the Studio team, by embedding into their workflow and removing the bottlenecks one at a time.
 
-## Overview
+## Why this exists
 
-Latentia is a next-generation generative AI web platform that provides a unified interface for multiple AI image and video generation models. Unlike existing tools, Latentia introduces a project-centric organizational structure that enables teams to collaborate effectively on creative work.
+Through 2025, Loop ran dozens of AI image and video campaigns. The workflow was: write a prompt in ChatGPT or Claude, paste it into Krea or another platform, iterate, repeat. Three problems with that.
 
-## Features Implemented
+First, platforms like Krea take a margin on every API call. Defensible business model, but not transparent and expensive at campaign scale. Second, switching between an LLM for prompt writing and a separate tool for generation breaks the flow state. Every tab switch is a context switch. Third, the features our team actually needed (prompt enhancement linked to our product catalogue, image-to-video without leaving the page, PDF image extraction for briefing assets) were not available in any off-the-shelf tool and may never be, because they only matter for our specific workflow.
 
-### Phase 1: Foundation ✅
+Vesper exists to close those gaps. Software for a team of ten, not a platform for the industry.
 
-- ✅ Next.js 14 with TypeScript and App Router
-- ✅ Tailwind CSS with custom dark theme
-- ✅ Supabase integration (client and server)
-- ✅ Prisma ORM with PostgreSQL schema
-- ✅ shadcn/ui component library
-- ✅ Authentication pages (login, signup)
-- ✅ Protected routes middleware
+## What it does
 
-### Phase 2: Project Management ✅
+A project-based workspace where the Studio team generates images and videos across multiple models (Gemini, Replicate, FAL.ai, Kling) with a built-in prompt enhancer powered by Claude. Sessions function as scoped workspaces within a project. Every generation is tracked, every output stored.
 
-- ✅ Project dashboard with grid layout
-- ✅ New project creation dialog
-- ✅ Project cards with metadata
-- ✅ Session management system
-- ✅ Session sidebar with filtering
+## Key capabilities
 
-### Phase 3: Generation Interface ✅
+**Prompt enhancement.** Claude-powered prompt refinement with model-specific strategies and reference image analysis. Linked to the Loop product catalogue so prompts stay on-brand without manual copy-paste.
 
-- ✅ Chat-based generation UI
-- ✅ Generation gallery with grid layout
-- ✅ Chat input with parameter controls
-- ✅ Model picker with pinning capability
-- ✅ Parameter controls (aspect ratio, resolution, outputs)
-- ✅ Image/Video mode toggle
-- ✅ Hover overlay with action buttons (download, star, delete, reuse)
-- ✅ Reuse parameters functionality
+**Multi-model generation.** Adapter architecture supporting Gemini Flash Image, Veo 3.1, Replicate Seedream, FAL.ai Seedream, and Kling. Switch models without switching tools.
 
-### Phase 4: Model Integrations ✅
+**Animate still.** A popup that lets you go from image to video without leaving the page. A small thing in isolation, but in a production flow where you are constantly evaluating images and deciding which to animate, it removes a real friction point.
 
-- ✅ Model adapter architecture (BaseModelAdapter)
-- ✅ Gemini 2.5 Flash Image (Nano Banana) for image generation
-- ✅ Gemini Veo 3.1 for video generation
-- ✅ Replicate Seedream 4.0 integration
-- ✅ FAL.ai Seedream 4 integration
-- ✅ Realtime generation updates
-- ✅ Background processing architecture
-- ✅ Optimistic UI updates
-- ✅ Generation status polling
+**PDF image extraction.** Stakeholders and brief owners send Word documents and PDFs. Instead of manually copying images out of those files, Vesper extracts them directly for use as reference images.
 
-### Phase 5: Prompt Enhancement ✅
+**Real-time feedback.** Supabase Realtime subscriptions, optimistic UI updates, and infinite scroll so the team can generate fast and review faster.
 
-- ✅ AI-powered prompt enhancement using Claude Sonnet 4.5
-- ✅ Model-specific enhancement strategies
-- ✅ Reference image analysis for image-to-image workflows
-- ✅ Video-specific best practices (Veo 3.1 guidelines)
-- ✅ Admin panel for managing system prompts
-- ✅ User role management (admin/user)
+## Architecture
 
-### Phase 6: Performance Optimizations ✅
+| Layer | Stack |
+|-------|-------|
+| Frontend | Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS, shadcn/ui |
+| State | React Query (TanStack Query) |
+| Backend | Next.js API Routes (serverless) |
+| Database | Supabase (PostgreSQL + Prisma ORM) |
+| Auth | Supabase Auth with role-based access |
+| Storage | Supabase Storage (CDN) |
+| Real-time | Supabase Realtime subscriptions |
+| AI | Google Gemini, Anthropic Claude, Replicate, FAL.ai, Kling |
 
-- ✅ Optimized database queries (single-query joins for thumbnails)
-- ✅ Infinite scroll for generations (cursor-based pagination)
-- ✅ Aggressive React Query caching (5min projects, 3min sessions)
-- ✅ Hover prefetching for faster navigation
-- ✅ Image compression for reference uploads
-- ✅ GCS URI support for video downloads
-- ✅ Real-time subscriptions via Supabase Realtime
-- ✅ Optimistic updates for instant feedback
-
-## Tech Stack
-
-- **Frontend**: Next.js 14, React 18, TypeScript
-- **Styling**: Tailwind CSS, shadcn/ui
-- **State Management**: React Query (TanStack Query)
-- **Backend**: Next.js API Routes (serverless)
-- **Database**: Supabase (PostgreSQL + Prisma ORM)
-- **Authentication**: Supabase Auth with role-based access
-- **Storage**: Supabase Storage (with CDN)
-- **Real-time**: Supabase Realtime subscriptions
-- **AI APIs**: Google Gemini, Anthropic Claude, Replicate, FAL.ai
-- **Canvas**: React Flow (for node interface - future)
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ (preferably 20+)
-- npm or pnpm
-- Supabase account
-
-### Installation
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd latentia
+```
+app/                      # Next.js pages
+  (auth)/                 # Login, signup
+  projects/               # Dashboard and project detail
+components/
+  projects/               # Project cards, creation
+  sessions/               # Session sidebar, filtering
+  generation/             # Gallery, prompt bar, model picker
+lib/
+  supabase/               # Client configuration
+prisma/
+  schema.prisma           # Database schema
 ```
 
-2. Install dependencies:
+## Getting started
+
+Prerequisites: Node.js 18+, Supabase account.
+
 ```bash
+git clone https://github.com/tensalir/Loop-Vesper.git
+cd Loop-Vesper
 npm install
-```
-
-3. Set up environment variables:
-```bash
 cp .env.example .env.local
 ```
 
-Then edit `.env.local` with your Supabase credentials:
+Add your keys to `.env.local`:
+
 ```
-NEXT_PUBLIC_SUPABASE_URL=your-project-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-DATABASE_URL=your-database-url
-
-# AI API Keys (required for generation features)
-GEMINI_API_KEY=your-gemini-api-key
-ANTHROPIC_API_KEY=your-anthropic-api-key
-REPLICATE_API_TOKEN=your-replicate-token
-FAL_KEY=your-fal-key
-
-# Kling Official API (for frame-to-frame video interpolation)
-# Get your keys from: https://app.klingai.com/global/dev/document-api
-KLING_ACCESS_KEY=your-kling-access-key
-KLING_SECRET_KEY=your-kling-secret-key
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+DATABASE_URL=...
+GEMINI_API_KEY=...
+ANTHROPIC_API_KEY=...
+REPLICATE_API_TOKEN=...
+FAL_KEY=...
+KLING_ACCESS_KEY=...
+KLING_SECRET_KEY=...
 ```
 
-4. Set up the database:
 ```bash
 npm run prisma:push
-```
-
-5. Run the development server:
-```bash
 npm run dev
 ```
 
-6. Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Project Structure
-
-```
-latentia/
-├── app/                      # Next.js app directory
-│   ├── (auth)/              # Authentication pages
-│   │   ├── login/
-│   │   └── signup/
-│   ├── projects/            # Projects pages
-│   │   ├── [id]/           # Individual project page
-│   │   └── page.tsx        # Projects dashboard
-│   ├── auth/
-│   │   └── callback/       # OAuth callback handler
-│   ├── layout.tsx
-│   ├── page.tsx
-│   └── globals.css
-├── components/
-│   ├── ui/                  # shadcn/ui components
-│   ├── projects/            # Project-related components
-│   ├── sessions/            # Session-related components
-│   └── generation/          # Generation interface components
-├── lib/
-│   ├── supabase/           # Supabase client configuration
-│   └── utils.ts            # Utility functions
-├── types/                   # TypeScript type definitions
-├── prisma/
-│   └── schema.prisma       # Database schema
-└── middleware.ts           # Route protection middleware
-```
-
-## Database Schema
-
-The database includes the following main tables:
-
-- **profiles**: User profiles
-- **projects**: Top-level project containers
-- **project_members**: Collaboration/sharing
-- **sessions**: Individual workstreams within projects
-- **generations**: Generation requests
-- **outputs**: Generated images/videos
-- **models**: AI model configurations
-- **user_model_pins**: User's pinned models
-- **workflows**: Node-based workflows (future)
-
-## Next Steps (Future Features)
-
-### Future Enhancements
-
-- [ ] Additional model integrations (Flux Pro, Stable Diffusion 3, etc.)
-- [ ] Real-time collaboration with multiplayer cursors
-- [ ] Node-based interface with React Flow
-- [ ] Advanced image editing tools
-- [ ] Generation history search and filtering
-- [ ] Batch download and export
-- [ ] Advanced metadata panel
-- [ ] Mobile responsive design improvements
-
-### Polish & Production
-
-- [ ] Comprehensive testing suite (unit, integration, E2E)
-- [ ] Error tracking (Sentry)
-- [ ] Analytics (Posthog or Vercel Analytics)
-- [ ] Custom domain and branding
-- [ ] User documentation and tutorials
-
-## Contributing
-
-This is a private project currently in active development.
-
-## License
-
-Proprietary - All rights reserved
+Open [http://localhost:3000](http://localhost:3000).
 
 ## Documentation
 
-### Core Documentation
-- [Product Requirements Document](./PRD.md)
-- [Technical Architecture](./ARCHITECTURE.md)
-- [Performance Implementation Summary](./PERFORMANCE_IMPLEMENTATION_SUMMARY.md)
-
-### Setup Guides
-- [Quick Start Guide](./QUICKSTART.md)
-- [Environment Setup](./SETUP.md)
-- [Database Setup](./VERCEL_DATABASE_SETUP.md)
-- [Gemini API Setup](./GEMINI_SETUP.md)
+- [Product Requirements](./PRD.md)
+- [Architecture](./ARCHITECTURE.md)
+- [Quick Start](./QUICKSTART.md)
+- [Gemini Setup](./GEMINI_SETUP.md)
 - [Replicate Setup](./REPLICATE_SETUP.md)
 - [FAL.ai Setup](./FAL_SETUP.md)
+- [Prompt Enhancement](./PROMPT_ENHANCEMENT_FEATURE.md)
+- [User Roles](./USER_ROLES_SETUP.md)
 
-### Feature Documentation
-- [Prompt Enhancement System](./PROMPT_ENHANCEMENT_FEATURE.md)
-- [User Roles & Admin Panel](./USER_ROLES_SETUP.md)
-- [Performance Optimization Plan](./PRE_REFACTORING_II_PERFORMANCE_PLAN.md)
+## What comes next
 
----
-
-Built with ❤️ using Next.js and Supabase
-
+More model integrations as they mature, batch operations for campaign-scale generation, and tighter feedback loops between generation output and briefing context. The roadmap is driven by what the team asks for, not by a feature checklist.
