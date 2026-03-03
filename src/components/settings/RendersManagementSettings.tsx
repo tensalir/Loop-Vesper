@@ -120,6 +120,10 @@ export function RendersManagementSettings() {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   
+  // New product creation state
+  const [creatingProduct, setCreatingProduct] = useState(false)
+  const [newProductName, setNewProductName] = useState('')
+
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingRender, setEditingRender] = useState<ProductRender | null>(null)
@@ -234,6 +238,14 @@ export function RendersManagementSettings() {
     setLockedProductName(true)
     setPrefilledColorway(colorway)
     setBulkUploadOpen(true)
+  }
+
+  const confirmNewProduct = () => {
+    const name = newProductName.trim()
+    if (!name) return
+    setCreatingProduct(false)
+    setNewProductName('')
+    openUploadForProduct(name)
   }
 
   // Compress image to reduce payload size
@@ -713,7 +725,15 @@ export function RendersManagementSettings() {
               <Upload className="h-6 w-6" />
             </div>
             <p className="text-sm">No product renders found</p>
-            <p className="text-xs">Click &quot;Bulk Upload&quot; to add product renders</p>
+            <p className="text-xs mb-3">Get started by creating a product</p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCreatingProduct(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Product
+            </Button>
           </div>
         ) : (
           <div className="space-y-2">
@@ -844,6 +864,57 @@ export function RendersManagementSettings() {
                 )}
               </div>
             ))}
+
+            {/* New Product Row */}
+            {creatingProduct ? (
+              <div className="border rounded-lg overflow-hidden border-dashed border-primary/50">
+                <div className="flex items-center gap-2 p-3 bg-muted/30">
+                  <FolderOpen className="h-4 w-4 text-primary" />
+                  <Input
+                    value={newProductName}
+                    onChange={(e) => setNewProductName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') confirmNewProduct()
+                      else if (e.key === 'Escape') {
+                        setCreatingProduct(false)
+                        setNewProductName('')
+                      }
+                    }}
+                    placeholder="Product name..."
+                    className="h-7 text-sm flex-1"
+                    autoFocus
+                  />
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={confirmNewProduct}
+                    disabled={!newProductName.trim()}
+                  >
+                    <Upload className="h-3 w-3 mr-1" />
+                    Add Renders
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setCreatingProduct(false)
+                      setNewProductName('')
+                    }}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <button
+                className="w-full border border-dashed rounded-lg p-3 flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
+                onClick={() => setCreatingProduct(true)}
+              >
+                <Plus className="h-4 w-4" />
+                New Product
+              </button>
+            )}
           </div>
         )}
 
