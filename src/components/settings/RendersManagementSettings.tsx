@@ -113,6 +113,8 @@ export function RendersManagementSettings() {
   // Bulk upload dialog state
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false)
   const [productName, setProductName] = useState('')
+  const [lockedProductName, setLockedProductName] = useState(false)
+  const [prefilledColorway, setPrefilledColorway] = useState('')
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
@@ -210,6 +212,30 @@ export function RendersManagementSettings() {
     })
   }
 
+  const resetUploadDialog = () => {
+    setProductName('')
+    setLockedProductName(false)
+    setPrefilledColorway('')
+    setPendingImages([])
+    setAnalysisComplete(false)
+    setAnalysisError(null)
+  }
+
+  const openUploadForProduct = (product: string) => {
+    resetUploadDialog()
+    setProductName(product)
+    setLockedProductName(true)
+    setBulkUploadOpen(true)
+  }
+
+  const openUploadForColorway = (product: string, colorway: string) => {
+    resetUploadDialog()
+    setProductName(product)
+    setLockedProductName(true)
+    setPrefilledColorway(colorway)
+    setBulkUploadOpen(true)
+  }
+
   // Compress image to reduce payload size
   const compressImage = (file: File, maxWidth = 1024, quality = 0.85): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -272,7 +298,7 @@ export function RendersManagementSettings() {
           file,
           base64: compressedBase64, // Use compressed version for API
           preview: previewBase64, // Use original for preview
-          suggestedColorway: 'Unanalyzed',
+          suggestedColorway: prefilledColorway || 'Unanalyzed',
           suggestedAngle: 'front',
           colorDescription: '',
           confidence: 0,
@@ -521,8 +547,7 @@ export function RendersManagementSettings() {
       const result = await response.json()
       
       // Reset and close
-      setProductName('')
-      setPendingImages([])
+      resetUploadDialog()
       setBulkUploadOpen(false)
       
       // Refresh list
@@ -695,21 +720,32 @@ export function RendersManagementSettings() {
             {filteredProducts.map((product) => (
               <div key={product} className="border rounded-lg overflow-hidden">
                 {/* Product Header */}
-                <button
-                  className="w-full flex items-center gap-2 p-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
-                  onClick={() => toggleProduct(product)}
-                >
-                  {expandedProducts.has(product) ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                  <FolderOpen className="h-4 w-4 text-primary" />
-                  <span className="font-medium">{product}</span>
-                  <span className="text-xs text-muted-foreground ml-auto">
-                    {Object.keys(groupedRenders[product]).length} colorway(s), {Object.values(groupedRenders[product]).flat().length} image(s)
-                  </span>
-                </button>
+                <div className="flex items-center bg-muted/30 hover:bg-muted/50 transition-colors">
+                  <button
+                    className="flex-1 flex items-center gap-2 p-3 text-left"
+                    onClick={() => toggleProduct(product)}
+                  >
+                    {expandedProducts.has(product) ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                    <FolderOpen className="h-4 w-4 text-primary" />
+                    <span className="font-medium">{product}</span>
+                    <span className="text-xs text-muted-foreground ml-auto">
+                      {Object.keys(groupedRenders[product]).length} colorway(s), {Object.values(groupedRenders[product]).flat().length} image(s)
+                    </span>
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 mr-2"
+                    onClick={() => openUploadForProduct(product)}
+                    title={`Add renders to ${product}`}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
 
                 {/* Colorways */}
                 {expandedProducts.has(product) && (
@@ -719,26 +755,37 @@ export function RendersManagementSettings() {
                       return (
                         <div key={colorwayKey} className="border-b last:border-b-0">
                           {/* Colorway Header */}
-                          <button
-                            className="w-full flex items-center gap-2 p-2 pl-8 hover:bg-muted/30 transition-colors text-left"
-                            onClick={() => toggleColorway(colorwayKey)}
-                          >
-                            {expandedColorways.has(colorwayKey) ? (
-                              <ChevronDown className="h-3 w-3" />
-                            ) : (
-                              <ChevronRight className="h-3 w-3" />
-                            )}
-                            <div 
-                              className="w-3 h-3 rounded-full border" 
-                              style={{ 
-                                background: colorway === 'Default' ? '#888' : undefined 
-                              }}
-                            />
-                            <span className="text-sm">{colorway}</span>
-                            <span className="text-xs text-muted-foreground ml-auto">
-                              {images.length} angle(s)
-                            </span>
-                          </button>
+                          <div className="flex items-center hover:bg-muted/30 transition-colors">
+                            <button
+                              className="flex-1 flex items-center gap-2 p-2 pl-8 text-left"
+                              onClick={() => toggleColorway(colorwayKey)}
+                            >
+                              {expandedColorways.has(colorwayKey) ? (
+                                <ChevronDown className="h-3 w-3" />
+                              ) : (
+                                <ChevronRight className="h-3 w-3" />
+                              )}
+                              <div 
+                                className="w-3 h-3 rounded-full border" 
+                                style={{ 
+                                  background: colorway === 'Default' ? '#888' : undefined 
+                                }}
+                              />
+                              <span className="text-sm">{colorway}</span>
+                              <span className="text-xs text-muted-foreground ml-auto">
+                                {images.length} angle(s)
+                              </span>
+                            </button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 shrink-0 mr-2"
+                              onClick={() => openUploadForColorway(product, colorway)}
+                              title={`Add renders to ${product} / ${colorway}`}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
 
                           {/* Images Grid */}
                           {expandedColorways.has(colorwayKey) && (
@@ -809,15 +856,22 @@ export function RendersManagementSettings() {
       </CardContent>
 
       {/* Bulk Upload Dialog */}
-      <Dialog open={bulkUploadOpen} onOpenChange={setBulkUploadOpen}>
+      <Dialog open={bulkUploadOpen} onOpenChange={(open) => {
+        setBulkUploadOpen(open)
+        if (!open) resetUploadDialog()
+      }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" />
-              Bulk Upload Product Renders
+              {lockedProductName
+                ? `Add Renders to ${productName}${prefilledColorway ? ` / ${prefilledColorway}` : ''}`
+                : 'Bulk Upload Product Renders'}
             </DialogTitle>
             <DialogDescription>
-              Upload multiple images and let AI automatically detect and group colorways
+              {lockedProductName
+                ? `Upload images to add to this ${prefilledColorway ? 'colorway' : 'product'}`
+                : 'Upload multiple images and let AI automatically detect and group colorways'}
             </DialogDescription>
           </DialogHeader>
           
@@ -830,9 +884,13 @@ export function RendersManagementSettings() {
                 placeholder="e.g., MCL38"
                 value={productName}
                 onChange={(e) => setProductName(e.target.value)}
+                readOnly={lockedProductName}
+                className={lockedProductName ? 'bg-muted cursor-default' : ''}
               />
               <p className="text-xs text-muted-foreground">
-                This will be the category name for all uploaded images
+                {lockedProductName
+                  ? `Adding renders to existing product${prefilledColorway ? ` under "${prefilledColorway}" colorway` : ''}`
+                  : 'This will be the category name for all uploaded images'}
               </p>
             </div>
 
