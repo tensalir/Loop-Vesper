@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { User, BarChart3, Sparkles, Image as ImageIcon } from 'lucide-react'
+import { User, BarChart3, Sparkles, Image as ImageIcon, Users } from 'lucide-react'
 import { AccountSettings } from '@/components/settings/AccountSettings'
 import { AnalyticsSettings } from '@/components/settings/AnalyticsSettings'
 import { PromptManagementSettings } from '@/components/settings/PromptManagementSettings'
 import { RendersManagementSettings } from '@/components/settings/RendersManagementSettings'
+import { UserManagementSettings } from '@/components/settings/UserManagementSettings'
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('account')
@@ -38,7 +39,7 @@ export default function SettingsPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className={`grid w-full max-w-md ${isAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}>
+        <TabsList className={`grid w-full max-w-lg ${isAdmin ? 'grid-cols-5' : 'grid-cols-3'}`}>
           <TabsTrigger value="account" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             <span className="hidden sm:inline">Account</span>
@@ -51,6 +52,12 @@ export default function SettingsPage() {
             <Sparkles className="h-4 w-4" />
             <span className="hidden sm:inline">Prompts</span>
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="users" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Users</span>
+            </TabsTrigger>
+          )}
           {isAdmin && (
             <TabsTrigger value="renders" className="flex items-center gap-2">
               <ImageIcon className="h-4 w-4" />
@@ -70,6 +77,12 @@ export default function SettingsPage() {
         <TabsContent value="prompts" className="mt-6">
           <PromptManagementSettings />
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="users" className="mt-6">
+            <UserManagementSettings />
+          </TabsContent>
+        )}
 
         {isAdmin && (
           <TabsContent value="renders" className="mt-6">

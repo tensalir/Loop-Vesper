@@ -7,14 +7,30 @@ import type { User } from '@supabase/supabase-js'
 /**
  * Authenticate a request and return the user.
  * Uses getUser() for server-validated auth (not getSession() which reads from cookies).
+ * Also checks if the user's profile is paused or soft-deleted.
  */
-export async function getAuthUser(): Promise<{ user: User | null; error: string | null }> {
+export async function getAuthUser(opts?: { skipProfileCheck?: boolean }): Promise<{ user: User | null; error: string | null; statusCode?: number }> {
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { user }, error } = await supabase.auth.getUser()
     if (error || !user) {
-      return { user: null, error: error?.message || 'Unauthorized' }
+      return { user: null, error: error?.message || 'Unauthorized', statusCode: 401 }
     }
+
+    if (!opts?.skipProfileCheck) {
+      const profile = await prisma.profile.findUnique({
+        where: { id: user.id },
+        select: { pausedAt: true, deletedAt: true },
+      })
+
+      if (profile?.deletedAt) {
+        return { user: null, error: 'Account has been deleted', statusCode: 403 }
+      }
+      if (profile?.pausedAt) {
+        return { user: null, error: 'Account is paused', statusCode: 403 }
+      }
+    }
+
     return { user, error: null }
   } catch (err: any) {
     return { user: null, error: err?.message || 'Auth check failed' }
@@ -29,7 +45,7 @@ export async function requireAdmin(): Promise<
   | { user: User; response: null }
   | { user: null; response: NextResponse }
 > {
-  const { user, error } = await getAuthUser()
+  const { user, error } = await getAuthUser({ skipProfileCheck: true })
   if (!user) {
     return {
       user: null,
