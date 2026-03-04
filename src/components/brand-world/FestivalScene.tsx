@@ -4,11 +4,10 @@ import { useRef, useMemo } from 'react'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { StageHotspot } from './StageHotspot'
-import { BannerBillboard } from './BannerBillboard'
 import { RobotBillboard } from './RobotBillboard'
 import { getToonGradient3, getToonGradient5 } from './toon-materials'
 import { STAGES, WORLD_CONFIG } from '@/lib/brand-world/world-config'
-import type { PlacedBanner, PlacedRobot, BrandWorldOutput } from '@/lib/brand-world/placement'
+import type { PlacedRobot, BrandWorldOutput } from '@/lib/brand-world/placement'
 
 function createSkyDomeMaterial() {
   return new THREE.ShaderMaterial({
@@ -48,21 +47,21 @@ function createSkyDomeMaterial() {
 }
 
 interface FestivalSceneProps {
-  placedBanners: PlacedBanner[]
   placedRobots: PlacedRobot[]
   pendingRobots?: PlacedRobot[]
   selectedStageId: string | null
   onStageClick: (stageId: string) => void
-  onRobotClick?: (output: BrandWorldOutput) => void
+  onRobotClick?: (output: BrandWorldOutput, worldPosition?: [number, number, number]) => void
+  focusedOutputId?: string | null
 }
 
 export function FestivalScene({
-  placedBanners,
   placedRobots,
   pendingRobots = [],
   selectedStageId,
   onStageClick,
   onRobotClick,
+  focusedOutputId = null,
 }: FestivalSceneProps) {
   const controlsRef = useRef<any>(null)
   const grad3 = useMemo(() => getToonGradient3(), [])
@@ -130,20 +129,6 @@ export function FestivalScene({
         />
       ))}
 
-      {/* Banner billboards */}
-      {placedBanners.map((banner) => {
-        const stage = STAGES.find((s) => s.id === banner.slot.stageId)
-        const stagePos = stage?.position ?? [0, 0, 0]
-        return (
-          <BannerBillboard
-            key={banner.slot.id}
-            banner={banner}
-            stagePosition={stagePos}
-            stageScale={stage?.scale ?? 1}
-          />
-        )
-      })}
-
       {/* Robot billboard actors */}
       {placedRobots.map((robot) => (
         <RobotBillboard
@@ -151,7 +136,8 @@ export function FestivalScene({
           output={robot.output}
           position={robot.position}
           rotation={robot.rotation}
-          onClick={onRobotClick}
+          onClick={(o) => onRobotClick?.(o, robot.position)}
+          focused={robot.output.id === focusedOutputId}
         />
       ))}
 

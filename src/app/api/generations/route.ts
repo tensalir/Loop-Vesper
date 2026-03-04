@@ -26,12 +26,28 @@ const ALLOWED_PARAMETER_FIELDS = [
   'referenceImageBucket',
   'referenceImageMimeType',
   'referenceImageChecksum',
+  // End-frame pointers (for video interpolation thumbnails + reuse)
+  'endFrameImageUrl',
+  'endFrameImageId',
+  'endFrameImagePath',
+  'endFrameImageBucket',
+  'endFrameImageMimeType',
+  'endFrameImageChecksum',
+  // Legacy end-frame field (keep only URL values in sanitize function)
+  'endFrameImage',
 
   // Multi-image support (URLs only, base64 stripped in sanitize function)
   'referenceImages',
 
   // Animate-still: links video generations to source image output
   'sourceOutputId',
+
+  // Lineage / branching metadata
+  'sourceRootOutputId',
+  'sourceKind',
+  'sourceVideoOutputId',
+  'sourceTimecodeMs',
+  'sourceLabel',
 ]
 
 /**
@@ -54,6 +70,12 @@ function sanitizeParameters(params: unknown): Record<string, unknown> {
         )
         if (filtered.length > 0) {
           sanitized[key] = filtered
+        }
+      } else if (key === 'endFrameImage') {
+        // Legacy compatibility: keep only URL values, never base64 blobs
+        const value = input[key]
+        if (typeof value === 'string' && value.startsWith('http')) {
+          sanitized[key] = value
         }
       } else {
         sanitized[key] = input[key]

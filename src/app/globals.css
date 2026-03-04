@@ -470,5 +470,103 @@
   .dark .bg-prompt-card {
     background-color: hsl(var(--muted)); /* Use muted for dark mode */
   }
+
+  /* ── Timeline mode morph transition ── */
+
+  @keyframes timeline-morph-in {
+    0% {
+      opacity: 0;
+      transform: scaleY(0.6) translateY(12px);
+      filter: blur(4px);
+    }
+    40% {
+      opacity: 0.6;
+      filter: blur(1px);
+    }
+    100% {
+      opacity: 1;
+      transform: scaleY(1) translateY(0);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes timeline-morph-out {
+    0% {
+      opacity: 1;
+      transform: scaleY(1) translateY(0);
+      filter: blur(0);
+    }
+    60% {
+      opacity: 0.5;
+      filter: blur(2px);
+    }
+    100% {
+      opacity: 0;
+      transform: scaleY(0.6) translateY(12px);
+      filter: blur(4px);
+    }
+  }
+
+  @keyframes timeline-scanline-boot {
+    0% {
+      background-position: 0 -100%;
+    }
+    100% {
+      background-position: 0 200%;
+    }
+  }
+
+  @keyframes timeline-glow-pulse {
+    0%, 100% {
+      box-shadow:
+        0 0 12px hsl(var(--primary) / 0.15),
+        inset 0 0 8px hsl(var(--primary) / 0.05);
+    }
+    50% {
+      box-shadow:
+        0 0 20px hsl(var(--primary) / 0.25),
+        inset 0 0 14px hsl(var(--primary) / 0.08);
+    }
+  }
+
+  .timeline-enter {
+    animation: timeline-morph-in 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .timeline-exit {
+    animation: timeline-morph-out 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .timeline-scanline-boot::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      hsl(var(--primary) / 0.04) 48%,
+      hsl(var(--primary) / 0.08) 50%,
+      hsl(var(--primary) / 0.04) 52%,
+      transparent 100%
+    );
+    background-size: 100% 200%;
+    animation: timeline-scanline-boot 1.2s ease-out 1;
+    border-radius: inherit;
+    z-index: 1;
+  }
+
+  .timeline-glow {
+    animation: timeline-glow-pulse 2s ease-in-out infinite;
+    border-color: hsl(var(--primary) / 0.4) !important;
+  }
+
+  .timeline-backdrop-blur {
+    filter: blur(8px) brightness(0.7);
+    transform: scale(0.98) translateY(-8px);
+    opacity: 0.4;
+    transition: filter 350ms ease-out, transform 350ms ease-out, opacity 350ms ease-out;
+    pointer-events: none;
+  }
 }
 

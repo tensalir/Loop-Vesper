@@ -26,6 +26,11 @@ export interface VideoIteration {
     duration?: number
     sourceOutputId?: string
     referenceImageUrl?: string
+    sourceRootOutputId?: string
+    sourceKind?: 'original' | 'snapshot' | 'edited'
+    sourceVideoOutputId?: string
+    sourceTimecodeMs?: number
+    sourceLabel?: string
   }
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled'
   cost: number | null

@@ -5,6 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Dialog,
+  DialogContent,
+} from '@/components/ui/dialog'
 import { Video as VideoIcon, ImagePlus, Ratio, ChevronDown, X, Upload, FolderOpen, Clock, Loader2, GripHorizontal, Pin, Plus, ArrowLeftRight } from 'lucide-react'
 import { useModelCapabilities } from '@/hooks/useModelCapabilities'
 import { usePinnedImages } from '@/hooks/usePinnedImages'
@@ -14,10 +18,9 @@ import { AspectRatioSelector } from './AspectRatioSelector'
 import { ModelPicker } from './ModelPicker'
 import { ImageBrowseModal } from './ImageBrowseModal'
 import { ProductRendersBrowseModal } from './ProductRendersBrowseModal'
-import { PdfBucketRail, PDF_BUCKET_MIME } from './PdfBucketRail'
-import { usePdfIngestion } from '@/hooks/usePdfIngestion'
 import { useParams } from 'next/navigation'
 import { PromptEnhancementButton } from './PromptEnhancementButton'
+import { SnapshotRail, SNAPSHOT_RAIL_MIME } from './SnapshotRail'
 
 interface VideoInputProps {
   prompt: string
@@ -97,9 +100,6 @@ export function VideoInput({
   const referenceUpload = useImageUpload({ purpose: 'reference', compress: false })
   const endFrameUpload = useImageUpload({ purpose: 'endframe', compress: false })
   
-  // PDF ingestion
-  const { ingestPdf } = usePdfIngestion(projectId || '')
-  
   // Start frame state
   const [referenceImage, setReferenceImage] = useState<File | null>(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
@@ -120,6 +120,8 @@ export function VideoInput({
   const [stylePopoverOpen, setStylePopoverOpen] = useState(false)
   const [endFramePopoverOpen, setEndFramePopoverOpen] = useState(false)
   const [selectingEndFrame, setSelectingEndFrame] = useState(false) // Track if browse modal is for end frame
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isEnhancing, setIsEnhancing] = useState(false)
   // Ref guard to avoid race conditions where users click Generate
@@ -401,23 +403,9 @@ export function VideoInput({
     }
   }
 
-  // Route PDF files to the ingestion pipeline
-  const processPdfFile = useCallback((file: File) => {
-    if (!projectId) {
-      toast({ title: 'No project', description: 'PDF upload requires a project context.' })
-      return
-    }
-    ingestPdf(file)
-    toast({ title: 'Processing PDF...', description: `Extracting images from ${file.name}` })
-  }, [projectId, ingestPdf, toast])
-
   // Process and add image file for start frame (used by both file input and drag-and-drop)
   // Uploads immediately to Supabase Storage to bypass Vercel's 4.5MB limit
   const processImageFile = async (file: File) => {
-    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-      processPdfFile(file)
-      return
-    }
     if (!file.type.startsWith('image/')) return
     
     // Clean up old preview URL
@@ -565,8 +553,7 @@ export function VideoInput({
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    const hasBucketDrag = Array.from(e.dataTransfer.types).includes(PDF_BUCKET_MIME)
-    if (!supportsImageToVideo && !hasBucketDrag) return
+    if (!supportsImageToVideo) return
     setIsDragging(true)
   }
 
@@ -593,12 +580,6 @@ export function VideoInput({
     e.stopPropagation()
     setIsDragging(false)
 
-    const bucketUrl = e.dataTransfer.getData(PDF_BUCKET_MIME)
-    if (bucketUrl) {
-      handleBrowseSelect(bucketUrl)
-      return
-    }
-    
     if (!supportsImageToVideo) return
     
     const files = Array.from(e.dataTransfer.files)
@@ -681,6 +662,50 @@ export function VideoInput({
     setReferenceImageId(createReferenceId())
     // Update parent so it persists across tab switches
     onSetReferenceImageUrl?.(imageUrl)
+  }
+
+  const openImagePreview = (imageUrl: string | null | undefined) => {
+    if (!imageUrl) return
+    setPreviewImageUrl(imageUrl)
+    setPreviewOpen(true)
+  }
+
+  const getDraggedSnapshotUrl = (e: React.DragEvent): string | null => {
+    const custom = e.dataTransfer.getData(SNAPSHOT_RAIL_MIME)
+    if (custom) return custom
+    const uriList = e.dataTransfer.getData('text/uri-list')
+    if (uriList) return uriList
+    return null
+  }
+
+  const handleStartFrameDragOver = (e: React.DragEvent) => {
+    if (!getDraggedSnapshotUrl(e)) return
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+
+  const handleStartFrameDrop = (e: React.DragEvent) => {
+    const snapshotUrl = getDraggedSnapshotUrl(e)
+    if (!snapshotUrl) return
+    e.preventDefault()
+    e.stopPropagation()
+    handleBrowseSelect(snapshotUrl)
+  }
+
+  const handleEndFrameDragOver = (e: React.DragEvent) => {
+    if (!getDraggedSnapshotUrl(e)) return
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+
+  const handleEndFrameDrop = (e: React.DragEvent) => {
+    const snapshotUrl = getDraggedSnapshotUrl(e)
+    if (!snapshotUrl) return
+    e.preventDefault()
+    e.stopPropagation()
+    handleEndFrameBrowseSelect(snapshotUrl)
   }
 
   // If a referenceImageUrl is provided from parent (e.g., convert-to-video),
@@ -859,15 +884,20 @@ export function VideoInput({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* PDF Bucket Rail - above the input area */}
+      {/* Snapshot Rail - shows captured video frames as selectable start frames */}
       {projectId && supportsImageToVideo && (
-        <PdfBucketRail projectId={projectId} />
+        <SnapshotRail
+          projectId={projectId}
+          onSelect={(snap) => {
+            openImagePreview(snap.fileUrl)
+          }}
+        />
       )}
 
       {/* Main Input Area - Card Style */}
-      <div className="flex items-center gap-3">
+      <div className={isOverlay ? 'flex items-center gap-3' : 'flex flex-wrap items-center gap-3'}>
         {/* Input with resize handle */}
-        <div className={`flex-1 relative flex rounded-lg ${isEnhancing ? 'enhancing-container' : ''}`}>
+        <div className={`relative flex rounded-lg ${isOverlay ? 'flex-1' : 'order-2 flex-1 min-w-0'} ${isEnhancing ? 'enhancing-container' : ''}`}>
           {/* Resize handle at top of input - available in both default and overlay modes */}
           <div 
             className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 cursor-ns-resize group"
@@ -932,36 +962,93 @@ export function VideoInput({
 
         {/* Start/End frame controls - Right of prompt (hidden if model doesn't support input images) */}
         {showStartFrameControl && (
-          <div className="flex flex-col gap-1.5">
+          <div className={isOverlay ? 'flex flex-col gap-1.5' : 'order-1 basis-full flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent'}>
             {/* Start Frame Thumbnail */}
-            <div className="relative group">
+            <div
+              className="relative group"
+              onDragOver={handleStartFrameDragOver}
+              onDrop={handleStartFrameDrop}
+            >
               {/* Label above thumbnail */}
               <div className="absolute left-1/2 -translate-x-1/2 -top-5 px-1.5 py-0.5 rounded text-[8px] font-semibold uppercase tracking-wider bg-primary/90 text-primary-foreground opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
                 Start
               </div>
 
               {canPickStartFrame ? (
-                <Popover open={stylePopoverOpen} onOpenChange={setStylePopoverOpen}>
-                  <PopoverTrigger asChild>
+                (referenceImage || imagePreviewUrl) ? (
+                  <>
                     <button
                       type="button"
                       disabled={generating || isUploading}
                       className="p-0 bg-transparent"
-                      title={referenceImage || imagePreviewUrl ? 'Change start frame' : 'Add start frame (optional)'}
+                      title="Preview start frame"
+                      onClick={() => openImagePreview(imagePreviewUrl)}
                     >
-                      {referenceImage || imagePreviewUrl ? (
-                        <div
-                          className={`rounded-md overflow-hidden border-2 border-primary/50 shadow-lg transition-transform duration-300 group-hover:scale-105 ${
-                            isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
-                          }`}
+                      <div
+                        className={`rounded-md overflow-hidden border-2 border-primary/50 shadow-lg transition-transform duration-300 group-hover:scale-105 ${
+                          isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
+                        }`}
+                      >
+                        <img
+                          src={imagePreviewUrl || ''}
+                          alt="Start frame"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    </button>
+                    <Popover open={stylePopoverOpen} onOpenChange={setStylePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={generating || isUploading}
+                          className="absolute -bottom-1 -right-1 bg-background border border-border rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-primary/10 z-10"
+                          title="Change start frame"
                         >
-                          <img
-                            src={imagePreviewUrl || ''}
-                            alt="Start frame"
-                            className="w-full h-full object-cover"
-                          />
+                          <ImagePlus className="h-2.5 w-2.5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-40 p-2 bg-background/95 backdrop-blur-xl border-white/10 rounded-lg"
+                        align="start"
+                      >
+                        <div className="flex flex-col gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
+                            onClick={() => {
+                              fileInputRef.current?.click()
+                              setStylePopoverOpen(false)
+                            }}
+                          >
+                            <Upload className="h-3.5 w-3.5 mr-2" />
+                            Upload
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
+                            onClick={() => {
+                              setBrowseModalOpen(true)
+                              setStylePopoverOpen(false)
+                            }}
+                          >
+                            <FolderOpen className="h-3.5 w-3.5 mr-2" />
+                            Browse
+                          </Button>
                         </div>
-                      ) : (
+                      </PopoverContent>
+                    </Popover>
+                  </>
+                ) : (
+                  <Popover open={stylePopoverOpen} onOpenChange={setStylePopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        disabled={generating || isUploading}
+                        className="p-0 bg-transparent"
+                        title="Add start frame (optional)"
+                      >
                         <div
                           className={`rounded-md border-2 border-dashed border-white/20 hover:border-primary/50 hover:bg-primary/10 transition-all flex items-center justify-center ${
                             isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
@@ -969,52 +1056,55 @@ export function VideoInput({
                         >
                           <ImagePlus className="h-3.5 w-3.5 text-muted-foreground/70" />
                         </div>
-                      )}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className="w-40 p-2 bg-background/95 backdrop-blur-xl border-white/10 rounded-lg"
-                    align="start"
-                  >
-                    <div className="flex flex-col gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
-                        onClick={() => {
-                          fileInputRef.current?.click()
-                          setStylePopoverOpen(false)
-                        }}
-                      >
-                        <Upload className="h-3.5 w-3.5 mr-2" />
-                        Upload
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
-                        onClick={() => {
-                          setBrowseModalOpen(true)
-                          setStylePopoverOpen(false)
-                        }}
-                      >
-                        <FolderOpen className="h-3.5 w-3.5 mr-2" />
-                        Browse
-                      </Button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-40 p-2 bg-background/95 backdrop-blur-xl border-white/10 rounded-lg"
+                      align="start"
+                    >
+                      <div className="flex flex-col gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
+                          onClick={() => {
+                            fileInputRef.current?.click()
+                            setStylePopoverOpen(false)
+                          }}
+                        >
+                          <Upload className="h-3.5 w-3.5 mr-2" />
+                          Upload
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
+                          onClick={() => {
+                            setBrowseModalOpen(true)
+                            setStylePopoverOpen(false)
+                          }}
+                        >
+                          <FolderOpen className="h-3.5 w-3.5 mr-2" />
+                          Browse
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )
               ) : (
                 // Locked / hidden-picker mode: show thumbnail only (no placeholder)
                 (referenceImage || imagePreviewUrl) && (
-                  <div
+                  <button
+                    type="button"
+                    onClick={() => openImagePreview(imagePreviewUrl)}
                     className={`rounded-md overflow-hidden border-2 border-primary/50 shadow-lg ${
                       isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
                     }`}
+                    title="Preview start frame"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={imagePreviewUrl || ''} alt="Start frame" className="w-full h-full object-cover" />
-                  </div>
+                  </button>
                 )
               )}
 
@@ -1056,7 +1146,11 @@ export function VideoInput({
             {supportsFrameInterpolation && (
               (referenceImage || imagePreviewUrl) ? (
                 (endFrameImage || endFramePreviewUrl) ? (
-                  <div className="relative group">
+                  <div
+                    className="relative group"
+                    onDragOver={handleEndFrameDragOver}
+                    onDrop={handleEndFrameDrop}
+                  >
                     <div className={`rounded-md overflow-hidden border-2 border-amber-500/50 shadow-lg transition-transform duration-300 group-hover:scale-105 ${
                       isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
                     }`}>
@@ -1093,6 +1187,8 @@ export function VideoInput({
                         className={`rounded-md border-2 border-dashed border-white/20 hover:border-amber-500/50 hover:bg-amber-500/10 transition-all flex items-center justify-center ${
                           isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
                         }`}
+                        onDragOver={handleEndFrameDragOver}
+                        onDrop={handleEndFrameDrop}
                         title="Add end frame (optional)"
                       >
                         <Plus className="h-3 w-3 text-muted-foreground/50" />
@@ -1138,6 +1234,8 @@ export function VideoInput({
                   className={`rounded-md border-2 border-dashed border-white/10 bg-white/5 opacity-40 flex items-center justify-center ${
                     isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
                   }`}
+                  onDragOver={handleEndFrameDragOver}
+                  onDrop={handleEndFrameDrop}
                   title="Add a start frame first"
                 >
                   <Plus className="h-3 w-3 text-muted-foreground/50" />
@@ -1168,7 +1266,7 @@ export function VideoInput({
               size="default"
               className={`rounded-lg font-semibold shadow-sm hover:shadow transition-all ${
                 isOverlay ? 'h-[48px] px-6 text-xs' : 'h-[56px] px-8 text-sm'
-              }`}
+              } ${isOverlay ? '' : 'order-3'}`}
             >
               {generating ? (
                 <Loader2 className={`mr-2 animate-spin ${isOverlay ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
@@ -1343,6 +1441,18 @@ export function VideoInput({
         onClose={() => setRendersModalOpen(false)}
         onSelectImage={handleBrowseSelect}
       />
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-4xl p-2 sm:p-3 bg-background/95 backdrop-blur-xl border-white/10">
+          {previewImageUrl ? (
+            <img
+              src={previewImageUrl}
+              alt="Frame preview"
+              className="w-full h-auto max-h-[80vh] object-contain rounded-md"
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

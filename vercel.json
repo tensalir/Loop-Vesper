@@ -6,6 +6,9 @@
     },
     "app/api/analyze/process/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/timeline/render/process/route.ts": {
+      "maxDuration": 300
     }
   }
 }

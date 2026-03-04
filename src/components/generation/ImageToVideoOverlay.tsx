@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { X, Video, Plus, Play, Loader2, Check, Clock, AlertCircle, ChevronDown, ChevronUp, RotateCcw, Download, Bookmark, Trash2, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { X, Video, Plus, Play, Loader2, Check, Clock, AlertCircle, ChevronDown, ChevronUp, RotateCcw, Download, Bookmark, Trash2, RefreshCw, Camera } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -80,6 +80,17 @@ export function ImageToVideoOverlay({
     { limit: 20 }
   )
   
+  // Branch filter for iterations panel
+  const [iterationBranch, setIterationBranch] = useState<'all' | 'original' | 'snapshot'>('all')
+  const filteredIterations = useMemo(() => {
+    if (iterationBranch === 'all') return iterations
+    return iterations.filter((i) => {
+      const kind = (i.parameters as any)?.sourceKind
+      if (iterationBranch === 'snapshot') return kind === 'snapshot'
+      return !kind || kind === 'original'
+    })
+  }, [iterations, iterationBranch])
+
   // Sync stuck generations state
   const { toast } = useToast()
   const [isSyncing, setIsSyncing] = useState(false)
@@ -553,6 +564,35 @@ export function ImageToVideoOverlay({
       console.error('Error deleting generation:', error)
     }
   }, [refetch])
+
+  // Capture a snapshot from a video iteration and persist via API
+  const handleIterationSnapshot = useCallback(async (videoOutputId: string, blob: Blob, timecodeMs: number) => {
+    try {
+      const file = new File([blob], `snapshot-${timecodeMs}ms.jpg`, { type: 'image/jpeg' })
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('timecodeMs', String(timecodeMs))
+
+      const res = await fetch(`/api/outputs/${videoOutputId}/snapshots`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || `Snapshot failed: ${res.status}`)
+      }
+
+      const data = await res.json()
+      toast({ title: 'Snapshot captured', description: data.output?.fileUrl ? 'Frame saved as image' : 'Snapshot saved' })
+      queryClient.invalidateQueries({ queryKey: ['generations'] })
+      queryClient.invalidateQueries({ queryKey: ['snapshots'] })
+    } catch (err: any) {
+      console.error('Snapshot error:', err)
+      toast({ title: 'Snapshot failed', description: err.message || 'Could not capture frame', variant: 'destructive' })
+    }
+  }, [queryClient, toast])
   
   // Reset start frame URL when imageUrl prop changes (e.g., opening overlay for different image)
   useEffect(() => {
@@ -754,27 +794,45 @@ export function ImageToVideoOverlay({
             
             {/* Right Panel: Iteration History */}
             <div className="w-full lg:w-96 flex flex-col bg-muted/30 dark:bg-black/30 border-l border-border/50 dark:border-white/5 shadow-2xl">
-              <div className="px-5 py-4 border-b border-border dark:border-white/10 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Iterations</h3>
+              <div className="px-5 py-4 border-b border-border dark:border-white/10 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Iterations</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {hasProcessing && (
+                      <button
+                        onClick={handleSyncStuck}
+                        disabled={isSyncing}
+                        className="p-1 rounded-md hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                        title="Sync stuck generations with Replicate"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                      </button>
+                    )}
+                    <span className="text-[10px] font-semibold text-foreground bg-muted px-2 py-0.5 rounded-md border border-border">
+                      {count}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {/* Sync button - visible when there are processing generations */}
-                  {hasProcessing && (
-                    <button
-                      onClick={handleSyncStuck}
-                      disabled={isSyncing}
-                      className="p-1 rounded-md hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                      title="Sync stuck generations with Replicate"
-                    >
-                      <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                    </button>
-                  )}
-                  <span className="text-[10px] font-semibold text-foreground bg-muted px-2 py-0.5 rounded-md border border-border">
-                    {count}
-                  </span>
-                </div>
+                {/* Branch tabs — only show when snapshot-derived iterations exist */}
+                {iterations.some(i => (i.parameters as any)?.sourceKind === 'snapshot') && (
+                  <Tabs value={iterationBranch} onValueChange={(v) => setIterationBranch(v as 'all' | 'original' | 'snapshot')}>
+                    <TabsList className="h-7 bg-muted/50 p-0.5 rounded-lg border border-border/50 w-full">
+                      <TabsTrigger value="all" className="flex-1 px-2 py-0.5 text-[10px] font-semibold rounded-md data-[state=active]:bg-background data-[state=active]:text-foreground">
+                        All
+                      </TabsTrigger>
+                      <TabsTrigger value="original" className="flex-1 px-2 py-0.5 text-[10px] font-semibold rounded-md data-[state=active]:bg-background data-[state=active]:text-foreground">
+                        Original
+                      </TabsTrigger>
+                      <TabsTrigger value="snapshot" className="flex-1 px-2 py-0.5 text-[10px] font-semibold rounded-md data-[state=active]:bg-background data-[state=active]:text-foreground">
+                        <Camera className="h-3 w-3 mr-1" />
+                        Snapshots
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                )}
               </div>
               
               {/* Iteration List */}
@@ -786,7 +844,7 @@ export function ImageToVideoOverlay({
                   </div>
                 )}
                 
-                {iterations.length === 0 ? (
+                {filteredIterations.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 text-center px-6">
                     <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mb-4 border border-border">
                       <Video className="h-8 w-8 text-muted-foreground/30" />
@@ -795,7 +853,7 @@ export function ImageToVideoOverlay({
                     <p className="text-xs text-muted-foreground mt-2 max-w-[200px]">Enter a prompt and click generate to create your first video iteration.</p>
                   </div>
                 ) : (
-                  iterations.map((iteration) => (
+                  filteredIterations.map((iteration) => (
                     <IterationCard 
                       key={iteration.id} 
                       iteration={iteration}
@@ -815,6 +873,7 @@ export function ImageToVideoOverlay({
                       onBookmark={handleToggleBookmark}
                       onApprove={handleToggleApproval}
                       onDelete={handleDeleteGeneration}
+                      onSnapshot={handleIterationSnapshot}
                     />
                   ))
                 )}
@@ -868,13 +927,16 @@ function IterationCard({
   onBookmark,
   onApprove,
   onDelete,
+  onSnapshot,
 }: { 
   iteration: VideoIteration
   onReuseParameters?: (iteration: VideoIteration) => void
   onBookmark?: (outputId: string, isBookmarked: boolean) => void
   onApprove?: (outputId: string, isApproved: boolean) => void
   onDelete?: (generationId: string) => void
+  onSnapshot?: (videoOutputId: string, blob: Blob, timecodeMs: number) => void
 }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
   const [isExpanded, setIsExpanded] = useState(false)
   const hasOutput = iteration.outputs.length > 0
   const videoOutput = iteration.outputs[0]
@@ -960,6 +1022,22 @@ function IterationCard({
       console.error('Download failed:', error)
     }
   }, [videoOutput?.fileUrl, iteration.id])
+
+  const handleSnapshot = useCallback(() => {
+    const video = videoRef.current
+    if (!video || !videoOutput) return
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth || video.clientWidth
+    canvas.height = video.videoHeight || video.clientHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    canvas.toBlob((blob) => {
+      if (blob) {
+        onSnapshot?.(videoOutput.id, blob, Math.round(video.currentTime * 1000))
+      }
+    }, 'image/jpeg', 0.92)
+  }, [videoOutput, onSnapshot])
   
   return (
     <div className="group rounded-xl border border-border bg-card/50 overflow-hidden hover:border-primary/30 transition-all duration-300 shadow-sm hover:shadow-xl">
@@ -968,7 +1046,9 @@ function IterationCard({
         {hasOutput && iteration.status === 'completed' ? (
           <>
             <video
+              ref={videoRef}
               src={videoOutput.fileUrl}
+              crossOrigin="anonymous"
               className="w-full h-full object-contain"
               controls
               preload="metadata"
@@ -998,6 +1078,18 @@ function IterationCard({
                 >
                   <RotateCcw className="h-3.5 w-3.5 text-white" />
                 </button>
+                {onSnapshot && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleSnapshot()
+                    }}
+                    className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
+                    title="Capture snapshot at current time"
+                  >
+                    <Camera className="h-3.5 w-3.5 text-white" />
+                  </button>
+                )}
               </div>
               
               {/* Top Right - Bookmark + Approval */}

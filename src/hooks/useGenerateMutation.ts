@@ -33,6 +33,12 @@ interface GenerateParams {
     endFrameImageId?: string
     /** Brand World zone/stage association */
     brandWorldStageId?: string
+    /** Lineage / branching */
+    sourceRootOutputId?: string
+    sourceKind?: 'original' | 'snapshot' | 'edited'
+    sourceVideoOutputId?: string
+    sourceTimecodeMs?: number
+    sourceLabel?: string
   }
 }
 

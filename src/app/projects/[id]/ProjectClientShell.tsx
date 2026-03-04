@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
-import { Settings, Sun, Moon, Lock, Globe, Loader2, FileText, Globe2, Link2 } from 'lucide-react'
+import { Settings, Sun, Moon, Lock, Globe, Loader2, FileText } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -747,7 +747,7 @@ export function ProjectClientShell({
             )}
           </div>
           
-          {/* Row 2: Briefing + Brand World action pills */}
+          {/* Row 2: Briefing action pill */}
           <div className="flex items-center gap-1.5">
             <button
               onClick={handleOpenBriefing}
@@ -757,29 +757,6 @@ export function ProjectClientShell({
               <FileText className="h-3 w-3" />
               <span>Briefing</span>
             </button>
-            {isAdmin && (
-              brandWorldLink ? (
-                <Link href={`/brand-world/${projectId}`}>
-                  <button
-                    className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-primary/10 hover:bg-primary/20 border border-primary/30 text-[10px] font-semibold text-primary hover:text-primary transition-all w-fit uppercase tracking-wider"
-                    title="Open Brand World"
-                  >
-                    <Globe2 className="h-3 w-3" />
-                    <span>Brand World</span>
-                  </button>
-                </Link>
-              ) : (
-                <Link href={`/brand-world/${projectId}`}>
-                  <button
-                    className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/30 hover:bg-muted/50 border border-border/40 text-[10px] font-semibold text-muted-foreground/80 hover:text-foreground transition-all w-fit uppercase tracking-wider"
-                    title="Link to Brand World"
-                  >
-                    <Link2 className="h-3 w-3" />
-                    <span>Brand World</span>
-                  </button>
-                </Link>
-              )
-            )}
           </div>
           
           {/* Row 3: Pinned Images with subtle label */}

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, forwardRef, useMemo, memo } from 'react'
 import Image from 'next/image'
-import { Download, RotateCcw, Info, Copy, Bookmark, Check, Video, Wand2, X, Trash2, Pin, ArrowDownRight } from 'lucide-react'
+import { Download, RotateCcw, Info, Copy, Bookmark, Check, Video, Wand2, X, Trash2, Pin, ArrowDownRight, Camera, Paintbrush } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { GenerationWithOutputs } from '@/types/generation'
 import type { Session } from '@/types/project'
@@ -14,6 +14,8 @@ import { GenerationProgress } from './GenerationProgress'
 import { ImageLightbox } from './ImageLightbox'
 import { ImageToVideoOverlay } from './ImageToVideoOverlay'
 import { VideoIterationsStackHint } from './VideoIterationsStackHint'
+import { ImageBranchStack } from './ImageBranchStack'
+import { InlineEditComposer } from './InlineEditComposer'
 import {
   formatDate,
   formatModelWithProvider,
@@ -30,9 +32,72 @@ interface ReferenceImageThumbnailProps {
 }
 
 const ReferenceImageThumbnail = memo(function ReferenceImageThumbnail({ generation, onPinImage }: ReferenceImageThumbnailProps) {
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null)
   const urls = getReferenceImageUrls(generation)
-  if (urls.length === 0) return null
+  const params = (generation.parameters || {}) as Record<string, unknown>
+  const endFrameUrl =
+    normalizeReferenceImageUrl(params.endFrameImageUrl) ||
+    normalizeReferenceImageUrl(params.endFrameImage) ||
+    (typeof params.endFrameImagePath === 'string'
+      ? getPublicStorageUrl(
+          typeof params.endFrameImageBucket === 'string' ? params.endFrameImageBucket : 'generated-images',
+          params.endFrameImagePath
+        )
+      : null) ||
+    (typeof params.endFrameImageId === 'string'
+      ? getPublicStorageUrl('generated-images', `references/${generation.userId}/${params.endFrameImageId}.jpg`)
+      : null)
+  const isVideoGeneration = (generation.outputs || []).some((output) => output.fileType === 'video')
+  const startFrameUrl = urls[0]
+  if (urls.length === 0 && !endFrameUrl) return null
+
+  if (isVideoGeneration && startFrameUrl && endFrameUrl) {
+    return (
+      <div className="mt-3 pt-3 border-t border-border/50">
+        <div className="text-xs text-muted-foreground/70 mb-1.5">Frames:</div>
+        <div className="flex items-start gap-2">
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] text-muted-foreground/70">Start</span>
+            <div
+              className="relative w-16 h-16 rounded-lg overflow-hidden border border-border/50 group/refimg"
+              onMouseEnter={() => setHoveredKey('start')}
+              onMouseLeave={() => setHoveredKey(null)}
+            >
+              <img src={startFrameUrl} alt="Start frame" className="w-full h-full object-cover" loading="lazy" />
+              {onPinImage && hoveredKey === 'start' && (
+                <button
+                  onClick={(e) => handlePinClick(e, startFrameUrl)}
+                  className="absolute top-1 right-1 w-4 h-4 rounded-full bg-primary/90 text-primary-foreground flex items-center justify-center hover:bg-primary transition-colors shadow-sm"
+                  title="Pin start frame"
+                >
+                  <Pin className="h-2 w-2" />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] text-muted-foreground/70">End</span>
+            <div
+              className="relative w-16 h-16 rounded-lg overflow-hidden border border-border/50 group/refimg"
+              onMouseEnter={() => setHoveredKey('end')}
+              onMouseLeave={() => setHoveredKey(null)}
+            >
+              <img src={endFrameUrl} alt="End frame" className="w-full h-full object-cover" loading="lazy" />
+              {onPinImage && hoveredKey === 'end' && (
+                <button
+                  onClick={(e) => handlePinClick(e, endFrameUrl)}
+                  className="absolute top-1 right-1 w-4 h-4 rounded-full bg-primary/90 text-primary-foreground flex items-center justify-center hover:bg-primary transition-colors shadow-sm"
+                  title="Pin end frame"
+                >
+                  <Pin className="h-2 w-2" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const label = urls.length > 1 ? 'Reference Images:' : 'Reference Image:'
   const visibleUrls = urls.slice(0, 4)
@@ -50,12 +115,12 @@ const ReferenceImageThumbnail = memo(function ReferenceImageThumbnail({ generati
       {urls.length === 1 ? (
         <div 
           className="relative w-20 h-20 rounded-lg overflow-hidden border border-border/50 group/refimg"
-          onMouseEnter={() => setHoveredIndex(0)}
-          onMouseLeave={() => setHoveredIndex(null)}
+          onMouseEnter={() => setHoveredKey('ref-0')}
+          onMouseLeave={() => setHoveredKey(null)}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={urls[0]} alt="Reference" className="w-full h-full object-cover" loading="lazy" />
-          {onPinImage && hoveredIndex === 0 && (
+          {onPinImage && hoveredKey === 'ref-0' && (
             <button
               onClick={(e) => handlePinClick(e, urls[0])}
               className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary/90 text-primary-foreground flex items-center justify-center hover:bg-primary transition-colors shadow-sm"
@@ -72,8 +137,8 @@ const ReferenceImageThumbnail = memo(function ReferenceImageThumbnail({ generati
               <div
                 key={`${generation.id}-ref-${index}`}
                 className="relative group/refimg"
-                onMouseEnter={() => setHoveredIndex(index)}
-                onMouseLeave={() => setHoveredIndex(null)}
+                onMouseEnter={() => setHoveredKey(`ref-${index}`)}
+                onMouseLeave={() => setHoveredKey(null)}
               >
                 <img
                   src={url}
@@ -81,7 +146,7 @@ const ReferenceImageThumbnail = memo(function ReferenceImageThumbnail({ generati
                   className="w-full h-full object-cover rounded-[4px]"
                   loading="lazy"
                 />
-                {onPinImage && hoveredIndex === index && (
+                {onPinImage && hoveredKey === `ref-${index}` && (
                   <button
                     onClick={(e) => handlePinClick(e, url)}
                     className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-primary/90 text-primary-foreground flex items-center justify-center hover:bg-primary transition-colors shadow-sm"
@@ -118,6 +183,7 @@ interface VideoCardWithOverlayProps {
   onReuseParameters: (generation: GenerationWithOutputs) => void
   onToggleBookmark: (outputId: string, isBookmarked: boolean) => void
   onToggleApproval: (outputId: string, isApproved: boolean) => void
+  onSnapshot?: (videoOutputId: string, blob: Blob, timecodeMs: number) => void
 }
 
 const VideoCardWithOverlay = memo(function VideoCardWithOverlay({
@@ -129,16 +195,32 @@ const VideoCardWithOverlay = memo(function VideoCardWithOverlay({
   onReuseParameters,
   onToggleBookmark,
   onToggleApproval,
+  onSnapshot,
 }: VideoCardWithOverlayProps) {
-  // Compute stable aspect ratio upfront - prefer output dimensions, then fallback
+  const videoRef = useRef<HTMLVideoElement>(null)
+
   const aspectRatio = useMemo(() => {
-    // If we have stored dimensions from the output, use them (most accurate)
     if (output.width && output.height) {
       return `${output.width} / ${output.height}`
     }
-    // Otherwise use the generation parameter aspect ratio
     return fallbackAspectRatio.replace(':', ' / ')
   }, [output.width, output.height, fallbackAspectRatio])
+
+  const handleSnapshot = useCallback(() => {
+    const video = videoRef.current
+    if (!video || !onSnapshot) return
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth || video.clientWidth
+    canvas.height = video.videoHeight || video.clientHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    canvas.toBlob((blob) => {
+      if (blob) {
+        onSnapshot(output.id, blob, Math.round(video.currentTime * 1000))
+      }
+    }, 'image/jpeg', 0.92)
+  }, [output.id, onSnapshot])
   
   return (
     <div
@@ -150,15 +232,17 @@ const VideoCardWithOverlay = memo(function VideoCardWithOverlay({
       style={{ aspectRatio }}
     >
       <video
+        ref={videoRef}
         src={output.fileUrl}
+        crossOrigin="anonymous"
         className="w-full h-full object-contain"
         controls
         preload="metadata"
       />
 
-      {/* Hover Overlay with Actions (no convert-to-video button in video view) */}
+      {/* Hover Overlay with Actions */}
       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
-        {/* Top Left - Download + Reuse */}
+        {/* Top Left - Download + Reuse + Snapshot */}
         <div className="absolute top-2 left-2 pointer-events-auto flex items-center gap-1">
           <button
             onClick={(e) => {
@@ -180,6 +264,18 @@ const VideoCardWithOverlay = memo(function VideoCardWithOverlay({
           >
             <RotateCcw className="h-3.5 w-3.5 text-white" />
           </button>
+          {onSnapshot && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleSnapshot()
+              }}
+              className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
+              title="Capture snapshot at current time"
+            >
+              <Camera className="h-3.5 w-3.5 text-white" />
+            </button>
+          )}
         </div>
         
         {/* Top Right - Bookmark + Approval */}
@@ -294,6 +390,77 @@ export function GenerationGallery({
       description: 'Reference image added to project pins',
     })
   }, [pinImage, toast])
+
+  const handleVideoSnapshot = useCallback(async (videoOutputId: string, blob: Blob, timecodeMs: number) => {
+    try {
+      const file = new File([blob], `snapshot-${timecodeMs}ms.jpg`, { type: 'image/jpeg' })
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('timecodeMs', String(timecodeMs))
+
+      const res = await fetch(`/api/outputs/${videoOutputId}/snapshots`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || `Snapshot failed: ${res.status}`)
+      }
+
+      toast({ title: 'Snapshot captured', description: 'Frame saved as image' })
+      queryClient.invalidateQueries({ queryKey: ['generations'] })
+      queryClient.invalidateQueries({ queryKey: ['snapshots'] })
+    } catch (err: any) {
+      console.error('Snapshot error:', err)
+      toast({ title: 'Snapshot failed', description: err.message || 'Could not capture frame', variant: 'destructive' })
+    }
+  }, [queryClient, toast])
+
+  // Inline edit composer state
+  const [editingOutputId, setEditingOutputId] = useState<string | null>(null)
+
+  const handleInlineEdit = useCallback(async (
+    editPrompt: string,
+    referenceImageUrl: string,
+    sourceOutputId: string
+  ) => {
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          sessionId,
+          modelId: 'gemini-nano-banana-2',
+          prompt: editPrompt,
+          parameters: {
+            aspectRatio: '1:1',
+            resolution: 1024,
+            numOutputs: 1,
+            referenceImageUrl,
+            sourceRootOutputId: sourceOutputId,
+            sourceKind: 'edited',
+            sourceLabel: `Edit: ${editPrompt.slice(0, 40)}`,
+          },
+        }),
+      })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || `Generation failed: ${res.status}`)
+      }
+
+      toast({ title: 'Edit started', description: 'Generating edited version...' })
+      queryClient.invalidateQueries({ queryKey: ['generations'] })
+    } catch (err: any) {
+      console.error('Inline edit error:', err)
+      toast({ title: 'Edit failed', description: err.message || 'Could not start edit', variant: 'destructive' })
+      throw err
+    }
+  }, [sessionId, queryClient, toast])
+
   const [lightboxData, setLightboxData] = useState<{
     imageUrl: string
     output: any
@@ -1202,6 +1369,7 @@ export function GenerationGallery({
                           onReuseParameters={onReuseParameters}
                           onToggleBookmark={handleToggleBookmark}
                           onToggleApproval={handleToggleApproval}
+                          onSnapshot={handleVideoSnapshot}
                         />
                       )
                     })
@@ -1330,6 +1498,19 @@ export function GenerationGallery({
                       onClick={() => handleVideoConversion(output.id, output.fileUrl)}
                     />
                   )}
+
+                  {/* Branch thumbnails — snapshot/edited variants of this image */}
+                  <ImageBranchStack
+                    primaryOutputId={output.id}
+                    generations={generations}
+                    onSwap={(branchOutputId, branchFileUrl) => {
+                      setLightboxData({
+                        imageUrl: branchFileUrl,
+                        output: { ...output, id: branchOutputId, fileUrl: branchFileUrl },
+                        generation,
+                      })
+                    }}
+                  />
                   
                   {/* Main image card */}
                   <div
@@ -1340,6 +1521,18 @@ export function GenerationGallery({
                     }`}
                     style={{ aspectRatio: getAspectRatioStyle(aspectRatio), zIndex: 1 }}
                   >
+                    {/* Source-kind badge for snapshot/edited images */}
+                    {(() => {
+                      const kind = (generation.parameters as any)?.sourceKind
+                      if (!kind || kind === 'original') return null
+                      return (
+                        <div className="absolute top-1.5 left-1.5 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/50 backdrop-blur-sm text-[9px] text-white/80 font-medium">
+                          {kind === 'snapshot' && <Camera className="h-2.5 w-2.5" />}
+                          {kind === 'edited' && <Wand2 className="h-2.5 w-2.5" />}
+                          <span>{kind === 'snapshot' ? 'Snapshot' : 'Edited'}</span>
+                        </div>
+                      )
+                    })()}
                     {output.fileType === 'image' && (
                       <Image
                         src={output.fileUrl}
@@ -1427,6 +1620,16 @@ export function GenerationGallery({
                     >
                       <Pin className="h-3.5 w-3.5 text-white" />
                     </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEditingOutputId(output.id)
+                      }}
+                      className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
+                      title="Quick edit"
+                    >
+                      <Paintbrush className="h-3.5 w-3.5 text-white" />
+                    </button>
                   </div>
                   
                   {/* Bottom Right - Use as Reference (positioned left of the VideoIterationsStackHint video button) */}
@@ -1449,6 +1652,16 @@ export function GenerationGallery({
                     </button>
                   )}
                 </div>
+
+                {/* Inline edit composer */}
+                {editingOutputId === output.id && (
+                  <InlineEditComposer
+                    imageUrl={output.fileUrl}
+                    outputId={output.id}
+                    onGenerate={handleInlineEdit}
+                    onClose={() => setEditingOutputId(null)}
+                  />
+                )}
 
               </div>
               {/* Close wrapper for stacked iterations */}

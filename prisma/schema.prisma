@@ -39,6 +39,8 @@ model Profile {
   outputEvents   OutputEvent[]
   pdfBuckets     PdfBucket[]
   brandWorldLinks BrandWorldProjectSettings[]
+  timelineSequences  TimelineSequence[]
+  timelineRenderJobs TimelineRenderJob[]
 
   @@map("profiles")
 }
@@ -61,6 +63,7 @@ model Project {
   pinnedImages PinnedImage[]
   pdfBuckets          PdfBucket[]
   brandWorldSettings  BrandWorldProjectSettings?
+  timelineSequences   TimelineSequence[]
 
   @@index([ownerId])
   @@index([isShared, ownerId])
@@ -519,5 +522,119 @@ model BrandWorldProjectSettings {
 
   @@index([projectId])
   @@map("brand_world_project_settings")
+}
+
+// ── Timeline Editor Models ──
+
+model TimelineSequence {
+  id        String   @id @default(uuid()) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  sessionId String?  @map("session_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String   @default("Untitled Sequence")
+  durationMs Int     @default(0) @map("duration_ms")
+  fps       Int      @default(30)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        Profile             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tracks      TimelineTrack[]
+  transitions TimelineTransition[]
+  renderJobs  TimelineRenderJob[]
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([projectId, updatedAt(sort: Desc)])
+  @@map("timeline_sequences")
+}
+
+model TimelineTrack {
+  id         String @id @default(uuid()) @db.Uuid
+  sequenceId String @map("sequence_id") @db.Uuid
+  kind       String // 'video', 'caption', 'audio'
+  label      String @default("Track")
+  sortOrder  Int    @default(0) @map("sort_order")
+  isMuted    Boolean @default(false) @map("is_muted")
+
+  sequence TimelineSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  clips    TimelineClip[]
+  captions TimelineCaption[]
+
+  @@index([sequenceId])
+  @@index([sequenceId, sortOrder])
+  @@map("timeline_tracks")
+}
+
+model TimelineClip {
+  id              String @id @default(uuid()) @db.Uuid
+  trackId         String @map("track_id") @db.Uuid
+  outputId        String? @map("output_id") @db.Uuid
+  fileUrl         String @map("file_url")
+  fileType        String @map("file_type") // 'video', 'image', 'audio'
+  startMs         Int    @map("start_ms")
+  endMs           Int    @map("end_ms")
+  inPointMs       Int    @default(0) @map("in_point_ms")
+  outPointMs      Int    @map("out_point_ms")
+  sourceDurationMs Int   @map("source_duration_ms")
+  sortOrder       Int    @default(0) @map("sort_order")
+
+  track TimelineTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([trackId])
+  @@index([trackId, startMs])
+  @@map("timeline_clips")
+}
+
+model TimelineTransition {
+  id         String @id @default(uuid()) @db.Uuid
+  sequenceId String @map("sequence_id") @db.Uuid
+  type       String @default("cross_dissolve") // 'cross_dissolve'
+  fromClipId String @map("from_clip_id") @db.Uuid
+  toClipId   String @map("to_clip_id") @db.Uuid
+  durationMs Int    @default(500) @map("duration_ms")
+
+  sequence TimelineSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  @@index([sequenceId])
+  @@map("timeline_transitions")
+}
+
+model TimelineCaption {
+  id      String @id @default(uuid()) @db.Uuid
+  trackId String @map("track_id") @db.Uuid
+  text    String @db.Text
+  startMs Int    @map("start_ms")
+  endMs   Int    @map("end_ms")
+  style   Json   @default("{}")
+
+  track TimelineTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([trackId])
+  @@index([trackId, startMs])
+  @@map("timeline_captions")
+}
+
+model TimelineRenderJob {
+  id          String    @id @default(uuid()) @db.Uuid
+  sequenceId  String    @map("sequence_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  status      String    @default("queued") // 'queued', 'processing', 'completed', 'failed'
+  progress    Int       @default(0) // 0-100
+  resolution  Int       @default(1080)
+  snapshotJson Json?    @map("snapshot_json") // Frozen timeline state at render time
+  outputUrl   String?   @map("output_url")
+  outputId    String?   @map("output_id") @db.Uuid
+  error       String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+
+  sequence TimelineSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  user     Profile          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([sequenceId])
+  @@index([userId])
+  @@index([status])
+  @@map("timeline_render_jobs")
 }
 

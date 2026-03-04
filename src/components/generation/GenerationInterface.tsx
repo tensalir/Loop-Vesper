@@ -15,9 +15,10 @@ import { useModels } from '@/hooks/useModels'
 import { useUIStore } from '@/store/uiStore'
 import { useToast } from '@/components/ui/use-toast'
 import { createClient } from '@/lib/supabase/client'
-import { Image as ImageIcon, Video, MessageCircle } from 'lucide-react'
+import { Image as ImageIcon, Video, MessageCircle, Film } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { logMetric } from '@/lib/metrics'
+import { useTimelineStore } from '@/store/timelineStore'
 
 // Default to Kling Official API for best quality and frame interpolation support.
 // Requires KLING_ACCESS_KEY and KLING_SECRET_KEY credentials.
@@ -61,6 +62,26 @@ const VideoInput = dynamic(
   }
 )
 
+const TimelineShell = dynamic(
+  () => import('../timeline/TimelineShell').then((mod) => mod.TimelineShell),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="p-6 text-center text-muted-foreground">Loading timeline…</div>
+    ),
+  }
+)
+
+const VideoBrowseModal = dynamic(
+  () => import('../timeline/VideoBrowseModal').then((mod) => mod.VideoBrowseModal),
+  { ssr: false }
+)
+
+const ExportPanel = dynamic(
+  () => import('../timeline/ExportPanel').then((mod) => mod.ExportPanel),
+  { ssr: false }
+)
+
 interface GenerationInterfaceProps {
   session: Session | null
   generationType: 'image' | 'video'
@@ -102,6 +123,12 @@ export function GenerationInterface({
 }: GenerationInterfaceProps) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const composerMode = useTimelineStore((s) => s.composerMode)
+  const setComposerMode = useTimelineStore((s) => s.setComposerMode)
+  const isLibraryOpen = useTimelineStore((s) => s.isLibraryOpen)
+  const setLibraryOpen = useTimelineStore((s) => s.setLibraryOpen)
+  const isTimelineMode = composerMode === 'timeline'
+  const isExportPanelOpen = useTimelineStore((s) => s.isExportPanelOpen)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const scrollContentRef = useRef<HTMLDivElement>(null)
   const loadOlderRef = useRef<HTMLDivElement | null>(null) // Sentinel at TOP for loading older items
@@ -1246,8 +1273,15 @@ export function GenerationInterface({
 
   return (
     <div className="flex-1 flex flex-col relative">
-      {/* Gallery Area - Always show, even if empty */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-grid-soft" style={{ scrollbarGutter: 'stable' }}>
+      {/* Gallery Area - Always show, even if empty. Blur/fade when timeline is active. */}
+      <div
+        ref={scrollContainerRef}
+        className={cn(
+          "flex-1 overflow-y-auto bg-grid-soft transition-all duration-350",
+          isTimelineMode && "timeline-backdrop-blur"
+        )}
+        style={{ scrollbarGutter: 'stable' }}
+      >
         {isLoading ? (
           // Loading state
           <div className="h-full pl-[var(--dock-left-gutter)] flex items-center justify-center">
@@ -1257,7 +1291,7 @@ export function GenerationInterface({
           </div>
         ) : (
           <div ref={scrollContentRef} className={cn(
-            "pt-24 pb-52 flex justify-center",
+            "pt-24 pb-72 flex justify-center",
             "pl-[var(--dock-left-gutter)]",
             "transition-[padding] duration-300 ease-in-out"
           )}>
@@ -1325,59 +1359,69 @@ export function GenerationInterface({
         </button>
       )}
 
-      {/* Chat Input - Floating Card at Bottom - Responsive width using dock tokens */}
-      {/* Use wider max-width for multi-image models to accommodate thumbnail strip */}
+      {/* Composer Area - Floating Card at Bottom */}
       <div className={cn(
         "absolute bottom-[var(--dock-bottom)] left-1/2 -translate-x-1/2",
         "w-full px-4 xl:px-6 z-30",
         "transition-[max-width] duration-300 ease-in-out",
-        supportsMultiImage 
-          ? "max-w-[var(--dock-prompt-max-w-multi)]" 
-          : "max-w-[var(--dock-prompt-max-w)]"
+        isTimelineMode
+          ? "max-w-[var(--dock-prompt-max-w-multi)]"
+          : supportsMultiImage 
+            ? "max-w-[var(--dock-prompt-max-w-multi)]" 
+            : "max-w-[var(--dock-prompt-max-w)]"
       )}>
         <div className="flex items-center gap-3">
-          {/* Prompt Bar */}
-          <div className="flex-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl p-4">
-              {generationType === 'video' ? (
-                <VideoInput
-                  prompt={prompt}
-                  onPromptChange={setPrompt}
-                  onGenerate={handleGenerate}
-                  parameters={parameters}
-                  onParametersChange={setParameters}
-                  selectedModel={selectedModel}
-                  onModelSelect={setSelectedModel}
-                  referenceImageUrl={referenceImageUrl}
-                  onClearReferenceImage={() => setReferenceImageUrl(null)}
-                  onSetReferenceImageUrl={setReferenceImageUrl}
-                  onRegisterPasteHandler={registerPasteHandler}
-                />
-              ) : (
-                <ChatInput
-                  prompt={prompt}
-                  onPromptChange={setPrompt}
-                  onGenerate={handleGenerate}
-                  parameters={parameters}
-                  onParametersChange={setParameters}
-                  generationType={generationType}
-                  selectedModel={selectedModel}
-                  onModelSelect={setSelectedModel}
-                  isGenerating={false}
-                  referenceImageUrls={referenceImageUrls}
-                  onReferenceImageUrlsChange={setReferenceImageUrls}
-                  onRegisterPasteHandler={registerPasteHandler}
-                />
-              )}
+          {/* Prompt Bar OR Timeline Shell — exclusive surface policy */}
+          <div className={cn(
+            "flex-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl",
+            isTimelineMode ? "p-3" : "p-4"
+          )}>
+            {isTimelineMode ? (
+              <TimelineShell projectId={session?.projectId || ''} />
+            ) : (
+              <>
+                {generationType === 'video' ? (
+                  <VideoInput
+                    prompt={prompt}
+                    onPromptChange={setPrompt}
+                    onGenerate={handleGenerate}
+                    parameters={parameters}
+                    onParametersChange={setParameters}
+                    selectedModel={selectedModel}
+                    onModelSelect={setSelectedModel}
+                    referenceImageUrl={referenceImageUrl}
+                    onClearReferenceImage={() => setReferenceImageUrl(null)}
+                    onSetReferenceImageUrl={setReferenceImageUrl}
+                    onRegisterPasteHandler={registerPasteHandler}
+                  />
+                ) : (
+                  <ChatInput
+                    prompt={prompt}
+                    onPromptChange={setPrompt}
+                    onGenerate={handleGenerate}
+                    parameters={parameters}
+                    onParametersChange={setParameters}
+                    generationType={generationType}
+                    selectedModel={selectedModel}
+                    onModelSelect={setSelectedModel}
+                    isGenerating={false}
+                    referenceImageUrls={referenceImageUrls}
+                    onReferenceImageUrlsChange={setReferenceImageUrls}
+                    onRegisterPasteHandler={registerPasteHandler}
+                  />
+                )}
+              </>
+            )}
           </div>
 
           {/* Vertical Control Bar */}
           <div className="flex flex-col gap-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-1.5">
             {/* Image/Video Toggle */}
             <button
-              onClick={() => onGenerationTypeChange?.('image')}
+              onClick={() => { if (isTimelineMode) setComposerMode('generate'); onGenerationTypeChange?.('image') }}
               className={cn(
                 'p-2 rounded-lg transition-all',
-                generationType === 'image'
+                !isTimelineMode && generationType === 'image'
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
               )}
@@ -1386,16 +1430,30 @@ export function GenerationInterface({
               <ImageIcon className="h-4 w-4" />
             </button>
             <button
-              onClick={() => onGenerationTypeChange?.('video')}
+              onClick={() => { if (isTimelineMode) setComposerMode('generate'); onGenerationTypeChange?.('video') }}
               className={cn(
                 'p-2 rounded-lg transition-all',
-                generationType === 'video'
+                !isTimelineMode && generationType === 'video'
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
               )}
               title="Video generation"
             >
               <Video className="h-4 w-4" />
+            </button>
+
+            {/* Timeline button — positioned under video, above brainstorm */}
+            <button
+              onClick={() => setComposerMode(isTimelineMode ? 'generate' : 'timeline')}
+              className={cn(
+                'p-2 rounded-lg transition-all',
+                isTimelineMode
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              )}
+              title={isTimelineMode ? 'Exit timeline editor' : 'Timeline editor'}
+            >
+              <Film className="h-4 w-4" />
             </button>
 
             {/* Spacer */}
@@ -1423,6 +1481,30 @@ export function GenerationInterface({
           </div>
         </div>
       </div>
+
+      {/* Export Panel — lazy-mounted only when user requests it (progressive disclosure) */}
+      {isTimelineMode && isExportPanelOpen && session?.projectId && (
+        <div className="absolute bottom-[calc(var(--dock-bottom)+260px)] right-4 xl:right-6 z-30 w-72">
+          <ExportPanel projectId={session.projectId} />
+        </div>
+      )}
+
+      {/* Video Browse Library — lazy-mounted only when open */}
+      {isLibraryOpen && session?.projectId && (
+        <VideoBrowseModal
+          isOpen={isLibraryOpen}
+          onClose={() => setLibraryOpen(false)}
+          projectId={session.projectId}
+          onSelectVideo={(videoUrl, outputId, durationMs) => {
+            const insertFn = (useTimelineStore as any)._insertVideo
+            if (typeof insertFn === 'function') {
+              insertFn(videoUrl, outputId, durationMs)
+            }
+            toast({ title: 'Video added', description: 'Clip added to timeline' })
+            setLibraryOpen(false)
+          }}
+        />
+      )}
     </div>
   )
 }

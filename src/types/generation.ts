@@ -32,6 +32,12 @@ export interface GenerationParameters {
   resolution?: number
   numOutputs?: number
   duration?: number
+  // Lineage / branching
+  sourceRootOutputId?: string
+  sourceKind?: 'original' | 'snapshot' | 'edited'
+  sourceVideoOutputId?: string
+  sourceTimecodeMs?: number
+  sourceLabel?: string
   // Model-specific params (forward compatible)
   [key: string]: unknown
 }

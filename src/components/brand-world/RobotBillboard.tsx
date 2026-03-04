@@ -12,6 +12,7 @@ interface RobotBillboardProps {
   rotation?: number
   onClick?: (output: BrandWorldOutput) => void
   status?: 'completed' | 'processing'
+  focused?: boolean
 }
 
 function createPixelShader() {
@@ -60,14 +61,29 @@ function createPixelShader() {
   })
 }
 
-export function RobotBillboard({ output, position, rotation = 0, onClick, status = 'completed' }: RobotBillboardProps) {
+export function RobotBillboard({
+  output,
+  position,
+  rotation = 0,
+  onClick,
+  status = 'completed',
+  focused = false,
+}: RobotBillboardProps) {
   const groupRef = useRef<THREE.Group>(null)
+  const leftArmRef = useRef<THREE.Mesh>(null)
+  const rightArmRef = useRef<THREE.Mesh>(null)
+  const leftLegRef = useRef<THREE.Mesh>(null)
+  const rightLegRef = useRef<THREE.Mesh>(null)
+  const headRef = useRef<THREE.Mesh>(null)
+  const torsoRef = useRef<THREE.Group>(null)
+
   const [hovered, setHovered] = useState(false)
   const [texture, setTexture] = useState<THREE.Texture | null>(null)
   const textureRef = useRef<THREE.Texture | null>(null)
   const pixelMatRef = useRef<THREE.ShaderMaterial | null>(null)
   const gradientMap = useMemo(() => getToonGradient3(), [])
   const idleOffset = useMemo(() => Math.random() * Math.PI * 2, [])
+  const danceAmplitude = useRef(1)
   const isProcessing = status === 'processing'
 
   const pixelMaterial = useMemo(() => {
@@ -100,14 +116,42 @@ export function RobotBillboard({ output, position, rotation = 0, onClick, status
     }
   }, [output.fileUrl, output.fileType, isProcessing])
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
+    const targetAmp = focused ? 0 : 1
+    danceAmplitude.current = THREE.MathUtils.lerp(danceAmplitude.current, targetAmp, delta * 5)
+    const amp = danceAmplitude.current
+
+    const t = state.clock.elapsedTime + idleOffset
+    const bobSpeed = isProcessing ? 1.6 : 0.8
+    const bobAmount = isProcessing ? 0.12 : 0.06
+
     if (groupRef.current) {
-      const t = state.clock.elapsedTime + idleOffset
-      const bobSpeed = isProcessing ? 1.6 : 0.8
-      const bobAmount = isProcessing ? 0.12 : 0.06
-      groupRef.current.position.y = position[1] + Math.sin(t * bobSpeed) * bobAmount
-      groupRef.current.rotation.y = rotation + Math.sin(t * 0.5) * 0.05
+      groupRef.current.position.y = position[1] + Math.sin(t * bobSpeed) * bobAmount * amp
+
+      const cam = state.camera.position
+      const faceAngle = Math.atan2(cam.x - position[0], cam.z - position[2])
+      groupRef.current.rotation.y = faceAngle
     }
+
+    if (leftArmRef.current) {
+      leftArmRef.current.rotation.x = Math.sin(t * 2.5) * 0.3 * amp
+    }
+    if (rightArmRef.current) {
+      rightArmRef.current.rotation.x = Math.sin(t * 2.5 + Math.PI) * 0.3 * amp
+    }
+    if (leftLegRef.current) {
+      leftLegRef.current.rotation.x = Math.sin(t * 2.5 + Math.PI) * 0.15 * amp
+    }
+    if (rightLegRef.current) {
+      rightLegRef.current.rotation.x = Math.sin(t * 2.5) * 0.15 * amp
+    }
+    if (headRef.current) {
+      headRef.current.rotation.z = Math.sin(t * 1.5) * 0.1 * amp
+    }
+    if (torsoRef.current) {
+      torsoRef.current.rotation.y = Math.sin(t * 1.0) * 0.05 * amp
+    }
+
     if (pixelMatRef.current) {
       pixelMatRef.current.uniforms.uTime.value = state.clock.elapsedTime
     }
@@ -139,63 +183,71 @@ export function RobotBillboard({ output, position, rotation = 0, onClick, status
         document.body.style.cursor = 'auto'
       }}
     >
-      {/* Legs */}
-      {[-0.2, 0.2].map((x) => (
-        <mesh key={`leg-${x}`} position={[x, 0.35, 0]} castShadow>
-          <boxGeometry args={[0.15, 0.7, 0.15]} />
-          <meshToonMaterial color={limbColor} gradientMap={gradientMap} />
-        </mesh>
-      ))}
-
-      {/* Body / torso */}
-      <mesh position={[0, 1.1, 0]} castShadow>
-        <boxGeometry args={[0.7, 0.9, 0.4]} />
-        <meshToonMaterial color={bodyColor} gradientMap={gradientMap} />
+      {/* Left leg */}
+      <mesh ref={leftLegRef} position={[-0.2, 0.35, 0]} castShadow>
+        <boxGeometry args={[0.15, 0.7, 0.15]} />
+        <meshToonMaterial color={limbColor} gradientMap={gradientMap} />
+      </mesh>
+      {/* Right leg */}
+      <mesh ref={rightLegRef} position={[0.2, 0.35, 0]} castShadow>
+        <boxGeometry args={[0.15, 0.7, 0.15]} />
+        <meshToonMaterial color={limbColor} gradientMap={gradientMap} />
       </mesh>
 
-      {/* Chest screen */}
-      <mesh position={[0, 1.15, 0.21]}>
-        <planeGeometry args={[0.55, 0.55]} />
-        {isProcessing && pixelMaterial ? (
-          <primitive object={pixelMaterial} attach="material" />
-        ) : texture ? (
-          <meshBasicMaterial map={texture} toneMapped={false} />
-        ) : output.fileType === 'video' ? (
-          <meshBasicMaterial color="#1a2a3a" />
-        ) : (
-          <meshBasicMaterial color="#2a2a3a" />
+      {/* Torso group — holds body + chest screen + bezel */}
+      <group ref={torsoRef}>
+        <mesh position={[0, 1.1, 0]} castShadow>
+          <boxGeometry args={[0.7, 0.9, 0.4]} />
+          <meshToonMaterial color={bodyColor} gradientMap={gradientMap} />
+        </mesh>
+
+        {/* Chest screen */}
+        <mesh position={[0, 1.15, 0.21]}>
+          <planeGeometry args={[0.55, 0.55]} />
+          {isProcessing && pixelMaterial ? (
+            <primitive object={pixelMaterial} attach="material" />
+          ) : texture ? (
+            <meshBasicMaterial map={texture} toneMapped={false} />
+          ) : output.fileType === 'video' ? (
+            <meshBasicMaterial color="#1a2a3a" />
+          ) : (
+            <meshBasicMaterial color="#2a2a3a" />
+          )}
+        </mesh>
+
+        {/* Screen bezel */}
+        <mesh position={[0, 1.15, 0.205]}>
+          <planeGeometry args={[0.6, 0.6]} />
+          <meshBasicMaterial color="#333" />
+        </mesh>
+
+        {/* Video play indicator */}
+        {!isProcessing && output.fileType === 'video' && (
+          <mesh position={[0, 1.15, 0.22]}>
+            <circleGeometry args={[0.1, 6]} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
+          </mesh>
         )}
+      </group>
+
+      {/* Left arm */}
+      <mesh ref={leftArmRef} position={[-0.48, 1.0, 0]} castShadow>
+        <boxGeometry args={[0.12, 0.6, 0.12]} />
+        <meshToonMaterial color={limbColor} gradientMap={gradientMap} />
       </mesh>
-
-      {/* Screen bezel */}
-      <mesh position={[0, 1.15, 0.205]}>
-        <planeGeometry args={[0.6, 0.6]} />
-        <meshBasicMaterial color="#333" />
+      {/* Right arm */}
+      <mesh ref={rightArmRef} position={[0.48, 1.0, 0]} castShadow>
+        <boxGeometry args={[0.12, 0.6, 0.12]} />
+        <meshToonMaterial color={limbColor} gradientMap={gradientMap} />
       </mesh>
-
-      {/* Video play indicator on chest */}
-      {!isProcessing && output.fileType === 'video' && (
-        <mesh position={[0, 1.15, 0.22]}>
-          <circleGeometry args={[0.1, 6]} />
-          <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
-        </mesh>
-      )}
-
-      {/* Arms */}
-      {[-0.48, 0.48].map((x) => (
-        <mesh key={`arm-${x}`} position={[x, 1.0, 0]} castShadow>
-          <boxGeometry args={[0.12, 0.6, 0.12]} />
-          <meshToonMaterial color={limbColor} gradientMap={gradientMap} />
-        </mesh>
-      ))}
 
       {/* Head */}
-      <mesh position={[0, 1.85, 0]} castShadow>
+      <mesh ref={headRef} position={[0, 1.85, 0]} castShadow>
         <boxGeometry args={[0.4, 0.35, 0.35]} />
         <meshToonMaterial color={bodyColor} gradientMap={gradientMap} />
       </mesh>
 
-      {/* Eyes — pulse when processing */}
+      {/* Eyes */}
       {[-0.1, 0.1].map((x) => (
         <mesh key={`eye-${x}`} position={[x, 1.88, 0.18]}>
           <sphereGeometry args={[0.04, 6, 4]} />
@@ -213,14 +265,14 @@ export function RobotBillboard({ output, position, rotation = 0, onClick, status
         <meshBasicMaterial color={antennaColor} />
       </mesh>
 
-      {/* Hover / processing ring */}
-      {(hovered || isProcessing) && (
+      {/* Hover / processing / focused ring */}
+      {(hovered || isProcessing || focused) && (
         <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0.6, 0.75, 16]} />
           <meshBasicMaterial
-            color={isProcessing ? '#44ff88' : '#44aaff'}
+            color={isProcessing ? '#44ff88' : focused ? '#ffffff' : '#44aaff'}
             transparent
-            opacity={isProcessing ? 0.5 : 0.4}
+            opacity={isProcessing ? 0.5 : focused ? 0.6 : 0.4}
             side={THREE.DoubleSide}
           />
         </mesh>
