@@ -1,8 +1,10 @@
 'use client'
 
+import { useMemo } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { useProfile } from '@/hooks/useProfile'
 import {
   LayoutDashboard,
   FileText,
@@ -10,12 +12,14 @@ import {
   CheckCircle,
   Bookmark,
   BarChart3,
+  Globe,
 } from 'lucide-react'
 
 interface NavItem {
   title: string
   href: string
   icon: React.ComponentType<{ className?: string }>
+  adminOnly?: boolean
 }
 
 // Top section - Dashboard and Analytics
@@ -32,12 +36,18 @@ const topNavItems: NavItem[] = [
   },
 ]
 
-// Main section - Briefings, Projects, Review
+// Main section - Briefings, Brand World, Projects, Review
 const mainNavItems: NavItem[] = [
   {
     title: 'Briefings',
     href: '/briefings',
     icon: FileText,
+  },
+  {
+    title: 'Brand World',
+    href: '/brand-world',
+    icon: Globe,
+    adminOnly: true,
   },
   {
     title: 'Projects',
@@ -66,6 +76,13 @@ interface DashboardSidebarProps {
 
 export function DashboardSidebar({ className }: DashboardSidebarProps) {
   const pathname = usePathname()
+  const { data: profile } = useProfile()
+  const isAdmin = profile?.role === 'admin'
+
+  const visibleMainNavItems = useMemo(
+    () => mainNavItems.filter((item) => !item.adminOnly || isAdmin),
+    [isAdmin]
+  )
 
   const isActive = (href: string) => {
     if (href === '/') {
@@ -129,7 +146,7 @@ export function DashboardSidebar({ className }: DashboardSidebarProps) {
 
         {/* Main Section - Briefings, Projects, Review */}
         <div className="space-y-1">
-          {mainNavItems.map((item) => (
+          {visibleMainNavItems.map((item) => (
             <NavLink key={item.href} item={item} />
           ))}
         </div>

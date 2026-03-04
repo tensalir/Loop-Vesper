@@ -141,7 +141,12 @@ export function ProjectClientShell({
     return 'dark' // Default to dark for SSR
   })
   const [isChatOpen, setIsChatOpen] = useState(false)
-  const [externalPrompt, setExternalPrompt] = useState<string>('')
+  const [externalPrompt, setExternalPrompt] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('prefillPrompt') ?? ''
+    }
+    return ''
+  })
   const [pendingPinnedImageUrl, setPendingPinnedImageUrl] = useState<string | null>(null)
   const [showBriefingModal, setShowBriefingModal] = useState(false)
   const [briefing, setBriefing] = useState('')
