@@ -93,8 +93,9 @@ export async function GET(
           select: {
             id: true,
             prompt: true,
+            parameters: true,
             session: {
-              select: { name: true },
+              select: { id: true, name: true },
             },
           },
         },
@@ -114,18 +115,23 @@ export async function GET(
       ).toString('base64url')
     }
 
-    const data = pageOutputs.map((o) => ({
-      id: o.id,
-      fileUrl: o.fileUrl,
-      fileType: o.fileType,
-      width: o.width,
-      height: o.height,
-      duration: o.duration,
-      createdAt: o.createdAt,
-      prompt: o.generation.prompt,
-      generationId: o.generation.id,
-      sessionName: o.generation.session.name,
-    }))
+    const data = pageOutputs.map((o) => {
+      const params = (o.generation.parameters ?? {}) as Record<string, unknown>
+      return {
+        id: o.id,
+        fileUrl: o.fileUrl,
+        fileType: o.fileType,
+        width: o.width,
+        height: o.height,
+        duration: o.duration,
+        createdAt: o.createdAt,
+        prompt: o.generation.prompt,
+        generationId: o.generation.id,
+        sessionId: o.generation.session.id,
+        sessionName: o.generation.session.name,
+        brandWorldStageId: (typeof params.brandWorldStageId === 'string' ? params.brandWorldStageId : undefined),
+      }
+    })
 
     return NextResponse.json(
       { data, nextCursor, hasMore },

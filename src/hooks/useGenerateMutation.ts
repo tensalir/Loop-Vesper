@@ -31,6 +31,8 @@ interface GenerateParams {
     /** End frame pre-uploaded HTTP URL (preferred over base64) */
     endFrameImageUrl?: string
     endFrameImageId?: string
+    /** Brand World zone/stage association */
+    brandWorldStageId?: string
   }
 }
 

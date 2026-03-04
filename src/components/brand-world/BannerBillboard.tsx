@@ -7,9 +7,10 @@ import type { PlacedBanner } from '@/lib/brand-world/placement'
 interface BannerBillboardProps {
   banner: PlacedBanner
   stagePosition: [number, number, number]
+  stageScale: number
 }
 
-export function BannerBillboard({ banner, stagePosition }: BannerBillboardProps) {
+export function BannerBillboard({ banner, stagePosition, stageScale }: BannerBillboardProps) {
   const { slot, output } = banner
   const meshRef = useRef<THREE.Mesh>(null)
   const [texture, setTexture] = useState<THREE.Texture | null>(null)
@@ -39,28 +40,27 @@ export function BannerBillboard({ banner, stagePosition }: BannerBillboardProps)
     }
   }, [output.fileUrl, output.fileType])
 
+  const s = stageScale
   const worldPos: [number, number, number] = [
-    stagePosition[0] + slot.position[0],
-    stagePosition[1] + slot.position[1],
-    stagePosition[2] + slot.position[2],
+    stagePosition[0] + slot.position[0] * s,
+    stagePosition[1] + slot.position[1] * s,
+    stagePosition[2] + slot.position[2] * s,
   ]
 
   return (
-    <group position={worldPos} rotation={slot.rotation}>
-      {/* Banner frame */}
+    <group position={worldPos} rotation={slot.rotation} scale={[s, s, s]}>
+      {/* Banner surface — meshBasicMaterial so photos render unshaded */}
       <mesh ref={meshRef} castShadow>
         <planeGeometry args={[slot.size[0], slot.size[1]]} />
         {texture && !hasError ? (
-          <meshStandardMaterial
+          <meshBasicMaterial
             map={texture}
-            roughness={0.3}
-            metalness={0.1}
             side={THREE.DoubleSide}
+            toneMapped={false}
           />
         ) : (
-          <meshStandardMaterial
-            color={hasError ? '#333333' : '#1a1a2e'}
-            roughness={0.5}
+          <meshBasicMaterial
+            color={hasError ? '#3a2a2a' : '#1a1a2e'}
             side={THREE.DoubleSide}
           />
         )}
@@ -69,15 +69,21 @@ export function BannerBillboard({ banner, stagePosition }: BannerBillboardProps)
       {/* Frame border */}
       <lineSegments>
         <edgesGeometry args={[new THREE.PlaneGeometry(slot.size[0], slot.size[1])]} />
-        <lineBasicMaterial color="#666666" linewidth={1} />
+        <lineBasicMaterial color="#887766" linewidth={1} />
       </lineSegments>
 
-      {/* Video indicator */}
+      {/* Video play indicator */}
       {output.fileType === 'video' && (
-        <mesh position={[0, 0, 0.01]}>
-          <circleGeometry args={[0.4, 16]} />
-          <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
-        </mesh>
+        <group position={[0, 0, 0.02]}>
+          <mesh>
+            <circleGeometry args={[0.5, 6]} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={0.5} />
+          </mesh>
+          <mesh position={[0.1, 0, 0.01]}>
+            <coneGeometry args={[0.2, 0.35, 3]} />
+            <meshBasicMaterial color="#333333" />
+          </mesh>
+        </group>
       )}
     </group>
   )

@@ -1,42 +1,52 @@
 'use client'
 
 import { useState } from 'react'
-import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
-import { useProjects } from '@/hooks/useProjects'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useProfile } from '@/hooks/useProfile'
+import { useProjects } from '@/hooks/useProjects'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Loader2, ShieldAlert } from 'lucide-react'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Loader2, Plus, ShieldAlert, Globe, ExternalLink } from 'lucide-react'
 
-const BrandWorldViewport = dynamic(
-  () => import('@/components/brand-world/BrandWorldViewport').then((m) => m.BrandWorldViewport),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex-1 flex items-center justify-center bg-muted/20">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">Loading Brand World&hellip;</p>
-        </div>
-      </div>
-    ),
-  }
-)
-
-export default function BrandWorldPage() {
+export default function BrandWorldLibraryPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { data: profile, isLoading: profileLoading } = useProfile()
   const isAdmin = profile?.role === 'admin'
-  const { data: projects, isLoading: projectsLoading } = useProjects()
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
-  const selectedProject = projects?.find((p) => p.id === selectedProjectId) ?? null
+  const [showCreate, setShowCreate] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newDescription, setNewDescription] = useState('')
+
+  const { data: projects, isLoading: projectsLoading } = useProjects()
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim(), description: newDescription.trim() || null }),
+      })
+      if (!res.ok) throw new Error('Failed to create project')
+      return res.json()
+    },
+    onSuccess: (project: { id: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      setShowCreate(false)
+      setNewName('')
+      setNewDescription('')
+      router.push(`/brand-world/${project.id}`)
+    },
+  })
 
   if (profileLoading) {
     return (
@@ -56,10 +66,7 @@ export default function BrandWorldPage() {
             Brand World is currently available to admin users only.
           </p>
         </div>
-        <button
-          onClick={() => router.push('/')}
-          className="text-sm text-primary hover:underline"
-        >
+        <button onClick={() => router.push('/')} className="text-sm text-primary hover:underline">
           Back to dashboard
         </button>
       </div>
@@ -67,44 +74,119 @@ export default function BrandWorldPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] -m-4 md:-m-6 lg:-m-8">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-card/30 backdrop-blur-sm shrink-0">
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className="text-lg font-bold tracking-tight">Brand World</h1>
-            <p className="text-xs text-muted-foreground">
-              Interactive festival world for AI-generated content
+    <div className="space-y-6 max-w-5xl mx-auto">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Brand World</h1>
+          <p className="text-muted-foreground">
+            Interactive festival worlds for AI-generated content
+          </p>
+        </div>
+        <Button onClick={() => setShowCreate(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Project
+        </Button>
+      </div>
+
+      {projectsLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : !projects || projects.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 space-y-4">
+          <div className="rounded-full bg-muted p-4">
+            <Globe className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <div className="text-center">
+            <h2 className="text-xl font-semibold mb-1">No projects yet</h2>
+            <p className="text-muted-foreground max-w-md">
+              Create your first project to start placing AI-generated content in an interactive festival environment.
             </p>
           </div>
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create your first project
+          </Button>
         </div>
-
-        <div className="flex items-center gap-3">
-          <Select
-            value={selectedProjectId ?? ''}
-            onValueChange={(val) => setSelectedProjectId(val || null)}
-          >
-            <SelectTrigger className="w-[240px] h-9 text-sm">
-              <SelectValue placeholder={projectsLoading ? 'Loading projects\u2026' : 'Select a project'} />
-            </SelectTrigger>
-            <SelectContent>
-              {projects?.map((project) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {projects.map((project) => (
+            <div
+              key={project.id}
+              className="group relative border border-border/60 rounded-lg p-5 hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer"
+              onClick={() => router.push(`/brand-world/${project.id}`)}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <Globe className="h-4 w-4 text-primary" />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    router.push(`/projects/${project.id}`)
+                  }}
+                  title="Open in project workspace"
+                >
+                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              </div>
+              <h3 className="font-semibold text-sm mb-1 truncate">{project.name}</h3>
+              {project.description && (
+                <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{project.description}</p>
+              )}
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase tracking-wider">
+                <span>{new Date(project.updatedAt).toLocaleDateString()}</span>
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
+      )}
 
-      {/* 3D Viewport */}
-      <div className="flex-1 relative overflow-hidden">
-        <BrandWorldViewport
-          projectId={selectedProjectId}
-          projectName={selectedProject?.name ?? null}
-        />
-      </div>
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Create Brand World Project</DialogTitle>
+            <DialogDescription>
+              Set up a new project for your interactive festival world. Zone sessions will be created automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Name</label>
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="e.g. Summer Festival 2026"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Description (optional)</label>
+              <Input
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                placeholder="Brief description of this world"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button
+              onClick={() => createMutation.mutate()}
+              disabled={!newName.trim() || createMutation.isPending}
+            >
+              {createMutation.isPending ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating&hellip;</>
+              ) : (
+                'Create project'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

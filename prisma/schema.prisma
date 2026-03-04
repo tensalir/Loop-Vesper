@@ -503,3 +503,4 @@ model SyncCursor {
   @@index([integration])
   @@map("sync_cursors")
 }
+

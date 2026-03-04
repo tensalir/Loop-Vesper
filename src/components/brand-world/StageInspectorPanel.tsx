@@ -1,17 +1,17 @@
 'use client'
 
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { X, Sparkles, ExternalLink } from 'lucide-react'
+import { X, Sparkles, ChevronRight } from 'lucide-react'
 import type { StageConfig } from '@/lib/brand-world/world-config'
 import type { PlacedBanner } from '@/lib/brand-world/placement'
 
 interface StageInspectorPanelProps {
   stage: StageConfig
   banners: PlacedBanner[]
-  projectId: string | null
+  projectId: string
   onDismiss: () => void
+  onOpenGenerate: () => void
 }
 
 export function StageInspectorPanel({
@@ -19,32 +19,21 @@ export function StageInspectorPanel({
   banners,
   projectId,
   onDismiss,
+  onOpenGenerate,
 }: StageInspectorPanelProps) {
-  const router = useRouter()
-
-  const handleGenerate = () => {
-    if (!projectId) return
-    const prompt = encodeURIComponent(
-      `Festival ${stage.name.toLowerCase()} scene, vibrant atmosphere, crowd energy`
-    )
-    router.push(`/projects/${projectId}?prefillPrompt=${prompt}`)
-  }
-
-  const handleOpenProject = () => {
-    if (!projectId) return
-    router.push(`/projects/${projectId}`)
-  }
-
   return (
-    <div className="absolute top-4 right-4 w-80 bg-background/95 backdrop-blur-md border border-border/60 rounded-lg shadow-xl overflow-hidden z-10">
+    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[420px] max-w-[calc(100vw-2rem)] bg-background/95 backdrop-blur-md border border-border/60 rounded-xl shadow-2xl overflow-hidden z-10">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-border/40">
+        <div className="flex items-center gap-2.5">
           <div
             className="w-3 h-3 rounded-full shrink-0"
             style={{ backgroundColor: stage.color }}
           />
-          <h3 className="text-sm font-semibold truncate">{stage.name}</h3>
+          <h3 className="text-sm font-bold truncate">{stage.name}</h3>
+          <span className="text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded-full font-medium">
+            {banners.length} media
+          </span>
         </div>
         <Button
           variant="ghost"
@@ -56,29 +45,18 @@ export function StageInspectorPanel({
         </Button>
       </div>
 
-      {/* Description */}
-      <div className="px-4 py-3 border-b border-border/30">
-        <p className="text-xs text-muted-foreground leading-relaxed">
+      {/* Description + Media grid */}
+      <div className="px-5 py-3">
+        <p className="text-xs text-muted-foreground leading-relaxed mb-3">
           {stage.description}
         </p>
-        <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
-          <span>{stage.bannerSlots.length} banner slots</span>
-          <span className="w-px h-3 bg-border" />
-          <span>{banners.length} media placed</span>
-        </div>
-      </div>
 
-      {/* Media thumbnails */}
-      {banners.length > 0 && (
-        <div className="px-4 py-3 border-b border-border/30">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2">
-            Placed media
-          </p>
-          <div className="grid grid-cols-3 gap-1.5">
-            {banners.map((b) => (
+        {banners.length > 0 && (
+          <div className="grid grid-cols-4 gap-1.5 mb-3">
+            {banners.slice(0, 8).map((b) => (
               <div
                 key={b.slot.id}
-                className="relative aspect-video rounded overflow-hidden border border-border/30 bg-muted/30"
+                className="relative aspect-square rounded-md overflow-hidden border border-border/30 bg-muted/30"
                 title={b.output.prompt}
               >
                 {b.output.fileType === 'image' ? (
@@ -86,7 +64,7 @@ export function StageInspectorPanel({
                     src={b.output.fileUrl}
                     alt={b.output.prompt}
                     fill
-                    sizes="80px"
+                    sizes="60px"
                     className="object-cover"
                   />
                 ) : (
@@ -96,38 +74,26 @@ export function StageInspectorPanel({
                 )}
               </div>
             ))}
+            {banners.length > 8 && (
+              <div className="aspect-square rounded-md border border-border/30 bg-muted/30 flex items-center justify-center text-[10px] text-muted-foreground font-medium">
+                +{banners.length - 8}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Actions */}
-      <div className="px-4 py-3 flex flex-col gap-2">
-        {projectId && (
-          <>
-            <Button
-              size="sm"
-              className="w-full text-xs gap-1.5"
-              onClick={handleGenerate}
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Generate for this stage
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full text-xs gap-1.5"
-              onClick={handleOpenProject}
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Open project
-            </Button>
-          </>
-        )}
-        {!projectId && (
-          <p className="text-xs text-muted-foreground text-center py-1">
-            Select a project to generate content for this stage.
-          </p>
-        )}
+      <div className="px-5 pb-4 flex items-center gap-2">
+        <Button
+          size="sm"
+          className="flex-1 text-xs gap-1.5 h-9"
+          onClick={onOpenGenerate}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          Generate for this zone
+          <ChevronRight className="h-3 w-3 ml-auto" />
+        </Button>
       </div>
     </div>
   )
