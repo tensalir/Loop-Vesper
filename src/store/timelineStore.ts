@@ -90,8 +90,21 @@ export const useTimelineStore = create<TimelineStore>()(
       setLibraryOpen: (open) => set({ isLibraryOpen: open }, false, 'setLibraryOpen'),
       setExportPanelOpen: (open) => set({ isExportPanelOpen: open }, false, 'setExportPanelOpen'),
       insertVideoClip: (videoUrl, outputId, durationMs) => {
-        const currentSequence = get().sequence
-        if (!currentSequence) return false
+        let currentSequence = get().sequence
+
+        if (!currentSequence) {
+          currentSequence = {
+            id: `local-seq-${Date.now()}`,
+            projectId: '',
+            sessionId: null,
+            name: 'Sequence 1',
+            durationMs: 0,
+            fps: 30,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            tracks: [],
+          }
+        }
 
         let tracks = [...currentSequence.tracks]
         let videoTrack = tracks.find((track) => track.kind === 'video')

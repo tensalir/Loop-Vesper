@@ -5,10 +5,11 @@ import {
   Scissors, Type, MousePointer2, Play, Pause, SkipBack,
   FolderOpen, Download, Plus, ZoomIn, ZoomOut,
   Volume2, VolumeX, GripVertical, X, Save, Loader2,
+  ChevronDown, Trash2, FilePlus2, Check,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTimelineStore } from '@/store/timelineStore'
-import { msToTimecode, type TimelineTrack } from '@/types/timeline'
+import { msToTimecode, type TimelineTrack, type TimelineSequence } from '@/types/timeline'
 import {
   createTrack, splitClipAtPlayhead, removeClip,
   addCrossDissolve, addCaption,
@@ -19,10 +20,18 @@ import { useSaveSequence } from '@/hooks/useTimeline'
 interface TimelineEditorProps {
   projectId: string
   onOpenLibrary: () => void
+  sequences?: TimelineSequence[]
+  onCreateSequence?: () => void
+  onSwitchSequence?: (seq: TimelineSequence) => void
+  onDeleteSequence?: (seqId: string) => void
+  isCreating?: boolean
   className?: string
 }
 
-export function TimelineEditor({ projectId, onOpenLibrary, className }: TimelineEditorProps) {
+export function TimelineEditor({
+  projectId, onOpenLibrary, sequences, onCreateSequence,
+  onSwitchSequence, onDeleteSequence, isCreating, className,
+}: TimelineEditorProps) {
   const {
     sequence, playheadMs, zoom, isPlaying, activeTool,
     selectedClipId, selectedTrackId, isExportPanelOpen,
@@ -36,6 +45,8 @@ export function TimelineEditor({ projectId, onOpenLibrary, className }: Timeline
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const previewVideoRef = useRef<HTMLVideoElement>(null)
   const [mounted, setMounted] = useState(false)
+  const [isSeqMenuOpen, setIsSeqMenuOpen] = useState(false)
+  const seqMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -45,6 +56,17 @@ export function TimelineEditor({ projectId, onOpenLibrary, className }: Timeline
       if (playIntervalRef.current) clearInterval(playIntervalRef.current)
     }
   }, [finishModeSwitch])
+
+  useEffect(() => {
+    if (!isSeqMenuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (seqMenuRef.current && !seqMenuRef.current.contains(e.target as Node)) {
+        setIsSeqMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [isSeqMenuOpen])
 
   // Playback simulation
   useEffect(() => {
@@ -188,13 +210,17 @@ export function TimelineEditor({ projectId, onOpenLibrary, className }: Timeline
   const handleSave = useCallback(async () => {
     if (!sequence || !sequence.id || !isDirty) return
     try {
-      await saveMutation.mutateAsync({
+      const saved = await saveMutation.mutateAsync({
         name: sequence.name,
         durationMs: sequence.durationMs,
         tracks: sequence.tracks,
         transitions: sequence.transitions,
       })
-      useTimelineStore.getState().markClean()
+      const store = useTimelineStore.getState()
+      if (saved && saved.id !== sequence.id) {
+        store.setSequence({ ...sequence, ...saved, tracks: sequence.tracks })
+      }
+      store.markClean()
     } catch {
       // error handled by mutation
     }
@@ -235,6 +261,81 @@ export function TimelineEditor({ projectId, onOpenLibrary, className }: Timeline
 
   return (
     <div className={cn('relative flex flex-col gap-2', mounted ? 'timeline-enter' : 'opacity-0', className)}>
+      {/* Sequence selector */}
+      {sequences && sequences.length > 0 && (
+        <div className="flex items-center gap-2" ref={seqMenuRef}>
+          <div className="relative">
+            <button
+              onClick={() => setIsSeqMenuOpen(!isSeqMenuOpen)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-foreground/80 hover:text-foreground bg-muted/30 hover:bg-muted/50 border border-border/30 transition-colors"
+            >
+              <span className="max-w-[180px] truncate">{sequence?.name || 'Select edit'}</span>
+              <ChevronDown className={cn('h-3 w-3 text-muted-foreground transition-transform', isSeqMenuOpen && 'rotate-180')} />
+            </button>
+
+            {isSeqMenuOpen && (
+              <div className="absolute top-full left-0 mt-1 z-50 min-w-[200px] rounded-lg border border-border/50 bg-card/95 backdrop-blur-xl shadow-xl py-1">
+                {sequences.map((seq) => (
+                  <button
+                    key={seq.id}
+                    onClick={() => {
+                      onSwitchSequence?.(seq)
+                      setIsSeqMenuOpen(false)
+                    }}
+                    className={cn(
+                      'flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left transition-colors group/item',
+                      seq.id === sequence?.id
+                        ? 'text-primary bg-primary/5'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                    )}
+                  >
+                    {seq.id === sequence?.id && <Check className="h-3 w-3 flex-shrink-0" />}
+                    <span className={cn('flex-1 truncate', seq.id !== sequence?.id && 'ml-5')}>
+                      {seq.name}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground/50 font-mono tabular-nums">
+                      {seq.tracks?.length ?? 0}t
+                    </span>
+                    {sequences.length > 1 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDeleteSequence?.(seq.id)
+                          setIsSeqMenuOpen(false)
+                        }}
+                        className="opacity-0 group-hover/item:opacity-100 p-0.5 rounded text-muted-foreground/40 hover:text-red-400 transition-all"
+                        title="Delete this edit"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </button>
+                ))}
+
+                <div className="h-px bg-border/30 my-1" />
+
+                <button
+                  onClick={() => {
+                    onCreateSequence?.()
+                    setIsSeqMenuOpen(false)
+                  }}
+                  disabled={isCreating}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors disabled:opacity-50"
+                >
+                  <FilePlus2 className="h-3 w-3" />
+                  <span>New edit</span>
+                  {isCreating && <Loader2 className="h-3 w-3 animate-spin ml-auto" />}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {isDirty && (
+            <span className="text-[9px] text-amber-500/80 font-mono uppercase tracking-wider">unsaved</span>
+          )}
+        </div>
+      )}
+
       {/* Full-width preview */}
       <div className="relative w-full aspect-video rounded-lg bg-black/70 border border-border/30 overflow-hidden timeline-scanline-boot">
         {previewClip ? (

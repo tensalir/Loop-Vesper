@@ -1371,7 +1371,7 @@ export function GenerationInterface({
             ? "max-w-[var(--dock-prompt-max-w-multi)]" 
             : "max-w-[var(--dock-prompt-max-w)]"
       )}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-end gap-3">
           {/* Prompt Bar OR Timeline Shell — exclusive surface policy */}
           <div className={cn(
             "flex-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl",

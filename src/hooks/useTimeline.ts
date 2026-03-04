@@ -41,6 +41,19 @@ async function saveSequence(
   sequenceId: string,
   payload: { name?: string; durationMs?: number; tracks?: any[]; transitions?: any[] }
 ): Promise<TimelineSequence> {
+  const isLocal = sequenceId.startsWith('local-')
+
+  if (isLocal) {
+    const createRes = await fetch(`/api/projects/${projectId}/timeline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: payload.name || 'Sequence 1' }),
+    })
+    if (!createRes.ok) throw new Error('Failed to create timeline on server')
+    const created: SequenceApiResponse = await createRes.json()
+    sequenceId = created.sequence.id
+  }
+
   const res = await fetch(`/api/projects/${projectId}/timeline/${sequenceId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
