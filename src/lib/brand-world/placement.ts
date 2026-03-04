@@ -51,7 +51,59 @@ export function assignOutputsToSlots(outputs: BrandWorldOutput[]): PlacedBanner[
   return placed
 }
 
+export interface PendingGeneration {
+  id: string
+  stageId: string
+  prompt: string
+  genType: 'image' | 'video'
+  createdAt: string
+}
+
 const MAX_ROBOTS_PER_STAGE = 8
+
+export function assignPendingToRobots(pending: PendingGeneration[]): PlacedRobot[] {
+  const robots: PlacedRobot[] = []
+  const stageGroups: Record<string, PendingGeneration[]> = {}
+
+  for (const p of pending) {
+    if (!stageGroups[p.stageId]) stageGroups[p.stageId] = []
+    stageGroups[p.stageId].push(p)
+  }
+
+  for (const stage of STAGES) {
+    const items = stageGroups[stage.id] ?? []
+    const cx = stage.position[0]
+    const cz = stage.position[2]
+    const radius = 8 * stage.scale
+
+    for (let i = 0; i < items.length; i++) {
+      const angle = ((i + 0.5) / Math.max(items.length, 1)) * Math.PI * 0.8 - Math.PI * 0.4
+      const px = cx + Math.sin(angle) * (radius + 2)
+      const pz = cz + Math.cos(angle) * (radius + 2)
+      const faceAngle = Math.atan2(cx - px, cz - pz)
+
+      robots.push({
+        output: {
+          id: items[i].id,
+          fileUrl: '',
+          fileType: items[i].genType === 'video' ? 'video' : 'image',
+          width: null,
+          height: null,
+          duration: null,
+          createdAt: items[i].createdAt,
+          prompt: items[i].prompt,
+          generationId: items[i].id,
+          sessionName: '',
+        },
+        stageId: stage.id,
+        position: [px, 0, pz],
+        rotation: faceAngle,
+      })
+    }
+  }
+
+  return robots
+}
 
 export function assignOutputsToRobots(outputs: BrandWorldOutput[]): PlacedRobot[] {
   const sorted = [...outputs].sort(

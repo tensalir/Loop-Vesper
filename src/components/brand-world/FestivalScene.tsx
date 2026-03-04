@@ -50,6 +50,7 @@ function createSkyDomeMaterial() {
 interface FestivalSceneProps {
   placedBanners: PlacedBanner[]
   placedRobots: PlacedRobot[]
+  pendingRobots?: PlacedRobot[]
   selectedStageId: string | null
   onStageClick: (stageId: string) => void
   onRobotClick?: (output: BrandWorldOutput) => void
@@ -58,6 +59,7 @@ interface FestivalSceneProps {
 export function FestivalScene({
   placedBanners,
   placedRobots,
+  pendingRobots = [],
   selectedStageId,
   onStageClick,
   onRobotClick,
@@ -85,9 +87,12 @@ export function FestivalScene({
       />
       <hemisphereLight args={['#87ceeb', '#4a7a3a', 0.35]} />
 
+      {/* Scene background — matches sky horizon so any far-plane clipping is seamless */}
+      <color attach="background" args={[WORLD_CONFIG.skyHorizonColor]} />
+
       {/* Sky dome */}
       <mesh>
-        <sphereGeometry args={[250, 32, 16]} />
+        <sphereGeometry args={[200, 32, 16]} />
         <primitive object={skyMaterial} attach="material" />
       </mesh>
 
@@ -147,6 +152,17 @@ export function FestivalScene({
           position={robot.position}
           rotation={robot.rotation}
           onClick={onRobotClick}
+        />
+      ))}
+
+      {/* Pending generation robots */}
+      {pendingRobots.map((robot) => (
+        <RobotBillboard
+          key={`pending-${robot.output.id}`}
+          output={robot.output}
+          position={robot.position}
+          rotation={robot.rotation}
+          status="processing"
         />
       ))}
 

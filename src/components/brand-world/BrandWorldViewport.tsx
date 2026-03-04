@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { Canvas } from '@react-three/fiber'
 import { FestivalScene } from './FestivalScene'
 import { StageInspectorPanel } from './StageInspectorPanel'
 import { useProjectOutputs } from './useProjectOutputs'
-import { assignOutputsToSlots, assignOutputsToRobots } from '@/lib/brand-world/placement'
-import type { BrandWorldOutput } from '@/lib/brand-world/placement'
+import { assignOutputsToSlots, assignOutputsToRobots, assignPendingToRobots } from '@/lib/brand-world/placement'
+import type { BrandWorldOutput, PendingGeneration } from '@/lib/brand-world/placement'
 import { WORLD_CONFIG, getStageById } from '@/lib/brand-world/world-config'
 import type { StageConfig } from '@/lib/brand-world/world-config'
 
@@ -25,10 +25,41 @@ export function BrandWorldViewport({ projectId, projectName }: BrandWorldViewpor
   const [selectedStage, setSelectedStage] = useState<StageConfig | null>(null)
   const [generateStage, setGenerateStage] = useState<StageConfig | null>(null)
   const [previewOutput, setPreviewOutput] = useState<{ url: string; type: 'image' | 'video'; prompt: string } | null>(null)
-  const { outputs, isLoading } = useProjectOutputs(projectId)
+  const [pendingGenerations, setPendingGenerations] = useState<PendingGeneration[]>([])
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const { outputs, isLoading, refetch } = useProjectOutputs(projectId)
+
+  useEffect(() => {
+    if (pendingGenerations.length === 0) {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current)
+        pollTimerRef.current = null
+      }
+      return
+    }
+
+    pollTimerRef.current = setInterval(() => {
+      refetch()
+    }, 4000)
+
+    return () => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+    }
+  }, [pendingGenerations.length, refetch])
+
+  useEffect(() => {
+    if (pendingGenerations.length === 0) return
+    const outputIds = new Set(outputs.map((o) => o.generationId))
+    setPendingGenerations((prev) => prev.filter((p) => !outputIds.has(p.id)))
+  }, [outputs, pendingGenerations.length])
+
+  const handleGenerationStarted = useCallback((gen: PendingGeneration) => {
+    setPendingGenerations((prev) => [...prev, gen])
+  }, [])
 
   const placedBanners = assignOutputsToSlots(outputs)
   const placedRobots = assignOutputsToRobots(outputs)
+  const pendingRobots = assignPendingToRobots(pendingGenerations)
 
   const handleStageClick = useCallback((stageId: string) => {
     const stage = getStageById(stageId)
@@ -80,6 +111,7 @@ export function BrandWorldViewport({ projectId, projectName }: BrandWorldViewpor
         <FestivalScene
           placedBanners={placedBanners}
           placedRobots={placedRobots}
+          pendingRobots={pendingRobots}
           selectedStageId={selectedStage?.id ?? null}
           onStageClick={handleStageClick}
           onRobotClick={handleRobotClick}
@@ -99,6 +131,12 @@ export function BrandWorldViewport({ projectId, projectName }: BrandWorldViewpor
           <span>{outputs.length} outputs loaded</span>
           <span className="w-px h-3 bg-border" />
           <span>{placedBanners.length} banners placed</span>
+          {pendingGenerations.length > 0 && (
+            <>
+              <span className="w-px h-3 bg-border" />
+              <span className="text-primary font-medium">{pendingGenerations.length} generating&hellip;</span>
+            </>
+          )}
           {projectName && (
             <>
               <span className="w-px h-3 bg-border" />
@@ -125,6 +163,7 @@ export function BrandWorldViewport({ projectId, projectName }: BrandWorldViewpor
           stage={generateStage}
           projectId={projectId}
           onClose={handleCloseGenerate}
+          onGenerationStarted={handleGenerationStarted}
         />
       )}
 

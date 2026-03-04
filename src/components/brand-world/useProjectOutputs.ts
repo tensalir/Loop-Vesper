@@ -48,5 +48,6 @@ export function useProjectOutputs(projectId: string | null) {
     isLoading: query.isLoading,
     hasMore: query.hasNextPage,
     fetchMore: query.fetchNextPage,
+    refetch: query.refetch,
   }
 }
