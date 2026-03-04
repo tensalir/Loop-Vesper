@@ -127,6 +127,7 @@ export function GenerationInterface({
   const setComposerMode = useTimelineStore((s) => s.setComposerMode)
   const isLibraryOpen = useTimelineStore((s) => s.isLibraryOpen)
   const setLibraryOpen = useTimelineStore((s) => s.setLibraryOpen)
+  const insertVideoClip = useTimelineStore((s) => s.insertVideoClip)
   const isTimelineMode = composerMode === 'timeline'
   const isExportPanelOpen = useTimelineStore((s) => s.isExportPanelOpen)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -1496,12 +1497,17 @@ export function GenerationInterface({
           onClose={() => setLibraryOpen(false)}
           projectId={session.projectId}
           onSelectVideo={(videoUrl, outputId, durationMs) => {
-            const insertFn = (useTimelineStore as any)._insertVideo
-            if (typeof insertFn === 'function') {
-              insertFn(videoUrl, outputId, durationMs)
+            const inserted = insertVideoClip(videoUrl, outputId, durationMs)
+            if (inserted) {
+              toast({ title: 'Video added', description: 'Clip added to timeline' })
+              setLibraryOpen(false)
+            } else {
+              toast({
+                title: 'Could not add video',
+                description: 'Load a timeline sequence first, then try again.',
+                variant: 'destructive',
+              })
             }
-            toast({ title: 'Video added', description: 'Clip added to timeline' })
-            setLibraryOpen(false)
           }}
         />
       )}

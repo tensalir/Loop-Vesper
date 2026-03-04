@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -129,27 +129,49 @@ function VideoThumbnail({
   video: BrowseVideo
   onSelect: (video: BrowseVideo) => void
 }) {
+  const previewRef = useRef<HTMLVideoElement | null>(null)
   const durationLabel = video.durationMs
     ? `${(video.durationMs / 1000).toFixed(1)}s`
     : null
+
+  const handleMouseEnter = () => {
+    const element = previewRef.current
+    if (!element) return
+    element.muted = true
+    void element.play().catch(() => {
+      // Ignore autoplay policy failures for hover preview.
+    })
+  }
+
+  const handleMouseLeave = () => {
+    const element = previewRef.current
+    if (!element) return
+    element.pause()
+    element.currentTime = 0
+  }
 
   return (
     <button
       type="button"
       onClick={() => onSelect(video)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       className="group relative aspect-video rounded-lg overflow-hidden border border-border/50 hover:border-primary/50 hover:shadow-lg transition-all duration-200 bg-muted/30 text-left"
     >
       {/* Poster image — no autoplay to avoid decode spikes */}
       <video
+        ref={previewRef}
         src={video.url}
         className="w-full h-full object-cover"
         preload="metadata"
         muted
+        loop
+        playsInline
       />
 
-      {/* Hover overlay */}
-      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center justify-center">
-        <div className="p-2 bg-primary rounded-full">
+      {/* Hover affordance */}
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+        <div className="p-2 bg-primary rounded-full shadow-md">
           <Plus className="h-4 w-4 text-primary-foreground" />
         </div>
       </div>

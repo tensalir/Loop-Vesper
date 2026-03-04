@@ -34,6 +34,7 @@ export function TimelineEditor({ projectId, onOpenLibrary, className }: Timeline
   const saveMutation = useSaveSequence(projectId, sequence?.id || '')
   const tracksAreaRef = useRef<HTMLDivElement>(null)
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const previewVideoRef = useRef<HTMLVideoElement>(null)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -66,6 +67,49 @@ export function TimelineEditor({ projectId, onOpenLibrary, className }: Timeline
 
   const durationMs = sequence?.durationMs ?? 0
   const viewDurationMs = Math.max(durationMs, 10_000) / zoom
+  const previewClip = useMemo(() => {
+    const videoClips = (sequence?.tracks ?? [])
+      .filter((track) => track.kind === 'video')
+      .flatMap((track) => track.clips)
+      .sort((a, b) => a.startMs - b.startMs)
+
+    if (videoClips.length === 0) return null
+    return (
+      videoClips.find((clip) => playheadMs >= clip.startMs && playheadMs < clip.endMs) ??
+      videoClips[0]
+    )
+  }, [sequence, playheadMs])
+
+  useEffect(() => {
+    const previewElement = previewVideoRef.current
+    if (!previewElement) return
+
+    if (!previewClip) {
+      previewElement.pause()
+      return
+    }
+
+    const localMs = Math.max(
+      previewClip.inPointMs,
+      Math.min(
+        previewClip.outPointMs,
+        previewClip.inPointMs + Math.max(0, playheadMs - previewClip.startMs)
+      )
+    )
+    const nextTime = localMs / 1000
+
+    if (Math.abs(previewElement.currentTime - nextTime) > 0.12) {
+      previewElement.currentTime = nextTime
+    }
+
+    if (isPlaying) {
+      void previewElement.play().catch(() => {
+        // Ignore browser autoplay restrictions for muted preview.
+      })
+    } else {
+      previewElement.pause()
+    }
+  }, [previewClip, playheadMs, isPlaying])
 
   const handleAddTrack = useCallback((kind: 'video' | 'caption' | 'audio') => {
     if (!sequence) return
@@ -191,106 +235,175 @@ export function TimelineEditor({ projectId, onOpenLibrary, className }: Timeline
 
   return (
     <div className={cn('relative flex flex-col gap-2', mounted ? 'timeline-enter' : 'opacity-0', className)}>
-      {/* Preview + Controls Row */}
-      <div className="flex items-center gap-3">
-        {/* Mini Preview */}
-        <div className="relative w-[180px] h-[102px] rounded-lg bg-black/60 border border-border/30 overflow-hidden flex-shrink-0 flex items-center justify-center timeline-scanline-boot">
-          <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider font-mono z-10">
-            {isPlaying ? msToTimecode(playheadMs) : 'Preview'}
-          </span>
+      {/* Full-width preview */}
+      <div className="relative w-full aspect-video rounded-lg bg-black/70 border border-border/30 overflow-hidden timeline-scanline-boot">
+        {previewClip ? (
+          <video
+            ref={previewVideoRef}
+            key={previewClip.id}
+            src={previewClip.fileUrl}
+            className="w-full h-full object-contain"
+            muted
+            playsInline
+            preload="metadata"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground/60 font-mono uppercase tracking-wider">
+            Add a video clip to preview
+          </div>
+        )}
+        <div className="absolute bottom-2 left-2 px-2 py-1 rounded bg-black/50 text-[10px] text-white font-mono tabular-nums">
+          {msToTimecode(playheadMs)}
+        </div>
+      </div>
+
+      {/* Controls row between preview and timeline */}
+      <div className="flex flex-col gap-2 rounded-lg border border-border/30 bg-muted/20 px-2.5 py-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="font-mono text-xs text-muted-foreground tabular-nums bg-muted/30 px-2 py-1 rounded-md border border-border/30 min-w-[90px] text-center">
+            {msToTimecode(playheadMs)}
+          </div>
+
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={() => {
+                setPlayheadMs(0)
+                setIsPlaying(false)
+              }}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+              title="Skip to start"
+            >
+              <SkipBack className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setPlayheadMs(Math.max(0, playheadMs - 5000))}
+              className="px-2 py-1 rounded-md text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+              title="Back 5 seconds"
+            >
+              -5s
+            </button>
+            <button
+              onClick={() => setIsPlaying(!isPlaying)}
+              className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              title={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            </button>
+            <button
+              onClick={() => setPlayheadMs(Math.min(durationMs, playheadMs + 5000))}
+              className="px-2 py-1 rounded-md text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+              title="Forward 5 seconds"
+            >
+              +5s
+            </button>
+          </div>
+
+          <div className="w-px h-4 bg-border/50" />
+
+          {tools.map((tool) => (
+            <button
+              key={tool.id}
+              onClick={() => setActiveTool(tool.id)}
+              className={cn(
+                'p-1.5 rounded-md transition-colors',
+                activeTool === tool.id
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              )}
+              title={tool.label}
+            >
+              <tool.icon className="h-3.5 w-3.5" />
+            </button>
+          ))}
+
+          <div className="w-px h-4 bg-border/50" />
+
+          {activeTool === 'cut' && selectedClipId && (
+            <button
+              onClick={handleSplitAtPlayhead}
+              className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors border border-amber-500/30"
+              title="Split at playhead"
+            >
+              <Scissors className="h-3 w-3" /> Split
+            </button>
+          )}
+
+          <button
+            onClick={handleAddCrossDissolve}
+            className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors border border-border/30"
+            title="Add cross-dissolve between adjacent clips"
+          >
+            <X className="h-3 w-3 rotate-45" /> Dissolve
+          </button>
+
+          <button
+            onClick={handleAddCaption}
+            className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors border border-border/30"
+            title="Add caption at playhead"
+          >
+            <Type className="h-3 w-3" /> Caption
+          </button>
+
+          <div className="flex items-center gap-0.5 ml-auto">
+            <button
+              onClick={() => setZoom(zoom / 1.3)}
+              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+            >
+              <ZoomOut className="h-3 w-3" />
+            </button>
+            <span className="text-[10px] text-muted-foreground font-mono w-8 text-center">
+              {Math.round(zoom * 100)}%
+            </span>
+            <button
+              onClick={() => setZoom(zoom * 1.3)}
+              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+            >
+              <ZoomIn className="h-3 w-3" />
+            </button>
+          </div>
+
+          <button
+            onClick={onOpenLibrary}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors border border-border/30"
+          >
+            <FolderOpen className="h-3 w-3" /> Library
+          </button>
+
+          {isDirty && (
+            <button
+              onClick={handleSave}
+              disabled={saveMutation.isPending}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs bg-primary/10 text-primary hover:bg-primary/20 transition-colors border border-primary/30"
+            >
+              {saveMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Save className="h-3 w-3" />
+              )}
+              Save
+            </button>
+          )}
+
+          <button
+            onClick={() => setExportPanelOpen(!isExportPanelOpen)}
+            className={cn(
+              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-colors border',
+              isExportPanelOpen
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border-border/30'
+            )}
+          >
+            <Download className="h-3 w-3" /> Export
+          </button>
         </div>
 
-        {/* Controls */}
-        <div className="flex-1 flex flex-col gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Timecode */}
-            <div className="font-mono text-xs text-muted-foreground tabular-nums bg-muted/30 px-2 py-1 rounded-md border border-border/30 min-w-[80px] text-center">
-              {msToTimecode(playheadMs)}
-            </div>
-
-            {/* Transport */}
-            <div className="flex items-center gap-0.5">
-              <button onClick={() => { setPlayheadMs(0); setIsPlaying(false) }}
-                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors" title="Skip to start">
-                <SkipBack className="h-3.5 w-3.5" />
-              </button>
-              <button onClick={() => setIsPlaying(!isPlaying)}
-                className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors" title={isPlaying ? 'Pause' : 'Play'}>
-                {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-              </button>
-            </div>
-
-            <div className="w-px h-4 bg-border/50" />
-
-            {/* Tools */}
-            {tools.map((tool) => (
-              <button key={tool.id} onClick={() => setActiveTool(tool.id)}
-                className={cn('p-1.5 rounded-md transition-colors', activeTool === tool.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60')}
-                title={tool.label}>
-                <tool.icon className="h-3.5 w-3.5" />
-              </button>
-            ))}
-
-            <div className="w-px h-4 bg-border/50" />
-
-            {/* Quick actions */}
-            {activeTool === 'cut' && selectedClipId && (
-              <button onClick={handleSplitAtPlayhead}
-                className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors border border-amber-500/30"
-                title="Split at playhead">
-                <Scissors className="h-3 w-3" /> Split
-              </button>
-            )}
-
-            <button onClick={handleAddCrossDissolve}
-              className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors border border-border/30"
-              title="Add cross-dissolve between adjacent clips">
-              <X className="h-3 w-3 rotate-45" /> Dissolve
-            </button>
-
-            <button onClick={handleAddCaption}
-              className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors border border-border/30"
-              title="Add caption at playhead">
-              <Type className="h-3 w-3" /> Caption
-            </button>
-
-            {/* Zoom */}
-            <div className="flex items-center gap-0.5 ml-auto">
-              <button onClick={() => setZoom(zoom / 1.3)} className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"><ZoomOut className="h-3 w-3" /></button>
-              <span className="text-[10px] text-muted-foreground font-mono w-8 text-center">{Math.round(zoom * 100)}%</span>
-              <button onClick={() => setZoom(zoom * 1.3)} className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"><ZoomIn className="h-3 w-3" /></button>
-            </div>
-
-            {/* Library + Save + Export */}
-            <button onClick={onOpenLibrary}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors border border-border/30">
-              <FolderOpen className="h-3 w-3" /> Library
-            </button>
-
-            {isDirty && (
-              <button onClick={handleSave} disabled={saveMutation.isPending}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs bg-primary/10 text-primary hover:bg-primary/20 transition-colors border border-primary/30">
-                {saveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                Save
-              </button>
-            )}
-
-            <button onClick={() => setExportPanelOpen(!isExportPanelOpen)}
-              className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-colors border',
-                isExportPanelOpen ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border-border/30')}>
-              <Download className="h-3 w-3" /> Export
-            </button>
-          </div>
-
-          {/* Metadata */}
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 font-mono uppercase tracking-wider">
-            <span>Duration: {msToTimecode(durationMs)}</span>
-            <span>|</span>
-            <span>{sequence?.tracks.length ?? 0} tracks</span>
-            <span>|</span>
-            <span>{sequence?.fps ?? 30} fps</span>
-            {isDirty && <span className="text-amber-500/80">| unsaved</span>}
-          </div>
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 font-mono uppercase tracking-wider">
+          <span>Duration: {msToTimecode(durationMs)}</span>
+          <span>|</span>
+          <span>{sequence?.tracks.length ?? 0} tracks</span>
+          <span>|</span>
+          <span>{sequence?.fps ?? 30} fps</span>
+          {isDirty && <span className="text-amber-500/80">| unsaved</span>}
         </div>
       </div>
 

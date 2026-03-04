@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 import type { ComposerMode, TimelineSequence } from '@/types/timeline'
 import { beginModeSwitch, endModeSwitch, type ModeSwitchMark } from '@/lib/timeline/performance'
+import { createTrack, insertClip, computeSequenceDuration } from '@/lib/timeline/operations'
 
 interface TimelineStore {
   // Mode
@@ -38,6 +39,7 @@ interface TimelineStore {
   markClean: () => void
   setLibraryOpen: (open: boolean) => void
   setExportPanelOpen: (open: boolean) => void
+  insertVideoClip: (videoUrl: string, outputId: string, durationMs: number) => boolean
   resetTimeline: () => void
 }
 
@@ -87,6 +89,43 @@ export const useTimelineStore = create<TimelineStore>()(
       markClean: () => set({ isDirty: false }, false, 'markClean'),
       setLibraryOpen: (open) => set({ isLibraryOpen: open }, false, 'setLibraryOpen'),
       setExportPanelOpen: (open) => set({ isExportPanelOpen: open }, false, 'setExportPanelOpen'),
+      insertVideoClip: (videoUrl, outputId, durationMs) => {
+        const currentSequence = get().sequence
+        if (!currentSequence) return false
+
+        let tracks = [...currentSequence.tracks]
+        let videoTrack = tracks.find((track) => track.kind === 'video')
+
+        if (!videoTrack) {
+          videoTrack = createTrack('video', 'Video', 0)
+          videoTrack.sequenceId = currentSequence.id
+          tracks = [videoTrack, ...tracks]
+        }
+
+        const { track: updatedTrack } = insertClip(
+          videoTrack,
+          videoUrl,
+          'video',
+          durationMs,
+          outputId
+        )
+        tracks = tracks.map((track) => (track.id === updatedTrack.id ? updatedTrack : track))
+
+        set(
+          {
+            sequence: {
+              ...currentSequence,
+              tracks,
+              durationMs: computeSequenceDuration(tracks),
+            },
+            selectedTrackId: updatedTrack.id,
+            isDirty: true,
+          },
+          false,
+          'insertVideoClip'
+        )
+        return true
+      },
 
       resetTimeline: () =>
         set(

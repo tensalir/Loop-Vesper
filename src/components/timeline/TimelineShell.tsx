@@ -5,7 +5,6 @@ import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 import { useTimelineStore } from '@/store/timelineStore'
 import { useTimelineSequences, useCreateSequence } from '@/hooks/useTimeline'
-import { createTrack, insertClip, computeSequenceDuration } from '@/lib/timeline/operations'
 import type { TimelineSequence } from '@/types/timeline'
 
 const TimelineEditor = dynamic(
@@ -26,7 +25,7 @@ interface TimelineShellProps {
 }
 
 export function TimelineShell({ projectId, className }: TimelineShellProps) {
-  const { sequence, setSequence, setLibraryOpen, markDirty, finishModeSwitch } = useTimelineStore()
+  const { sequence, setSequence, setLibraryOpen, finishModeSwitch } = useTimelineStore()
   const { data: sequences, isLoading } = useTimelineSequences(projectId)
   const createMutation = useCreateSequence(projectId)
 
@@ -34,73 +33,45 @@ export function TimelineShell({ projectId, className }: TimelineShellProps) {
     finishModeSwitch()
   }, [finishModeSwitch])
 
-  // Auto-load the most recent sequence or create one
-  useEffect(() => {
-    if (isLoading || sequence) return
+  const ensureSequence = useCallback(
+    (onReady?: () => void) => {
+      if (sequence) {
+        onReady?.()
+        return
+      }
+      if (isLoading) return
 
-    if (sequences && sequences.length > 0) {
-      setSequence(sequences[0] as TimelineSequence)
-    } else if (!createMutation.isPending) {
+      if (sequences && sequences.length > 0) {
+        setSequence(sequences[0] as TimelineSequence)
+        onReady?.()
+        return
+      }
+
+      if (createMutation.isPending) return
+
       createMutation.mutate(
         { name: 'Sequence 1' },
         {
           onSuccess: (newSeq) => {
             setSequence(newSeq as TimelineSequence)
+            onReady?.()
           },
         }
       )
-    }
-  }, [isLoading, sequences, sequence, setSequence, createMutation])
-
-  const handleOpenLibrary = useCallback(() => {
-    setLibraryOpen(true)
-  }, [setLibraryOpen])
-
-  // Called from GenerationInterface when a video is selected from the library
-  const handleInsertVideo = useCallback(
-    (videoUrl: string, outputId: string, durationMs: number) => {
-      const currentSequence = useTimelineStore.getState().sequence
-      if (!currentSequence) return
-
-      let tracks = [...currentSequence.tracks]
-      let videoTrack = tracks.find((t) => t.kind === 'video')
-
-      if (!videoTrack) {
-        videoTrack = createTrack('video', 'Video', 0)
-        videoTrack.sequenceId = currentSequence.id
-        tracks = [videoTrack, ...tracks]
-      }
-
-      const { track: updatedTrack } = insertClip(
-        videoTrack,
-        videoUrl,
-        'video',
-        durationMs,
-        outputId
-      )
-
-      tracks = tracks.map((t) => (t.id === updatedTrack.id ? updatedTrack : t))
-      const newDuration = computeSequenceDuration(tracks)
-
-      setSequence({
-        ...currentSequence,
-        tracks,
-        durationMs: newDuration,
-      })
-      markDirty()
     },
-    [setSequence, markDirty]
+    [sequence, isLoading, sequences, setSequence, createMutation]
   )
 
-  // Expose the insert handler for parent components via the store
+  // Auto-load the most recent sequence or create one
   useEffect(() => {
-    ;(useTimelineStore as any)._insertVideo = handleInsertVideo
-    return () => {
-      delete (useTimelineStore as any)._insertVideo
-    }
-  }, [handleInsertVideo])
+    if (!sequence) ensureSequence()
+  }, [sequence, ensureSequence])
 
-  if (isLoading && !sequence) {
+  const handleOpenLibrary = useCallback(() => {
+    ensureSequence(() => setLibraryOpen(true))
+  }, [ensureSequence, setLibraryOpen])
+
+  if (!sequence) {
     return (
       <div className={cn('flex items-center justify-center py-6 text-muted-foreground text-sm', className)}>
         Loading timeline…
