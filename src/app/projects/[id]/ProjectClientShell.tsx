@@ -5,9 +5,9 @@ import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
-import { Settings, Sun, Moon, Lock, Globe, Loader2, FileText } from 'lucide-react'
+import { Settings, Sun, Moon, Lock, Globe, Loader2, FileText, Globe2, Link2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -170,6 +170,19 @@ export function ProjectClientShell({
 
   // Use React Query for sessions with intelligent caching (will use prefetched data)
   const { data: sessions = [], isLoading: sessionsLoading } = useSessions(projectId)
+
+  const { data: brandWorldLink } = useQuery<{ source: string; createdAt: string } | null>({
+    queryKey: ['brand-world-link', projectId],
+    queryFn: async () => {
+      const res = await fetch(`/api/brand-world/projects?mode=linked`)
+      if (!res.ok) return null
+      const projects: { id: string; brandWorldSettings: { source: string; createdAt: string } | null }[] = await res.json()
+      const match = projects.find((p) => p.id === projectId)
+      return match?.brandWorldSettings ?? null
+    },
+    enabled: isAdmin,
+    staleTime: 60_000,
+  })
 
   // Initialize theme from localStorage or system preference
   useEffect(() => {
@@ -734,15 +747,40 @@ export function ProjectClientShell({
             )}
           </div>
           
-          {/* Row 2: Briefing button - styled as a subtle action pill */}
-          <button
-            onClick={handleOpenBriefing}
-            className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/30 hover:bg-muted/50 border border-border/40 text-[10px] font-semibold text-muted-foreground/80 hover:text-foreground transition-all w-fit uppercase tracking-wider"
-            title="Project briefing"
-          >
-            <FileText className="h-3 w-3" />
-            <span>Briefing</span>
-          </button>
+          {/* Row 2: Briefing + Brand World action pills */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleOpenBriefing}
+              className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/30 hover:bg-muted/50 border border-border/40 text-[10px] font-semibold text-muted-foreground/80 hover:text-foreground transition-all w-fit uppercase tracking-wider"
+              title="Project briefing"
+            >
+              <FileText className="h-3 w-3" />
+              <span>Briefing</span>
+            </button>
+            {isAdmin && (
+              brandWorldLink ? (
+                <Link href={`/brand-world/${projectId}`}>
+                  <button
+                    className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-primary/10 hover:bg-primary/20 border border-primary/30 text-[10px] font-semibold text-primary hover:text-primary transition-all w-fit uppercase tracking-wider"
+                    title="Open Brand World"
+                  >
+                    <Globe2 className="h-3 w-3" />
+                    <span>Brand World</span>
+                  </button>
+                </Link>
+              ) : (
+                <Link href={`/brand-world/${projectId}`}>
+                  <button
+                    className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/30 hover:bg-muted/50 border border-border/40 text-[10px] font-semibold text-muted-foreground/80 hover:text-foreground transition-all w-fit uppercase tracking-wider"
+                    title="Link to Brand World"
+                  >
+                    <Link2 className="h-3 w-3" />
+                    <span>Brand World</span>
+                  </button>
+                </Link>
+              )
+            )}
+          </div>
           
           {/* Row 3: Pinned Images with subtle label */}
           {projectId && (

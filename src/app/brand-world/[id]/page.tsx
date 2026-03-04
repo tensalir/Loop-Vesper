@@ -40,6 +40,9 @@ export default async function BrandWorldDetailPage({ params }: PageProps) {
           select: { id: true, name: true, type: true },
           orderBy: { createdAt: 'asc' },
         },
+        brandWorldSettings: {
+          select: { source: true, createdAt: true },
+        },
       },
     }),
   ])
@@ -58,6 +61,8 @@ export default async function BrandWorldDetailPage({ params }: PageProps) {
       projectName={project.name}
       projectDescription={project.description}
       initialSessions={project.sessions}
+      isLinked={!!project.brandWorldSettings}
+      linkSource={project.brandWorldSettings?.source ?? null}
     />
   )
 }

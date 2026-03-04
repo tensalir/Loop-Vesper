@@ -38,6 +38,7 @@ model Profile {
   pinnedImages   PinnedImage[]
   outputEvents   OutputEvent[]
   pdfBuckets     PdfBucket[]
+  brandWorldLinks BrandWorldProjectSettings[]
 
   @@map("profiles")
 }
@@ -58,7 +59,8 @@ model Project {
   members      ProjectMember[]
   chats        ProjectChat[]
   pinnedImages PinnedImage[]
-  pdfBuckets   PdfBucket[]
+  pdfBuckets          PdfBucket[]
+  brandWorldSettings  BrandWorldProjectSettings?
 
   @@index([ownerId])
   @@index([isShared, ownerId])
@@ -502,5 +504,20 @@ model SyncCursor {
   @@unique([integration, cursorKey])
   @@index([integration])
   @@map("sync_cursors")
+}
+
+model BrandWorldProjectSettings {
+  id             String   @id @default(uuid()) @db.Uuid
+  projectId      String   @unique @map("project_id") @db.Uuid
+  linkedByUserId String   @map("linked_by_user_id") @db.Uuid
+  source         String   // 'created' or 'linked'
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  linkedBy Profile @relation(fields: [linkedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("brand_world_project_settings")
 }
 
