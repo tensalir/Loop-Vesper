@@ -38,7 +38,7 @@ export function TimelineShell({
   isPromptMode = false,
   timelinePromptSlot,
 }: TimelineShellProps) {
-  const { sequence, setSequence, setLibraryOpen, finishModeSwitch, resetTimeline } = useTimelineStore()
+  const { sequence, setSequence, setLibraryOpen, setLibraryInsertTarget, finishModeSwitch, resetTimeline } = useTimelineStore()
   const { data: sequences, isLoading, refetch: refetchSequences } = useTimelineSequences(projectId)
   const createMutation = useCreateSequence(projectId)
   const deleteMutation = useDeleteSequence(projectId)
@@ -85,9 +85,15 @@ export function TimelineShell({
   }, [sequence, ensureSequence])
 
   const handleOpenLibrary = useCallback(() => {
+    setLibraryInsertTarget(null)
     setLibraryOpen(true)
     ensureSequence(undefined, true)
-  }, [ensureSequence, setLibraryOpen])
+  }, [ensureSequence, setLibraryOpen, setLibraryInsertTarget])
+
+  const handleInsertFromLibrary = useCallback((trackId: string, afterMs: number) => {
+    setLibraryInsertTarget({ trackId, timelineMs: afterMs })
+    setLibraryOpen(true)
+  }, [setLibraryInsertTarget, setLibraryOpen])
 
   const handleCreateSequence = useCallback(async () => {
     await flushNow()
@@ -136,6 +142,7 @@ export function TimelineShell({
       <TimelineEditor
         projectId={projectId}
         onOpenLibrary={handleOpenLibrary}
+        onInsertFromLibrary={handleInsertFromLibrary}
         sequences={allSequences}
         onCreateSequence={handleCreateSequence}
         onSwitchSequence={handleSwitchSequence}

@@ -127,6 +127,8 @@ export function GenerationInterface({
   const setComposerMode = useTimelineStore((s) => s.setComposerMode)
   const isLibraryOpen = useTimelineStore((s) => s.isLibraryOpen)
   const setLibraryOpen = useTimelineStore((s) => s.setLibraryOpen)
+  const libraryInsertTarget = useTimelineStore((s) => s.libraryInsertTarget)
+  const setLibraryInsertTarget = useTimelineStore((s) => s.setLibraryInsertTarget)
   const insertVideoClip = useTimelineStore((s) => s.insertVideoClip)
   const insertVideoClipTargeted = useTimelineStore((s) => s.insertVideoClipTargeted)
   const replaceClip = useTimelineStore((s) => s.replaceClip)
@@ -1875,7 +1877,29 @@ export function GenerationInterface({
           onClose={() => setLibraryOpen(false)}
           projectId={session.projectId}
           onSelectVideo={(videoUrl, outputId, durationMs) => {
-            const inserted = insertVideoClip(videoUrl, outputId, durationMs)
+            let inserted = false
+            const target = libraryInsertTarget
+            if (target) {
+              const refClips = useTimelineStore.getState().sequence?.tracks
+                .find((t) => t.id === target.trackId)?.clips ?? []
+              const refClip = refClips
+                .filter((c) => c.endMs <= target.timelineMs + 50)
+                .sort((a, b) => b.endMs - a.endMs)[0]
+              if (refClip) {
+                inserted = insertVideoClipTargeted(
+                  videoUrl, outputId, durationMs,
+                  'sameTrackAfter', refClip.id, target.trackId, target.timelineMs
+                )
+              } else {
+                inserted = insertVideoClipTargeted(
+                  videoUrl, outputId, durationMs,
+                  'sameTrackAfter', '', target.trackId, target.timelineMs
+                )
+              }
+              setLibraryInsertTarget(null)
+            } else {
+              inserted = insertVideoClip(videoUrl, outputId, durationMs)
+            }
             if (inserted) {
               toast({ title: 'Video added', description: 'Clip added to timeline' })
               setLibraryOpen(false)

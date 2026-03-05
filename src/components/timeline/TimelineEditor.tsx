@@ -5,7 +5,7 @@ import {
   Scissors, Type, MousePointer2, Play, Pause, SkipBack,
   FolderOpen, Download, Plus, ZoomIn, ZoomOut,
   Volume2, VolumeX, GripVertical, X, Save, Loader2,
-  ChevronDown, Trash2, FilePlus2, Check,
+  ChevronDown, Trash2, FilePlus2, Check, Camera,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTimelineStore } from '@/store/timelineStore'
@@ -21,6 +21,8 @@ import {
 import { captureCurrentFrameAsync } from '@/lib/video/captureFrame'
 
 const LABEL_WIDTH = 80
+const CLIP_JOIN_TOLERANCE_MS = 1
+const PREVIEW_GAP_TOLERANCE_MS = 50
 
 export interface SnapshotRequest {
   blob: Blob
@@ -36,6 +38,7 @@ export interface SnapshotRequest {
 interface TimelineEditorProps {
   projectId: string
   onOpenLibrary: () => void
+  onInsertFromLibrary?: (trackId: string, afterMs: number) => void
   sequences?: TimelineSequence[]
   onCreateSequence?: () => void
   onSwitchSequence?: (seq: TimelineSequence) => void
@@ -50,7 +53,7 @@ interface TimelineEditorProps {
 }
 
 export function TimelineEditor({
-  projectId, onOpenLibrary, sequences, onCreateSequence,
+  projectId, onOpenLibrary, onInsertFromLibrary, sequences, onCreateSequence,
   onSwitchSequence, onDeleteSequence, isCreating, className,
   onSnapshotRequest, flushNow, isSaving, isPromptMode = false, timelinePromptSlot,
 }: TimelineEditorProps) {
@@ -65,6 +68,8 @@ export function TimelineEditor({
   const tracksAreaRef = useRef<HTMLDivElement>(null)
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const previewVideoRef = useRef<HTMLVideoElement>(null)
+  const lastFrameCanvasRef = useRef<HTMLCanvasElement>(null)
+  const activePreviewSrcRef = useRef<string | null>(null)
   const [mounted, setMounted] = useState(false)
   const [isSeqMenuOpen, setIsSeqMenuOpen] = useState(false)
   const seqMenuRef = useRef<HTMLDivElement>(null)
@@ -95,8 +100,9 @@ export function TimelineEditor({
       playIntervalRef.current = setInterval(() => {
         const store = useTimelineStore.getState()
         const next = store.playheadMs + 33
-        if (next >= (store.sequence?.durationMs ?? 0)) {
-          store.setPlayheadMs(0)
+        const endMs = store.sequence?.durationMs ?? 0
+        if (next >= endMs) {
+          store.setPlayheadMs(endMs)
           store.setIsPlaying(false)
         } else {
           store.setPlayheadMs(next)
@@ -124,32 +130,77 @@ export function TimelineEditor({
       .flatMap((track) => track.clips)
       .sort((a, b) => a.startMs - b.startMs)
     if (videoClips.length === 0) return null
-    return (
-      videoClips.find((clip) => playheadMs >= clip.startMs && playheadMs < clip.endMs) ??
-      videoClips[0]
-    )
+
+    const active = videoClips.find((clip) => playheadMs >= clip.startMs && playheadMs < clip.endMs)
+    if (active) return active
+
+    const first = videoClips[0]
+    const last = videoClips[videoClips.length - 1]
+
+    // Before first clip: preview first clip.
+    if (playheadMs < first.startMs) return first
+    // At/after timeline tail: keep showing the final clip.
+    if (playheadMs >= last.endMs) return last
+
+    // Between clips: bridge micro-gaps to avoid black-frame flicker at boundaries.
+    for (let i = 0; i < videoClips.length - 1; i++) {
+      const current = videoClips[i]
+      const next = videoClips[i + 1]
+      if (playheadMs >= current.endMs && playheadMs < next.startMs) {
+        const gapMs = next.startMs - current.endMs
+        if (gapMs <= PREVIEW_GAP_TOLERANCE_MS) return next
+        return null
+      }
+    }
+
+    return null
   }, [sequence, playheadMs])
 
   useLayoutEffect(() => {
-    const previewElement = previewVideoRef.current
-    if (!previewElement) return
-    if (!previewClip) { previewElement.pause(); return }
+    const video = previewVideoRef.current
+    if (!video) return
+    if (!previewClip) { video.pause(); return }
+
+    const targetSrc = previewClip.fileUrl
+    const srcChanged = activePreviewSrcRef.current !== targetSrc
+
+    if (srcChanged) {
+      const canvas = lastFrameCanvasRef.current
+      if (canvas && video.readyState >= 2 && video.videoWidth > 0) {
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+        const ctx = canvas.getContext('2d')
+        ctx?.drawImage(video, 0, 0)
+        canvas.style.display = 'block'
+      }
+
+      activePreviewSrcRef.current = targetSrc
+      video.src = targetSrc
+      video.load()
+
+      const hideCanvas = () => {
+        if (lastFrameCanvasRef.current) lastFrameCanvasRef.current.style.display = 'none'
+      }
+      video.addEventListener('loadeddata', hideCanvas, { once: true })
+      setTimeout(hideCanvas, 600)
+    }
+
     const localMs = Math.max(
       previewClip.inPointMs,
       Math.min(previewClip.outPointMs, previewClip.inPointMs + Math.max(0, playheadMs - previewClip.startMs))
     )
     const nextTime = localMs / 1000
     if (!isPlaying) {
-      if (Math.abs(previewElement.currentTime - nextTime) > 0.005) {
-        previewElement.currentTime = nextTime
+      if (Math.abs(video.currentTime - nextTime) > 0.005) {
+        video.currentTime = nextTime
       }
-      previewElement.pause()
+      video.pause()
       return
     }
-    if (Math.abs(previewElement.currentTime - nextTime) > 0.08) {
-      previewElement.currentTime = nextTime
+    if (Math.abs(video.currentTime - nextTime) > 0.08) {
+      video.currentTime = nextTime
     }
-    void previewElement.play().catch(() => {})
+    void video.play().catch(() => {})
   }, [previewClip, playheadMs, isPlaying])
 
   // ── Helpers to convert pixel positions to ms ──
@@ -458,7 +509,15 @@ export function TimelineEditor({
         case 'v': setActiveTool('select'); break
         case 'c': setActiveTool('cut'); break
         case 't': setActiveTool('caption'); break
-        case ' ': e.preventDefault(); setIsPlaying(!useTimelineStore.getState().isPlaying); break
+        case ' ': {
+          e.preventDefault()
+          const s = useTimelineStore.getState()
+          if (!s.isPlaying && (s.sequence?.durationMs ?? 0) > 0 && s.playheadMs >= (s.sequence?.durationMs ?? 0) - 100) {
+            s.setPlayheadMs(0)
+          }
+          s.setIsPlaying(!s.isPlaying)
+          break
+        }
         case 'delete':
         case 'backspace': handleDeleteSelected(); break
         case 's':
@@ -567,19 +626,25 @@ export function TimelineEditor({
               Reference Frame
             </div>
           </>
-        ) : previewClip ? (
-          <video
-            ref={previewVideoRef}
-            key={previewClip.id}
-            src={previewClip.fileUrl}
-            className="w-full h-full object-contain"
-            crossOrigin="anonymous"
-            muted playsInline preload="auto"
-          />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground/60 font-mono uppercase tracking-wider">
-            Add a video clip to preview
-          </div>
+          <>
+            <canvas
+              ref={lastFrameCanvasRef}
+              className="absolute inset-0 w-full h-full object-contain pointer-events-none z-[1]"
+              style={{ display: 'none' }}
+            />
+            <video
+              ref={previewVideoRef}
+              className={cn('w-full h-full object-contain', !previewClip && 'hidden')}
+              crossOrigin="anonymous"
+              muted playsInline preload="auto"
+            />
+            {!previewClip && (
+              <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground/60 font-mono uppercase tracking-wider">
+                Add a video clip to preview
+              </div>
+            )}
+          </>
         )}
         <div className="absolute bottom-2 left-2 px-2 py-1 rounded bg-black/50 text-[10px] text-white font-mono tabular-nums">
           {msToTimecode(playheadMs)}
@@ -598,7 +663,12 @@ export function TimelineEditor({
               <SkipBack className="h-3.5 w-3.5" />
             </button>
             <button onClick={() => setPlayheadMs(Math.max(0, playheadMs - 5000))} className="px-2 py-1 rounded-md text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors" title="Back 5 seconds">-5s</button>
-            <button onClick={() => setIsPlaying(!isPlaying)} className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors" title={isPlaying ? 'Pause' : 'Play'}>
+            <button onClick={() => {
+              if (!isPlaying && durationMs > 0 && playheadMs >= durationMs - 100) {
+                setPlayheadMs(0)
+              }
+              setIsPlaying(!isPlaying)
+            }} className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors" title={isPlaying ? 'Pause' : 'Play'}>
               {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             </button>
             <button onClick={() => setPlayheadMs(Math.min(durationMs, playheadMs + 5000))} className="px-2 py-1 rounded-md text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors" title="Forward 5 seconds">+5s</button>
@@ -706,6 +776,7 @@ export function TimelineEditor({
                       transitions={transitionsByFrom}
                       onDissolveDurationChange={handleDissolveDurationChange}
                       onSnapshotAtPoint={onSnapshotRequest ? handleSnapshotAtPoint : undefined}
+                      onInsertFromLibrary={onInsertFromLibrary}
                       onToggleMute={handleToggleMute}
                     />
                   ))}
@@ -721,17 +792,15 @@ export function TimelineEditor({
                 </>
               )}
 
-              {/* Playhead overlay */}
+              {/* Playhead overlay — the wider hit-area covers the full vertical line */}
               {viewDurationMs > 0 && (
                 <div
-                  className="absolute top-0 bottom-0 w-px bg-primary z-10"
-                  style={{ left: playheadLeft, pointerEvents: 'none' }}
+                  className="absolute top-0 bottom-0 z-10 cursor-ew-resize"
+                  style={{ left: `calc(${playheadLeft} - 5px)`, width: '11px' }}
+                  onMouseDown={handlePlayheadDragStart}
                 >
-                  <div
-                    className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-primary rounded-sm shadow-sm shadow-primary/50 cursor-ew-resize"
-                    style={{ pointerEvents: 'auto' }}
-                    onMouseDown={handlePlayheadDragStart}
-                  />
+                  <div className="absolute top-0 bottom-0 left-1/2 w-px -translate-x-1/2 bg-primary pointer-events-none" />
+                  <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-primary rounded-sm shadow-sm shadow-primary/50 pointer-events-none" />
                 </div>
               )}
             </div>
@@ -739,6 +808,125 @@ export function TimelineEditor({
         )}
       </div>
       </div>
+    </div>
+  )
+}
+
+// ── ClipFilmstrip — renders evenly-spaced video frame thumbnails across the clip ──
+
+const FILMSTRIP_THUMB_WIDTH = 40
+
+function ClipFilmstrip({
+  fileUrl,
+  clipDurationMs,
+  flushLeft = false,
+  flushRight = false,
+}: {
+  fileUrl: string
+  clipDurationMs: number
+  flushLeft?: boolean
+  flushRight?: boolean
+}) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
+  const [slotCount, setSlotCount] = useState(0)
+  const generationIdRef = useRef(0)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0
+      setSlotCount(Math.max(1, Math.floor(width / FILMSTRIP_THUMB_WIDTH)))
+    })
+    observer.observe(el)
+    setSlotCount(Math.max(1, Math.floor(el.clientWidth / FILMSTRIP_THUMB_WIDTH)))
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (slotCount === 0) return
+    const genId = ++generationIdRef.current
+
+    const video = document.createElement('video')
+    video.crossOrigin = 'anonymous'
+    video.muted = true
+    video.playsInline = true
+    video.preload = 'auto'
+    video.src = fileUrl
+
+    let cancelled = false
+
+    const captureFrames = async () => {
+      await new Promise<void>((resolve) => {
+        if (video.readyState >= 1) { resolve(); return }
+        const done = () => { video.removeEventListener('loadedmetadata', done); video.removeEventListener('error', done); resolve() }
+        video.addEventListener('loadedmetadata', done, { once: true })
+        video.addEventListener('error', done, { once: true })
+        setTimeout(done, 2000)
+      })
+      if (cancelled || genId !== generationIdRef.current) return
+
+      const duration = video.duration
+      if (!duration || !isFinite(duration)) return
+
+      for (let i = 0; i < slotCount; i++) {
+        if (cancelled || genId !== generationIdRef.current) break
+        const seekTime = (i / Math.max(1, slotCount - 1)) * duration * 0.95
+        video.currentTime = seekTime
+        await new Promise<void>((resolve) => {
+          const finish = () => { video.removeEventListener('seeked', finish); resolve() }
+          video.addEventListener('seeked', finish, { once: true })
+          setTimeout(finish, 300)
+        })
+        if (cancelled || genId !== generationIdRef.current) break
+
+        const canvas = canvasRefs.current[i]
+        if (!canvas) continue
+        const ctx = canvas.getContext('2d')
+        if (!ctx) continue
+        const vw = video.videoWidth || 64
+        const vh = video.videoHeight || 36
+        canvas.width = FILMSTRIP_THUMB_WIDTH
+        canvas.height = Math.round((FILMSTRIP_THUMB_WIDTH / vw) * vh)
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      }
+
+      video.pause()
+      video.removeAttribute('src')
+      video.load()
+    }
+
+    captureFrames()
+
+    return () => {
+      cancelled = true
+      video.pause()
+      video.removeAttribute('src')
+      video.load()
+    }
+  }, [fileUrl, slotCount, clipDurationMs])
+
+  canvasRefs.current.length = slotCount
+
+  return (
+    <div
+      ref={containerRef}
+      className={cn(
+        'absolute inset-0 flex overflow-hidden opacity-50 pointer-events-none',
+        !flushLeft && !flushRight && 'rounded-md',
+        flushLeft && 'rounded-l-none',
+        flushRight && 'rounded-r-none'
+      )}
+    >
+      {Array.from({ length: slotCount }, (_, i) => (
+        <canvas
+          key={i}
+          ref={(el) => { canvasRefs.current[i] = el }}
+          className="h-full flex-shrink-0 object-cover"
+          style={{ width: `${100 / slotCount}%` }}
+        />
+      ))}
     </div>
   )
 }
@@ -775,7 +963,7 @@ function TrackLane({
   track, viewDurationMs, selectedClipId, isSelectedTrack,
   onClipClick, onSelectTrack, activeTool,
   onTrim, pxToMs, transitions, onDissolveDurationChange,
-  onSnapshotAtPoint, onToggleMute,
+  onSnapshotAtPoint, onInsertFromLibrary, onToggleMute,
 }: {
   track: TimelineTrack
   viewDurationMs: number
@@ -789,6 +977,7 @@ function TrackLane({
   transitions: Map<string, TimelineTransition>
   onDissolveDurationChange: (transitionId: string, newDurationMs: number) => void
   onSnapshotAtPoint?: (clip: TimelineClip, trackId: string, targetMs: number) => void
+  onInsertFromLibrary?: (trackId: string, afterMs: number) => void
   onToggleMute: (trackId: string) => void
 }) {
   const kindColors: Record<string, { bg: string; border: string; selected: string }> = {
@@ -867,32 +1056,62 @@ function TrackLane({
           const isSelected = selectedClipId === clip.id
           const dissolve = transitions.get(clip.id)
           const isPlaceholder = clip.fileUrl.startsWith('placeholder:')
+          const prevClip = idx > 0 ? sortedClips[idx - 1] : null
+          const nextClip = idx < sortedClips.length - 1 ? sortedClips[idx + 1] : null
+          const touchesPrev = !!prevClip && Math.abs(clip.startMs - prevClip.endMs) <= CLIP_JOIN_TOLERANCE_MS
+          const touchesNext = !!nextClip && Math.abs(nextClip.startMs - clip.endMs) <= CLIP_JOIN_TOLERANCE_MS
+          const clipWidth = Math.max(0.5, width)
 
           return (
             <div key={clip.id} className="contents">
+              {/* Hover zone — extends above and below the clip for snapshot cursor detection; button lives here so hover is unbroken */}
+              {!isPlaceholder && onSnapshotAtPoint && clip.fileType === 'video' && clip.outputId && (
+                <div
+                  className="absolute z-[15]"
+                  style={{ left: `${left}%`, width: `${Math.max(0.5, width)}%`, top: 0, bottom: 0 }}
+                  onMouseMove={(e) => {
+                    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+                    if (rect.width <= 0) return
+                    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+                    setSnapshotCursor({ clipId: clip.id, ratio })
+                  }}
+                  onMouseLeave={() => {
+                    setSnapshotCursor((current) => (current?.clipId === clip.id ? null : current))
+                  }}
+                >
+                  {snapshotCursor?.clipId === clip.id && (
+                    <button
+                      className="absolute w-7 h-7 rounded-full bg-muted/90 text-foreground backdrop-blur-sm border border-border/50 shadow-md flex items-center justify-center hover:bg-muted hover:scale-110 transition-all"
+                      style={{ top: '50%', left: `${snapshotCursor.ratio * 100}%`, transform: 'translate(-50%, -100%)' }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const targetMs = clip.startMs + (clip.endMs - clip.startMs) * snapshotCursor.ratio
+                        onSnapshotAtPoint(clip, track.id, targetMs)
+                      }}
+                      title="Capture snapshot at this frame"
+                    >
+                      <Camera className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              )}
               {/* Clip block */}
               <div
                 className={cn(
                   'absolute top-3 bottom-1 rounded-md border cursor-pointer transition-colors overflow-visible group/clip',
+                  touchesPrev && 'rounded-l-none',
+                  touchesNext && 'rounded-r-none',
                   isPlaceholder
                     ? 'border-primary/40 bg-primary/[0.07] timeline-clip-generating'
                     : cn(colors.bg, colors.border),
                   isSelected && !isPlaceholder && colors.selected,
                   activeTool === 'cut' && !isPlaceholder && 'cursor-crosshair'
                 )}
-                style={{ left: `${left}%`, width: `${Math.max(0.5, width)}%` }}
+                style={{
+                  left: `${left}%`,
+                  width: touchesNext ? `calc(${clipWidth}% + 1px)` : `${clipWidth}%`,
+                }}
                 onClick={(e) => { e.stopPropagation(); if (!isPlaceholder) onClipClick(clip.id, track.id) }}
-                onMouseMove={(e) => {
-                  if (isPlaceholder) return
-                  if (!onSnapshotAtPoint || clip.fileType !== 'video' || !clip.outputId) return
-                  const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
-                  if (rect.width <= 0) return
-                  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-                  setSnapshotCursor({ clipId: clip.id, ratio })
-                }}
-                onMouseLeave={() => {
-                  setSnapshotCursor((current) => (current?.clipId === clip.id ? null : current))
-                }}
                 title={isPlaceholder ? 'Generating…' : `${clip.fileType}: ${((clip.endMs - clip.startMs) / 1000).toFixed(1)}s`}
               >
                 {isPlaceholder ? (
@@ -901,13 +1120,15 @@ function TrackLane({
                   </span>
                 ) : (
                   <>
-                {/* Thumbnail placeholder for video clips */}
                 {clip.fileType === 'video' && (
-                  <div className="absolute left-0 top-0 bottom-0 w-6 rounded-l-md overflow-hidden opacity-60">
-                    <video src={clip.fileUrl} className="w-full h-full object-cover" muted preload="metadata" />
-                  </div>
+                  <ClipFilmstrip
+                    fileUrl={clip.fileUrl}
+                    clipDurationMs={clip.endMs - clip.startMs}
+                    flushLeft={touchesPrev}
+                    flushRight={touchesNext}
+                  />
                 )}
-                <span className="absolute inset-0 flex items-center px-1.5 text-[8px] text-foreground/60 truncate pointer-events-none" style={{ paddingLeft: clip.fileType === 'video' ? '28px' : '6px' }}>
+                <span className="absolute inset-0 flex items-center justify-center text-[8px] text-foreground/70 font-mono tabular-nums truncate pointer-events-none z-[1] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
                   {((clip.endMs - clip.startMs) / 1000).toFixed(1)}s
                 </span>
                   </>
@@ -915,28 +1136,24 @@ function TrackLane({
 
                 {!isPlaceholder && (
                   <>
-                {/* Left trim handle */}
                 <div
                   className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-primary/40 rounded-l-md transition-colors z-20"
                   onMouseDown={(e) => handleTrimDrag(clip.id, 'left', e)}
                 />
-                {/* Right trim handle */}
                 <div
                   className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-primary/40 rounded-r-md transition-colors z-20"
                   onMouseDown={(e) => handleTrimDrag(clip.id, 'right', e)}
                 />
 
-                {/* Snapshot "+" — inside clip so mouseleave covers both clip + button */}
-                {onSnapshotAtPoint && snapshotCursor?.clipId === clip.id && (
+                {onInsertFromLibrary && (
                   <button
-                    className="absolute z-30 w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg shadow-primary/30 hover:bg-primary/90 hover:scale-110 transition-all ring-1 ring-primary/40"
-                    style={{ top: '-14px', left: `${snapshotCursor.ratio * 100}%`, transform: 'translateX(-50%)' }}
+                    className="absolute z-20 w-5 h-5 rounded-full bg-muted/80 text-muted-foreground hover:text-foreground backdrop-blur-sm border border-border/40 shadow-sm flex items-center justify-center opacity-0 group-hover/clip:opacity-100 hover:scale-110 transition-all"
+                    style={{ top: '50%', right: '-12px', transform: 'translateY(-50%)' }}
                     onClick={(e) => {
                       e.stopPropagation()
-                      const targetMs = clip.startMs + (clip.endMs - clip.startMs) * snapshotCursor.ratio
-                      onSnapshotAtPoint(clip, track.id, targetMs)
+                      onInsertFromLibrary(track.id, clip.endMs)
                     }}
-                    title="Generate video from this frame"
+                    title="Insert video from library"
                   >
                     <Plus className="h-3 w-3" />
                   </button>

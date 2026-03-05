@@ -32,6 +32,7 @@ interface TimelineStore {
 
   // Browse library
   isLibraryOpen: boolean
+  libraryInsertTarget: { trackId: string; timelineMs: number } | null
 
   // Render
   isExportPanelOpen: boolean
@@ -51,6 +52,7 @@ interface TimelineStore {
   setSnapshotPrompt: (snap: TimelineStore['snapshotPrompt']) => void
   clearSnapshotPrompt: () => void
   setLibraryOpen: (open: boolean) => void
+  setLibraryInsertTarget: (target: { trackId: string; timelineMs: number } | null) => void
   setExportPanelOpen: (open: boolean) => void
   insertVideoClip: (videoUrl: string, outputId: string, durationMs: number) => boolean
   insertVideoClipTargeted: (
@@ -81,6 +83,7 @@ export const useTimelineStore = create<TimelineStore>()(
         timelineMs: 0, timecodeMs: 0, isAtClipEnd: false, outputId: null,
       },
       isLibraryOpen: false,
+      libraryInsertTarget: null,
       isExportPanelOpen: false,
 
       setComposerMode: (mode) => {
@@ -116,6 +119,7 @@ export const useTimelineStore = create<TimelineStore>()(
         snapshotPrompt: { snapshotUrl: null, clipId: null, trackId: null, timelineMs: 0, timecodeMs: 0, isAtClipEnd: false, outputId: null },
       }, false, 'clearSnapshotPrompt'),
       setLibraryOpen: (open) => set({ isLibraryOpen: open }, false, 'setLibraryOpen'),
+      setLibraryInsertTarget: (target) => set({ libraryInsertTarget: target }, false, 'setLibraryInsertTarget'),
       setExportPanelOpen: (open) => set({ isExportPanelOpen: open }, false, 'setExportPanelOpen'),
       insertVideoClip: (videoUrl, outputId, durationMs) => {
         let currentSequence = get().sequence
@@ -251,6 +255,7 @@ export const useTimelineStore = create<TimelineStore>()(
               timelineMs: 0, timecodeMs: 0, isAtClipEnd: false, outputId: null,
             },
             isLibraryOpen: false,
+            libraryInsertTarget: null,
             isExportPanelOpen: false,
           },
           false,

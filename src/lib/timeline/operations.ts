@@ -42,7 +42,7 @@ export function insertClip(
   outputId?: string
 ): { track: TimelineTrack; clip: TimelineClip } {
   const lastClipEnd = track.clips.reduce((max, c) => Math.max(max, c.endMs), 0)
-  const startMs = snapToGrid(lastClipEnd, 100)
+  const startMs = lastClipEnd
   const endMs = startMs + sourceDurationMs
 
   const clip: TimelineClip = {
