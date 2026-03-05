@@ -132,6 +132,25 @@ export function useSaveSequence(projectId: string, sequenceId: string) {
   })
 }
 
+export function useRenameSequence(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ sequenceId, name }: { sequenceId: string; name: string }) => {
+      const res = await fetch(`/api/projects/${projectId}/timeline/${sequenceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      if (!res.ok) throw new Error('Failed to rename timeline')
+      const data: SequenceApiResponse = await res.json()
+      return data.sequence
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['timeline-sequences', projectId] })
+    },
+  })
+}
+
 export function useDeleteSequence(projectId: string) {
   const queryClient = useQueryClient()
   return useMutation({

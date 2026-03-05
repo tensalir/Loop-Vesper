@@ -4,7 +4,7 @@ import { useEffect, useCallback, useRef, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 import { useTimelineStore } from '@/store/timelineStore'
-import { useTimelineSequences, useCreateSequence, useDeleteSequence } from '@/hooks/useTimeline'
+import { useTimelineSequences, useCreateSequence, useDeleteSequence, useRenameSequence } from '@/hooks/useTimeline'
 import { useTimelineAutosave } from '@/hooks/useTimelineAutosave'
 import type { TimelineSequence } from '@/types/timeline'
 
@@ -42,6 +42,7 @@ export function TimelineShell({
   const { data: sequences, isLoading, refetch: refetchSequences } = useTimelineSequences(projectId)
   const createMutation = useCreateSequence(projectId)
   const deleteMutation = useDeleteSequence(projectId)
+  const renameMutation = useRenameSequence(projectId)
   const { flushNow, isSaving } = useTimelineAutosave(projectId)
   const didBootstrapRef = useRef(false)
 
@@ -120,6 +121,23 @@ export function TimelineShell({
     [sequence, setSequence, resetTimeline, flushNow]
   )
 
+  const handleRenameSequence = useCallback(
+    async (seqId: string, newName: string) => {
+      renameMutation.mutate(
+        { sequenceId: seqId, name: newName },
+        {
+          onSuccess: (updated) => {
+            if (sequence?.id === seqId) {
+              setSequence({ ...sequence, name: updated.name } as TimelineSequence)
+            }
+            refetchSequences()
+          },
+        }
+      )
+    },
+    [sequence, setSequence, renameMutation, refetchSequences]
+  )
+
   const handleDeleteSequence = useCallback(
     async (seqId: string) => {
       await flushNow()
@@ -146,6 +164,7 @@ export function TimelineShell({
         sequences={allSequences}
         onCreateSequence={handleCreateSequence}
         onSwitchSequence={handleSwitchSequence}
+        onRenameSequence={handleRenameSequence}
         onDeleteSequence={handleDeleteSequence}
         isCreating={createMutation.isPending}
         onSnapshotRequest={onSnapshotRequest}

@@ -13,6 +13,7 @@ interface TimelineStore {
   sequence: TimelineSequence | null
   playheadMs: number
   zoom: number
+  scrollLeftMs: number
   isPlaying: boolean
   selectedClipId: string | null
   selectedTrackId: string | null
@@ -43,6 +44,7 @@ interface TimelineStore {
   setSequence: (seq: TimelineSequence | null) => void
   setPlayheadMs: (ms: number) => void
   setZoom: (zoom: number) => void
+  setScrollLeftMs: (ms: number) => void
   setIsPlaying: (playing: boolean) => void
   setSelectedClipId: (id: string | null) => void
   setSelectedTrackId: (id: string | null) => void
@@ -73,6 +75,7 @@ export const useTimelineStore = create<TimelineStore>()(
       sequence: null,
       playheadMs: 0,
       zoom: 1,
+      scrollLeftMs: 0,
       isPlaying: false,
       selectedClipId: null,
       selectedTrackId: null,
@@ -108,6 +111,7 @@ export const useTimelineStore = create<TimelineStore>()(
       setSequence: (seq) => set({ sequence: seq }, false, 'setSequence'),
       setPlayheadMs: (ms) => set({ playheadMs: Math.max(0, ms) }, false, 'setPlayheadMs'),
       setZoom: (zoom) => set({ zoom: Math.max(0.1, Math.min(10, zoom)) }, false, 'setZoom'),
+      setScrollLeftMs: (ms) => set({ scrollLeftMs: Math.max(0, ms) }, false, 'setScrollLeftMs'),
       setIsPlaying: (playing) => set({ isPlaying: playing }, false, 'setIsPlaying'),
       setSelectedClipId: (id) => set({ selectedClipId: id }, false, 'setSelectedClipId'),
       setSelectedTrackId: (id) => set({ selectedTrackId: id }, false, 'setSelectedTrackId'),
@@ -245,6 +249,7 @@ export const useTimelineStore = create<TimelineStore>()(
             sequence: null,
             playheadMs: 0,
             zoom: 1,
+            scrollLeftMs: 0,
             isPlaying: false,
             selectedClipId: null,
             selectedTrackId: null,

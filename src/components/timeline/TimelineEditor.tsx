@@ -5,7 +5,7 @@ import {
   Scissors, Type, MousePointer2, Play, Pause, SkipBack,
   FolderOpen, Download, Plus, ZoomIn, ZoomOut,
   Volume2, VolumeX, GripVertical, X, Save, Loader2,
-  ChevronDown, Trash2, FilePlus2, Check, Camera,
+  ChevronDown, Trash2, FilePlus2, Check, Camera, Pencil,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTimelineStore } from '@/store/timelineStore'
@@ -42,6 +42,7 @@ interface TimelineEditorProps {
   sequences?: TimelineSequence[]
   onCreateSequence?: () => void
   onSwitchSequence?: (seq: TimelineSequence) => void
+  onRenameSequence?: (seqId: string, newName: string) => void
   onDeleteSequence?: (seqId: string) => void
   isCreating?: boolean
   className?: string
@@ -54,13 +55,13 @@ interface TimelineEditorProps {
 
 export function TimelineEditor({
   projectId, onOpenLibrary, onInsertFromLibrary, sequences, onCreateSequence,
-  onSwitchSequence, onDeleteSequence, isCreating, className,
+  onSwitchSequence, onRenameSequence, onDeleteSequence, isCreating, className,
   onSnapshotRequest, flushNow, isSaving, isPromptMode = false, timelinePromptSlot,
 }: TimelineEditorProps) {
   const {
-    sequence, playheadMs, zoom, isPlaying, activeTool,
+    sequence, playheadMs, zoom, scrollLeftMs, isPlaying, activeTool,
     selectedClipId, selectedTrackId, isExportPanelOpen, snapshotPrompt,
-    setSequence, setPlayheadMs, setZoom, setIsPlaying,
+    setSequence, setPlayheadMs, setZoom, setScrollLeftMs, setIsPlaying,
     setActiveTool, setSelectedClipId, setSelectedTrackId,
     setExportPanelOpen, markDirty, isDirty, finishModeSwitch,
   } = useTimelineStore()
@@ -72,6 +73,9 @@ export function TimelineEditor({
   const activePreviewSrcRef = useRef<string | null>(null)
   const [mounted, setMounted] = useState(false)
   const [isSeqMenuOpen, setIsSeqMenuOpen] = useState(false)
+  const [renamingSeqId, setRenamingSeqId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const renameInputRef = useRef<HTMLInputElement>(null)
   const seqMenuRef = useRef<HTMLDivElement>(null)
   const isDraggingPlayheadRef = useRef(false)
 
@@ -85,7 +89,7 @@ export function TimelineEditor({
   }, [finishModeSwitch])
 
   useEffect(() => {
-    if (!isSeqMenuOpen) return
+    if (!isSeqMenuOpen) { setRenamingSeqId(null); return }
     const handler = (e: MouseEvent) => {
       if (seqMenuRef.current && !seqMenuRef.current.contains(e.target as Node)) {
         setIsSeqMenuOpen(false)
@@ -121,7 +125,10 @@ export function TimelineEditor({
   }, [isPromptMode, isPlaying, setIsPlaying])
 
   const durationMs = sequence?.durationMs ?? 0
-  const viewDurationMs = Math.max(durationMs, 10_000) / zoom
+  const totalDurationMs = Math.max(durationMs, 10_000)
+  const viewDurationMs = totalDurationMs / zoom
+  const viewStartMs = scrollLeftMs
+  const viewEndMs = scrollLeftMs + viewDurationMs
   const promptReferenceUrl = isPromptMode ? snapshotPrompt.snapshotUrl : null
 
   const previewClip = useMemo(() => {
@@ -211,9 +218,9 @@ export function TimelineEditor({
     const x = clientX - rect.left - LABEL_WIDTH
     const trackWidth = rect.width - LABEL_WIDTH
     if (trackWidth <= 0) return 0
-    const ms = Math.round((x / trackWidth) * viewDurationMs)
-    return Math.max(0, Math.min(ms, viewDurationMs))
-  }, [viewDurationMs])
+    const ms = Math.round(scrollLeftMs + (x / trackWidth) * viewDurationMs)
+    return Math.max(0, ms)
+  }, [viewDurationMs, scrollLeftMs])
 
   // ── Draggable playhead ──
   const handlePlayheadDragStart = useCallback((e: React.MouseEvent) => {
@@ -534,9 +541,116 @@ export function TimelineEditor({
     if (viewDurationMs <= 0) return '80px'
     const areaWidth = tracksAreaRef.current?.clientWidth ?? 800
     const trackWidth = areaWidth - LABEL_WIDTH
-    const px = LABEL_WIDTH + (playheadMs / viewDurationMs) * trackWidth
+    const px = LABEL_WIDTH + ((playheadMs - scrollLeftMs) / viewDurationMs) * trackWidth
     return `${px}px`
-  }, [playheadMs, viewDurationMs])
+  }, [playheadMs, viewDurationMs, scrollLeftMs])
+
+  // ── Wheel zoom + horizontal scroll/pan on tracks area ──
+  const isPanningRef = useRef(false)
+  const panStartXRef = useRef(0)
+  const panStartScrollRef = useRef(0)
+  const isAltHeldRef = useRef(false)
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') isAltHeldRef.current = true
+    }
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') isAltHeldRef.current = false
+    }
+    const handleBlur = () => {
+      isAltHeldRef.current = false
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    window.addEventListener('blur', handleBlur)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+      window.removeEventListener('blur', handleBlur)
+    }
+  }, [])
+
+  useEffect(() => {
+    const el = tracksAreaRef.current
+    if (!el) return
+
+    const handleWheel = (e: WheelEvent) => {
+      const store = useTimelineStore.getState()
+      const totalMs = Math.max(store.sequence?.durationMs ?? 0, 10_000)
+      const altActive = e.altKey || isAltHeldRef.current
+
+      // Block browser page zoom/pinch behavior inside timeline surface.
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        return
+      }
+
+      if (altActive) {
+        // Alt + scroll = zoom (centered on cursor)
+        e.preventDefault()
+        const rect = el.getBoundingClientRect()
+        const cursorRatio = Math.max(0, Math.min(1, (e.clientX - rect.left - LABEL_WIDTH) / (rect.width - LABEL_WIDTH)))
+        const cursorMs = store.scrollLeftMs + cursorRatio * (totalMs / store.zoom)
+
+        const zoomDelta = e.deltaY < 0 ? 1.15 : 1 / 1.15
+        const newZoom = Math.max(0.1, Math.min(10, store.zoom * zoomDelta))
+        const newViewDuration = totalMs / newZoom
+        const maxScroll = Math.max(0, totalMs - newViewDuration)
+        const newScrollLeft = Math.max(0, Math.min(maxScroll, cursorMs - cursorRatio * newViewDuration))
+        store.setZoom(newZoom)
+        store.setScrollLeftMs(newScrollLeft)
+      }
+      // Plain wheel intentionally left to native behavior.
+    }
+
+    const handleMouseDown = (e: MouseEvent) => {
+      // Middle-click or Alt+left-click = start panning
+      if (e.button === 1 || (e.button === 0 && e.altKey)) {
+        e.preventDefault()
+        isPanningRef.current = true
+        panStartXRef.current = e.clientX
+        panStartScrollRef.current = useTimelineStore.getState().scrollLeftMs
+        document.body.style.cursor = 'grabbing'
+        document.body.style.userSelect = 'none'
+      }
+    }
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isPanningRef.current) return
+      const store = useTimelineStore.getState()
+      const totalMs = Math.max(store.sequence?.durationMs ?? 0, 10_000)
+      const rect = el.getBoundingClientRect()
+      const trackWidth = rect.width - LABEL_WIDTH
+      if (trackWidth <= 0) return
+      const viewMs = totalMs / store.zoom
+      const msPerPx = viewMs / trackWidth
+      const deltaPx = panStartXRef.current - e.clientX
+      const maxScroll = Math.max(0, totalMs - viewMs)
+      store.setScrollLeftMs(Math.max(0, Math.min(maxScroll, panStartScrollRef.current + deltaPx * msPerPx)))
+    }
+
+    const handleMouseUp = () => {
+      if (!isPanningRef.current) return
+      isPanningRef.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    el.addEventListener('mousedown', handleMouseDown)
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      el.removeEventListener('wheel', handleWheel)
+      el.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [])
 
   // All transitions indexed by fromClipId for dissolve rendering
   const transitionsByFrom = useMemo(() => {
@@ -562,28 +676,72 @@ export function TimelineEditor({
             </button>
 
             {isSeqMenuOpen && (
-              <div className="absolute top-full left-0 mt-1 z-50 min-w-[200px] rounded-lg border border-border/50 bg-card/95 backdrop-blur-xl shadow-xl py-1">
-                {sequences.map((seq) => (
-                  <button
-                    key={seq.id}
-                    onClick={() => { onSwitchSequence?.(seq); setIsSeqMenuOpen(false) }}
-                    className={cn(
-                      'flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left transition-colors group/item',
-                      seq.id === sequence?.id ? 'text-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-                    )}
-                  >
-                    {seq.id === sequence?.id && <Check className="h-3 w-3 flex-shrink-0" />}
-                    <span className={cn('flex-1 truncate', seq.id !== sequence?.id && 'ml-5')}>{seq.name}</span>
-                    <span className="text-[9px] text-muted-foreground/50 font-mono tabular-nums">{seq.tracks?.length ?? 0}t</span>
-                    {sequences.length > 1 && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onDeleteSequence?.(seq.id); setIsSeqMenuOpen(false) }}
-                        className="opacity-0 group-hover/item:opacity-100 p-0.5 rounded text-muted-foreground/40 hover:text-red-400 transition-all"
-                        title="Delete this edit"
-                      ><Trash2 className="h-3 w-3" /></button>
-                    )}
-                  </button>
-                ))}
+              <div className="absolute top-full left-0 mt-1 z-50 min-w-[220px] rounded-lg border border-border/50 bg-card/95 backdrop-blur-xl shadow-xl py-1">
+                {sequences.map((seq) => {
+                  const isRenaming = renamingSeqId === seq.id
+                  return (
+                    <div
+                      key={seq.id}
+                      className={cn(
+                        'flex items-center gap-2 w-full px-3 py-1.5 text-xs transition-colors group/item',
+                        seq.id === sequence?.id ? 'text-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                      )}
+                    >
+                      {seq.id === sequence?.id && <Check className="h-3 w-3 flex-shrink-0" />}
+                      {isRenaming ? (
+                        <input
+                          ref={renameInputRef}
+                          className="flex-1 min-w-0 bg-muted/50 border border-border/50 rounded px-1.5 py-0.5 text-xs text-foreground outline-none focus:border-primary/50"
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const trimmed = renameValue.trim()
+                              if (trimmed && trimmed !== seq.name) onRenameSequence?.(seq.id, trimmed)
+                              setRenamingSeqId(null)
+                            } else if (e.key === 'Escape') {
+                              setRenamingSeqId(null)
+                            }
+                          }}
+                          onBlur={() => {
+                            const trimmed = renameValue.trim()
+                            if (trimmed && trimmed !== seq.name) onRenameSequence?.(seq.id, trimmed)
+                            setRenamingSeqId(null)
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          autoFocus
+                        />
+                      ) : (
+                        <button
+                          className={cn('flex-1 text-left truncate', seq.id !== sequence?.id && !isRenaming && 'ml-5')}
+                          onClick={() => { onSwitchSequence?.(seq); setIsSeqMenuOpen(false) }}
+                        >
+                          {seq.name}
+                        </button>
+                      )}
+                      <span className="text-[9px] text-muted-foreground/50 font-mono tabular-nums flex-shrink-0">{seq.tracks?.length ?? 0}t</span>
+                      {!isRenaming && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setRenamingSeqId(seq.id)
+                            setRenameValue(seq.name)
+                            setTimeout(() => renameInputRef.current?.select(), 0)
+                          }}
+                          className="opacity-0 group-hover/item:opacity-100 p-0.5 rounded text-muted-foreground/40 hover:text-foreground transition-all"
+                          title="Rename this edit"
+                        ><Pencil className="h-3 w-3" /></button>
+                      )}
+                      {!isRenaming && sequences.length > 1 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onDeleteSequence?.(seq.id); setIsSeqMenuOpen(false) }}
+                          className="opacity-0 group-hover/item:opacity-100 p-0.5 rounded text-muted-foreground/40 hover:text-red-400 transition-all"
+                          title="Delete this edit"
+                        ><Trash2 className="h-3 w-3" /></button>
+                      )}
+                    </div>
+                  )
+                })}
                 <div className="h-px bg-border/30 my-1" />
                 <button
                   onClick={() => { onCreateSequence?.(); setIsSeqMenuOpen(false) }}
@@ -738,7 +896,7 @@ export function TimelineEditor({
       <div
         ref={tracksAreaRef}
         className={cn(
-          'relative rounded-lg overflow-visible min-h-[160px]',
+          'relative rounded-lg overflow-hidden min-h-[160px]',
           isPromptMode
             ? 'bg-transparent border border-transparent max-h-[36vh]'
             : 'bg-muted/20 border border-border/30 timeline-glow'
@@ -752,11 +910,11 @@ export function TimelineEditor({
           <>
             {/* Ruler — draggable */}
             <div className="h-6 bg-muted/30 border-b border-border/30 cursor-pointer select-none rounded-t-lg" onMouseDown={handleRulerMouseDown}>
-              <TrackRuler durationMs={viewDurationMs} />
+              <TrackRuler durationMs={viewDurationMs} startMs={viewStartMs} />
             </div>
 
             {/* Track lanes — scrollable when stacked */}
-            <div className="relative overflow-y-auto overflow-x-clip scrollbar-hide rounded-b-lg bg-muted/20" style={{ maxHeight: 'calc(100% - 24px)' }}>
+            <div className="relative overflow-y-auto overflow-x-hidden scrollbar-hide rounded-b-lg bg-muted/20" style={{ maxHeight: 'calc(100% - 24px)' }}>
               {(!sequence || sequence.tracks.length === 0) ? (
                 <EmptyTrackPrompt onAddTrack={handleAddTrack} onOpenLibrary={onOpenLibrary} />
               ) : (
@@ -766,6 +924,7 @@ export function TimelineEditor({
                       key={track.id}
                       track={track}
                       viewDurationMs={viewDurationMs}
+                      viewStartMs={viewStartMs}
                       selectedClipId={selectedClipId}
                       isSelectedTrack={selectedTrackId === track.id}
                       onClipClick={handleClipClick}
@@ -933,20 +1092,24 @@ function ClipFilmstrip({
 
 // ── TrackRuler ──
 
-function TrackRuler({ durationMs }: { durationMs: number }) {
+function TrackRuler({ durationMs, startMs = 0 }: { durationMs: number; startMs?: number }) {
+  const endMs = startMs + durationMs
   const marks = useMemo(() => {
     const result: { ms: number; label: string; major: boolean }[] = []
     const step = durationMs <= 10000 ? 1000 : durationMs <= 30000 ? 2000 : 5000
-    for (let ms = 0; ms <= durationMs; ms += step) {
+    const first = Math.floor(startMs / step) * step
+    for (let ms = first; ms <= endMs; ms += step) {
+      if (ms < startMs) continue
+      const pct = ((ms - startMs) / durationMs) * 100
       result.push({ ms, label: `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`, major: ms % (step * 2) === 0 })
     }
     return result
-  }, [durationMs])
+  }, [durationMs, startMs, endMs])
 
   return (
     <div className="relative w-full h-full pl-[80px]">
       {marks.map((m) => (
-        <div key={m.ms} className="absolute bottom-0 flex flex-col items-center" style={{ left: `${(m.ms / durationMs) * 100}%` }}>
+        <div key={m.ms} className="absolute bottom-0 flex flex-col items-center" style={{ left: `${((m.ms - startMs) / durationMs) * 100}%` }}>
           <span className={cn('text-[8px] font-mono leading-none mb-0.5', m.major ? 'text-muted-foreground/60' : 'text-muted-foreground/30')}>
             {m.major ? m.label : ''}
           </span>
@@ -960,13 +1123,14 @@ function TrackRuler({ durationMs }: { durationMs: number }) {
 // ── TrackLane with trim handles and dissolve chips ──
 
 function TrackLane({
-  track, viewDurationMs, selectedClipId, isSelectedTrack,
+  track, viewDurationMs, viewStartMs, selectedClipId, isSelectedTrack,
   onClipClick, onSelectTrack, activeTool,
   onTrim, pxToMs, transitions, onDissolveDurationChange,
   onSnapshotAtPoint, onInsertFromLibrary, onToggleMute,
 }: {
   track: TimelineTrack
   viewDurationMs: number
+  viewStartMs: number
   selectedClipId: string | null
   isSelectedTrack: boolean
   onClipClick: (clipId: string, trackId: string) => void
@@ -1051,7 +1215,7 @@ function TrackLane({
 
       <div className="flex-1 relative">
         {sortedClips.map((clip, idx) => {
-          const left = (clip.startMs / viewDurationMs) * 100
+          const left = ((clip.startMs - viewStartMs) / viewDurationMs) * 100
           const width = ((clip.endMs - clip.startMs) / viewDurationMs) * 100
           const isSelected = selectedClipId === clip.id
           const dissolve = transitions.get(clip.id)
@@ -1165,7 +1329,7 @@ function TrackLane({
               {/* Dissolve handle between this clip and next */}
               {dissolve && idx < sortedClips.length - 1 && (() => {
                 const nextClip = sortedClips[idx + 1]
-                const dissolveLeft = (clip.endMs / viewDurationMs) * 100
+                const dissolveLeft = ((clip.endMs - viewStartMs) / viewDurationMs) * 100
                 const dissolveWidth = Math.max(0.3, (dissolve.durationMs / viewDurationMs) * 100)
                 return (
                   <div
@@ -1184,7 +1348,7 @@ function TrackLane({
         })}
 
         {(track.captions ?? []).map((cap) => {
-          const left = (cap.startMs / viewDurationMs) * 100
+          const left = ((cap.startMs - viewStartMs) / viewDurationMs) * 100
           const width = ((cap.endMs - cap.startMs) / viewDurationMs) * 100
           return (
             <div key={cap.id} className="absolute top-0.5 bottom-0.5 rounded bg-amber-500/20 border border-amber-500/30 cursor-pointer"
