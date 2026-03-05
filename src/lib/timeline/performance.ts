@@ -14,14 +14,14 @@ let switchCounter = 0
 
 export interface ModeSwitchMark {
   id: number
-  from: 'generate' | 'timeline'
-  to: 'generate' | 'timeline'
+  from: string
+  to: string
   startMs: number
 }
 
 export function beginModeSwitch(
-  from: 'generate' | 'timeline',
-  to: 'generate' | 'timeline'
+  from: string,
+  to: string
 ): ModeSwitchMark {
   switchCounter++
   const mark: ModeSwitchMark = {

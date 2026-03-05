@@ -267,3 +267,106 @@ export function hasOverlap(clips: TimelineClip[], excludeId?: string): boolean {
 export function findInsertPosition(clips: TimelineClip[]): number {
   return clips.reduce((max, c) => Math.max(max, c.endMs), 0)
 }
+
+// ── Trim operations ──
+
+export function trimClipLeft(
+  track: TimelineTrack,
+  clipId: string,
+  newStartMs: number
+): TimelineTrack {
+  const idx = track.clips.findIndex((c) => c.id === clipId)
+  if (idx === -1) return track
+  const clip = track.clips[idx]
+  const clamped = Math.max(0, Math.min(newStartMs, clip.endMs - 100))
+  const delta = clamped - clip.startMs
+  const updated: TimelineClip = {
+    ...clip,
+    startMs: clamped,
+    inPointMs: Math.max(0, clip.inPointMs + delta),
+  }
+  const newClips = [...track.clips]
+  newClips[idx] = updated
+  return { ...track, clips: newClips }
+}
+
+export function trimClipRight(
+  track: TimelineTrack,
+  clipId: string,
+  newEndMs: number
+): TimelineTrack {
+  const idx = track.clips.findIndex((c) => c.id === clipId)
+  if (idx === -1) return track
+  const clip = track.clips[idx]
+  const clamped = Math.max(clip.startMs + 100, newEndMs)
+  const newDuration = clamped - clip.startMs
+  const updated: TimelineClip = {
+    ...clip,
+    endMs: clamped,
+    outPointMs: Math.min(clip.sourceDurationMs, clip.inPointMs + newDuration),
+  }
+  const newClips = [...track.clips]
+  newClips[idx] = updated
+  return { ...track, clips: newClips }
+}
+
+// ── Targeted insertion ──
+
+export function insertClipAt(
+  track: TimelineTrack,
+  fileUrl: string,
+  fileType: 'video' | 'image' | 'audio',
+  sourceDurationMs: number,
+  startMs: number,
+  outputId?: string
+): { track: TimelineTrack; clip: TimelineClip } {
+  const endMs = startMs + sourceDurationMs
+  const clip: TimelineClip = {
+    id: genId(),
+    trackId: track.id,
+    outputId: outputId || null,
+    fileUrl,
+    fileType,
+    startMs,
+    endMs,
+    inPointMs: 0,
+    outPointMs: sourceDurationMs,
+    sourceDurationMs,
+    sortOrder: track.clips.length,
+  }
+  return {
+    track: { ...track, clips: [...track.clips, clip] },
+    clip,
+  }
+}
+
+export function insertTrackAbove(
+  tracks: TimelineTrack[],
+  referenceTrackId: string,
+  kind: TrackKind,
+  label?: string
+): { tracks: TimelineTrack[]; newTrack: TimelineTrack } {
+  const refIdx = tracks.findIndex((t) => t.id === referenceTrackId)
+  const insertIdx = refIdx === -1 ? 0 : refIdx
+  const newTrack = createTrack(kind, label, insertIdx)
+  const reordered = [...tracks]
+  reordered.splice(insertIdx, 0, newTrack)
+  for (let i = 0; i < reordered.length; i++) {
+    reordered[i] = { ...reordered[i], sortOrder: i }
+  }
+  return { tracks: reordered, newTrack }
+}
+
+// ── Transition duration update ──
+
+export function updateTransitionDuration(
+  transitions: TimelineTransition[],
+  transitionId: string,
+  newDurationMs: number
+): TimelineTransition[] {
+  return transitions.map((t) =>
+    t.id === transitionId
+      ? { ...t, durationMs: Math.max(100, Math.min(2000, newDurationMs)) }
+      : t
+  )
+}

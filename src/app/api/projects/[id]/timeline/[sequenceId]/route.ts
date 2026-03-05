@@ -84,6 +84,47 @@ export async function PATCH(
       )
     }
 
+    // Validate clip ranges
+    if (Array.isArray(tracks)) {
+      for (const track of tracks) {
+        for (const clip of track.clips ?? []) {
+          if (typeof clip.startMs !== 'number' || typeof clip.endMs !== 'number') continue
+          if (clip.startMs < 0 || clip.endMs <= clip.startMs) {
+            return NextResponse.json(
+              { error: `Invalid clip range: startMs=${clip.startMs}, endMs=${clip.endMs}` },
+              { status: 400 }
+            )
+          }
+        }
+      }
+    }
+
+    // Validate transition integrity: from/to clips must exist and share a track
+    if (Array.isArray(transitions) && transitions.length > 0 && Array.isArray(tracks)) {
+      const clipToTrack = new Map<string, string>()
+      for (const track of tracks) {
+        for (const clip of track.clips ?? []) {
+          clipToTrack.set(clip.id, track.id)
+        }
+      }
+      for (const t of transitions) {
+        const fromTrack = clipToTrack.get(t.fromClipId)
+        const toTrack = clipToTrack.get(t.toClipId)
+        if (!fromTrack || !toTrack) {
+          return NextResponse.json(
+            { error: `Transition references missing clip: from=${t.fromClipId}, to=${t.toClipId}` },
+            { status: 400 }
+          )
+        }
+        if (fromTrack !== toTrack) {
+          return NextResponse.json(
+            { error: 'Transitions must connect clips on the same track' },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
     const updated = await prisma.$transaction(async (tx) => {
       // Update sequence metadata
       const seq = await tx.timelineSequence.update({

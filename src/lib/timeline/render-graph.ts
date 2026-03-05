@@ -6,12 +6,12 @@
  * The Vercel-side endpoint only enqueues the job; this logic runs server-side
  * in a long-running process with access to FFmpeg.
  *
- * Supported V1 operations:
- *   - clip trim + placement (via -ss/-to on inputs)
- *   - cross-dissolve (xfade filter)
+ * V2 operations:
+ *   - per-track clip trim + concat/xfade (dissolves scoped to same track)
+ *   - multi-track overlay compositing (tracks stacked by sortOrder)
  *   - caption burn-in (drawtext filter)
- *   - single audio track mix (amix or amerge)
- *   - H.264 / AAC output at 1080p
+ *   - multi-audio track mix (amix)
+ *   - H.264 / AAC output
  */
 
 interface RenderClip {
@@ -42,14 +42,6 @@ interface RenderCaption {
   }
 }
 
-interface RenderAudioClip {
-  fileUrl: string
-  startMs: number
-  endMs: number
-  inPointMs: number
-  outPointMs: number
-}
-
 export interface RenderPlan {
   inputs: string[]
   filterComplex: string
@@ -63,6 +55,7 @@ export interface TimelineSnapshot {
   fps: number
   tracks: Array<{
     kind: string
+    sortOrder?: number
     clips: RenderClip[]
     captions?: RenderCaption[]
   }>
@@ -77,10 +70,10 @@ export function buildRenderPlan(
   const filters: string[] = []
   let inputIndex = 0
 
-  const videoClips = snapshot.tracks
-    .filter((t) => t.kind === 'video')
-    .flatMap((t) => t.clips)
-    .sort((a, b) => a.startMs - b.startMs)
+  // Group video tracks by sortOrder (lowest = bottom layer)
+  const videoTracks = snapshot.tracks
+    .filter((t) => t.kind === 'video' && t.clips.length > 0)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
 
   const audioClips = snapshot.tracks
     .filter((t) => t.kind === 'audio')
@@ -92,15 +85,14 @@ export function buildRenderPlan(
     .flatMap((t) => t.captions ?? [])
     .sort((a, b) => a.startMs - b.startMs)
 
-  // 1. Add video inputs
   const clipInputMap = new Map<string, number>()
-  for (const clip of videoClips) {
+  const allVideoClips = videoTracks.flatMap((t) => t.clips)
+  for (const clip of allVideoClips) {
     clipInputMap.set(clip.id, inputIndex)
     inputs.push(clip.fileUrl)
     inputIndex++
   }
 
-  // 2. Add audio inputs
   const audioInputMap = new Map<string, number>()
   for (const clip of audioClips) {
     audioInputMap.set(clip.id, inputIndex)
@@ -108,10 +100,15 @@ export function buildRenderPlan(
     inputIndex++
   }
 
-  // 3. Build video filter chain
-  if (videoClips.length > 0) {
-    // Trim each video input
-    for (const clip of videoClips) {
+  // Build per-track video chains with scoped dissolves
+  const trackOutputLabels: string[] = []
+
+  for (let tIdx = 0; tIdx < videoTracks.length; tIdx++) {
+    const track = videoTracks[tIdx]
+    const clips = [...track.clips].sort((a, b) => a.startMs - b.startMs)
+    const trackLabel = `track${tIdx}`
+
+    for (const clip of clips) {
       const idx = clipInputMap.get(clip.id)!
       const trimStart = clip.inPointMs / 1000
       const trimEnd = clip.outPointMs / 1000
@@ -120,51 +117,69 @@ export function buildRenderPlan(
       )
     }
 
-    // Apply cross-dissolves between adjacent clips
-    if (videoClips.length === 1) {
-      filters.push(`[v${clipInputMap.get(videoClips[0].id)}]null[vout]`)
+    if (clips.length === 1) {
+      filters.push(`[v${clipInputMap.get(clips[0].id)}]null[${trackLabel}]`)
     } else {
-      let currentLabel = `v${clipInputMap.get(videoClips[0].id)}`
-      for (let i = 1; i < videoClips.length; i++) {
-        const nextLabel = `v${clipInputMap.get(videoClips[i].id)}`
-        const outputLabel = i === videoClips.length - 1 ? 'vout' : `vmix${i}`
+      let currentLabel = `v${clipInputMap.get(clips[0].id)}`
+      for (let i = 1; i < clips.length; i++) {
+        const nextLabel = `v${clipInputMap.get(clips[i].id)}`
+        const isLast = i === clips.length - 1
+        const outputLabel = isLast ? trackLabel : `${trackLabel}mix${i}`
 
         const transition = snapshot.transitions.find(
-          (t) =>
-            t.fromClipId === videoClips[i - 1].id &&
-            t.toClipId === videoClips[i].id
+          (t) => t.fromClipId === clips[i - 1].id && t.toClipId === clips[i].id
         )
 
         if (transition) {
-          const offsetSec = (videoClips[i].startMs - videoClips[i - 1].startMs) / 1000 - transition.durationMs / 1000
+          const offsetSec = (clips[i].startMs - clips[i - 1].startMs) / 1000 - transition.durationMs / 1000
           filters.push(
             `[${currentLabel}][${nextLabel}]xfade=transition=fade:duration=${transition.durationMs / 1000}:offset=${Math.max(0, offsetSec)}[${outputLabel}]`
           )
         } else {
           filters.push(`[${currentLabel}][${nextLabel}]concat=n=2:v=1:a=0[${outputLabel}]`)
         }
-
         currentLabel = outputLabel
       }
     }
 
-    // 4. Burn in captions with drawtext
-    if (captions.length > 0) {
-      let captionInput = 'vout'
-      for (let i = 0; i < captions.length; i++) {
-        const cap = captions[i]
-        const outputLabel = i === captions.length - 1 ? 'vcap' : `vcap${i}`
-        const yPos = cap.style.position === 'top' ? '40' : cap.style.position === 'center' ? '(h-text_h)/2' : 'h-text_h-40'
-        const escapedText = cap.text.replace(/'/g, "\\'").replace(/:/g, '\\:')
-        filters.push(
-          `[${captionInput}]drawtext=text='${escapedText}':fontsize=${cap.style.fontSize}:fontcolor=${cap.style.color}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${cap.startMs / 1000},${cap.endMs / 1000})'[${outputLabel}]`
-        )
-        captionInput = outputLabel
-      }
+    trackOutputLabels.push(trackLabel)
+  }
+
+  // Composite stacked tracks via overlay (bottom track first, subsequent tracks overlay on top)
+  if (trackOutputLabels.length === 0) {
+    // No video — create black background
+    filters.push(`color=c=black:s=1920x${resolution}:d=${snapshot.durationMs / 1000}[vout]`)
+  } else if (trackOutputLabels.length === 1) {
+    filters.push(`[${trackOutputLabels[0]}]null[vout]`)
+  } else {
+    let baseLabel = trackOutputLabels[0]
+    for (let i = 1; i < trackOutputLabels.length; i++) {
+      const overlayLabel = trackOutputLabels[i]
+      const isLast = i === trackOutputLabels.length - 1
+      const outputLabel = isLast ? 'vout' : `vstack${i}`
+      filters.push(
+        `[${baseLabel}][${overlayLabel}]overlay=eof_action=pass:shortest=0[${outputLabel}]`
+      )
+      baseLabel = outputLabel
     }
   }
 
-  // 5. Audio mixing
+  // Caption burn-in
+  if (captions.length > 0 && trackOutputLabels.length > 0) {
+    let captionInput = 'vout'
+    for (let i = 0; i < captions.length; i++) {
+      const cap = captions[i]
+      const outputLabel = i === captions.length - 1 ? 'vcap' : `vcap${i}`
+      const yPos = cap.style.position === 'top' ? '40' : cap.style.position === 'center' ? '(h-text_h)/2' : 'h-text_h-40'
+      const escapedText = cap.text.replace(/'/g, "\\'").replace(/:/g, '\\:')
+      filters.push(
+        `[${captionInput}]drawtext=text='${escapedText}':fontsize=${cap.style.fontSize}:fontcolor=${cap.style.color}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${cap.startMs / 1000},${cap.endMs / 1000})'[${outputLabel}]`
+      )
+      captionInput = outputLabel
+    }
+  }
+
+  // Audio mixing
   if (audioClips.length > 0) {
     for (const clip of audioClips) {
       const idx = audioInputMap.get(clip.id)!
@@ -183,8 +198,7 @@ export function buildRenderPlan(
     }
   }
 
-  // 6. Build output args
-  const videoOutput = captions.length > 0 ? 'vcap' : 'vout'
+  const videoOutput = captions.length > 0 && trackOutputLabels.length > 0 ? 'vcap' : 'vout'
   const hasAudio = audioClips.length > 0
 
   const outputArgs = [

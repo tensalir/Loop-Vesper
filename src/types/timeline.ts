@@ -6,7 +6,7 @@
 export const TIMELINE_FPS = 30
 export const TIMELINE_MAX_DURATION_MS = 120_000
 
-export type ComposerMode = 'generate' | 'timeline'
+export type ComposerMode = 'generate' | 'timeline' | 'timelinePrompt'
 
 export type TrackKind = 'video' | 'caption' | 'audio'
 

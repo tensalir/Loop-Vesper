@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 import { useTimelineStore } from '@/store/timelineStore'
 import { useTimelineSequences, useCreateSequence, useDeleteSequence } from '@/hooks/useTimeline'
+import { useTimelineAutosave } from '@/hooks/useTimelineAutosave'
 import type { TimelineSequence } from '@/types/timeline'
 
 const TimelineEditor = dynamic(
@@ -22,13 +23,18 @@ const TimelineEditor = dynamic(
 interface TimelineShellProps {
   projectId: string
   className?: string
+  onSnapshotRequest?: (req: {
+    blob: Blob; timecodeMs: number; clipId: string; trackId: string;
+    isAtClipEnd: boolean; fileUrl: string; outputId: string | null;
+  }) => void
 }
 
-export function TimelineShell({ projectId, className }: TimelineShellProps) {
+export function TimelineShell({ projectId, className, onSnapshotRequest }: TimelineShellProps) {
   const { sequence, setSequence, setLibraryOpen, finishModeSwitch, resetTimeline } = useTimelineStore()
   const { data: sequences, isLoading, refetch: refetchSequences } = useTimelineSequences(projectId)
   const createMutation = useCreateSequence(projectId)
   const deleteMutation = useDeleteSequence(projectId)
+  const { flushNow, isSaving } = useTimelineAutosave(projectId)
   const didBootstrapRef = useRef(false)
 
   useEffect(() => {
@@ -75,7 +81,8 @@ export function TimelineShell({ projectId, className }: TimelineShellProps) {
     ensureSequence(undefined, true)
   }, [ensureSequence, setLibraryOpen])
 
-  const handleCreateSequence = useCallback(() => {
+  const handleCreateSequence = useCallback(async () => {
+    await flushNow()
     const nextNumber = (sequences?.length ?? 0) + 1
     createMutation.mutate(
       { name: `Edit ${nextNumber}` },
@@ -87,19 +94,21 @@ export function TimelineShell({ projectId, className }: TimelineShellProps) {
         },
       }
     )
-  }, [sequences, createMutation, setSequence, resetTimeline, refetchSequences])
+  }, [sequences, createMutation, setSequence, resetTimeline, refetchSequences, flushNow])
 
   const handleSwitchSequence = useCallback(
-    (seq: TimelineSequence) => {
+    async (seq: TimelineSequence) => {
       if (seq.id === sequence?.id) return
+      await flushNow()
       resetTimeline()
       setSequence(seq)
     },
-    [sequence, setSequence, resetTimeline]
+    [sequence, setSequence, resetTimeline, flushNow]
   )
 
   const handleDeleteSequence = useCallback(
-    (seqId: string) => {
+    async (seqId: string) => {
+      await flushNow()
       if (seqId === sequence?.id) {
         const remaining = (sequences ?? []).filter((s) => s.id !== seqId)
         resetTimeline()
@@ -109,7 +118,7 @@ export function TimelineShell({ projectId, className }: TimelineShellProps) {
       }
       deleteMutation.mutate(seqId, { onSuccess: () => refetchSequences() })
     },
-    [sequence, sequences, deleteMutation, setSequence, resetTimeline, refetchSequences]
+    [sequence, sequences, deleteMutation, setSequence, resetTimeline, refetchSequences, flushNow]
   )
 
   const allSequences = (sequences ?? []) as TimelineSequence[]
@@ -124,6 +133,9 @@ export function TimelineShell({ projectId, className }: TimelineShellProps) {
         onSwitchSequence={handleSwitchSequence}
         onDeleteSequence={handleDeleteSequence}
         isCreating={createMutation.isPending}
+        onSnapshotRequest={onSnapshotRequest}
+        flushNow={flushNow}
+        isSaving={isSaving}
       />
       {!sequence && (isLoading || createMutation.isPending) && (
         <div className="absolute top-2 right-2 rounded-md border border-border/40 bg-background/80 px-2 py-1 text-[10px] text-muted-foreground backdrop-blur-sm">

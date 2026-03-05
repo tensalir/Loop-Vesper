@@ -9,13 +9,28 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTimelineStore } from '@/store/timelineStore'
-import { msToTimecode, type TimelineTrack, type TimelineSequence } from '@/types/timeline'
+import { msToTimecode, type TimelineTrack, type TimelineClip, type TimelineTransition, type TimelineSequence } from '@/types/timeline'
 import {
   createTrack, splitClipAtPlayhead, removeClip,
   addCrossDissolve, addCaption,
   computeSequenceDuration,
+  trimClipLeft, trimClipRight,
+  updateTransitionDuration,
+  insertTrackAbove as insertTrackAboveOp,
 } from '@/lib/timeline/operations'
-import { useSaveSequence } from '@/hooks/useTimeline'
+import { captureCurrentFrameAsync } from '@/lib/video/captureFrame'
+
+const LABEL_WIDTH = 80
+
+export interface SnapshotRequest {
+  blob: Blob
+  timecodeMs: number
+  clipId: string
+  trackId: string
+  isAtClipEnd: boolean
+  fileUrl: string
+  outputId: string | null
+}
 
 interface TimelineEditorProps {
   projectId: string
@@ -26,11 +41,15 @@ interface TimelineEditorProps {
   onDeleteSequence?: (seqId: string) => void
   isCreating?: boolean
   className?: string
+  onSnapshotRequest?: (req: SnapshotRequest) => void
+  flushNow: () => Promise<void>
+  isSaving: boolean
 }
 
 export function TimelineEditor({
   projectId, onOpenLibrary, sequences, onCreateSequence,
   onSwitchSequence, onDeleteSequence, isCreating, className,
+  onSnapshotRequest, flushNow, isSaving,
 }: TimelineEditorProps) {
   const {
     sequence, playheadMs, zoom, isPlaying, activeTool,
@@ -40,13 +59,13 @@ export function TimelineEditor({
     setExportPanelOpen, markDirty, isDirty, finishModeSwitch,
   } = useTimelineStore()
 
-  const saveMutation = useSaveSequence(projectId, sequence?.id || '')
   const tracksAreaRef = useRef<HTMLDivElement>(null)
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const previewVideoRef = useRef<HTMLVideoElement>(null)
   const [mounted, setMounted] = useState(false)
   const [isSeqMenuOpen, setIsSeqMenuOpen] = useState(false)
   const seqMenuRef = useRef<HTMLDivElement>(null)
+  const isDraggingPlayheadRef = useRef(false)
 
   useEffect(() => {
     setMounted(true)
@@ -68,12 +87,11 @@ export function TimelineEditor({
     return () => document.removeEventListener('mousedown', handler)
   }, [isSeqMenuOpen])
 
-  // Playback simulation
   useEffect(() => {
     if (isPlaying && sequence) {
       playIntervalRef.current = setInterval(() => {
         const store = useTimelineStore.getState()
-        const next = store.playheadMs + 33 // ~30fps step
+        const next = store.playheadMs + 33
         if (next >= (store.sequence?.durationMs ?? 0)) {
           store.setPlayheadMs(0)
           store.setIsPlaying(false)
@@ -89,12 +107,12 @@ export function TimelineEditor({
 
   const durationMs = sequence?.durationMs ?? 0
   const viewDurationMs = Math.max(durationMs, 10_000) / zoom
+
   const previewClip = useMemo(() => {
     const videoClips = (sequence?.tracks ?? [])
       .filter((track) => track.kind === 'video')
       .flatMap((track) => track.clips)
       .sort((a, b) => a.startMs - b.startMs)
-
     if (videoClips.length === 0) return null
     return (
       videoClips.find((clip) => playheadMs >= clip.startMs && playheadMs < clip.endMs) ??
@@ -105,45 +123,115 @@ export function TimelineEditor({
   useEffect(() => {
     const previewElement = previewVideoRef.current
     if (!previewElement) return
-
-    if (!previewClip) {
-      previewElement.pause()
-      return
-    }
-
+    if (!previewClip) { previewElement.pause(); return }
     const localMs = Math.max(
       previewClip.inPointMs,
-      Math.min(
-        previewClip.outPointMs,
-        previewClip.inPointMs + Math.max(0, playheadMs - previewClip.startMs)
-      )
+      Math.min(previewClip.outPointMs, previewClip.inPointMs + Math.max(0, playheadMs - previewClip.startMs))
     )
     const nextTime = localMs / 1000
-
     if (Math.abs(previewElement.currentTime - nextTime) > 0.12) {
       previewElement.currentTime = nextTime
     }
-
     if (isPlaying) {
-      void previewElement.play().catch(() => {
-        // Ignore browser autoplay restrictions for muted preview.
-      })
+      void previewElement.play().catch(() => {})
     } else {
       previewElement.pause()
     }
   }, [previewClip, playheadMs, isPlaying])
 
+  // ── Helpers to convert pixel positions to ms ──
+  const pxToMs = useCallback((clientX: number) => {
+    const el = tracksAreaRef.current
+    if (!el) return 0
+    const rect = el.getBoundingClientRect()
+    const x = clientX - rect.left - LABEL_WIDTH
+    const trackWidth = rect.width - LABEL_WIDTH
+    if (trackWidth <= 0) return 0
+    const ms = Math.round((x / trackWidth) * viewDurationMs)
+    return Math.max(0, Math.min(ms, viewDurationMs))
+  }, [viewDurationMs])
+
+  // ── Draggable playhead ──
+  const handlePlayheadDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    isDraggingPlayheadRef.current = true
+    setIsPlaying(false)
+    const onMove = (ev: MouseEvent) => {
+      if (!isDraggingPlayheadRef.current) return
+      setPlayheadMs(pxToMs(ev.clientX))
+    }
+    const onUp = () => {
+      isDraggingPlayheadRef.current = false
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'ew-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [pxToMs, setPlayheadMs, setIsPlaying])
+
+  const handleRulerMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    setPlayheadMs(pxToMs(e.clientX))
+    setIsPlaying(false)
+    isDraggingPlayheadRef.current = true
+    const onMove = (ev: MouseEvent) => {
+      if (!isDraggingPlayheadRef.current) return
+      setPlayheadMs(pxToMs(ev.clientX))
+    }
+    const onUp = () => {
+      isDraggingPlayheadRef.current = false
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'ew-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [pxToMs, setPlayheadMs, setIsPlaying])
+
+  // ── Track operations ──
   const handleAddTrack = useCallback((kind: 'video' | 'caption' | 'audio') => {
     if (!sequence) return
     const sortOrder = sequence.tracks.length
     const track = createTrack(kind, undefined, sortOrder)
     track.sequenceId = sequence.id
-    setSequence({
-      ...sequence,
-      tracks: [...sequence.tracks, track],
-    })
+    setSequence({ ...sequence, tracks: [...sequence.tracks, track] })
     markDirty()
   }, [sequence, setSequence, markDirty])
+
+  const handleAddTrackAbove = useCallback((kind: 'video' | 'caption' | 'audio') => {
+    if (!sequence || !selectedTrackId) return
+    const { tracks } = insertTrackAboveOp(sequence.tracks, selectedTrackId, kind)
+    const reordered = tracks.map((t) => ({ ...t, sequenceId: sequence.id }))
+    setSequence({ ...sequence, tracks: reordered })
+    markDirty()
+  }, [sequence, selectedTrackId, setSequence, markDirty])
+
+  // ── Cut: clicking a clip in cut mode splits at playhead ──
+  const handleClipClick = useCallback((clipId: string, trackId: string) => {
+    if (activeTool === 'cut') {
+      if (!sequence) return
+      const newTracks = sequence.tracks.map((track) => {
+        if (track.id === trackId && track.clips.some((c) => c.id === clipId)) {
+          return splitClipAtPlayhead(track, clipId, playheadMs)
+        }
+        return track
+      })
+      const newDuration = computeSequenceDuration(newTracks)
+      setSequence({ ...sequence, tracks: newTracks, durationMs: newDuration })
+      setSelectedClipId(null)
+      markDirty()
+    } else {
+      setSelectedClipId(clipId)
+      setSelectedTrackId(trackId)
+    }
+  }, [activeTool, sequence, playheadMs, setSequence, setSelectedClipId, setSelectedTrackId, markDirty])
 
   const handleSplitAtPlayhead = useCallback(() => {
     if (!sequence || !selectedClipId) return
@@ -170,19 +258,25 @@ export function TimelineEditor({
 
   const handleAddCrossDissolve = useCallback(() => {
     if (!sequence) return
-    const allClips = sequence.tracks.flatMap((t) => t.clips).sort((a, b) => a.startMs - b.startMs)
-    for (let i = 0; i < allClips.length - 1; i++) {
-      if (allClips[i].endMs === allClips[i + 1].startMs) {
-        const newTransitions = addCrossDissolve(
-          sequence.transitions ?? [],
-          sequence.id,
-          allClips[i].id,
-          allClips[i + 1].id
-        )
-        setSequence({ ...sequence, transitions: newTransitions })
-        markDirty()
-        return
+    let transitions = sequence.transitions ?? []
+    let added = false
+    for (const track of sequence.tracks) {
+      const sorted = [...track.clips].sort((a, b) => a.startMs - b.startMs)
+      for (let i = 0; i < sorted.length - 1; i++) {
+        if (sorted[i].endMs === sorted[i + 1].startMs) {
+          const alreadyExists = transitions.some(
+            (t) => t.fromClipId === sorted[i].id && t.toClipId === sorted[i + 1].id
+          )
+          if (!alreadyExists) {
+            transitions = addCrossDissolve(transitions, sequence.id, sorted[i].id, sorted[i + 1].id)
+            added = true
+          }
+        }
       }
+    }
+    if (added) {
+      setSequence({ ...sequence, transitions })
+      markDirty()
     }
   }, [sequence, setSequence, markDirty])
 
@@ -190,48 +284,65 @@ export function TimelineEditor({
     if (!sequence) return
     let captionTrack = sequence.tracks.find((t) => t.kind === 'caption')
     let newTracks = [...sequence.tracks]
-
     if (!captionTrack) {
       captionTrack = createTrack('caption', 'Captions', sequence.tracks.length)
       captionTrack.sequenceId = sequence.id
       newTracks = [...newTracks, captionTrack]
     }
-
     const startMs = playheadMs
     const endMs = Math.min(startMs + 3000, 120_000)
     const updated = addCaption(captionTrack, 'New caption', startMs, endMs)
-
     newTracks = newTracks.map((t) => (t.id === updated.id ? updated : t))
     const newDuration = computeSequenceDuration(newTracks)
     setSequence({ ...sequence, tracks: newTracks, durationMs: newDuration })
     markDirty()
   }, [sequence, playheadMs, setSequence, markDirty])
 
+  // ── Trim handler (called from TrackLane) ──
+  const handleTrim = useCallback((trackId: string, clipId: string, edge: 'left' | 'right', newMs: number) => {
+    if (!sequence) return
+    const newTracks = sequence.tracks.map((track) => {
+      if (track.id !== trackId) return track
+      return edge === 'left'
+        ? trimClipLeft(track, clipId, newMs)
+        : trimClipRight(track, clipId, newMs)
+    })
+    const newDuration = computeSequenceDuration(newTracks)
+    setSequence({ ...sequence, tracks: newTracks, durationMs: newDuration })
+    markDirty()
+  }, [sequence, setSequence, markDirty])
+
+  // ── Dissolve duration drag ──
+  const handleDissolveDurationChange = useCallback((transitionId: string, newDurationMs: number) => {
+    if (!sequence) return
+    const updated = updateTransitionDuration(sequence.transitions ?? [], transitionId, newDurationMs)
+    setSequence({ ...sequence, transitions: updated })
+    markDirty()
+  }, [sequence, setSequence, markDirty])
+
+  // ── Snapshot capture from preview video ──
+  const handleSnapshotAtPlayhead = useCallback(async () => {
+    if (!previewVideoRef.current || !previewClip || !onSnapshotRequest) return
+    const frame = await captureCurrentFrameAsync(previewVideoRef.current)
+    if (!frame) return
+    const clipEndThreshold = 200
+    const isAtEnd = (previewClip.endMs - playheadMs) <= clipEndThreshold
+    const track = sequence?.tracks.find((t) => t.clips.some((c) => c.id === previewClip.id))
+    onSnapshotRequest({
+      blob: frame.blob,
+      timecodeMs: frame.timecodeMs,
+      clipId: previewClip.id,
+      trackId: track?.id ?? '',
+      isAtClipEnd: isAtEnd,
+      fileUrl: previewClip.fileUrl,
+      outputId: previewClip.outputId,
+    })
+  }, [previewClip, playheadMs, sequence, onSnapshotRequest])
+
   const handleSave = useCallback(async () => {
     if (!sequence || !sequence.id || !isDirty) return
-    try {
-      const saved = await saveMutation.mutateAsync({
-        name: sequence.name,
-        durationMs: sequence.durationMs,
-        tracks: sequence.tracks,
-        transitions: sequence.transitions,
-      })
-      const store = useTimelineStore.getState()
-      if (saved && saved.id !== sequence.id) {
-        store.setSequence({ ...sequence, ...saved, tracks: sequence.tracks })
-      }
-      store.markClean()
-    } catch {
-      // error handled by mutation
-    }
-  }, [sequence, isDirty, saveMutation])
-
-  const handleRulerClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const ratio = x / rect.width
-    setPlayheadMs(Math.round(ratio * viewDurationMs))
-  }, [viewDurationMs, setPlayheadMs])
+    await flushNow()
+  }, [sequence, isDirty, flushNow])
 
   const tools = [
     { id: 'select' as const, icon: MousePointer2, label: 'Select (V)' },
@@ -239,7 +350,6 @@ export function TimelineEditor({
     { id: 'caption' as const, icon: Type, label: 'Caption (T)' },
   ]
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
@@ -258,6 +368,24 @@ export function TimelineEditor({
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [setActiveTool, setIsPlaying, handleDeleteSelected, handleSave])
+
+  // ── Playhead position calc ──
+  const playheadLeft = useMemo(() => {
+    if (viewDurationMs <= 0) return '80px'
+    const areaWidth = tracksAreaRef.current?.clientWidth ?? 800
+    const trackWidth = areaWidth - LABEL_WIDTH
+    const px = LABEL_WIDTH + (playheadMs / viewDurationMs) * trackWidth
+    return `${px}px`
+  }, [playheadMs, viewDurationMs])
+
+  // All transitions indexed by fromClipId for dissolve rendering
+  const transitionsByFrom = useMemo(() => {
+    const map = new Map<string, TimelineTransition>()
+    for (const t of sequence?.transitions ?? []) {
+      map.set(t.fromClipId, t)
+    }
+    return map
+  }, [sequence?.transitions])
 
   return (
     <div className={cn('relative flex flex-col gap-2', mounted ? 'timeline-enter' : 'opacity-0', className)}>
@@ -278,75 +406,50 @@ export function TimelineEditor({
                 {sequences.map((seq) => (
                   <button
                     key={seq.id}
-                    onClick={() => {
-                      onSwitchSequence?.(seq)
-                      setIsSeqMenuOpen(false)
-                    }}
+                    onClick={() => { onSwitchSequence?.(seq); setIsSeqMenuOpen(false) }}
                     className={cn(
                       'flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left transition-colors group/item',
-                      seq.id === sequence?.id
-                        ? 'text-primary bg-primary/5'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                      seq.id === sequence?.id ? 'text-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
                     )}
                   >
                     {seq.id === sequence?.id && <Check className="h-3 w-3 flex-shrink-0" />}
-                    <span className={cn('flex-1 truncate', seq.id !== sequence?.id && 'ml-5')}>
-                      {seq.name}
-                    </span>
-                    <span className="text-[9px] text-muted-foreground/50 font-mono tabular-nums">
-                      {seq.tracks?.length ?? 0}t
-                    </span>
+                    <span className={cn('flex-1 truncate', seq.id !== sequence?.id && 'ml-5')}>{seq.name}</span>
+                    <span className="text-[9px] text-muted-foreground/50 font-mono tabular-nums">{seq.tracks?.length ?? 0}t</span>
                     {sequences.length > 1 && (
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onDeleteSequence?.(seq.id)
-                          setIsSeqMenuOpen(false)
-                        }}
+                        onClick={(e) => { e.stopPropagation(); onDeleteSequence?.(seq.id); setIsSeqMenuOpen(false) }}
                         className="opacity-0 group-hover/item:opacity-100 p-0.5 rounded text-muted-foreground/40 hover:text-red-400 transition-all"
                         title="Delete this edit"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
+                      ><Trash2 className="h-3 w-3" /></button>
                     )}
                   </button>
                 ))}
-
                 <div className="h-px bg-border/30 my-1" />
-
                 <button
-                  onClick={() => {
-                    onCreateSequence?.()
-                    setIsSeqMenuOpen(false)
-                  }}
+                  onClick={() => { onCreateSequence?.(); setIsSeqMenuOpen(false) }}
                   disabled={isCreating}
                   className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors disabled:opacity-50"
                 >
-                  <FilePlus2 className="h-3 w-3" />
-                  <span>New edit</span>
+                  <FilePlus2 className="h-3 w-3" /><span>New edit</span>
                   {isCreating && <Loader2 className="h-3 w-3 animate-spin ml-auto" />}
                 </button>
               </div>
             )}
           </div>
-
-          {isDirty && (
-            <span className="text-[9px] text-amber-500/80 font-mono uppercase tracking-wider">unsaved</span>
-          )}
+          {isDirty && <span className="text-[9px] text-amber-500/80 font-mono uppercase tracking-wider">unsaved</span>}
         </div>
       )}
 
-      {/* Full-width preview */}
-      <div className="relative w-full aspect-video rounded-lg bg-black/70 border border-border/30 overflow-hidden timeline-scanline-boot">
+      {/* Preview — slightly reduced height */}
+      <div className="relative w-full rounded-lg bg-black/70 border border-border/30 overflow-hidden timeline-scanline-boot" style={{ aspectRatio: '16 / 8.2' }}>
         {previewClip ? (
           <video
             ref={previewVideoRef}
             key={previewClip.id}
             src={previewClip.fileUrl}
             className="w-full h-full object-contain"
-            muted
-            playsInline
-            preload="metadata"
+            crossOrigin="anonymous"
+            muted playsInline preload="metadata"
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground/60 font-mono uppercase tracking-wider">
@@ -358,165 +461,91 @@ export function TimelineEditor({
         </div>
       </div>
 
-      {/* Controls row between preview and timeline */}
+      {/* Controls */}
       <div className="flex flex-col gap-2 rounded-lg border border-border/30 bg-muted/20 px-2.5 py-2">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="font-mono text-xs text-muted-foreground tabular-nums bg-muted/30 px-2 py-1 rounded-md border border-border/30 min-w-[90px] text-center">
             {msToTimecode(playheadMs)}
           </div>
-
           <div className="flex items-center gap-0.5">
-            <button
-              onClick={() => {
-                setPlayheadMs(0)
-                setIsPlaying(false)
-              }}
-              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-              title="Skip to start"
-            >
+            <button onClick={() => { setPlayheadMs(0); setIsPlaying(false) }} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors" title="Skip to start">
               <SkipBack className="h-3.5 w-3.5" />
             </button>
-            <button
-              onClick={() => setPlayheadMs(Math.max(0, playheadMs - 5000))}
-              className="px-2 py-1 rounded-md text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-              title="Back 5 seconds"
-            >
-              -5s
-            </button>
-            <button
-              onClick={() => setIsPlaying(!isPlaying)}
-              className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-              title={isPlaying ? 'Pause' : 'Play'}
-            >
+            <button onClick={() => setPlayheadMs(Math.max(0, playheadMs - 5000))} className="px-2 py-1 rounded-md text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors" title="Back 5 seconds">-5s</button>
+            <button onClick={() => setIsPlaying(!isPlaying)} className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors" title={isPlaying ? 'Pause' : 'Play'}>
               {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             </button>
-            <button
-              onClick={() => setPlayheadMs(Math.min(durationMs, playheadMs + 5000))}
-              className="px-2 py-1 rounded-md text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-              title="Forward 5 seconds"
-            >
-              +5s
-            </button>
+            <button onClick={() => setPlayheadMs(Math.min(durationMs, playheadMs + 5000))} className="px-2 py-1 rounded-md text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors" title="Forward 5 seconds">+5s</button>
           </div>
-
           <div className="w-px h-4 bg-border/50" />
-
           {tools.map((tool) => (
-            <button
-              key={tool.id}
-              onClick={() => setActiveTool(tool.id)}
-              className={cn(
-                'p-1.5 rounded-md transition-colors',
-                activeTool === tool.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-              )}
+            <button key={tool.id} onClick={() => setActiveTool(tool.id)}
+              className={cn('p-1.5 rounded-md transition-colors', activeTool === tool.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60')}
               title={tool.label}
-            >
-              <tool.icon className="h-3.5 w-3.5" />
-            </button>
+            ><tool.icon className="h-3.5 w-3.5" /></button>
           ))}
-
           <div className="w-px h-4 bg-border/50" />
 
           {activeTool === 'cut' && selectedClipId && (
-            <button
-              onClick={handleSplitAtPlayhead}
+            <button onClick={handleSplitAtPlayhead}
               className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors border border-amber-500/30"
               title="Split at playhead"
-            >
-              <Scissors className="h-3 w-3" /> Split
-            </button>
+            ><Scissors className="h-3 w-3" /> Split</button>
           )}
 
-          <button
-            onClick={handleAddCrossDissolve}
+          <button onClick={handleAddCrossDissolve}
             className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors border border-border/30"
             title="Add cross-dissolve between adjacent clips"
-          >
-            <X className="h-3 w-3 rotate-45" /> Dissolve
-          </button>
+          ><X className="h-3 w-3 rotate-45" /> Dissolve</button>
 
-          <button
-            onClick={handleAddCaption}
+          <button onClick={handleAddCaption}
             className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors border border-border/30"
             title="Add caption at playhead"
-          >
-            <Type className="h-3 w-3" /> Caption
-          </button>
+          ><Type className="h-3 w-3" /> Caption</button>
 
           <div className="flex items-center gap-0.5 ml-auto">
-            <button
-              onClick={() => setZoom(zoom / 1.3)}
-              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-            >
-              <ZoomOut className="h-3 w-3" />
-            </button>
-            <span className="text-[10px] text-muted-foreground font-mono w-8 text-center">
-              {Math.round(zoom * 100)}%
-            </span>
-            <button
-              onClick={() => setZoom(zoom * 1.3)}
-              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-            >
-              <ZoomIn className="h-3 w-3" />
-            </button>
+            <button onClick={() => setZoom(zoom / 1.3)} className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"><ZoomOut className="h-3 w-3" /></button>
+            <span className="text-[10px] text-muted-foreground font-mono w-8 text-center">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => setZoom(zoom * 1.3)} className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"><ZoomIn className="h-3 w-3" /></button>
           </div>
 
-          <button
-            onClick={onOpenLibrary}
+          <button onClick={onOpenLibrary}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors border border-border/30"
-          >
-            <FolderOpen className="h-3 w-3" /> Library
-          </button>
+          ><FolderOpen className="h-3 w-3" /> Library</button>
 
-          {isDirty && (
-            <button
-              onClick={handleSave}
-              disabled={saveMutation.isPending}
+          {(isDirty || isSaving) && (
+            <button onClick={handleSave} disabled={isSaving}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs bg-primary/10 text-primary hover:bg-primary/20 transition-colors border border-primary/30"
             >
-              {saveMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Save className="h-3 w-3" />
-              )}
-              Save
+              {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+              {isSaving ? 'Saving…' : 'Save'}
             </button>
           )}
 
-          <button
-            onClick={() => setExportPanelOpen(!isExportPanelOpen)}
-            className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-colors border',
-              isExportPanelOpen
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border-border/30'
+          <button onClick={() => setExportPanelOpen(!isExportPanelOpen)}
+            className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-colors border',
+              isExportPanelOpen ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border-border/30'
             )}
-          >
-            <Download className="h-3 w-3" /> Export
-          </button>
+          ><Download className="h-3 w-3" /> Export</button>
         </div>
 
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 font-mono uppercase tracking-wider">
-          <span>Duration: {msToTimecode(durationMs)}</span>
-          <span>|</span>
-          <span>{sequence?.tracks.length ?? 0} tracks</span>
-          <span>|</span>
+          <span>Duration: {msToTimecode(durationMs)}</span><span>|</span>
+          <span>{sequence?.tracks.length ?? 0} tracks</span><span>|</span>
           <span>{sequence?.fps ?? 30} fps</span>
           {isDirty && <span className="text-amber-500/80">| unsaved</span>}
         </div>
       </div>
 
       {/* Timeline Tracks Area */}
-      <div ref={tracksAreaRef} className="relative bg-muted/20 border border-border/30 rounded-lg overflow-hidden min-h-[140px] timeline-glow">
-        {/* Ruler */}
-        <div className="h-6 bg-muted/30 border-b border-border/30 cursor-pointer" onClick={handleRulerClick}>
+      <div ref={tracksAreaRef} className="relative bg-muted/20 border border-border/30 rounded-lg overflow-visible min-h-[160px] timeline-glow">
+        {/* Ruler — draggable */}
+        <div className="h-6 bg-muted/30 border-b border-border/30 cursor-pointer select-none rounded-t-lg" onMouseDown={handleRulerMouseDown}>
           <TrackRuler durationMs={viewDurationMs} />
         </div>
 
-        {/* Track lanes */}
-        <div className="relative">
+        {/* Track lanes — scrollable when stacked */}
+        <div className="relative overflow-y-auto overflow-x-clip scrollbar-hide rounded-b-lg bg-muted/20" style={{ maxHeight: 'calc(100% - 24px)' }}>
           {(!sequence || sequence.tracks.length === 0) ? (
             <EmptyTrackPrompt onAddTrack={handleAddTrack} onOpenLibrary={onOpenLibrary} />
           ) : (
@@ -528,37 +557,40 @@ export function TimelineEditor({
                   viewDurationMs={viewDurationMs}
                   selectedClipId={selectedClipId}
                   isSelectedTrack={selectedTrackId === track.id}
-                  onSelectClip={setSelectedClipId}
+                  onClipClick={handleClipClick}
                   onSelectTrack={setSelectedTrackId}
                   activeTool={activeTool}
                   playheadMs={playheadMs}
+                  onTrim={handleTrim}
+                  pxToMs={pxToMs}
+                  transitions={transitionsByFrom}
+                  onDissolveDurationChange={handleDissolveDurationChange}
+                  onSnapshotAtPlayhead={onSnapshotRequest ? handleSnapshotAtPlayhead : undefined}
                 />
               ))}
               {/* Add track buttons */}
               <div className="flex items-center gap-1 px-2 py-1.5 border-t border-border/20">
-                <button onClick={() => handleAddTrack('video')}
-                  className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors">
-                  <Plus className="h-2.5 w-2.5" /> Video
-                </button>
-                <button onClick={() => handleAddTrack('audio')}
-                  className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors">
-                  <Plus className="h-2.5 w-2.5" /> Audio
-                </button>
-                <button onClick={() => handleAddTrack('caption')}
-                  className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors">
-                  <Plus className="h-2.5 w-2.5" /> Caption
-                </button>
+                <button onClick={() => handleAddTrack('video')} className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors"><Plus className="h-2.5 w-2.5" /> Video</button>
+                <button onClick={() => handleAddTrack('audio')} className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors"><Plus className="h-2.5 w-2.5" /> Audio</button>
+                <button onClick={() => handleAddTrack('caption')} className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors"><Plus className="h-2.5 w-2.5" /> Caption</button>
+                {selectedTrackId && (
+                  <button onClick={() => handleAddTrackAbove('video')} className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors ml-auto"><Plus className="h-2.5 w-2.5" /> Above</button>
+                )}
               </div>
             </>
           )}
 
-          {/* Playhead */}
+          {/* Playhead overlay */}
           {viewDurationMs > 0 && (
             <div
-              className="absolute top-0 bottom-0 w-px bg-primary z-10 pointer-events-none"
-              style={{ left: `calc(80px + ${(playheadMs / viewDurationMs) * (100 - (80 / (tracksAreaRef.current?.clientWidth ?? 800)) * 100)}%)` }}
+              className="absolute top-0 bottom-0 w-px bg-primary z-10"
+              style={{ left: playheadLeft, pointerEvents: 'none' }}
             >
-              <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-primary rounded-full shadow-sm shadow-primary/50" />
+              <div
+                className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-primary rounded-sm shadow-sm shadow-primary/50 cursor-ew-resize"
+                style={{ pointerEvents: 'auto' }}
+                onMouseDown={handlePlayheadDragStart}
+              />
             </div>
           )}
         </div>
@@ -567,16 +599,14 @@ export function TimelineEditor({
   )
 }
 
+// ── TrackRuler ──
+
 function TrackRuler({ durationMs }: { durationMs: number }) {
   const marks = useMemo(() => {
     const result: { ms: number; label: string; major: boolean }[] = []
     const step = durationMs <= 10000 ? 1000 : durationMs <= 30000 ? 2000 : 5000
     for (let ms = 0; ms <= durationMs; ms += step) {
-      result.push({
-        ms,
-        label: `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`,
-        major: ms % (step * 2) === 0,
-      })
+      result.push({ ms, label: `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`, major: ms % (step * 2) === 0 })
     }
     return result
   }, [durationMs])
@@ -584,8 +614,7 @@ function TrackRuler({ durationMs }: { durationMs: number }) {
   return (
     <div className="relative w-full h-full pl-[80px]">
       {marks.map((m) => (
-        <div key={m.ms} className="absolute bottom-0 flex flex-col items-center"
-          style={{ left: `${(m.ms / durationMs) * 100}%` }}>
+        <div key={m.ms} className="absolute bottom-0 flex flex-col items-center" style={{ left: `${(m.ms / durationMs) * 100}%` }}>
           <span className={cn('text-[8px] font-mono leading-none mb-0.5', m.major ? 'text-muted-foreground/60' : 'text-muted-foreground/30')}>
             {m.major ? m.label : ''}
           </span>
@@ -596,18 +625,27 @@ function TrackRuler({ durationMs }: { durationMs: number }) {
   )
 }
 
+// ── TrackLane with trim handles and dissolve chips ──
+
 function TrackLane({
   track, viewDurationMs, selectedClipId, isSelectedTrack,
-  onSelectClip, onSelectTrack, activeTool, playheadMs,
+  onClipClick, onSelectTrack, activeTool, playheadMs,
+  onTrim, pxToMs, transitions, onDissolveDurationChange,
+  onSnapshotAtPlayhead,
 }: {
   track: TimelineTrack
   viewDurationMs: number
   selectedClipId: string | null
   isSelectedTrack: boolean
-  onSelectClip: (id: string | null) => void
+  onClipClick: (clipId: string, trackId: string) => void
   onSelectTrack: (id: string | null) => void
   activeTool: string
   playheadMs: number
+  onTrim: (trackId: string, clipId: string, edge: 'left' | 'right', newMs: number) => void
+  pxToMs: (clientX: number) => number
+  transitions: Map<string, TimelineTransition>
+  onDissolveDurationChange: (transitionId: string, newDurationMs: number) => void
+  onSnapshotAtPlayhead?: () => void
 }) {
   const kindColors: Record<string, { bg: string; border: string; selected: string }> = {
     video: { bg: 'bg-primary/15', border: 'border-primary/25', selected: 'border-primary ring-1 ring-primary/30' },
@@ -616,17 +654,56 @@ function TrackLane({
   }
   const colors = kindColors[track.kind] ?? kindColors.video
 
+  const handleTrimDrag = useCallback((clipId: string, edge: 'left' | 'right', e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const onMove = (ev: MouseEvent) => {
+      onTrim(track.id, clipId, edge, pxToMs(ev.clientX))
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'ew-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [track.id, onTrim, pxToMs])
+
+  const handleDissolveDrag = useCallback((transitionId: string, fromClipEndMs: number, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startMs = pxToMs(startX)
+    const onMove = (ev: MouseEvent) => {
+      const currentMs = pxToMs(ev.clientX)
+      const delta = currentMs - startMs
+      onDissolveDurationChange(transitionId, Math.max(100, 500 + delta))
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'ew-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [onDissolveDurationChange, pxToMs])
+
+  const sortedClips = useMemo(() => [...track.clips].sort((a, b) => a.startMs - b.startMs), [track.clips])
+
   return (
     <div
-      className={cn('flex items-stretch h-10 border-b border-border/20 group', isSelectedTrack && 'bg-primary/5')}
+      className={cn('flex items-stretch h-12 border-b border-border/20 group/lane relative', isSelectedTrack && 'bg-primary/5')}
       onClick={() => onSelectTrack(track.id)}
     >
-      {/* Track label */}
       <div className="w-[80px] flex-shrink-0 flex items-center gap-1 px-2 border-r border-border/20">
-        <GripVertical className="h-3 w-3 text-muted-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab" />
-        <span className="text-[9px] font-mono text-muted-foreground/60 uppercase tracking-wider truncate flex-1">
-          {track.label}
-        </span>
+        <GripVertical className="h-3 w-3 text-muted-foreground/30 opacity-0 group-hover/lane:opacity-100 transition-opacity cursor-grab" />
+        <span className="text-[9px] font-mono text-muted-foreground/60 uppercase tracking-wider truncate flex-1">{track.label}</span>
         {track.kind === 'audio' && (
           <button className="p-0.5 text-muted-foreground/40 hover:text-foreground transition-colors" title={track.isMuted ? 'Unmute' : 'Mute'}>
             {track.isMuted ? <VolumeX className="h-2.5 w-2.5" /> : <Volume2 className="h-2.5 w-2.5" />}
@@ -634,48 +711,93 @@ function TrackLane({
         )}
       </div>
 
-      {/* Clip area */}
       <div className="flex-1 relative">
-        {/* Clips */}
-        {track.clips.map((clip) => {
+        {sortedClips.map((clip, idx) => {
           const left = (clip.startMs / viewDurationMs) * 100
           const width = ((clip.endMs - clip.startMs) / viewDurationMs) * 100
           const isSelected = selectedClipId === clip.id
+          const dissolve = transitions.get(clip.id)
 
           return (
-            <div
-              key={clip.id}
-              className={cn(
-                'absolute top-1 bottom-1 rounded-md border cursor-pointer transition-all',
-                colors.bg, colors.border,
-                isSelected && colors.selected,
-                activeTool === 'cut' && 'cursor-crosshair'
+            <div key={clip.id} className="contents">
+              {/* Clip block */}
+              <div
+                className={cn(
+                  'absolute top-3 bottom-1 rounded-md border cursor-pointer transition-colors group/clip',
+                  colors.bg, colors.border,
+                  isSelected && colors.selected,
+                  activeTool === 'cut' && 'cursor-crosshair'
+                )}
+                style={{ left: `${left}%`, width: `${Math.max(0.5, width)}%` }}
+                onClick={(e) => { e.stopPropagation(); onClipClick(clip.id, track.id) }}
+                title={`${clip.fileType}: ${((clip.endMs - clip.startMs) / 1000).toFixed(1)}s`}
+              >
+                {/* Thumbnail placeholder for video clips */}
+                {clip.fileType === 'video' && (
+                  <div className="absolute left-0 top-0 bottom-0 w-6 rounded-l-md overflow-hidden opacity-60">
+                    <video src={clip.fileUrl} className="w-full h-full object-cover" muted preload="metadata" />
+                  </div>
+                )}
+                <span className="absolute inset-0 flex items-center px-1.5 text-[8px] text-foreground/60 truncate pointer-events-none" style={{ paddingLeft: clip.fileType === 'video' ? '28px' : '6px' }}>
+                  {((clip.endMs - clip.startMs) / 1000).toFixed(1)}s
+                </span>
+
+                {/* Left trim handle */}
+                <div
+                  className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-primary/40 rounded-l-md transition-colors z-20"
+                  onMouseDown={(e) => handleTrimDrag(clip.id, 'left', e)}
+                />
+                {/* Right trim handle */}
+                <div
+                  className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-primary/40 rounded-r-md transition-colors z-20"
+                  onMouseDown={(e) => handleTrimDrag(clip.id, 'right', e)}
+                />
+
+              </div>
+
+              {/* Snapshot "+" button — rendered outside clip to avoid overflow clipping */}
+              {clip.fileType === 'video' && playheadMs >= clip.startMs && playheadMs < clip.endMs && onSnapshotAtPlayhead && (
+                <button
+                  className="absolute z-30 -top-0.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[9px] font-semibold shadow-lg shadow-primary/30 hover:bg-primary/90 hover:scale-105 transition-all ring-1 ring-primary/40 animate-in fade-in duration-200"
+                  style={{ left: `${left + width / 2}%`, transform: 'translateX(-50%)' }}
+                  onClick={(e) => { e.stopPropagation(); onSnapshotAtPlayhead() }}
+                  title="Generate video from this frame"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>Generate</span>
+                </button>
               )}
-              style={{ left: `${left}%`, width: `${Math.max(1, width)}%` }}
-              onClick={(e) => { e.stopPropagation(); onSelectClip(clip.id) }}
-              title={`${clip.fileType}: ${((clip.endMs - clip.startMs) / 1000).toFixed(1)}s`}
-            >
-              <span className="absolute inset-0 flex items-center px-1.5 text-[8px] text-foreground/60 truncate pointer-events-none">
-                {((clip.endMs - clip.startMs) / 1000).toFixed(1)}s
-              </span>
+
+              {/* Dissolve handle between this clip and next */}
+              {dissolve && idx < sortedClips.length - 1 && (() => {
+                const nextClip = sortedClips[idx + 1]
+                const dissolveLeft = (clip.endMs / viewDurationMs) * 100
+                const dissolveWidth = Math.max(0.3, (dissolve.durationMs / viewDurationMs) * 100)
+                return (
+                  <div
+                    key={`dissolve-${dissolve.id}`}
+                    className="absolute top-0 bottom-0 bg-primary/10 border-x border-primary/30 cursor-ew-resize z-10 flex items-center justify-center"
+                    style={{ left: `${dissolveLeft - dissolveWidth / 2}%`, width: `${dissolveWidth}%` }}
+                    onMouseDown={(e) => handleDissolveDrag(dissolve.id, clip.endMs, e)}
+                    title={`Dissolve: ${(dissolve.durationMs / 1000).toFixed(1)}s — drag to resize`}
+                  >
+                    <X className="h-2.5 w-2.5 rotate-45 text-primary/50 pointer-events-none" />
+                  </div>
+                )
+              })()}
             </div>
           )
         })}
 
-        {/* Captions as overlay blocks */}
         {(track.captions ?? []).map((cap) => {
           const left = (cap.startMs / viewDurationMs) * 100
           const width = ((cap.endMs - cap.startMs) / viewDurationMs) * 100
           return (
-            <div
-              key={cap.id}
-              className="absolute top-0.5 bottom-0.5 rounded bg-amber-500/20 border border-amber-500/30 cursor-pointer"
+            <div key={cap.id} className="absolute top-0.5 bottom-0.5 rounded bg-amber-500/20 border border-amber-500/30 cursor-pointer"
               style={{ left: `${left}%`, width: `${Math.max(1, width)}%` }}
               title={cap.text}
             >
-              <span className="absolute inset-0 flex items-center px-1 text-[7px] text-amber-200/80 truncate pointer-events-none italic">
-                {cap.text}
-              </span>
+              <span className="absolute inset-0 flex items-center px-1 text-[7px] text-amber-200/80 truncate pointer-events-none italic">{cap.text}</span>
             </div>
           )
         })}
@@ -684,9 +806,10 @@ function TrackLane({
   )
 }
 
+// ── EmptyTrackPrompt ──
+
 function EmptyTrackPrompt({
-  onAddTrack,
-  onOpenLibrary,
+  onAddTrack, onOpenLibrary,
 }: {
   onAddTrack: (kind: 'video' | 'caption' | 'audio') => void
   onOpenLibrary: () => void
@@ -696,18 +819,12 @@ function EmptyTrackPrompt({
       <Plus className="h-6 w-6" />
       <span className="text-xs">Add tracks to start editing</span>
       <div className="flex gap-2">
-        <button
-          onClick={() => { onAddTrack('video'); onOpenLibrary() }}
+        <button onClick={() => { onAddTrack('video'); onOpenLibrary() }}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors border border-primary/30"
-        >
-          <FolderOpen className="h-3 w-3" /> Browse Videos
-        </button>
-        <button
-          onClick={() => onAddTrack('audio')}
+        ><FolderOpen className="h-3 w-3" /> Browse Videos</button>
+        <button onClick={() => onAddTrack('audio')}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors border border-border/30"
-        >
-          <Volume2 className="h-3 w-3" /> Add Audio Track
-        </button>
+        ><Volume2 className="h-3 w-3" /> Add Audio Track</button>
       </div>
     </div>
   )

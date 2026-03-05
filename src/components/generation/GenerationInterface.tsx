@@ -128,7 +128,12 @@ export function GenerationInterface({
   const isLibraryOpen = useTimelineStore((s) => s.isLibraryOpen)
   const setLibraryOpen = useTimelineStore((s) => s.setLibraryOpen)
   const insertVideoClip = useTimelineStore((s) => s.insertVideoClip)
-  const isTimelineMode = composerMode === 'timeline'
+  const insertVideoClipTargeted = useTimelineStore((s) => s.insertVideoClipTargeted)
+  const snapshotPrompt = useTimelineStore((s) => s.snapshotPrompt)
+  const setSnapshotPrompt = useTimelineStore((s) => s.setSnapshotPrompt)
+  const clearSnapshotPrompt = useTimelineStore((s) => s.clearSnapshotPrompt)
+  const isTimelineMode = composerMode === 'timeline' || composerMode === 'timelinePrompt'
+  const isTimelinePromptMode = composerMode === 'timelinePrompt'
   const isExportPanelOpen = useTimelineStore((s) => s.isExportPanelOpen)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const scrollContentRef = useRef<HTMLDivElement>(null)
@@ -1214,6 +1219,72 @@ export function GenerationInterface({
     })
   }
 
+  // ── Mode switch with autosave flush ──
+  const handleExitTimeline = useCallback(() => {
+    setComposerMode('generate')
+  }, [setComposerMode])
+
+  // ── Timeline snapshot → prompt morph ──
+  const handleTimelineSnapshotRequest = useCallback(async (req: {
+    blob: Blob; timecodeMs: number; clipId: string; trackId: string;
+    isAtClipEnd: boolean; fileUrl: string; outputId: string | null;
+  }) => {
+    if (!session?.projectId || !req.outputId) return
+    try {
+      const file = new File([req.blob], `snapshot-${req.timecodeMs}ms.jpg`, { type: 'image/jpeg' })
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('timecodeMs', String(req.timecodeMs))
+      if (session?.id) formData.append('sessionId', session.id)
+
+      const res = await fetch(`/api/outputs/${req.outputId}/snapshots`, {
+        method: 'POST', body: formData, credentials: 'include',
+      })
+      if (!res.ok) throw new Error('Snapshot upload failed')
+      const data = await res.json()
+      const snapshotUrl = data.output?.fileUrl
+
+      setSnapshotPrompt({
+        snapshotUrl, clipId: req.clipId, trackId: req.trackId,
+        timecodeMs: req.timecodeMs, isAtClipEnd: req.isAtClipEnd,
+        outputId: req.outputId,
+      })
+      if (snapshotUrl) setReferenceImageUrl(snapshotUrl)
+      setPrompt('')
+      setComposerMode('timelinePrompt')
+    } catch (err: any) {
+      toast({ title: 'Snapshot failed', description: err.message || 'Could not capture frame', variant: 'destructive' })
+    }
+  }, [session, setSnapshotPrompt, setReferenceImageUrl, setComposerMode, toast])
+
+  const handleReturnToTimeline = useCallback(() => {
+    clearSnapshotPrompt()
+    setComposerMode('timeline')
+  }, [clearSnapshotPrompt, setComposerMode])
+
+  // Watch for completed video generations and auto-insert into timeline when
+  // the generation was triggered from a timeline snapshot.
+  const pendingTimelineInsertRef = useRef<{
+    clipId: string; trackId: string; isAtClipEnd: boolean;
+  } | null>(null)
+
+  useEffect(() => {
+    if (composerMode !== 'timeline' || !pendingTimelineInsertRef.current) return
+    const pending = pendingTimelineInsertRef.current
+    const latestGen = generations[generations.length - 1]
+    if (!latestGen || latestGen.status !== 'completed') return
+    const videoOutput = latestGen.outputs?.find((o: any) => o.fileType === 'video')
+    if (!videoOutput) return
+
+    const durationMs = videoOutput.duration ? Math.round(videoOutput.duration * 1000) : 5000
+    const inserted = insertVideoClipTargeted(
+      videoOutput.fileUrl, videoOutput.id, durationMs,
+      pending.isAtClipEnd ? 'sameTrackAfter' : 'newTrackAbove',
+      pending.clipId, pending.trackId
+    )
+    if (inserted) pendingTimelineInsertRef.current = null
+  }, [composerMode, generations, insertVideoClipTargeted])
+
   // Get video sessions
   const videoSessions = allSessions.filter(s => s.type === 'video')
   
@@ -1372,13 +1443,46 @@ export function GenerationInterface({
             : "max-w-[var(--dock-prompt-max-w)]"
       )}>
         <div className="flex items-end gap-3">
-          {/* Prompt Bar OR Timeline Shell — exclusive surface policy */}
+          {/* Prompt Bar / Timeline Shell / Timeline Prompt — exclusive surface with morph transitions */}
           <div className={cn(
-            "flex-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl",
+            "flex-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl composer-surface-transition",
             isTimelineMode ? "p-3" : "p-4"
           )}>
-            {isTimelineMode ? (
-              <TimelineShell projectId={session?.projectId || ''} />
+            {composerMode === 'timeline' ? (
+              <TimelineShell
+                projectId={session?.projectId || ''}
+                onSnapshotRequest={handleTimelineSnapshotRequest}
+              />
+            ) : composerMode === 'timelinePrompt' ? (
+              <div className="prompt-from-timeline">
+                <VideoInput
+                  prompt={prompt}
+                  onPromptChange={setPrompt}
+                  onGenerate={async (promptText, options) => {
+                    const snapState = useTimelineStore.getState().snapshotPrompt
+                    if (snapState.clipId && snapState.trackId) {
+                      pendingTimelineInsertRef.current = {
+                        clipId: snapState.clipId,
+                        trackId: snapState.trackId,
+                        isAtClipEnd: snapState.isAtClipEnd,
+                      }
+                    }
+                    await handleGenerate(promptText, {
+                      ...options,
+                      referenceImageUrl: snapState.snapshotUrl || options?.referenceImageUrl,
+                    })
+                    handleReturnToTimeline()
+                  }}
+                  parameters={parameters}
+                  onParametersChange={setParameters}
+                  selectedModel={selectedModel}
+                  onModelSelect={setSelectedModel}
+                  referenceImageUrl={snapshotPrompt.snapshotUrl || referenceImageUrl}
+                  onClearReferenceImage={() => { handleReturnToTimeline() }}
+                  onSetReferenceImageUrl={setReferenceImageUrl}
+                  onRegisterPasteHandler={registerPasteHandler}
+                />
+              </div>
             ) : (
               <>
                 {generationType === 'video' ? (
@@ -1419,7 +1523,7 @@ export function GenerationInterface({
           <div className="flex flex-col gap-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-1.5">
             {/* Image/Video Toggle */}
             <button
-              onClick={() => { if (isTimelineMode) setComposerMode('generate'); onGenerationTypeChange?.('image') }}
+              onClick={() => { if (isTimelineMode) handleExitTimeline(); onGenerationTypeChange?.('image') }}
               className={cn(
                 'p-2 rounded-lg transition-all',
                 !isTimelineMode && generationType === 'image'
@@ -1431,7 +1535,7 @@ export function GenerationInterface({
               <ImageIcon className="h-4 w-4" />
             </button>
             <button
-              onClick={() => { if (isTimelineMode) setComposerMode('generate'); onGenerationTypeChange?.('video') }}
+              onClick={() => { if (isTimelineMode) handleExitTimeline(); onGenerationTypeChange?.('video') }}
               className={cn(
                 'p-2 rounded-lg transition-all',
                 !isTimelineMode && generationType === 'video'
@@ -1445,7 +1549,7 @@ export function GenerationInterface({
 
             {/* Timeline button — positioned under video, above brainstorm */}
             <button
-              onClick={() => setComposerMode(isTimelineMode ? 'generate' : 'timeline')}
+              onClick={() => isTimelineMode ? handleExitTimeline() : setComposerMode('timeline')}
               className={cn(
                 'p-2 rounded-lg transition-all',
                 isTimelineMode

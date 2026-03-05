@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils'
 import { useTimelineStore } from '@/store/timelineStore'
 import { useEnqueueRender, useRenderJobs } from '@/hooks/useTimeline'
+import { useTimelineAutosave } from '@/hooks/useTimelineAutosave'
 import { msToTimecode } from '@/types/timeline'
 
 interface ExportPanelProps {
@@ -17,14 +18,15 @@ interface ExportPanelProps {
 export function ExportPanel({ projectId, className }: ExportPanelProps) {
   const { sequence, setExportPanelOpen } = useTimelineStore()
   const [resolution, setResolution] = useState('1080')
+  const { flushNow } = useTimelineAutosave(projectId, { autoSchedule: false })
 
   const enqueueMutation = useEnqueueRender(projectId, sequence?.id || '')
   const { data: renderData } = useRenderJobs(projectId, sequence?.id, !!sequence?.id)
   const renderJobs = renderData?.renderJobs ?? []
-  const latestJob = renderJobs[0]
 
   const handleRender = async () => {
     if (!sequence?.id) return
+    await flushNow()
     await enqueueMutation.mutateAsync(parseInt(resolution))
   }
 
