@@ -1552,11 +1552,12 @@ export function GenerationInterface({
     }
     
     const isVideoGeneration = (gen: GenerationWithOutputs) => {
+      const modelConfig = allModels.find((m) => m.id === gen.modelId)
+      if (modelConfig?.type === 'video') return true
       if (gen.outputs && gen.outputs.length > 0) {
         return gen.outputs.some((output) => output.fileType === 'video')
       }
-      const modelType = allModels.find((m) => m.id === gen.modelId)?.type
-      return modelType === 'video'
+      return false
     }
 
     // Reverse so oldest is at top, newest at bottom.

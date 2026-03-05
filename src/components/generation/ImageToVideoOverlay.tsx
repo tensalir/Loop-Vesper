@@ -1167,14 +1167,21 @@ function IterationCard({
       
       {/* Metadata */}
       <div className="p-4 space-y-3">
-        {/* Status Badge + Model (on right) */}
+        {/* Status Badge + Origin + Model */}
         <div className="flex items-center justify-between gap-2">
-          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-tight border shrink-0 ${statusColors[iteration.status]}`}>
-            <StatusIcon className={`h-3 w-3 ${iteration.status === 'processing' ? 'animate-spin' : ''}`} />
-            <span>{iteration.status}</span>
+          <div className="flex items-center gap-1.5">
+            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-tight border shrink-0 ${statusColors[iteration.status]}`}>
+              <StatusIcon className={`h-3 w-3 ${iteration.status === 'processing' ? 'animate-spin' : ''}`} />
+              <span>{iteration.status}</span>
+            </div>
+            {((iteration.parameters as any)?.sourceKind === 'snapshot' || !!(iteration.parameters as any)?.sourceVideoOutputId) && (
+              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-[9px] font-semibold text-primary shrink-0">
+                <Camera className="h-2.5 w-2.5" />
+                <span>Timeline</span>
+              </div>
+            )}
           </div>
           
-          {/* Model indicator - moved to right */}
           {iteration.modelId && (
             <span className="text-[10px] text-muted-foreground truncate" title={iteration.modelId}>
               {formatModelName(iteration.modelId)}

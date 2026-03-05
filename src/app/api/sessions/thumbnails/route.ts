@@ -70,6 +70,8 @@ export async function GET(request: NextRequest) {
 
     // Single SQL query to get thumbnails for all sessions
     // Uses LATERAL join to efficiently get the latest image per session
+    // Excludes internal snapshot-capture records and video-model generations
+    // whose outputs were incorrectly tagged as images
     const thumbnailRows = await prisma.$queryRaw<Array<{
       session_id: string
       thumbnail_url: string | null
@@ -78,7 +80,6 @@ export async function GET(request: NextRequest) {
         s.id as session_id,
         thumb.file_url as thumbnail_url
       FROM sessions s
-      -- Get latest image thumbnail for each session
       LEFT JOIN LATERAL (
         SELECT o.file_url
         FROM generations g
@@ -86,13 +87,12 @@ export async function GET(request: NextRequest) {
         WHERE g.session_id = s.id
           AND g.status = 'completed'
           AND o.file_type = 'image'
+          AND g.model_id NOT IN ('snapshot-capture', 'kling-official', 'replicate-kling-2.6', 'gemini-veo-3.1')
         ORDER BY g.created_at DESC, o.created_at DESC
         LIMIT 1
       ) thumb ON TRUE
       WHERE s.project_id = ${projectId}::uuid
-        -- Privacy: owner/shared sees all, otherwise only public sessions
         AND (${showAllSessions}::boolean OR s.is_private = FALSE)
-        -- Optional type filter
         AND (${sessionType === null}::boolean OR s.type = ${sessionType || ''})
       ORDER BY s.updated_at DESC
     `)

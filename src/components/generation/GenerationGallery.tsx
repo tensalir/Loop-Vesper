@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, forwardRef, useMemo, memo } from 'react'
 import Image from 'next/image'
-import { Download, RotateCcw, Info, Copy, Bookmark, Check, Video, Wand2, X, Trash2, Pin, ArrowDownRight, Camera, Paintbrush } from 'lucide-react'
+import { Download, RotateCcw, Info, Copy, Bookmark, Check, Video, Wand2, X, Trash2, Pin, ArrowDownRight, Camera, Paintbrush, Film } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { GenerationWithOutputs } from '@/types/generation'
 import type { Session } from '@/types/project'
@@ -239,6 +239,21 @@ const VideoCardWithOverlay = memo(function VideoCardWithOverlay({
         controls
         preload="metadata"
       />
+
+      {/* Source-origin badge for timeline/snapshot-generated videos */}
+      {(() => {
+        const params = generation.parameters as any
+        const kind = params?.sourceKind
+        const hasSourceVideo = !!params?.sourceVideoOutputId
+        if (!kind && !hasSourceVideo) return null
+        const isTimeline = kind === 'snapshot' || hasSourceVideo
+        return (
+          <div className="absolute top-1.5 left-1.5 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/50 backdrop-blur-sm text-[9px] text-white/80 font-medium pointer-events-none">
+            {isTimeline ? <Film className="h-2.5 w-2.5" /> : <Wand2 className="h-2.5 w-2.5" />}
+            <span>{isTimeline ? 'Timeline' : 'Edited'}</span>
+          </div>
+        )
+      })()}
 
       {/* Hover Overlay with Actions */}
       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
