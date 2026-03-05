@@ -27,6 +27,11 @@ export function useTimelineAutosave(projectId: string, { autoSchedule = true }: 
   const isDirty = useTimelineStore((s) => s.isDirty)
   const saveMutation = useSaveSequence(projectId, sequence?.id ?? '')
   const stateRef = useRef<AutosaveState>({ timer: null, inflight: false, queued: false })
+  const mutateAsyncRef = useRef(saveMutation.mutateAsync)
+
+  useEffect(() => {
+    mutateAsyncRef.current = saveMutation.mutateAsync
+  }, [saveMutation.mutateAsync])
 
   const doSave = useCallback(async () => {
     const seq = useTimelineStore.getState().sequence
@@ -40,7 +45,7 @@ export function useTimelineAutosave(projectId: string, { autoSchedule = true }: 
 
     st.inflight = true
     try {
-      const saved = await saveMutation.mutateAsync({
+      const saved = await mutateAsyncRef.current({
         name: seq.name,
         durationMs: seq.durationMs,
         tracks: seq.tracks,
@@ -61,7 +66,7 @@ export function useTimelineAutosave(projectId: string, { autoSchedule = true }: 
         void doSave()
       }
     }
-  }, [saveMutation])
+  }, [])
 
   const scheduleSave = useCallback(() => {
     const st = stateRef.current

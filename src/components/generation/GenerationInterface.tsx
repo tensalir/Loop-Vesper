@@ -162,6 +162,9 @@ export function GenerationInterface({
   const deepLinkSeekingRef = useRef(false)
   const deepLinkPagesLoadedRef = useRef(0)
   const MAX_DEEPLINK_PAGES = 10 // Max pages to load when seeking deep-link output
+  const snapshotFlowIdRef = useRef(0)
+  const snapshotObjectUrlRef = useRef<string | null>(null)
+  const timelineSnapshotFileRef = useRef<File | null>(null)
   
   // State for pasted images (passed to input components)
   const [pastedImageFiles, setPastedImageFiles] = useState<File[]>([])
@@ -1034,11 +1037,18 @@ export function GenerationInterface({
         endFrameImageData_ = endFrameImageData
       }
       
+      const extraModelParams: Record<string, unknown> = {}
+      const typedParameters = parameters as unknown as Record<string, unknown>
+      if (typeof typedParameters.quality !== 'undefined') {
+        extraModelParams.quality = typedParameters.quality
+      }
+
       const result = await generateMutation.mutateAsync({
         sessionId: session.id,
         modelId: selectedModel,
         prompt,
         parameters: {
+          ...extraModelParams,
           aspectRatio: parameters.aspectRatio,
           resolution: parameters.resolution,
           numOutputs: parameters.numOutputs,
@@ -1078,6 +1088,10 @@ export function GenerationInterface({
     // Set parameters
     const genParams = generation.parameters as any
     const isVideo = generationType === 'video'
+    const inheritedExtras: Record<string, any> = {}
+    if (typeof genParams?.quality !== 'undefined') {
+      inheritedExtras.quality = genParams.quality
+    }
     setParameters({
       aspectRatio: genParams.aspectRatio || (isVideo ? '16:9' : '1:1'),
       resolution: genParams.resolution || (isVideo ? 720 : 1024),
@@ -1085,7 +1099,8 @@ export function GenerationInterface({
       ...(isVideo
         ? { duration: typeof genParams.duration === 'number' ? genParams.duration : 5 }
         : (typeof genParams.duration === 'number' ? { duration: genParams.duration } : {})),
-    })
+      ...inheritedExtras,
+    } as any)
     
     // Reuse reference images
     if (generationType === 'video') {
@@ -1221,8 +1236,9 @@ export function GenerationInterface({
 
   // ── Mode switch with autosave flush ──
   const handleExitTimeline = useCallback(() => {
+    clearSnapshotPrompt()
     setComposerMode('generate')
-  }, [setComposerMode])
+  }, [clearSnapshotPrompt, setComposerMode])
 
   // ── Timeline snapshot → prompt morph ──
   const handleTimelineSnapshotRequest = useCallback(async (req: {
@@ -1231,7 +1247,45 @@ export function GenerationInterface({
   }) => {
     if (!session?.projectId || !req.outputId) return
     try {
+      // Inherit model + quality/resolution from the source output generation.
+      const sourceGeneration = generations.find((gen) =>
+        (gen.outputs ?? []).some((o: any) => o.id === req.outputId)
+      )
+      if (sourceGeneration) {
+        const sourceParams = (sourceGeneration.parameters ?? {}) as any
+        const inheritedExtras: Record<string, any> = {}
+        if (sourceParams && typeof sourceParams.quality !== 'undefined') {
+          inheritedExtras.quality = sourceParams.quality
+        }
+        setSelectedModel(sourceGeneration.modelId)
+        setParameters({
+          aspectRatio: sourceParams.aspectRatio ?? parameters.aspectRatio ?? '16:9',
+          resolution: sourceParams.resolution ?? parameters.resolution ?? 720,
+          numOutputs: sourceParams.numOutputs ?? 1,
+          duration: sourceParams.duration ?? parameters.duration ?? 5,
+          ...inheritedExtras,
+        } as any)
+      }
+
+      // Switch mode immediately for snappier UX, upload in background.
+      if (snapshotObjectUrlRef.current) {
+        URL.revokeObjectURL(snapshotObjectUrlRef.current)
+      }
+      const flowId = ++snapshotFlowIdRef.current
       const file = new File([req.blob], `snapshot-${req.timecodeMs}ms.jpg`, { type: 'image/jpeg' })
+      timelineSnapshotFileRef.current = file
+      const localUrl = URL.createObjectURL(req.blob)
+      snapshotObjectUrlRef.current = localUrl
+
+      setSnapshotPrompt({
+        snapshotUrl: localUrl, clipId: req.clipId, trackId: req.trackId,
+        timecodeMs: req.timecodeMs, isAtClipEnd: req.isAtClipEnd,
+        outputId: req.outputId,
+      })
+      setReferenceImageUrl(localUrl)
+      setPrompt('')
+      setComposerMode('timelinePrompt')
+
       const formData = new FormData()
       formData.append('file', file)
       formData.append('timecodeMs', String(req.timecodeMs))
@@ -1242,22 +1296,46 @@ export function GenerationInterface({
       })
       if (!res.ok) throw new Error('Snapshot upload failed')
       const data = await res.json()
-      const snapshotUrl = data.output?.fileUrl
+      const uploadedUrl = data.output?.fileUrl
+      if (!uploadedUrl) return
+
+      // Ignore stale async responses from older clicks.
+      if (flowId !== snapshotFlowIdRef.current) return
 
       setSnapshotPrompt({
-        snapshotUrl, clipId: req.clipId, trackId: req.trackId,
-        timecodeMs: req.timecodeMs, isAtClipEnd: req.isAtClipEnd,
+        snapshotUrl: uploadedUrl,
+        clipId: req.clipId,
+        trackId: req.trackId,
+        timecodeMs: req.timecodeMs,
+        isAtClipEnd: req.isAtClipEnd,
         outputId: req.outputId,
       })
-      if (snapshotUrl) setReferenceImageUrl(snapshotUrl)
-      setPrompt('')
-      setComposerMode('timelinePrompt')
+      setReferenceImageUrl(uploadedUrl)
+      if (snapshotObjectUrlRef.current) {
+        URL.revokeObjectURL(snapshotObjectUrlRef.current)
+        snapshotObjectUrlRef.current = null
+      }
     } catch (err: any) {
       toast({ title: 'Snapshot failed', description: err.message || 'Could not capture frame', variant: 'destructive' })
     }
-  }, [session, setSnapshotPrompt, setReferenceImageUrl, setComposerMode, toast])
+  }, [
+    session,
+    generations,
+    parameters,
+    setSelectedModel,
+    setParameters,
+    setSnapshotPrompt,
+    setReferenceImageUrl,
+    setComposerMode,
+    toast,
+  ])
 
   const handleReturnToTimeline = useCallback(() => {
+    if (snapshotObjectUrlRef.current) {
+      URL.revokeObjectURL(snapshotObjectUrlRef.current)
+      snapshotObjectUrlRef.current = null
+    }
+    timelineSnapshotFileRef.current = null
     clearSnapshotPrompt()
     setComposerMode('timeline')
   }, [clearSnapshotPrompt, setComposerMode])
@@ -1443,46 +1521,65 @@ export function GenerationInterface({
             : "max-w-[var(--dock-prompt-max-w)]"
       )}>
         <div className="flex items-end gap-3">
-          {/* Prompt Bar / Timeline Shell / Timeline Prompt — exclusive surface with morph transitions */}
+          {/* Prompt Bar / Timeline Shell — timeline prompt renders inline inside timeline tracks area */}
           <div className={cn(
             "flex-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl composer-surface-transition",
             isTimelineMode ? "p-3" : "p-4"
           )}>
-            {composerMode === 'timeline' ? (
+            {isTimelineMode ? (
               <TimelineShell
                 projectId={session?.projectId || ''}
                 onSnapshotRequest={handleTimelineSnapshotRequest}
+                isPromptMode={isTimelinePromptMode}
+                timelinePromptSlot={isTimelinePromptMode ? (
+                  <div className="prompt-from-timeline space-y-2">
+                    <div className="relative">
+                      <div className="px-2 py-1 rounded-md border border-primary/30 bg-primary/10 w-[calc(100%-8.5rem)]">
+                        <span className="text-[10px] text-primary/90 font-mono uppercase tracking-wider">
+                          Snapshot Prompt Mode
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleReturnToTimeline}
+                        className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] px-2 py-0.5 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+                      >
+                        Back to timeline
+                      </button>
+                    </div>
+                    <VideoInput
+                      variant="overlay"
+                      prompt={prompt}
+                      onPromptChange={setPrompt}
+                      onGenerate={async (promptText, options) => {
+                        const snapState = useTimelineStore.getState().snapshotPrompt
+                        if (snapState.clipId && snapState.trackId) {
+                          pendingTimelineInsertRef.current = {
+                            clipId: snapState.clipId,
+                            trackId: snapState.trackId,
+                            isAtClipEnd: snapState.isAtClipEnd,
+                          }
+                        }
+                        const snapUrl = snapState.snapshotUrl
+                        const snapIsHttp = typeof snapUrl === 'string' && snapUrl.startsWith('http')
+                        await handleGenerate(promptText, {
+                          ...options,
+                          referenceImageUrl: snapIsHttp ? snapUrl : options?.referenceImageUrl,
+                          ...(snapIsHttp ? {} : { referenceImage: timelineSnapshotFileRef.current ?? options?.referenceImage }),
+                        })
+                        handleReturnToTimeline()
+                      }}
+                      parameters={parameters}
+                      onParametersChange={setParameters}
+                      selectedModel={selectedModel}
+                      onModelSelect={setSelectedModel}
+                      referenceImageUrl={snapshotPrompt.snapshotUrl || referenceImageUrl}
+                      onClearReferenceImage={() => { handleReturnToTimeline() }}
+                      onSetReferenceImageUrl={setReferenceImageUrl}
+                      onRegisterPasteHandler={registerPasteHandler}
+                    />
+                  </div>
+                ) : undefined}
               />
-            ) : composerMode === 'timelinePrompt' ? (
-              <div className="prompt-from-timeline">
-                <VideoInput
-                  prompt={prompt}
-                  onPromptChange={setPrompt}
-                  onGenerate={async (promptText, options) => {
-                    const snapState = useTimelineStore.getState().snapshotPrompt
-                    if (snapState.clipId && snapState.trackId) {
-                      pendingTimelineInsertRef.current = {
-                        clipId: snapState.clipId,
-                        trackId: snapState.trackId,
-                        isAtClipEnd: snapState.isAtClipEnd,
-                      }
-                    }
-                    await handleGenerate(promptText, {
-                      ...options,
-                      referenceImageUrl: snapState.snapshotUrl || options?.referenceImageUrl,
-                    })
-                    handleReturnToTimeline()
-                  }}
-                  parameters={parameters}
-                  onParametersChange={setParameters}
-                  selectedModel={selectedModel}
-                  onModelSelect={setSelectedModel}
-                  referenceImageUrl={snapshotPrompt.snapshotUrl || referenceImageUrl}
-                  onClearReferenceImage={() => { handleReturnToTimeline() }}
-                  onSetReferenceImageUrl={setReferenceImageUrl}
-                  onRegisterPasteHandler={registerPasteHandler}
-                />
-              </div>
             ) : (
               <>
                 {generationType === 'video' ? (

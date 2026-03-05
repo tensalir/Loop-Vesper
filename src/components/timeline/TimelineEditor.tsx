@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState, useEffect, useMemo } from 'react'
+import { useCallback, useRef, useState, useEffect, useLayoutEffect, useMemo, type ReactNode } from 'react'
 import {
   Scissors, Type, MousePointer2, Play, Pause, SkipBack,
   FolderOpen, Download, Plus, ZoomIn, ZoomOut,
@@ -44,16 +44,18 @@ interface TimelineEditorProps {
   onSnapshotRequest?: (req: SnapshotRequest) => void
   flushNow: () => Promise<void>
   isSaving: boolean
+  isPromptMode?: boolean
+  timelinePromptSlot?: ReactNode
 }
 
 export function TimelineEditor({
   projectId, onOpenLibrary, sequences, onCreateSequence,
   onSwitchSequence, onDeleteSequence, isCreating, className,
-  onSnapshotRequest, flushNow, isSaving,
+  onSnapshotRequest, flushNow, isSaving, isPromptMode = false, timelinePromptSlot,
 }: TimelineEditorProps) {
   const {
     sequence, playheadMs, zoom, isPlaying, activeTool,
-    selectedClipId, selectedTrackId, isExportPanelOpen,
+    selectedClipId, selectedTrackId, isExportPanelOpen, snapshotPrompt,
     setSequence, setPlayheadMs, setZoom, setIsPlaying,
     setActiveTool, setSelectedClipId, setSelectedTrackId,
     setExportPanelOpen, markDirty, isDirty, finishModeSwitch,
@@ -105,8 +107,15 @@ export function TimelineEditor({
     }
   }, [isPlaying, sequence])
 
+  useEffect(() => {
+    if (isPromptMode && isPlaying) {
+      setIsPlaying(false)
+    }
+  }, [isPromptMode, isPlaying, setIsPlaying])
+
   const durationMs = sequence?.durationMs ?? 0
   const viewDurationMs = Math.max(durationMs, 10_000) / zoom
+  const promptReferenceUrl = isPromptMode ? snapshotPrompt.snapshotUrl : null
 
   const previewClip = useMemo(() => {
     const videoClips = (sequence?.tracks ?? [])
@@ -120,7 +129,7 @@ export function TimelineEditor({
     )
   }, [sequence, playheadMs])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const previewElement = previewVideoRef.current
     if (!previewElement) return
     if (!previewClip) { previewElement.pause(); return }
@@ -129,14 +138,17 @@ export function TimelineEditor({
       Math.min(previewClip.outPointMs, previewClip.inPointMs + Math.max(0, playheadMs - previewClip.startMs))
     )
     const nextTime = localMs / 1000
-    if (Math.abs(previewElement.currentTime - nextTime) > 0.12) {
+    if (!isPlaying) {
+      if (Math.abs(previewElement.currentTime - nextTime) > 0.005) {
+        previewElement.currentTime = nextTime
+      }
+      previewElement.pause()
+      return
+    }
+    if (Math.abs(previewElement.currentTime - nextTime) > 0.08) {
       previewElement.currentTime = nextTime
     }
-    if (isPlaying) {
-      void previewElement.play().catch(() => {})
-    } else {
-      previewElement.pause()
-    }
+    void previewElement.play().catch(() => {})
   }, [previewClip, playheadMs, isPlaying])
 
   // ── Helpers to convert pixel positions to ms ──
@@ -312,6 +324,16 @@ export function TimelineEditor({
     markDirty()
   }, [sequence, setSequence, markDirty])
 
+  // ── Track mute toggle ──
+  const handleToggleMute = useCallback((trackId: string) => {
+    if (!sequence) return
+    const newTracks = sequence.tracks.map((t) =>
+      t.id === trackId ? { ...t, isMuted: !t.isMuted } : t
+    )
+    setSequence({ ...sequence, tracks: newTracks })
+    markDirty()
+  }, [sequence, setSequence, markDirty])
+
   // ── Dissolve duration drag ──
   const handleDissolveDurationChange = useCallback((transitionId: string, newDurationMs: number) => {
     if (!sequence) return
@@ -320,24 +342,100 @@ export function TimelineEditor({
     markDirty()
   }, [sequence, setSequence, markDirty])
 
-  // ── Snapshot capture from preview video ──
-  const handleSnapshotAtPlayhead = useCallback(async () => {
-    if (!previewVideoRef.current || !previewClip || !onSnapshotRequest) return
-    const frame = await captureCurrentFrameAsync(previewVideoRef.current)
+  // ── Snapshot capture from explicit timeline pointer position ──
+  const handleSnapshotAtPoint = useCallback(async (clip: TimelineClip, trackId: string, targetMs: number) => {
+    if (!onSnapshotRequest) return
+    if (!clip.outputId) return
+
+    const clampTargetMs = Math.max(clip.startMs, Math.min(clip.endMs, Math.round(targetMs)))
+    const localMs = Math.max(
+      clip.inPointMs,
+      Math.min(clip.outPointMs, clip.inPointMs + Math.max(0, clampTargetMs - clip.startMs))
+    )
+    const seekSec = localMs / 1000
+
+    setIsPlaying(false)
+    setPlayheadMs(clampTargetMs)
+
+    let frame: Awaited<ReturnType<typeof captureCurrentFrameAsync>> | null = null
+
+    const canUsePreview = previewClip?.id === clip.id && !!previewVideoRef.current
+    if (canUsePreview) {
+      const previewEl = previewVideoRef.current!
+      if (Math.abs(previewEl.currentTime - seekSec) > 0.005) {
+        previewEl.currentTime = seekSec
+        await new Promise<void>((resolve) => {
+          let done = false
+          const finish = () => {
+            if (done) return
+            done = true
+            previewEl.removeEventListener('seeked', finish)
+            resolve()
+          }
+          previewEl.addEventListener('seeked', finish, { once: true })
+          window.setTimeout(finish, 250)
+        })
+      }
+      frame = await captureCurrentFrameAsync(previewEl)
+    } else {
+      const probe = document.createElement('video')
+      probe.crossOrigin = 'anonymous'
+      probe.muted = true
+      probe.playsInline = true
+      probe.preload = 'auto'
+      probe.src = clip.fileUrl
+
+      await new Promise<void>((resolve) => {
+        if (probe.readyState >= 1) {
+          resolve()
+          return
+        }
+        let done = false
+        const finish = () => {
+          if (done) return
+          done = true
+          probe.removeEventListener('loadedmetadata', finish)
+          probe.removeEventListener('error', finish)
+          resolve()
+        }
+        probe.addEventListener('loadedmetadata', finish, { once: true })
+        probe.addEventListener('error', finish, { once: true })
+        window.setTimeout(finish, 600)
+      })
+
+      probe.currentTime = seekSec
+      await new Promise<void>((resolve) => {
+        let done = false
+        const finish = () => {
+          if (done) return
+          done = true
+          probe.removeEventListener('seeked', finish)
+          resolve()
+        }
+        probe.addEventListener('seeked', finish, { once: true })
+        window.setTimeout(finish, 250)
+      })
+      frame = await captureCurrentFrameAsync(probe)
+      probe.pause()
+      probe.removeAttribute('src')
+      probe.load()
+    }
+
     if (!frame) return
+
     const clipEndThreshold = 200
-    const isAtEnd = (previewClip.endMs - playheadMs) <= clipEndThreshold
-    const track = sequence?.tracks.find((t) => t.clips.some((c) => c.id === previewClip.id))
+    const isAtEnd = (clip.endMs - clampTargetMs) <= clipEndThreshold
     onSnapshotRequest({
       blob: frame.blob,
-      timecodeMs: frame.timecodeMs,
-      clipId: previewClip.id,
-      trackId: track?.id ?? '',
+      timecodeMs: Math.round(localMs),
+      clipId: clip.id,
+      trackId,
       isAtClipEnd: isAtEnd,
-      fileUrl: previewClip.fileUrl,
-      outputId: previewClip.outputId,
+      fileUrl: clip.fileUrl,
+      outputId: clip.outputId,
     })
-  }, [previewClip, playheadMs, sequence, onSnapshotRequest])
+    URL.revokeObjectURL(frame.objectUrl)
+  }, [onSnapshotRequest, previewClip, setIsPlaying, setPlayheadMs])
 
   const handleSave = useCallback(async () => {
     if (!sequence || !sequence.id || !isDirty) return
@@ -353,6 +451,7 @@ export function TimelineEditor({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (isPromptMode) return
       switch (e.key.toLowerCase()) {
         case 'v': setActiveTool('select'); break
         case 'c': setActiveTool('cut'); break
@@ -367,7 +466,7 @@ export function TimelineEditor({
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [setActiveTool, setIsPlaying, handleDeleteSelected, handleSave])
+  }, [isPromptMode, setActiveTool, setIsPlaying, handleDeleteSelected, handleSave])
 
   // ── Playhead position calc ──
   const playheadLeft = useMemo(() => {
@@ -442,14 +541,25 @@ export function TimelineEditor({
 
       {/* Preview — slightly reduced height */}
       <div className="relative w-full rounded-lg bg-black/70 border border-border/30 overflow-hidden timeline-scanline-boot" style={{ aspectRatio: '16 / 8.2' }}>
-        {previewClip ? (
+        {promptReferenceUrl ? (
+          <>
+            <img
+              src={promptReferenceUrl}
+              alt="Reference frame for generation"
+              className="w-full h-full object-contain"
+            />
+            <div className="absolute top-2 right-2 px-2 py-1 rounded bg-primary/85 text-[10px] text-primary-foreground font-mono uppercase tracking-wider">
+              Reference Frame
+            </div>
+          </>
+        ) : previewClip ? (
           <video
             ref={previewVideoRef}
             key={previewClip.id}
             src={previewClip.fileUrl}
             className="w-full h-full object-contain"
             crossOrigin="anonymous"
-            muted playsInline preload="metadata"
+            muted playsInline preload="auto"
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground/60 font-mono uppercase tracking-wider">
@@ -462,7 +572,10 @@ export function TimelineEditor({
       </div>
 
       {/* Controls */}
-      <div className="flex flex-col gap-2 rounded-lg border border-border/30 bg-muted/20 px-2.5 py-2">
+      <div className={cn(
+        'flex flex-col gap-2 rounded-lg border border-border/30 bg-muted/20 px-2.5 py-2',
+        isPromptMode && 'opacity-50 saturate-0 pointer-events-none'
+      )}>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="font-mono text-xs text-muted-foreground tabular-nums bg-muted/30 px-2 py-1 rounded-md border border-border/30 min-w-[90px] text-center">
             {msToTimecode(playheadMs)}
@@ -539,61 +652,69 @@ export function TimelineEditor({
 
       {/* Timeline Tracks Area */}
       <div ref={tracksAreaRef} className="relative bg-muted/20 border border-border/30 rounded-lg overflow-visible min-h-[160px] timeline-glow">
-        {/* Ruler — draggable */}
-        <div className="h-6 bg-muted/30 border-b border-border/30 cursor-pointer select-none rounded-t-lg" onMouseDown={handleRulerMouseDown}>
-          <TrackRuler durationMs={viewDurationMs} />
-        </div>
-
-        {/* Track lanes — scrollable when stacked */}
-        <div className="relative overflow-y-auto overflow-x-clip scrollbar-hide rounded-b-lg bg-muted/20" style={{ maxHeight: 'calc(100% - 24px)' }}>
-          {(!sequence || sequence.tracks.length === 0) ? (
-            <EmptyTrackPrompt onAddTrack={handleAddTrack} onOpenLibrary={onOpenLibrary} />
-          ) : (
-            <>
-              {sequence.tracks.map((track) => (
-                <TrackLane
-                  key={track.id}
-                  track={track}
-                  viewDurationMs={viewDurationMs}
-                  selectedClipId={selectedClipId}
-                  isSelectedTrack={selectedTrackId === track.id}
-                  onClipClick={handleClipClick}
-                  onSelectTrack={setSelectedTrackId}
-                  activeTool={activeTool}
-                  playheadMs={playheadMs}
-                  onTrim={handleTrim}
-                  pxToMs={pxToMs}
-                  transitions={transitionsByFrom}
-                  onDissolveDurationChange={handleDissolveDurationChange}
-                  onSnapshotAtPlayhead={onSnapshotRequest ? handleSnapshotAtPlayhead : undefined}
-                />
-              ))}
-              {/* Add track buttons */}
-              <div className="flex items-center gap-1 px-2 py-1.5 border-t border-border/20">
-                <button onClick={() => handleAddTrack('video')} className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors"><Plus className="h-2.5 w-2.5" /> Video</button>
-                <button onClick={() => handleAddTrack('audio')} className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors"><Plus className="h-2.5 w-2.5" /> Audio</button>
-                <button onClick={() => handleAddTrack('caption')} className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors"><Plus className="h-2.5 w-2.5" /> Caption</button>
-                {selectedTrackId && (
-                  <button onClick={() => handleAddTrackAbove('video')} className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors ml-auto"><Plus className="h-2.5 w-2.5" /> Above</button>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* Playhead overlay */}
-          {viewDurationMs > 0 && (
-            <div
-              className="absolute top-0 bottom-0 w-px bg-primary z-10"
-              style={{ left: playheadLeft, pointerEvents: 'none' }}
-            >
-              <div
-                className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-primary rounded-sm shadow-sm shadow-primary/50 cursor-ew-resize"
-                style={{ pointerEvents: 'auto' }}
-                onMouseDown={handlePlayheadDragStart}
-              />
+        {isPromptMode && timelinePromptSlot ? (
+          <div className="p-3 min-h-[160px] timeline-morph-in">
+            {timelinePromptSlot}
+          </div>
+        ) : (
+          <>
+            {/* Ruler — draggable */}
+            <div className="h-6 bg-muted/30 border-b border-border/30 cursor-pointer select-none rounded-t-lg" onMouseDown={handleRulerMouseDown}>
+              <TrackRuler durationMs={viewDurationMs} />
             </div>
-          )}
-        </div>
+
+            {/* Track lanes — scrollable when stacked */}
+            <div className="relative overflow-y-auto overflow-x-clip scrollbar-hide rounded-b-lg bg-muted/20" style={{ maxHeight: 'calc(100% - 24px)' }}>
+              {(!sequence || sequence.tracks.length === 0) ? (
+                <EmptyTrackPrompt onAddTrack={handleAddTrack} onOpenLibrary={onOpenLibrary} />
+              ) : (
+                <>
+                  {sequence.tracks.map((track) => (
+                    <TrackLane
+                      key={track.id}
+                      track={track}
+                      viewDurationMs={viewDurationMs}
+                      selectedClipId={selectedClipId}
+                      isSelectedTrack={selectedTrackId === track.id}
+                      onClipClick={handleClipClick}
+                      onSelectTrack={setSelectedTrackId}
+                      activeTool={activeTool}
+                      onTrim={handleTrim}
+                      pxToMs={pxToMs}
+                      transitions={transitionsByFrom}
+                      onDissolveDurationChange={handleDissolveDurationChange}
+                      onSnapshotAtPoint={onSnapshotRequest ? handleSnapshotAtPoint : undefined}
+                      onToggleMute={handleToggleMute}
+                    />
+                  ))}
+                  {/* Add track buttons */}
+                  <div className="flex items-center gap-1 px-2 py-1.5 border-t border-border/20">
+                    <button onClick={() => handleAddTrack('video')} className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors"><Plus className="h-2.5 w-2.5" /> Video</button>
+                    <button onClick={() => handleAddTrack('audio')} className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors"><Plus className="h-2.5 w-2.5" /> Audio</button>
+                    <button onClick={() => handleAddTrack('caption')} className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors"><Plus className="h-2.5 w-2.5" /> Caption</button>
+                    {selectedTrackId && (
+                      <button onClick={() => handleAddTrackAbove('video')} className="flex items-center gap-1 px-2 py-0.5 text-[9px] text-muted-foreground/60 hover:text-foreground rounded border border-dashed border-border/30 hover:border-border/60 transition-colors ml-auto"><Plus className="h-2.5 w-2.5" /> Above</button>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Playhead overlay */}
+              {viewDurationMs > 0 && (
+                <div
+                  className="absolute top-0 bottom-0 w-px bg-primary z-10"
+                  style={{ left: playheadLeft, pointerEvents: 'none' }}
+                >
+                  <div
+                    className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-primary rounded-sm shadow-sm shadow-primary/50 cursor-ew-resize"
+                    style={{ pointerEvents: 'auto' }}
+                    onMouseDown={handlePlayheadDragStart}
+                  />
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -629,9 +750,9 @@ function TrackRuler({ durationMs }: { durationMs: number }) {
 
 function TrackLane({
   track, viewDurationMs, selectedClipId, isSelectedTrack,
-  onClipClick, onSelectTrack, activeTool, playheadMs,
+  onClipClick, onSelectTrack, activeTool,
   onTrim, pxToMs, transitions, onDissolveDurationChange,
-  onSnapshotAtPlayhead,
+  onSnapshotAtPoint, onToggleMute,
 }: {
   track: TimelineTrack
   viewDurationMs: number
@@ -640,12 +761,12 @@ function TrackLane({
   onClipClick: (clipId: string, trackId: string) => void
   onSelectTrack: (id: string | null) => void
   activeTool: string
-  playheadMs: number
   onTrim: (trackId: string, clipId: string, edge: 'left' | 'right', newMs: number) => void
   pxToMs: (clientX: number) => number
   transitions: Map<string, TimelineTransition>
   onDissolveDurationChange: (transitionId: string, newDurationMs: number) => void
-  onSnapshotAtPlayhead?: () => void
+  onSnapshotAtPoint?: (clip: TimelineClip, trackId: string, targetMs: number) => void
+  onToggleMute: (trackId: string) => void
 }) {
   const kindColors: Record<string, { bg: string; border: string; selected: string }> = {
     video: { bg: 'bg-primary/15', border: 'border-primary/25', selected: 'border-primary ring-1 ring-primary/30' },
@@ -672,7 +793,7 @@ function TrackLane({
     document.addEventListener('mouseup', onUp)
   }, [track.id, onTrim, pxToMs])
 
-  const handleDissolveDrag = useCallback((transitionId: string, fromClipEndMs: number, e: React.MouseEvent) => {
+  const handleDissolveDrag = useCallback((transitionId: string, baseDurationMs: number, e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
@@ -680,7 +801,7 @@ function TrackLane({
     const onMove = (ev: MouseEvent) => {
       const currentMs = pxToMs(ev.clientX)
       const delta = currentMs - startMs
-      onDissolveDurationChange(transitionId, Math.max(100, 500 + delta))
+      onDissolveDurationChange(transitionId, baseDurationMs + delta)
     }
     const onUp = () => {
       document.removeEventListener('mousemove', onMove)
@@ -695,6 +816,7 @@ function TrackLane({
   }, [onDissolveDurationChange, pxToMs])
 
   const sortedClips = useMemo(() => [...track.clips].sort((a, b) => a.startMs - b.startMs), [track.clips])
+  const [snapshotCursor, setSnapshotCursor] = useState<{ clipId: string; ratio: number } | null>(null)
 
   return (
     <div
@@ -705,7 +827,11 @@ function TrackLane({
         <GripVertical className="h-3 w-3 text-muted-foreground/30 opacity-0 group-hover/lane:opacity-100 transition-opacity cursor-grab" />
         <span className="text-[9px] font-mono text-muted-foreground/60 uppercase tracking-wider truncate flex-1">{track.label}</span>
         {track.kind === 'audio' && (
-          <button className="p-0.5 text-muted-foreground/40 hover:text-foreground transition-colors" title={track.isMuted ? 'Unmute' : 'Mute'}>
+          <button
+            className="p-0.5 text-muted-foreground/40 hover:text-foreground transition-colors"
+            title={track.isMuted ? 'Unmute' : 'Mute'}
+            onClick={(e) => { e.stopPropagation(); onToggleMute(track.id) }}
+          >
             {track.isMuted ? <VolumeX className="h-2.5 w-2.5" /> : <Volume2 className="h-2.5 w-2.5" />}
           </button>
         )}
@@ -723,13 +849,23 @@ function TrackLane({
               {/* Clip block */}
               <div
                 className={cn(
-                  'absolute top-3 bottom-1 rounded-md border cursor-pointer transition-colors group/clip',
+                  'absolute top-3 bottom-1 rounded-md border cursor-pointer transition-colors overflow-visible group/clip',
                   colors.bg, colors.border,
                   isSelected && colors.selected,
                   activeTool === 'cut' && 'cursor-crosshair'
                 )}
                 style={{ left: `${left}%`, width: `${Math.max(0.5, width)}%` }}
                 onClick={(e) => { e.stopPropagation(); onClipClick(clip.id, track.id) }}
+                onMouseMove={(e) => {
+                  if (!onSnapshotAtPoint || clip.fileType !== 'video' || !clip.outputId) return
+                  const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+                  if (rect.width <= 0) return
+                  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+                  setSnapshotCursor({ clipId: clip.id, ratio })
+                }}
+                onMouseLeave={() => {
+                  setSnapshotCursor((current) => (current?.clipId === clip.id ? null : current))
+                }}
                 title={`${clip.fileType}: ${((clip.endMs - clip.startMs) / 1000).toFixed(1)}s`}
               >
                 {/* Thumbnail placeholder for video clips */}
@@ -753,20 +889,22 @@ function TrackLane({
                   onMouseDown={(e) => handleTrimDrag(clip.id, 'right', e)}
                 />
 
+                {/* Snapshot "+" — inside clip so mouseleave covers both clip + button */}
+                {onSnapshotAtPoint && snapshotCursor?.clipId === clip.id && (
+                  <button
+                    className="absolute z-30 w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg shadow-primary/30 hover:bg-primary/90 hover:scale-110 transition-all ring-1 ring-primary/40"
+                    style={{ top: '-14px', left: `${snapshotCursor.ratio * 100}%`, transform: 'translateX(-50%)' }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const targetMs = clip.startMs + (clip.endMs - clip.startMs) * snapshotCursor.ratio
+                      onSnapshotAtPoint(clip, track.id, targetMs)
+                    }}
+                    title="Generate video from this frame"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                )}
               </div>
-
-              {/* Snapshot "+" button — rendered outside clip to avoid overflow clipping */}
-              {clip.fileType === 'video' && playheadMs >= clip.startMs && playheadMs < clip.endMs && onSnapshotAtPlayhead && (
-                <button
-                  className="absolute z-30 -top-0.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[9px] font-semibold shadow-lg shadow-primary/30 hover:bg-primary/90 hover:scale-105 transition-all ring-1 ring-primary/40 animate-in fade-in duration-200"
-                  style={{ left: `${left + width / 2}%`, transform: 'translateX(-50%)' }}
-                  onClick={(e) => { e.stopPropagation(); onSnapshotAtPlayhead() }}
-                  title="Generate video from this frame"
-                >
-                  <Plus className="h-3 w-3" />
-                  <span>Generate</span>
-                </button>
-              )}
 
               {/* Dissolve handle between this clip and next */}
               {dissolve && idx < sortedClips.length - 1 && (() => {
@@ -778,7 +916,7 @@ function TrackLane({
                     key={`dissolve-${dissolve.id}`}
                     className="absolute top-0 bottom-0 bg-primary/10 border-x border-primary/30 cursor-ew-resize z-10 flex items-center justify-center"
                     style={{ left: `${dissolveLeft - dissolveWidth / 2}%`, width: `${dissolveWidth}%` }}
-                    onMouseDown={(e) => handleDissolveDrag(dissolve.id, clip.endMs, e)}
+                    onMouseDown={(e) => handleDissolveDrag(dissolve.id, dissolve.durationMs, e)}
                     title={`Dissolve: ${(dissolve.durationMs / 1000).toFixed(1)}s — drag to resize`}
                   >
                     <X className="h-2.5 w-2.5 rotate-45 text-primary/50 pointer-events-none" />

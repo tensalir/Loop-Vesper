@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback, useRef, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 import { useTimelineStore } from '@/store/timelineStore'
@@ -27,9 +27,17 @@ interface TimelineShellProps {
     blob: Blob; timecodeMs: number; clipId: string; trackId: string;
     isAtClipEnd: boolean; fileUrl: string; outputId: string | null;
   }) => void
+  isPromptMode?: boolean
+  timelinePromptSlot?: ReactNode
 }
 
-export function TimelineShell({ projectId, className, onSnapshotRequest }: TimelineShellProps) {
+export function TimelineShell({
+  projectId,
+  className,
+  onSnapshotRequest,
+  isPromptMode = false,
+  timelinePromptSlot,
+}: TimelineShellProps) {
   const { sequence, setSequence, setLibraryOpen, finishModeSwitch, resetTimeline } = useTimelineStore()
   const { data: sequences, isLoading, refetch: refetchSequences } = useTimelineSequences(projectId)
   const createMutation = useCreateSequence(projectId)
@@ -136,6 +144,8 @@ export function TimelineShell({ projectId, className, onSnapshotRequest }: Timel
         onSnapshotRequest={onSnapshotRequest}
         flushNow={flushNow}
         isSaving={isSaving}
+        isPromptMode={isPromptMode}
+        timelinePromptSlot={timelinePromptSlot}
       />
       {!sequence && (isLoading || createMutation.isPending) && (
         <div className="absolute top-2 right-2 rounded-md border border-border/40 bg-background/80 px-2 py-1 text-[10px] text-muted-foreground backdrop-blur-sm">

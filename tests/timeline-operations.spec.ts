@@ -5,18 +5,40 @@ import {
   insertClipAt,
   splitClipAtPlayhead,
   removeClip,
+  moveClip,
   trimClipLeft,
   trimClipRight,
   addCrossDissolve,
   updateTransitionDuration,
   removeTransition,
+  addCaption,
+  removeCaption,
   insertTrackAbove,
   computeSequenceDuration,
   hasOverlap,
+  snapToGrid,
+  snapToNearby,
 } from '../src/lib/timeline/operations'
 import type { TimelineTrack, TimelineClip, TimelineTransition } from '../src/types/timeline'
 
-test.describe('Timeline operations', () => {
+function makeClip(overrides: Partial<TimelineClip> = {}): TimelineClip {
+  return {
+    id: `clip-${Math.random().toString(36).slice(2, 6)}`,
+    trackId: 't',
+    outputId: null,
+    fileUrl: '',
+    fileType: 'video',
+    startMs: 0,
+    endMs: 5000,
+    inPointMs: 0,
+    outPointMs: 5000,
+    sourceDurationMs: 5000,
+    sortOrder: 0,
+    ...overrides,
+  }
+}
+
+test.describe('Track operations', () => {
   test('createTrack returns a track with correct kind and sortOrder', () => {
     const track = createTrack('video', 'V1', 2)
     expect(track.kind).toBe('video')
@@ -26,6 +48,14 @@ test.describe('Timeline operations', () => {
     expect(track.id).toBeTruthy()
   })
 
+  test('createTrack uses default labels per kind', () => {
+    expect(createTrack('video').label).toBe('Video')
+    expect(createTrack('audio').label).toBe('Audio')
+    expect(createTrack('caption').label).toBe('Captions')
+  })
+})
+
+test.describe('Clip insertion', () => {
   test('insertClip appends at end of track', () => {
     const track = createTrack('video')
     const { track: t1, clip: c1 } = insertClip(track, 'http://a.mp4', 'video', 5000)
@@ -47,6 +77,16 @@ test.describe('Timeline operations', () => {
     expect(t1.clips[0].outputId).toBe('out1')
   })
 
+  test('insertClipAt sets correct in/out points', () => {
+    const track = createTrack('video')
+    const { clip } = insertClipAt(track, 'http://a.mp4', 'video', 7000, 1000)
+    expect(clip.inPointMs).toBe(0)
+    expect(clip.outPointMs).toBe(7000)
+    expect(clip.sourceDurationMs).toBe(7000)
+  })
+})
+
+test.describe('Split', () => {
   test('splitClipAtPlayhead produces two clips with correct in/out points', () => {
     const track = createTrack('video')
     const { track: t1 } = insertClip(track, 'http://a.mp4', 'video', 10000)
@@ -73,6 +113,14 @@ test.describe('Timeline operations', () => {
     expect(splitClipAtPlayhead(t1, clipId, -100).clips).toHaveLength(1)
   })
 
+  test('splitClipAtPlayhead ignores missing clip', () => {
+    const track = createTrack('video')
+    const { track: t1 } = insertClip(track, 'http://a.mp4', 'video', 5000)
+    expect(splitClipAtPlayhead(t1, 'nonexistent', 2000).clips).toHaveLength(1)
+  })
+})
+
+test.describe('Remove clip', () => {
   test('removeClip removes the specified clip', () => {
     const track = createTrack('video')
     const { track: t1 } = insertClip(track, 'http://a.mp4', 'video', 5000)
@@ -84,6 +132,40 @@ test.describe('Timeline operations', () => {
     expect(removed.clips[0].fileUrl).toBe('http://b.mp4')
   })
 
+  test('removeClip is a no-op for missing IDs', () => {
+    const track = createTrack('video')
+    const { track: t1 } = insertClip(track, 'http://a.mp4', 'video', 5000)
+    expect(removeClip(t1, 'nonexistent').clips).toHaveLength(1)
+  })
+})
+
+test.describe('Move clip', () => {
+  test('moveClip updates startMs and endMs', () => {
+    const track = createTrack('video')
+    const { track: t1 } = insertClip(track, 'http://a.mp4', 'video', 5000)
+    const clipId = t1.clips[0].id
+
+    const moved = moveClip(t1, clipId, 2000)
+    expect(moved.clips[0].startMs).toBeGreaterThanOrEqual(0)
+    expect(moved.clips[0].endMs - moved.clips[0].startMs).toBe(5000)
+  })
+
+  test('moveClip clamps to zero', () => {
+    const track = createTrack('video')
+    const { track: t1 } = insertClip(track, 'http://a.mp4', 'video', 5000)
+    const moved = moveClip(t1, t1.clips[0].id, -1000)
+    expect(moved.clips[0].startMs).toBe(0)
+  })
+
+  test('moveClip ignores missing clip', () => {
+    const track = createTrack('video')
+    const { track: t1 } = insertClip(track, 'http://a.mp4', 'video', 5000)
+    const moved = moveClip(t1, 'nonexistent', 2000)
+    expect(moved).toBe(t1)
+  })
+})
+
+test.describe('Trim operations', () => {
   test('trimClipLeft adjusts startMs and inPointMs', () => {
     const track = createTrack('video')
     const { track: t1 } = insertClip(track, 'http://a.mp4', 'video', 10000)
@@ -95,7 +177,7 @@ test.describe('Timeline operations', () => {
     expect(trimmed.clips[0].endMs).toBe(10000)
   })
 
-  test('trimClipLeft clamps to minimum duration', () => {
+  test('trimClipLeft clamps to prevent zero-duration clip', () => {
     const track = createTrack('video')
     const { track: t1 } = insertClip(track, 'http://a.mp4', 'video', 5000)
     const clipId = t1.clips[0].id
@@ -114,7 +196,7 @@ test.describe('Timeline operations', () => {
     expect(trimmed.clips[0].outPointMs).toBe(6000)
   })
 
-  test('trimClipRight clamps to minimum duration', () => {
+  test('trimClipRight clamps to prevent zero-duration clip', () => {
     const track = createTrack('video')
     const { track: t1 } = insertClip(track, 'http://a.mp4', 'video', 5000)
     const clipId = t1.clips[0].id
@@ -123,6 +205,16 @@ test.describe('Timeline operations', () => {
     expect(trimmed.clips[0].endMs).toBeGreaterThan(trimmed.clips[0].startMs)
   })
 
+  test('trimClipRight respects sourceDurationMs ceiling', () => {
+    const track = createTrack('video')
+    const { track: t1 } = insertClip(track, 'http://a.mp4', 'video', 5000)
+    const clipId = t1.clips[0].id
+    const trimmed = trimClipRight(t1, clipId, 20000)
+    expect(trimmed.clips[0].outPointMs).toBeLessThanOrEqual(5000)
+  })
+})
+
+test.describe('Transition operations', () => {
   test('addCrossDissolve creates a transition and prevents duplicates', () => {
     const transitions: TimelineTransition[] = []
     const t1 = addCrossDissolve(transitions, 'seq1', 'clipA', 'clipB', 500)
@@ -141,14 +233,18 @@ test.describe('Timeline operations', () => {
       fromClipId: 'a', toClipId: 'b', durationMs: 500,
     }]
 
-    const updated = updateTransitionDuration(transitions, 't1', 1000)
-    expect(updated[0].durationMs).toBe(1000)
+    expect(updateTransitionDuration(transitions, 't1', 1000)[0].durationMs).toBe(1000)
+    expect(updateTransitionDuration(transitions, 't1', 10)[0].durationMs).toBe(100)
+    expect(updateTransitionDuration(transitions, 't1', 5000)[0].durationMs).toBe(2000)
+  })
 
-    const tooSmall = updateTransitionDuration(transitions, 't1', 10)
-    expect(tooSmall[0].durationMs).toBe(100)
-
-    const tooLarge = updateTransitionDuration(transitions, 't1', 5000)
-    expect(tooLarge[0].durationMs).toBe(2000)
+  test('updateTransitionDuration is a no-op for missing ID', () => {
+    const transitions: TimelineTransition[] = [{
+      id: 't1', sequenceId: 's1', type: 'cross_dissolve',
+      fromClipId: 'a', toClipId: 'b', durationMs: 500,
+    }]
+    const updated = updateTransitionDuration(transitions, 'nonexistent', 1000)
+    expect(updated[0].durationMs).toBe(500)
   })
 
   test('removeTransition removes by ID', () => {
@@ -160,7 +256,48 @@ test.describe('Timeline operations', () => {
     expect(result).toHaveLength(1)
     expect(result[0].id).toBe('t2')
   })
+})
 
+test.describe('Caption operations', () => {
+  test('addCaption appends a caption to the track', () => {
+    const track = createTrack('caption')
+    const updated = addCaption(track, 'Hello world', 1000, 4000)
+    expect(updated.captions).toHaveLength(1)
+    expect(updated.captions![0].text).toBe('Hello world')
+    expect(updated.captions![0].startMs).toBe(1000)
+    expect(updated.captions![0].endMs).toBe(4000)
+    expect(updated.captions![0].style.color).toBe('#FFFFFF')
+  })
+
+  test('addCaption allows custom style overrides', () => {
+    const track = createTrack('caption')
+    const updated = addCaption(track, 'Red text', 0, 2000, { color: '#FF0000', position: 'top' })
+    expect(updated.captions![0].style.color).toBe('#FF0000')
+    expect(updated.captions![0].style.position).toBe('top')
+    expect(updated.captions![0].style.fontSize).toBe(24)
+  })
+
+  test('removeCaption removes by ID', () => {
+    const track = createTrack('caption')
+    const t1 = addCaption(track, 'First', 0, 2000)
+    const t2 = addCaption(t1, 'Second', 3000, 5000)
+    expect(t2.captions).toHaveLength(2)
+
+    const capId = t2.captions![0].id
+    const removed = removeCaption(t2, capId)
+    expect(removed.captions).toHaveLength(1)
+    expect(removed.captions![0].text).toBe('Second')
+  })
+
+  test('removeCaption is a no-op for missing IDs', () => {
+    const track = createTrack('caption')
+    const t1 = addCaption(track, 'Keep me', 0, 2000)
+    const result = removeCaption(t1, 'nonexistent')
+    expect(result.captions).toHaveLength(1)
+  })
+})
+
+test.describe('Track stacking', () => {
   test('insertTrackAbove inserts before reference track and reorders', () => {
     const tracks: TimelineTrack[] = [
       { ...createTrack('video', 'V1', 0), sequenceId: 's1' },
@@ -179,6 +316,17 @@ test.describe('Timeline operations', () => {
     }
   })
 
+  test('insertTrackAbove falls back to index 0 for missing reference', () => {
+    const tracks: TimelineTrack[] = [
+      { ...createTrack('video', 'V1', 0), sequenceId: 's1' },
+    ]
+    const { tracks: result } = insertTrackAbove(tracks, 'nonexistent', 'audio')
+    expect(result).toHaveLength(2)
+    expect(result[0].kind).toBe('audio')
+  })
+})
+
+test.describe('Duration and overlap', () => {
   test('computeSequenceDuration returns max endMs across all tracks', () => {
     const track1 = createTrack('video')
     const { track: t1 } = insertClip(track1, 'http://a.mp4', 'video', 5000)
@@ -190,14 +338,47 @@ test.describe('Timeline operations', () => {
     expect(computeSequenceDuration([])).toBe(0)
   })
 
-  test('hasOverlap detects overlapping clips', () => {
-    const clips: TimelineClip[] = [
-      { id: 'a', trackId: 't', outputId: null, fileUrl: '', fileType: 'video', startMs: 0, endMs: 5000, inPointMs: 0, outPointMs: 5000, sourceDurationMs: 5000, sortOrder: 0 },
-      { id: 'b', trackId: 't', outputId: null, fileUrl: '', fileType: 'video', startMs: 4000, endMs: 8000, inPointMs: 0, outPointMs: 4000, sourceDurationMs: 4000, sortOrder: 1 },
-    ]
-    expect(hasOverlap(clips)).toBe(true)
+  test('computeSequenceDuration includes captions', () => {
+    const track = addCaption(createTrack('caption'), 'Test', 0, 12000)
+    expect(computeSequenceDuration([track])).toBe(12000)
+  })
 
-    clips[1].startMs = 5000
-    expect(hasOverlap(clips)).toBe(false)
+  test('hasOverlap detects overlapping clips', () => {
+    const overlapping: TimelineClip[] = [
+      makeClip({ id: 'a', startMs: 0, endMs: 5000 }),
+      makeClip({ id: 'b', startMs: 4000, endMs: 8000 }),
+    ]
+    expect(hasOverlap(overlapping)).toBe(true)
+
+    const adjacent: TimelineClip[] = [
+      makeClip({ id: 'a', startMs: 0, endMs: 5000 }),
+      makeClip({ id: 'b', startMs: 5000, endMs: 8000 }),
+    ]
+    expect(hasOverlap(adjacent)).toBe(false)
+  })
+
+  test('hasOverlap excludes a specific clip', () => {
+    const clips: TimelineClip[] = [
+      makeClip({ id: 'a', startMs: 0, endMs: 5000 }),
+      makeClip({ id: 'b', startMs: 4000, endMs: 8000 }),
+    ]
+    expect(hasOverlap(clips, 'b')).toBe(false)
+  })
+})
+
+test.describe('Snap utilities', () => {
+  test('snapToGrid rounds to nearest grid unit', () => {
+    expect(snapToGrid(150, 100)).toBe(200)
+    expect(snapToGrid(149, 100)).toBe(100)
+    expect(snapToGrid(0, 100)).toBe(0)
+  })
+
+  test('snapToNearby finds nearest clip edge', () => {
+    const clips: TimelineClip[] = [
+      makeClip({ startMs: 1000, endMs: 3000 }),
+      makeClip({ startMs: 5000, endMs: 8000 }),
+    ]
+    const snapped = snapToNearby(2950, clips, 20, 10)
+    expect(snapped).toBe(3000)
   })
 })

@@ -211,6 +211,10 @@ export const useTimelineStore = create<TimelineStore>()(
             selectedTrackId: null,
             activeTool: 'select',
             isDirty: false,
+            snapshotPrompt: {
+              snapshotUrl: null, clipId: null, trackId: null,
+              timecodeMs: 0, isAtClipEnd: false, outputId: null,
+            },
             isLibraryOpen: false,
             isExportPanelOpen: false,
           },
