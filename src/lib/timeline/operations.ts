@@ -357,6 +357,34 @@ export function insertTrackAbove(
   return { tracks: reordered, newTrack }
 }
 
+// ── Track removal with cleanup ──
+
+/**
+ * Remove a track by ID and clean up dangling transitions that reference
+ * clips belonging to the removed track. Re-normalizes sortOrder on
+ * remaining tracks. Returns the updated tracks array and pruned transitions.
+ */
+export function removeTrackAndCleanup(
+  tracks: TimelineTrack[],
+  trackId: string,
+  transitions: TimelineTransition[]
+): { tracks: TimelineTrack[]; transitions: TimelineTransition[] } {
+  const removedTrack = tracks.find((t) => t.id === trackId)
+  if (!removedTrack) return { tracks, transitions }
+
+  const removedClipIds = new Set(removedTrack.clips.map((c) => c.id))
+
+  const remainingTracks = tracks
+    .filter((t) => t.id !== trackId)
+    .map((t, i) => ({ ...t, sortOrder: i }))
+
+  const prunedTransitions = transitions.filter(
+    (t) => !removedClipIds.has(t.fromClipId) && !removedClipIds.has(t.toClipId)
+  )
+
+  return { tracks: remainingTracks, transitions: prunedTransitions }
+}
+
 // ── Transition duration update ──
 
 export function updateTransitionDuration(

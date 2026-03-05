@@ -9,7 +9,7 @@ import {
   Dialog,
   DialogContent,
 } from '@/components/ui/dialog'
-import { Video as VideoIcon, ImagePlus, Ratio, ChevronDown, X, Upload, FolderOpen, Clock, Loader2, GripHorizontal, Pin, Plus, ArrowLeftRight } from 'lucide-react'
+import { Video as VideoIcon, ImagePlus, Ratio, ChevronDown, X, Upload, FolderOpen, Clock, Loader2, GripHorizontal, Pin, Plus, ArrowLeftRight, Sparkles } from 'lucide-react'
 import { useModelCapabilities } from '@/hooks/useModelCapabilities'
 import { usePinnedImages } from '@/hooks/usePinnedImages'
 import { useToast } from '@/components/ui/use-toast'
@@ -71,6 +71,8 @@ interface VideoInputProps {
   hideEndFrame?: boolean
   /** Hide start-frame thumbnail/picker in this context */
   hideStartFrame?: boolean
+  /** Callback to open end-frame generation flow (from timeline prompt) */
+  onGenerateEndFrame?: () => void
 }
 
 export function VideoInput({
@@ -96,6 +98,7 @@ export function VideoInput({
   hideSnapshotRail = false,
   hideEndFrame = false,
   hideStartFrame = false,
+  onGenerateEndFrame,
 }: VideoInputProps) {
   const params = useParams()
   const { toast } = useToast()
@@ -979,9 +982,10 @@ export function VideoInput({
         </div>
 
         {/* Start/End frame controls - Right of prompt (hidden if model doesn't support input images) */}
-        {showStartFrameControl && (
+        {(showStartFrameControl || (showEndFrameControl && (referenceImage || imagePreviewUrl || referenceImageUrl))) && (
           <div className={isOverlay ? 'flex flex-col gap-1.5' : 'order-1 basis-full flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent'}>
             {/* Start Frame Thumbnail */}
+            {showStartFrameControl && (
             <div
               className="relative group"
               onDragOver={handleStartFrameDragOver}
@@ -1145,6 +1149,7 @@ export function VideoInput({
                 </button>
               )}
             </div>
+            )}
 
             {/* Swap button - shown when both start and end frames are present */}
             {showEndFrameControl && (referenceImage || imagePreviewUrl) && (endFrameImage || endFramePreviewUrl) && (
@@ -1242,6 +1247,20 @@ export function VideoInput({
                           <FolderOpen className="h-3.5 w-3.5 mr-2" />
                           Browse
                         </Button>
+                        {onGenerateEndFrame && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start h-8 text-xs rounded-md hover:bg-white/5"
+                            onClick={() => {
+                              setEndFramePopoverOpen(false)
+                              onGenerateEndFrame()
+                            }}
+                          >
+                            <Sparkles className="h-3.5 w-3.5 mr-2" />
+                            Generate
+                          </Button>
+                        )}
                       </div>
                     </PopoverContent>
                   </Popover>

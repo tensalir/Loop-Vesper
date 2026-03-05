@@ -17,12 +17,13 @@ import {
   trimClipLeft, trimClipRight,
   updateTransitionDuration,
   insertTrackAbove as insertTrackAboveOp,
+  removeTrackAndCleanup,
 } from '@/lib/timeline/operations'
 import { captureCurrentFrameAsync } from '@/lib/video/captureFrame'
+import { resolvePreviewClip } from '@/lib/timeline/preview'
 
 const LABEL_WIDTH = 80
 const CLIP_JOIN_TOLERANCE_MS = 1
-const PREVIEW_GAP_TOLERANCE_MS = 50
 
 export interface SnapshotRequest {
   blob: Blob
@@ -131,37 +132,10 @@ export function TimelineEditor({
   const viewEndMs = scrollLeftMs + viewDurationMs
   const promptReferenceUrl = isPromptMode ? snapshotPrompt.snapshotUrl : null
 
-  const previewClip = useMemo(() => {
-    const videoClips = (sequence?.tracks ?? [])
-      .filter((track) => track.kind === 'video')
-      .flatMap((track) => track.clips)
-      .sort((a, b) => a.startMs - b.startMs)
-    if (videoClips.length === 0) return null
-
-    const active = videoClips.find((clip) => playheadMs >= clip.startMs && playheadMs < clip.endMs)
-    if (active) return active
-
-    const first = videoClips[0]
-    const last = videoClips[videoClips.length - 1]
-
-    // Before first clip: preview first clip.
-    if (playheadMs < first.startMs) return first
-    // At/after timeline tail: keep showing the final clip.
-    if (playheadMs >= last.endMs) return last
-
-    // Between clips: bridge micro-gaps to avoid black-frame flicker at boundaries.
-    for (let i = 0; i < videoClips.length - 1; i++) {
-      const current = videoClips[i]
-      const next = videoClips[i + 1]
-      if (playheadMs >= current.endMs && playheadMs < next.startMs) {
-        const gapMs = next.startMs - current.endMs
-        if (gapMs <= PREVIEW_GAP_TOLERANCE_MS) return next
-        return null
-      }
-    }
-
-    return null
-  }, [sequence, playheadMs])
+  const previewClip = useMemo(
+    () => resolvePreviewClip(sequence?.tracks ?? [], playheadMs),
+    [sequence, playheadMs],
+  )
 
   useLayoutEffect(() => {
     const video = previewVideoRef.current
@@ -185,11 +159,32 @@ export function TimelineEditor({
       video.src = targetSrc
       video.load()
 
+      let canvasHidden = false
       const hideCanvas = () => {
+        if (canvasHidden) return
+        canvasHidden = true
         if (lastFrameCanvasRef.current) lastFrameCanvasRef.current.style.display = 'none'
       }
+      video.addEventListener('canplay', hideCanvas, { once: true })
       video.addEventListener('loadeddata', hideCanvas, { once: true })
-      setTimeout(hideCanvas, 600)
+      setTimeout(hideCanvas, 300)
+
+      // After a src swap, seek + resume only once the new source is ready so
+      // the preview doesn't flash an un-seeked first frame.
+      const localMs = Math.max(
+        previewClip.inPointMs,
+        Math.min(previewClip.outPointMs, previewClip.inPointMs + Math.max(0, playheadMs - previewClip.startMs)),
+      )
+      const seekAndResume = () => {
+        video.currentTime = localMs / 1000
+        if (isPlaying) void video.play().catch(() => {})
+      }
+      if (video.readyState >= 1) {
+        seekAndResume()
+      } else {
+        video.addEventListener('loadedmetadata', seekAndResume, { once: true })
+      }
+      return
     }
 
     const localMs = Math.max(
@@ -318,14 +313,41 @@ export function TimelineEditor({
     markDirty()
   }, [sequence, selectedClipId, playheadMs, setSequence, setSelectedClipId, markDirty])
 
-  const handleDeleteSelected = useCallback(() => {
-    if (!sequence || !selectedClipId) return
-    const newTracks = sequence.tracks.map((track) => removeClip(track, selectedClipId))
-    const newDuration = computeSequenceDuration(newTracks)
-    setSequence({ ...sequence, tracks: newTracks, durationMs: newDuration })
-    setSelectedClipId(null)
+  const handleDeleteTrack = useCallback((trackId: string) => {
+    if (!sequence) return
+    const track = sequence.tracks.find((t) => t.id === trackId)
+    if (!track) return
+    if (track.clips.length > 0 && !window.confirm(`Delete "${track.label}" and its ${track.clips.length} clip(s)?`)) return
+    const { tracks: newTracks, transitions: newTransitions } = removeTrackAndCleanup(
+      sequence.tracks, trackId, sequence.transitions ?? []
+    )
+    setSequence({
+      ...sequence,
+      tracks: newTracks,
+      transitions: newTransitions,
+      durationMs: computeSequenceDuration(newTracks),
+    })
+    if (selectedTrackId === trackId) setSelectedTrackId(null)
+    if (selectedClipId && !newTracks.some((t) => t.clips.some((c) => c.id === selectedClipId))) {
+      setSelectedClipId(null)
+    }
     markDirty()
-  }, [sequence, selectedClipId, setSequence, setSelectedClipId, markDirty])
+  }, [sequence, selectedTrackId, selectedClipId, setSequence, setSelectedTrackId, setSelectedClipId, markDirty])
+
+  const handleDeleteSelected = useCallback(() => {
+    if (!sequence) return
+    if (selectedClipId) {
+      const newTracks = sequence.tracks.map((track) => removeClip(track, selectedClipId))
+      const newDuration = computeSequenceDuration(newTracks)
+      setSequence({ ...sequence, tracks: newTracks, durationMs: newDuration })
+      setSelectedClipId(null)
+      markDirty()
+      return
+    }
+    if (selectedTrackId) {
+      handleDeleteTrack(selectedTrackId)
+    }
+  }, [sequence, selectedClipId, selectedTrackId, setSequence, setSelectedClipId, markDirty, handleDeleteTrack])
 
   const handleAddCrossDissolve = useCallback(() => {
     if (!sequence) return
@@ -937,6 +959,7 @@ export function TimelineEditor({
                       onSnapshotAtPoint={onSnapshotRequest ? handleSnapshotAtPoint : undefined}
                       onInsertFromLibrary={onInsertFromLibrary}
                       onToggleMute={handleToggleMute}
+                      onDeleteTrack={handleDeleteTrack}
                     />
                   ))}
                   {/* Add track buttons */}
@@ -1126,7 +1149,7 @@ function TrackLane({
   track, viewDurationMs, viewStartMs, selectedClipId, isSelectedTrack,
   onClipClick, onSelectTrack, activeTool,
   onTrim, pxToMs, transitions, onDissolveDurationChange,
-  onSnapshotAtPoint, onInsertFromLibrary, onToggleMute,
+  onSnapshotAtPoint, onInsertFromLibrary, onToggleMute, onDeleteTrack,
 }: {
   track: TimelineTrack
   viewDurationMs: number
@@ -1143,6 +1166,7 @@ function TrackLane({
   onSnapshotAtPoint?: (clip: TimelineClip, trackId: string, targetMs: number) => void
   onInsertFromLibrary?: (trackId: string, afterMs: number) => void
   onToggleMute: (trackId: string) => void
+  onDeleteTrack?: (trackId: string) => void
 }) {
   const kindColors: Record<string, { bg: string; border: string; selected: string }> = {
     video: { bg: 'bg-primary/15', border: 'border-primary/25', selected: 'border-primary ring-1 ring-primary/30' },
@@ -1209,6 +1233,15 @@ function TrackLane({
             onClick={(e) => { e.stopPropagation(); onToggleMute(track.id) }}
           >
             {track.isMuted ? <VolumeX className="h-2.5 w-2.5" /> : <Volume2 className="h-2.5 w-2.5" />}
+          </button>
+        )}
+        {onDeleteTrack && (
+          <button
+            className="p-0.5 text-muted-foreground/30 hover:text-red-400 opacity-0 group-hover/lane:opacity-100 transition-all"
+            title={`Delete ${track.label}`}
+            onClick={(e) => { e.stopPropagation(); onDeleteTrack(track.id) }}
+          >
+            <Trash2 className="h-2.5 w-2.5" />
           </button>
         )}
       </div>

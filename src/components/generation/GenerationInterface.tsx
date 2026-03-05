@@ -11,11 +11,11 @@ import { useInfiniteGenerations } from '@/hooks/useInfiniteGenerations'
 import { useGenerationsRealtime, markGenerationDismissed, isGenerationDismissed } from '@/hooks/useGenerationsRealtime'
 import { useGenerateMutation } from '@/hooks/useGenerateMutation'
 import { useModelCapabilities } from '@/hooks/useModelCapabilities'
-import { useModels } from '@/hooks/useModels'
+import { useModels, findModelInList } from '@/hooks/useModels'
 import { useUIStore } from '@/store/uiStore'
 import { useToast } from '@/components/ui/use-toast'
 import { createClient } from '@/lib/supabase/client'
-import { Image as ImageIcon, Video, MessageCircle, Film, Undo2 } from 'lucide-react'
+import { Image as ImageIcon, Video, MessageCircle, Film, Undo2, Sparkles, Loader2, Check, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { logMetric } from '@/lib/metrics'
 import { useTimelineStore } from '@/store/timelineStore'
@@ -175,6 +175,15 @@ export function GenerationInterface({
   } | null>(null)
   const snapshotPromptHasManualOverridesRef = useRef(false)
   const timelineVideoSessionIdRef = useRef<string | null>(null)
+  const timelineImageSessionIdRef = useRef<string | null>(null)
+
+  // End-frame generation sub-mode state
+  const [endFrameGenOpen, setEndFrameGenOpen] = useState(false)
+  const [endFrameGenPrompt, setEndFrameGenPrompt] = useState('')
+  const [endFrameGenModelId, setEndFrameGenModelId] = useState('gemini-nano-banana-pro')
+  const [endFrameGenCandidates, setEndFrameGenCandidates] = useState<Array<{ id: string; url: string; status: string }>>([])
+  const [endFrameGenerating, setEndFrameGenerating] = useState(false)
+  const endFrameGenMutation = useGenerateMutation()
   
   // State for pasted images (passed to input components)
   const [pastedImageFiles, setPastedImageFiles] = useState<File[]>([])
@@ -1430,8 +1439,113 @@ export function GenerationInterface({
     }
     timelineSnapshotFileRef.current = null
     clearSnapshotPrompt()
+    setEndFrameGenOpen(false)
+    setEndFrameGenCandidates([])
     setComposerMode('timeline')
   }, [clearSnapshotPrompt, setComposerMode])
+
+  // ── End-frame generation sub-mode ──
+
+  const resolveImageSession = useCallback(async (): Promise<string | null> => {
+    if (timelineImageSessionIdRef.current) return timelineImageSessionIdRef.current
+    const imageSessions = allSessions.filter((s) => s.type === 'image')
+    if (imageSessions.length > 0) {
+      timelineImageSessionIdRef.current = imageSessions[0].id
+      return imageSessions[0].id
+    }
+    if (onSessionCreate) {
+      const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const newSession = await onSessionCreate('image', `End Frames - ${dateStr}`, { skipSwitch: true })
+      if (newSession) {
+        timelineImageSessionIdRef.current = newSession.id
+        return newSession.id
+      }
+    }
+    return null
+  }, [allSessions, onSessionCreate])
+
+  const handleOpenEndFrameGen = useCallback(() => {
+    setEndFrameGenOpen(true)
+    setEndFrameGenCandidates([])
+    const snapUrl = snapshotPrompt.snapshotUrl
+    if (snapUrl) {
+      setEndFrameGenPrompt('Remove the main subject, keep the background clean')
+    }
+  }, [snapshotPrompt.snapshotUrl])
+
+  const handleEndFrameGenerate = useCallback(async () => {
+    const imageSessionId = await resolveImageSession()
+    if (!imageSessionId) {
+      toast({ title: 'No image session', description: 'Could not resolve an image session for end-frame generation.', variant: 'destructive' })
+      return
+    }
+    const snapUrl = snapshotPrompt.snapshotUrl
+    const snapIsHttp = typeof snapUrl === 'string' && snapUrl.startsWith('http')
+    if (!snapIsHttp) {
+      toast({ title: 'Snapshot not ready', description: 'Wait for snapshot upload to finish.', variant: 'destructive' })
+      return
+    }
+    if (!endFrameGenPrompt.trim()) return
+
+    setEndFrameGenerating(true)
+    try {
+      const result = await endFrameGenMutation.mutateAsync({
+        sessionId: imageSessionId,
+        modelId: endFrameGenModelId,
+        prompt: endFrameGenPrompt.trim(),
+        parameters: {
+          aspectRatio: (parameters as any).aspectRatio || '16:9',
+          resolution: (parameters as any).resolution || 1024,
+          numOutputs: 1,
+          referenceImageUrl: snapUrl,
+          sourceKind: 'snapshot' as const,
+          sourceVideoOutputId: snapshotPrompt.outputId ?? undefined,
+          sourceTimecodeMs: snapshotPrompt.timecodeMs,
+          sourceLabel: `End frame @ ${(snapshotPrompt.timecodeMs / 1000).toFixed(1)}s`,
+        },
+      })
+
+      const candidateId = result.id
+      setEndFrameGenCandidates((prev) => [...prev, { id: candidateId, url: '', status: 'processing' }])
+
+      const maxAttempts = 60
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise((r) => setTimeout(r, 2000))
+        try {
+          const res = await fetch(`/api/generations/${candidateId}`, { cache: 'no-store' })
+          if (!res.ok) continue
+          const gen = await res.json()
+          if (gen.status === 'completed' && gen.outputs?.length > 0) {
+            const outputUrl = gen.outputs[0].fileUrl
+            setEndFrameGenCandidates((prev) =>
+              prev.map((c) => (c.id === candidateId ? { ...c, url: outputUrl, status: 'completed' } : c))
+            )
+            break
+          }
+          if (gen.status === 'failed') {
+            setEndFrameGenCandidates((prev) =>
+              prev.map((c) => (c.id === candidateId ? { ...c, status: 'failed' } : c))
+            )
+            break
+          }
+        } catch { /* retry */ }
+      }
+    } catch (err: any) {
+      toast({ title: 'End frame generation failed', description: err.message || 'Please try again.', variant: 'destructive' })
+    } finally {
+      setEndFrameGenerating(false)
+    }
+  }, [resolveImageSession, snapshotPrompt, endFrameGenPrompt, endFrameGenModelId, parameters, endFrameGenMutation, toast])
+
+  const handleSelectEndFrameCandidate = useCallback((url: string) => {
+    setReferenceImageUrl(referenceImageUrl)
+    setEndFrameGenOpen(false)
+    // The end frame URL will be set via the onSetEndFrameImageUrl passed to VideoInput
+    // We need to update the parent state that VideoInput reads
+    endFrameSelectedUrlRef.current = url
+  }, [referenceImageUrl])
+
+  const endFrameSelectedUrlRef = useRef<string | null>(null)
 
   // Insert a placeholder clip immediately when Generate is clicked, then poll
   // the generation and swap the placeholder for the real video when complete.
@@ -1696,20 +1810,96 @@ export function GenerationInterface({
                 isPromptMode={isTimelinePromptMode}
                 timelinePromptSlot={isTimelinePromptMode ? (
                   <div className="prompt-from-timeline space-y-2">
-                    <div className="flex items-center gap-3">
-                      <div className="px-2 py-1 rounded-md border border-primary/30 bg-primary/10 flex-1">
-                        <span className="text-[10px] text-primary/90 font-mono uppercase tracking-wider">
-                          Snapshot Prompt Mode
-                        </span>
-                      </div>
+                    <div className="flex items-center justify-end">
                       <button
                         onClick={handleReturnToTimeline}
-                        className="w-[112px] inline-flex items-center justify-center gap-1 text-[10px] px-2 py-1 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+                        className="inline-flex items-center justify-center gap-1 text-[10px] px-2 py-1 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
                       >
                         <Undo2 className="h-3 w-3" />
                         Back to timeline
                       </button>
                     </div>
+
+                    {/* End-frame generation sub-panel */}
+                    {endFrameGenOpen && (
+                      <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.04] p-2.5 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-amber-500/80">Generate End Frame</span>
+                          <button
+                            onClick={() => setEndFrameGenOpen(false)}
+                            className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={endFrameGenModelId}
+                            onChange={(e) => setEndFrameGenModelId(e.target.value)}
+                            className="h-7 text-[10px] px-2 rounded-md bg-muted/50 border border-border/50 text-foreground"
+                          >
+                            {allModels.filter((m) => m.type === 'image').map((m) => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={endFrameGenPrompt}
+                            onChange={(e) => setEndFrameGenPrompt(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEndFrameGenerate() } }}
+                            placeholder="Describe the end frame..."
+                            className="flex-1 h-8 text-xs px-3 rounded-lg bg-muted/30 border border-border/40 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                          />
+                          <button
+                            onClick={handleEndFrameGenerate}
+                            disabled={endFrameGenerating || !endFrameGenPrompt.trim()}
+                            className="h-8 px-3 text-xs font-medium rounded-lg bg-amber-500/90 text-white hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                          >
+                            {endFrameGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                            Generate
+                          </button>
+                        </div>
+
+                        {/* Candidate thumbnails */}
+                        {endFrameGenCandidates.length > 0 && (
+                          <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+                            {endFrameGenCandidates.map((candidate) => (
+                              <div key={candidate.id} className="relative flex-shrink-0">
+                                {candidate.status === 'processing' ? (
+                                  <div className="w-[48px] h-[48px] rounded-md border border-amber-500/30 bg-muted/30 flex items-center justify-center">
+                                    <Loader2 className="h-4 w-4 animate-spin text-amber-500/60" />
+                                  </div>
+                                ) : candidate.status === 'failed' ? (
+                                  <div className="w-[48px] h-[48px] rounded-md border border-red-500/30 bg-red-500/5 flex items-center justify-center">
+                                    <X className="h-4 w-4 text-red-400" />
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      endFrameSelectedUrlRef.current = candidate.url
+                                      setEndFrameGenOpen(false)
+                                      toast({ title: 'End frame selected', description: 'Attached as end frame for video generation.' })
+                                    }}
+                                    className="w-[48px] h-[48px] rounded-md border-2 border-amber-500/40 hover:border-amber-500 overflow-hidden transition-all hover:scale-105"
+                                    title="Use as end frame"
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={candidate.url} alt="End frame candidate" className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/30 transition-colors">
+                                      <Check className="h-4 w-4 text-white opacity-0 hover:opacity-100" />
+                                    </div>
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <VideoInput
                       variant="default"
                       prompt={prompt}
@@ -1731,6 +1921,7 @@ export function GenerationInterface({
                           ...options,
                           referenceImageUrl: snapIsHttp ? snapUrl : options?.referenceImageUrl,
                           ...(snapIsHttp ? {} : { referenceImage: timelineSnapshotFileRef.current ?? options?.referenceImage }),
+                          ...(endFrameSelectedUrlRef.current ? { endFrameImageUrl: endFrameSelectedUrlRef.current } : {}),
                         })
                         if (insertionTarget && generated?.id) {
                           const durationSec = (parameters as any).duration ?? 5
@@ -1740,6 +1931,7 @@ export function GenerationInterface({
                             durationSec * 1000
                           )
                         }
+                        endFrameSelectedUrlRef.current = null
                         handleReturnToTimeline()
                       }}
                       parameters={parameters}
@@ -1751,10 +1943,11 @@ export function GenerationInterface({
                       onSetReferenceImageUrl={setReferenceImageUrl}
                       onRegisterPasteHandler={registerPasteHandler}
                       hideSnapshotRail
-                      hideEndFrame
                       hideStartFrame
                       hideReferencePicker
                       lockedReferenceImage
+                      endFrameImageUrl={endFrameSelectedUrlRef.current}
+                      onGenerateEndFrame={handleOpenEndFrameGen}
                     />
                   </div>
                 ) : undefined}

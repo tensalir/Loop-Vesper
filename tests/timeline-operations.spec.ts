@@ -14,6 +14,7 @@ import {
   addCaption,
   removeCaption,
   insertTrackAbove,
+  removeTrackAndCleanup,
   computeSequenceDuration,
   hasOverlap,
   snapToGrid,
@@ -380,5 +381,60 @@ test.describe('Snap utilities', () => {
     ]
     const snapped = snapToNearby(2950, clips, 20, 10)
     expect(snapped).toBe(3000)
+  })
+})
+
+test.describe('Track removal and cleanup', () => {
+  test('removeTrackAndCleanup removes the track and re-normalizes sortOrder', () => {
+    const t0 = { ...createTrack('video', 'V1', 0), sequenceId: 's1' }
+    const t1 = { ...createTrack('audio', 'A1', 1), sequenceId: 's1' }
+    const t2 = { ...createTrack('video', 'V2', 2), sequenceId: 's1' }
+
+    const { tracks } = removeTrackAndCleanup([t0, t1, t2], t1.id, [])
+    expect(tracks).toHaveLength(2)
+    expect(tracks.find((t) => t.id === t1.id)).toBeUndefined()
+    expect(tracks[0].sortOrder).toBe(0)
+    expect(tracks[1].sortOrder).toBe(1)
+  })
+
+  test('removeTrackAndCleanup prunes transitions referencing removed clips', () => {
+    const track = createTrack('video', 'V1', 0)
+    track.sequenceId = 's1'
+    const { track: t1 } = insertClip(track, 'http://a.mp4', 'video', 5000)
+    const { track: t2, clip: clipB } = insertClip(t1, 'http://b.mp4', 'video', 3000)
+
+    const otherTrack = createTrack('video', 'V2', 1)
+    otherTrack.sequenceId = 's1'
+    const { track: ot1, clip: clipC } = insertClip(otherTrack, 'http://c.mp4', 'video', 4000)
+    const { track: ot2, clip: clipD } = insertClip(ot1, 'http://d.mp4', 'video', 2000)
+
+    const transitions: TimelineTransition[] = [
+      { id: 'tx1', sequenceId: 's1', type: 'cross_dissolve', fromClipId: t2.clips[0].id, toClipId: clipB.id, durationMs: 500 },
+      { id: 'tx2', sequenceId: 's1', type: 'cross_dissolve', fromClipId: clipC.id, toClipId: clipD.id, durationMs: 500 },
+    ]
+
+    const result = removeTrackAndCleanup([t2, ot2], t2.id, transitions)
+    expect(result.tracks).toHaveLength(1)
+    expect(result.transitions).toHaveLength(1)
+    expect(result.transitions[0].id).toBe('tx2')
+  })
+
+  test('removeTrackAndCleanup is a no-op for missing track IDs', () => {
+    const track = createTrack('video', 'V1', 0)
+    track.sequenceId = 's1'
+    const result = removeTrackAndCleanup([track], 'nonexistent', [])
+    expect(result.tracks).toHaveLength(1)
+  })
+
+  test('removeTrackAndCleanup updates duration correctly', () => {
+    const t0 = createTrack('video', 'V1', 0)
+    t0.sequenceId = 's1'
+    const { track: withClip } = insertClip(t0, 'http://a.mp4', 'video', 10000)
+    const t1 = createTrack('video', 'V2', 1)
+    t1.sequenceId = 's1'
+    const { track: shortTrack } = insertClip(t1, 'http://b.mp4', 'video', 3000)
+
+    const { tracks } = removeTrackAndCleanup([withClip, shortTrack], withClip.id, [])
+    expect(computeSequenceDuration(tracks)).toBe(3000)
   })
 })
