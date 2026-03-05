@@ -22,6 +22,7 @@ export interface TimelineSequence {
   createdAt: string
   updatedAt: string
   tracks: TimelineTrack[]
+  transitions?: TimelineTransition[]
 }
 
 export interface TimelineTrack {
@@ -32,6 +33,7 @@ export interface TimelineTrack {
   sortOrder: number
   isMuted: boolean
   clips: TimelineClip[]
+  captions?: TimelineCaption[]
 }
 
 export interface TimelineClip {
