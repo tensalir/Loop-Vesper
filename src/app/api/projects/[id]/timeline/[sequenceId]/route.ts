@@ -144,10 +144,12 @@ export async function PATCH(
         },
       })
 
+      // Clip ID mapping shared between track insertion and transition normalization
+      const clipIdMap = new Map<string, string>()
+
       // Replace tracks + clips + captions if provided
       if (Array.isArray(tracks)) {
         await tx.timelineTrack.deleteMany({ where: { sequenceId: params.sequenceId } })
-        const clipIdMap = new Map<string, string>()
 
         for (let trackIndex = 0; trackIndex < tracks.length; trackIndex++) {
           const track = tracks[trackIndex]
