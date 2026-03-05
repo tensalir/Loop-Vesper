@@ -65,6 +65,12 @@ interface VideoInputProps {
   endFrameImageUrl?: string | null
   /** Override end frame image ID */
   endFrameImageIdOverride?: string
+  /** Hide snapshot rail list above prompt */
+  hideSnapshotRail?: boolean
+  /** Hide end-frame controls and payload in this context */
+  hideEndFrame?: boolean
+  /** Hide start-frame thumbnail/picker in this context */
+  hideStartFrame?: boolean
 }
 
 export function VideoInput({
@@ -87,6 +93,9 @@ export function VideoInput({
   onRegisterPasteHandler,
   endFrameImageUrl,
   endFrameImageIdOverride,
+  hideSnapshotRail = false,
+  hideEndFrame = false,
+  hideStartFrame = false,
 }: VideoInputProps) {
   const params = useParams()
   const { toast } = useToast()
@@ -172,6 +181,7 @@ export function VideoInput({
   // Check if model supports frame interpolation (start + end frames)
   // Only kling-official and gemini-veo-3.1 support this
   const supportsFrameInterpolation = modelConfig?.capabilities?.['frame-interpolation'] === true
+  const showEndFrameControl = !hideEndFrame && supportsFrameInterpolation
   
   // Check if this is a Kling model (for auto aspect ratio detection)
   const isKlingModel = selectedModel.includes('kling')
@@ -181,7 +191,9 @@ export function VideoInput({
 
   // UI controls
   const showStartFrameControl =
-    supportsImageToVideo && (referenceImage || imagePreviewUrl || !hideReferencePicker)
+    !hideStartFrame &&
+    supportsImageToVideo &&
+    (referenceImage || imagePreviewUrl || !hideReferencePicker)
   const canPickStartFrame = supportsImageToVideo && !hideReferencePicker && !lockedReferenceImage
   
   const resolutionParam = modelParameters.find((p) => p.name === 'resolution')
@@ -249,7 +261,7 @@ export function VideoInput({
 
   // Clear end frame when switching to a model that doesn't support frame interpolation
   useEffect(() => {
-    if (modelConfig && !supportsFrameInterpolation) {
+    if (hideEndFrame || (modelConfig && !supportsFrameInterpolation)) {
       // Model doesn't support end frames - clear any selected end frame
       if (endFrameImage || endFramePreviewUrl || uploadedEndFrameUrl) {
         console.log('[VideoInput] Clearing end frame - model does not support frame interpolation')
@@ -262,7 +274,7 @@ export function VideoInput({
         setUploadedEndFrameUrl(null)
       }
     }
-  }, [modelConfig, supportsFrameInterpolation])
+  }, [modelConfig, supportsFrameInterpolation, hideEndFrame, endFrameImage, endFramePreviewUrl, uploadedEndFrameUrl])
 
   // Veo 3.1: Enforce 8 seconds duration when resolution is 1080p or 4K
   useEffect(() => {
@@ -365,7 +377,9 @@ export function VideoInput({
       const isHttpUrl = (value: string | null | undefined): boolean =>
         typeof value === 'string' && value.startsWith('http')
       const effectiveReferenceUrl = uploadedReferenceUrl || (isHttpUrl(referenceImageUrl) ? referenceImageUrl : undefined)
-      const effectiveEndFrameUrl = uploadedEndFrameUrl || (isHttpUrl(endFrameImageUrl) ? endFrameImageUrl : undefined)
+      const effectiveEndFrameUrl = hideEndFrame
+        ? undefined
+        : (uploadedEndFrameUrl || (isHttpUrl(endFrameImageUrl) ? endFrameImageUrl : undefined))
       
       console.log('[VideoInput] Calling onGenerate with:', {
         effectiveReferenceUrl: effectiveReferenceUrl?.slice(0, 50),
@@ -381,8 +395,8 @@ export function VideoInput({
         referenceImageId: referenceImageId || undefined,
         referenceImageUrl: effectiveReferenceUrl ?? undefined,
         // Same for end frame
-        endFrameImage: effectiveEndFrameUrl ? undefined : endFrameImage || undefined,
-        endFrameImageId: endFrameImageId || undefined,
+        endFrameImage: hideEndFrame ? undefined : (effectiveEndFrameUrl ? undefined : endFrameImage || undefined),
+        endFrameImageId: hideEndFrame ? undefined : (endFrameImageId || undefined),
         endFrameImageUrl: effectiveEndFrameUrl ?? undefined,
       })
       // Keep the last prompt AND reference image after generating (users often iterate).
@@ -553,14 +567,14 @@ export function VideoInput({
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (!supportsImageToVideo) return
+    if (!supportsImageToVideo || hideStartFrame) return
     setIsDragging(true)
   }
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (!supportsImageToVideo) return
+    if (!supportsImageToVideo || hideStartFrame) return
   }
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -580,7 +594,7 @@ export function VideoInput({
     e.stopPropagation()
     setIsDragging(false)
 
-    if (!supportsImageToVideo) return
+    if (!supportsImageToVideo || hideStartFrame) return
     
     const files = Array.from(e.dataTransfer.files)
     if (files.length > 0) {
@@ -860,7 +874,7 @@ export function VideoInput({
 
   // Register paste handler with parent component
   useEffect(() => {
-    if (!onRegisterPasteHandler || !supportsImageToVideo) return
+    if (!onRegisterPasteHandler || !supportsImageToVideo || hideStartFrame) return
     
     const unregister = onRegisterPasteHandler((files) => {
       // Video input only uses one image, take the first
@@ -870,12 +884,12 @@ export function VideoInput({
     })
     
     return unregister
-  }, [onRegisterPasteHandler, supportsImageToVideo])
+  }, [onRegisterPasteHandler, supportsImageToVideo, hideStartFrame])
 
   return (
     <div 
       className={`space-y-3 transition-all ${
-        isDragging && supportsImageToVideo
+        isDragging && supportsImageToVideo && !hideStartFrame
           ? 'ring-2 ring-primary ring-offset-2 rounded-lg p-2 -m-2 bg-primary/5'
           : ''
       }`}
@@ -885,7 +899,7 @@ export function VideoInput({
       onDrop={handleDrop}
     >
       {/* Snapshot Rail - shows captured video frames as selectable start frames */}
-      {projectId && supportsImageToVideo && (
+      {projectId && supportsImageToVideo && !hideSnapshotRail && (
         <SnapshotRail
           projectId={projectId}
           onSelect={(snap) => {
@@ -914,7 +928,11 @@ export function VideoInput({
           </div>
           
           <Textarea
-            placeholder={supportsImageToVideo ? "Describe a video to animate from the reference image, or drag and drop an image here..." : "Describe a video to animate from the reference image..."}
+            placeholder={
+              supportsImageToVideo && !hideStartFrame
+                ? "Describe a video to animate from the reference image, or drag and drop an image here..."
+                : "Describe a video to animate from the reference image..."
+            }
             value={transformedPrompt !== null ? transformedPrompt : prompt}
             onChange={(e) => {
               setTransformedPrompt(null) // Clear transformation when user types
@@ -932,7 +950,7 @@ export function VideoInput({
             } ${
               isEnhancing
                 ? 'border-transparent'
-                : isDragging && supportsImageToVideo
+                : isDragging && supportsImageToVideo && !hideStartFrame
                 ? 'border-primary/50'
                 : 'border-border focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary/50'
             } ${isEnhancing ? 'enhancing-text' : ''}`}
@@ -1129,7 +1147,7 @@ export function VideoInput({
             </div>
 
             {/* Swap button - shown when both start and end frames are present */}
-            {supportsFrameInterpolation && (referenceImage || imagePreviewUrl) && (endFrameImage || endFramePreviewUrl) && (
+            {showEndFrameControl && (referenceImage || imagePreviewUrl) && (endFrameImage || endFramePreviewUrl) && (
               <button
                 onClick={handleSwapFrames}
                 disabled={isUploading || generating}
@@ -1143,7 +1161,7 @@ export function VideoInput({
             )}
 
             {/* End Frame Thumbnail or Empty Placeholder - only show for models that support frame interpolation */}
-            {supportsFrameInterpolation && (
+            {showEndFrameControl && (
               (referenceImage || imagePreviewUrl) ? (
                 (endFrameImage || endFramePreviewUrl) ? (
                   <div
@@ -1266,7 +1284,7 @@ export function VideoInput({
               size="default"
               className={`rounded-lg font-semibold shadow-sm hover:shadow transition-all ${
                 isOverlay ? 'h-[48px] px-6 text-xs' : 'h-[56px] px-8 text-sm'
-              } ${isOverlay ? '' : 'order-3'}`}
+              } min-w-[112px] justify-center ${isOverlay ? '' : 'order-3'}`}
             >
               {generating ? (
                 <Loader2 className={`mr-2 animate-spin ${isOverlay ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
@@ -1289,7 +1307,7 @@ export function VideoInput({
       />
 
       {/* Hidden file input for start frame */}
-      {supportsImageToVideo && !hideReferencePicker && (
+      {supportsImageToVideo && !hideReferencePicker && !hideStartFrame && (
         <input
           ref={fileInputRef}
           type="file"
@@ -1311,7 +1329,7 @@ export function VideoInput({
         </div>
 
         {/* Start frame picker moved to right of prompt (above). */}
-        {!hideReferencePicker && supportsImageToVideo && (
+        {!hideReferencePicker && !hideStartFrame && supportsImageToVideo && (
           <Button
             variant="outline"
             size="sm"

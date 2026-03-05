@@ -539,8 +539,21 @@ export function TimelineEditor({
         </div>
       )}
 
+      {/* Snapshot prompt shell: single frame around preview + prompt area */}
+      <div
+        className={cn(
+          'flex flex-col gap-2',
+          isPromptMode && 'rounded-lg border border-primary/35 bg-primary/[0.03] shadow-[0_0_0_1px_rgba(74,222,128,0.12),0_0_24px_rgba(74,222,128,0.16)] p-2'
+        )}
+      >
       {/* Preview — slightly reduced height */}
-      <div className="relative w-full rounded-lg bg-black/70 border border-border/30 overflow-hidden timeline-scanline-boot" style={{ aspectRatio: '16 / 8.2' }}>
+      <div
+        className={cn(
+          'relative w-full rounded-lg bg-black/70 overflow-hidden timeline-scanline-boot',
+          isPromptMode ? 'border border-transparent' : 'border border-border/30'
+        )}
+        style={{ aspectRatio: '16 / 8.2' }}
+      >
         {promptReferenceUrl ? (
           <>
             <img
@@ -572,10 +585,8 @@ export function TimelineEditor({
       </div>
 
       {/* Controls */}
-      <div className={cn(
-        'flex flex-col gap-2 rounded-lg border border-border/30 bg-muted/20 px-2.5 py-2',
-        isPromptMode && 'opacity-50 saturate-0 pointer-events-none'
-      )}>
+      {!isPromptMode && (
+      <div className="flex flex-col gap-2 rounded-lg border border-border/30 bg-muted/20 px-2.5 py-2">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="font-mono text-xs text-muted-foreground tabular-nums bg-muted/30 px-2 py-1 rounded-md border border-border/30 min-w-[90px] text-center">
             {msToTimecode(playheadMs)}
@@ -649,11 +660,20 @@ export function TimelineEditor({
           {isDirty && <span className="text-amber-500/80">| unsaved</span>}
         </div>
       </div>
+      )}
 
       {/* Timeline Tracks Area */}
-      <div ref={tracksAreaRef} className="relative bg-muted/20 border border-border/30 rounded-lg overflow-visible min-h-[160px] timeline-glow">
+      <div
+        ref={tracksAreaRef}
+        className={cn(
+          'relative rounded-lg overflow-visible min-h-[160px]',
+          isPromptMode
+            ? 'bg-transparent border border-transparent max-h-[36vh]'
+            : 'bg-muted/20 border border-border/30 timeline-glow'
+        )}
+      >
         {isPromptMode && timelinePromptSlot ? (
-          <div className="p-3 min-h-[160px] timeline-morph-in">
+          <div className="p-3 min-h-[160px] max-h-[36vh] overflow-y-auto timeline-morph-in">
             {timelinePromptSlot}
           </div>
         ) : (
@@ -715,6 +735,7 @@ export function TimelineEditor({
             </div>
           </>
         )}
+      </div>
       </div>
     </div>
   )
@@ -843,6 +864,7 @@ function TrackLane({
           const width = ((clip.endMs - clip.startMs) / viewDurationMs) * 100
           const isSelected = selectedClipId === clip.id
           const dissolve = transitions.get(clip.id)
+          const isPlaceholder = clip.fileUrl.startsWith('placeholder:')
 
           return (
             <div key={clip.id} className="contents">
@@ -850,13 +872,16 @@ function TrackLane({
               <div
                 className={cn(
                   'absolute top-3 bottom-1 rounded-md border cursor-pointer transition-colors overflow-visible group/clip',
-                  colors.bg, colors.border,
-                  isSelected && colors.selected,
-                  activeTool === 'cut' && 'cursor-crosshair'
+                  isPlaceholder
+                    ? 'border-primary/40 bg-primary/[0.07] timeline-clip-generating'
+                    : cn(colors.bg, colors.border),
+                  isSelected && !isPlaceholder && colors.selected,
+                  activeTool === 'cut' && !isPlaceholder && 'cursor-crosshair'
                 )}
                 style={{ left: `${left}%`, width: `${Math.max(0.5, width)}%` }}
-                onClick={(e) => { e.stopPropagation(); onClipClick(clip.id, track.id) }}
+                onClick={(e) => { e.stopPropagation(); if (!isPlaceholder) onClipClick(clip.id, track.id) }}
                 onMouseMove={(e) => {
+                  if (isPlaceholder) return
                   if (!onSnapshotAtPoint || clip.fileType !== 'video' || !clip.outputId) return
                   const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
                   if (rect.width <= 0) return
@@ -866,8 +891,14 @@ function TrackLane({
                 onMouseLeave={() => {
                   setSnapshotCursor((current) => (current?.clipId === clip.id ? null : current))
                 }}
-                title={`${clip.fileType}: ${((clip.endMs - clip.startMs) / 1000).toFixed(1)}s`}
+                title={isPlaceholder ? 'Generating…' : `${clip.fileType}: ${((clip.endMs - clip.startMs) / 1000).toFixed(1)}s`}
               >
+                {isPlaceholder ? (
+                  <span className="absolute inset-0 flex items-center justify-center text-[8px] text-primary/70 font-mono uppercase tracking-wider pointer-events-none">
+                    Generating… {((clip.endMs - clip.startMs) / 1000).toFixed(0)}s
+                  </span>
+                ) : (
+                  <>
                 {/* Thumbnail placeholder for video clips */}
                 {clip.fileType === 'video' && (
                   <div className="absolute left-0 top-0 bottom-0 w-6 rounded-l-md overflow-hidden opacity-60">
@@ -877,7 +908,11 @@ function TrackLane({
                 <span className="absolute inset-0 flex items-center px-1.5 text-[8px] text-foreground/60 truncate pointer-events-none" style={{ paddingLeft: clip.fileType === 'video' ? '28px' : '6px' }}>
                   {((clip.endMs - clip.startMs) / 1000).toFixed(1)}s
                 </span>
+                  </>
+                )}
 
+                {!isPlaceholder && (
+                  <>
                 {/* Left trim handle */}
                 <div
                   className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-primary/40 rounded-l-md transition-colors z-20"
@@ -903,6 +938,8 @@ function TrackLane({
                   >
                     <Plus className="h-3 w-3" />
                   </button>
+                )}
+                  </>
                 )}
               </div>
 

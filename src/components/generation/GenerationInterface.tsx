@@ -15,7 +15,7 @@ import { useModels } from '@/hooks/useModels'
 import { useUIStore } from '@/store/uiStore'
 import { useToast } from '@/components/ui/use-toast'
 import { createClient } from '@/lib/supabase/client'
-import { Image as ImageIcon, Video, MessageCircle, Film } from 'lucide-react'
+import { Image as ImageIcon, Video, MessageCircle, Film, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { logMetric } from '@/lib/metrics'
 import { useTimelineStore } from '@/store/timelineStore'
@@ -129,6 +129,7 @@ export function GenerationInterface({
   const setLibraryOpen = useTimelineStore((s) => s.setLibraryOpen)
   const insertVideoClip = useTimelineStore((s) => s.insertVideoClip)
   const insertVideoClipTargeted = useTimelineStore((s) => s.insertVideoClipTargeted)
+  const replaceClip = useTimelineStore((s) => s.replaceClip)
   const snapshotPrompt = useTimelineStore((s) => s.snapshotPrompt)
   const setSnapshotPrompt = useTimelineStore((s) => s.setSnapshotPrompt)
   const clearSnapshotPrompt = useTimelineStore((s) => s.clearSnapshotPrompt)
@@ -165,6 +166,12 @@ export function GenerationInterface({
   const snapshotFlowIdRef = useRef(0)
   const snapshotObjectUrlRef = useRef<string | null>(null)
   const timelineSnapshotFileRef = useRef<File | null>(null)
+  const snapshotInsertionWatchersRef = useRef<Set<string>>(new Set())
+  const snapshotPromptOverridesRef = useRef<{
+    modelId: string
+    parameters: Record<string, unknown>
+  } | null>(null)
+  const snapshotPromptHasManualOverridesRef = useRef(false)
   
   // State for pasted images (passed to input components)
   const [pastedImageFiles, setPastedImageFiles] = useState<File[]>([])
@@ -284,6 +291,7 @@ export function GenerationInterface({
   
   // Use Zustand store for UI state
   const { selectedModel, parameters, setSelectedModel, setParameters } = useUIStore()
+  const effectiveGenerationType: 'image' | 'video' = isTimelineMode ? 'video' : generationType
   
   // Use cached models data from React Query (prefetched on server)
   const { data: allModels = [] } = useModels()
@@ -443,7 +451,7 @@ export function GenerationInterface({
   // If Kling Official is selected but not configured correctly, generations will fail with
   // "Authorization signature is invalid". Auto-fallback to Replicate Kling so users can keep working.
   useEffect(() => {
-    if (generationType !== 'video') return
+    if (effectiveGenerationType !== 'video') return
     if (selectedModel !== 'kling-official') return
 
     const hasAuthSignatureError = generations.some((gen) => {
@@ -464,7 +472,7 @@ export function GenerationInterface({
       description:
         'Kling Official failed authentication (authorization signature invalid). Using Kling 2.6 (Replicate) instead.',
     })
-  }, [generationType, selectedModel, generations, setSelectedModel, toast])
+  }, [effectiveGenerationType, selectedModel, generations, setSelectedModel, toast])
   
   // Subscribe to real-time updates
   useGenerationsRealtime(session?.id || null, userId)
@@ -479,18 +487,18 @@ export function GenerationInterface({
   const supportsReferenceImages = useMemo(() => {
     if (!modelConfig) return false
     // Image models: check 'editing' capability
-    if (generationType === 'image') {
+    if (effectiveGenerationType === 'image') {
       return modelConfig.capabilities?.editing === true
     }
     // Video models: check 'image-2-video' capability
     return modelConfig.capabilities?.['image-2-video'] === true
-  }, [modelConfig, generationType])
+  }, [modelConfig, effectiveGenerationType])
   
   // Check if current model supports multiple reference images (for wider prompt bar)
   const supportsMultiImage = useMemo(() => {
-    if (!modelConfig || generationType !== 'image') return false
+    if (!modelConfig || effectiveGenerationType !== 'image') return false
     return modelConfig.capabilities?.multiImageEditing === true
-  }, [modelConfig, generationType])
+  }, [modelConfig, effectiveGenerationType])
   
   // Global paste handler for Cmd/Ctrl+V with images
   useEffect(() => {
@@ -567,7 +575,7 @@ export function GenerationInterface({
     if (allModels.length === 0) return
     
     const current = allModels.find(m => m.id === selectedModel)
-    const requiredType = generationType
+    const requiredType = effectiveGenerationType
     
     // Enforce model type per view: image sessions -> image models, video sessions -> video models
     if (!current || current.type !== requiredType) {
@@ -598,12 +606,12 @@ export function GenerationInterface({
       }
     } else {
       // Otherwise use default based on generation type
-      const defaultNumOutputs = generationType === 'image' ? 4 : 1
+      const defaultNumOutputs = effectiveGenerationType === 'image' ? 4 : 1
       if (parameters.numOutputs !== defaultNumOutputs) {
         setParameters({ numOutputs: defaultNumOutputs })
       }
     }
-  }, [generationType, selectedModel, allModels])
+  }, [effectiveGenerationType, selectedModel, allModels])
 
   // Track scroll position to determine if user is pinned to bottom
   useEffect(() => {
@@ -868,7 +876,7 @@ export function GenerationInterface({
       endFrameImageUrl?: string
     }
   ) => {
-    if (!session || !prompt.trim()) return
+    if (!session || !prompt.trim()) return null
 
     // Create pending generation ID
     const pendingId = `pending-${Date.now()}`
@@ -1052,7 +1060,7 @@ export function GenerationInterface({
           aspectRatio: parameters.aspectRatio,
           resolution: parameters.resolution,
           numOutputs: parameters.numOutputs,
-          ...(generationType === 'video' && parameters.duration && { duration: parameters.duration }),
+          ...(effectiveGenerationType === 'video' && parameters.duration && { duration: parameters.duration }),
           ...(finalReferenceImages && finalReferenceImages.length > 0 && { referenceImages: finalReferenceImages }),
           // Reference image: URL goes to referenceImageUrl, base64 goes to referenceImage
           ...(referenceImageUrl_ && { referenceImageUrl: referenceImageUrl_ }),
@@ -1066,6 +1074,7 @@ export function GenerationInterface({
       })
       
       // Success is indicated by the progress bar, no toast needed
+      return result
     } catch (error: any) {
       console.error('Generation error:', error)
       toast({
@@ -1087,7 +1096,7 @@ export function GenerationInterface({
     
     // Set parameters
     const genParams = generation.parameters as any
-    const isVideo = generationType === 'video'
+    const isVideo = effectiveGenerationType === 'video'
     const inheritedExtras: Record<string, any> = {}
     if (typeof genParams?.quality !== 'undefined') {
       inheritedExtras.quality = genParams.quality
@@ -1103,7 +1112,7 @@ export function GenerationInterface({
     } as any)
     
     // Reuse reference images
-    if (generationType === 'video') {
+    if (effectiveGenerationType === 'video') {
       // For video: use referenceImageUrl (single image or begin frame)
       if (genParams.referenceImageUrl) {
         setReferenceImageUrl(genParams.referenceImageUrl)
@@ -1241,30 +1250,86 @@ export function GenerationInterface({
   }, [clearSnapshotPrompt, setComposerMode])
 
   // ── Timeline snapshot → prompt morph ──
+  const handleTimelinePromptModelSelect = useCallback((modelId: string) => {
+    snapshotPromptHasManualOverridesRef.current = true
+    const previous = snapshotPromptOverridesRef.current
+    snapshotPromptOverridesRef.current = {
+      modelId,
+      parameters:
+        previous?.parameters ??
+        ((parameters as unknown as Record<string, unknown>) ?? {}),
+    }
+    setSelectedModel(modelId)
+  }, [parameters, setSelectedModel])
+
+  const handleTimelinePromptParametersChange = useCallback((nextParameters: any) => {
+    snapshotPromptHasManualOverridesRef.current = true
+    const previous = snapshotPromptOverridesRef.current
+    const mergedParameters = {
+      ...(previous?.parameters ?? {}),
+      ...(nextParameters ?? {}),
+    }
+    snapshotPromptOverridesRef.current = {
+      modelId: previous?.modelId ?? selectedModel,
+      parameters: mergedParameters,
+    }
+    setParameters(nextParameters)
+  }, [selectedModel, setParameters])
+
   const handleTimelineSnapshotRequest = useCallback(async (req: {
     blob: Blob; timecodeMs: number; clipId: string; trackId: string;
     isAtClipEnd: boolean; fileUrl: string; outputId: string | null;
   }) => {
     if (!session?.projectId || !req.outputId) return
     try {
-      // Inherit model + quality/resolution from the source output generation.
+      // Inherit model + quality/resolution from source output, but keep
+      // user-selected overrides sticky across snapshot iterations.
       const sourceGeneration = generations.find((gen) =>
         (gen.outputs ?? []).some((o: any) => o.id === req.outputId)
       )
-      if (sourceGeneration) {
-        const sourceParams = (sourceGeneration.parameters ?? {}) as any
-        const inheritedExtras: Record<string, any> = {}
-        if (sourceParams && typeof sourceParams.quality !== 'undefined') {
-          inheritedExtras.quality = sourceParams.quality
+      const sourceParams = (sourceGeneration?.parameters ?? {}) as Record<string, unknown>
+      const currentParams = parameters as unknown as Record<string, unknown>
+      const hasSourceVideoModel =
+        !!sourceGeneration &&
+        allModels.some((m) => m.id === sourceGeneration.modelId && m.type === 'video')
+      const preferredVideoModel = getPreferredModelIdFromList(allModels, 'video')
+      const inheritedModelId =
+        hasSourceVideoModel
+          ? sourceGeneration!.modelId
+          : (preferredVideoModel ?? selectedModel)
+
+      const inheritedParams: Record<string, unknown> = {
+        aspectRatio: sourceParams.aspectRatio ?? currentParams.aspectRatio ?? '16:9',
+        resolution: sourceParams.resolution ?? currentParams.resolution ?? 720,
+        numOutputs: sourceParams.numOutputs ?? currentParams.numOutputs ?? 1,
+        duration: sourceParams.duration ?? currentParams.duration ?? 5,
+      }
+      if (typeof sourceParams.quality !== 'undefined') {
+        inheritedParams.quality = sourceParams.quality
+      } else if (typeof currentParams.quality !== 'undefined') {
+        inheritedParams.quality = currentParams.quality
+      }
+
+      const shouldUseManualOverrides =
+        snapshotPromptHasManualOverridesRef.current && !!snapshotPromptOverridesRef.current
+      const appliedModelId =
+        shouldUseManualOverrides
+          ? snapshotPromptOverridesRef.current!.modelId
+          : inheritedModelId
+      const appliedParams: Record<string, unknown> = shouldUseManualOverrides
+        ? {
+            ...inheritedParams,
+            ...snapshotPromptOverridesRef.current!.parameters,
+          }
+        : inheritedParams
+
+      setSelectedModel(appliedModelId)
+      setParameters(appliedParams as any)
+      if (!shouldUseManualOverrides) {
+        snapshotPromptOverridesRef.current = {
+          modelId: appliedModelId,
+          parameters: appliedParams,
         }
-        setSelectedModel(sourceGeneration.modelId)
-        setParameters({
-          aspectRatio: sourceParams.aspectRatio ?? parameters.aspectRatio ?? '16:9',
-          resolution: sourceParams.resolution ?? parameters.resolution ?? 720,
-          numOutputs: sourceParams.numOutputs ?? 1,
-          duration: sourceParams.duration ?? parameters.duration ?? 5,
-          ...inheritedExtras,
-        } as any)
       }
 
       // Switch mode immediately for snappier UX, upload in background.
@@ -1321,6 +1386,8 @@ export function GenerationInterface({
   }, [
     session,
     generations,
+    allModels,
+    selectedModel,
     parameters,
     setSelectedModel,
     setParameters,
@@ -1340,28 +1407,81 @@ export function GenerationInterface({
     setComposerMode('timeline')
   }, [clearSnapshotPrompt, setComposerMode])
 
-  // Watch for completed video generations and auto-insert into timeline when
-  // the generation was triggered from a timeline snapshot.
-  const pendingTimelineInsertRef = useRef<{
-    clipId: string; trackId: string; isAtClipEnd: boolean;
-  } | null>(null)
+  // Insert a placeholder clip immediately when Generate is clicked, then poll
+  // the generation and swap the placeholder for the real video when complete.
+  const watchSnapshotGenerationAndInsert = useCallback(async (
+    generationId: string,
+    target: { clipId: string; trackId: string; isAtClipEnd: boolean },
+    placeholderDurationMs: number
+  ) => {
+    if (snapshotInsertionWatchersRef.current.has(generationId)) return
+    snapshotInsertionWatchersRef.current.add(generationId)
 
-  useEffect(() => {
-    if (composerMode !== 'timeline' || !pendingTimelineInsertRef.current) return
-    const pending = pendingTimelineInsertRef.current
-    const latestGen = generations[generations.length - 1]
-    if (!latestGen || latestGen.status !== 'completed') return
-    const videoOutput = latestGen.outputs?.find((o: any) => o.fileType === 'video')
-    if (!videoOutput) return
+    const placeholderUrl = `placeholder:${generationId}`
+    const placeholderOutputId = `pending-${generationId}`
 
-    const durationMs = videoOutput.duration ? Math.round(videoOutput.duration * 1000) : 5000
-    const inserted = insertVideoClipTargeted(
-      videoOutput.fileUrl, videoOutput.id, durationMs,
-      pending.isAtClipEnd ? 'sameTrackAfter' : 'newTrackAbove',
-      pending.clipId, pending.trackId
+    insertVideoClipTargeted(
+      placeholderUrl,
+      placeholderOutputId,
+      placeholderDurationMs,
+      target.isAtClipEnd ? 'sameTrackAfter' : 'newTrackAbove',
+      target.clipId,
+      target.trackId
     )
-    if (inserted) pendingTimelineInsertRef.current = null
-  }, [composerMode, generations, insertVideoClipTargeted])
+
+    try {
+      const maxAttempts = 90
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+
+        const response = await fetch(`/api/generations/${generationId}`, { cache: 'no-store' })
+        if (!response.ok) continue
+
+        const generation = await response.json()
+        const status = generation?.status as string | undefined
+        const outputs = (generation?.outputs ?? []) as Array<any>
+
+        if (status === 'completed') {
+          const selectedOutput =
+            outputs.find((o: any) => o.fileType === 'video' && typeof o.fileUrl === 'string') ??
+            outputs.find((o: any) => typeof o.fileUrl === 'string')
+
+          if (selectedOutput?.fileUrl) {
+            const realDurationMs =
+              typeof selectedOutput.duration === 'number'
+                ? Math.round(selectedOutput.duration * 1000)
+                : placeholderDurationMs
+
+            const seq = useTimelineStore.getState().sequence
+            const placeholderClip = seq?.tracks
+              .flatMap((t) => t.clips)
+              .find((c) => c.fileUrl === placeholderUrl)
+
+            if (placeholderClip) {
+              replaceClip(placeholderClip.id, selectedOutput.fileUrl, selectedOutput.id, realDurationMs)
+            } else {
+              insertVideoClip(selectedOutput.fileUrl, selectedOutput.id, realDurationMs)
+            }
+          }
+          return
+        }
+
+        if (status === 'failed' || status === 'dismissed' || status === 'cancelled') {
+          const seq = useTimelineStore.getState().sequence
+          if (seq) {
+            const newTracks = seq.tracks.map((track) => ({
+              ...track,
+              clips: track.clips.filter((c) => c.fileUrl !== placeholderUrl),
+            }))
+            useTimelineStore.getState().setSequence({ ...seq, tracks: newTracks })
+          }
+          return
+        }
+      }
+    } finally {
+      snapshotInsertionWatchersRef.current.delete(generationId)
+    }
+  }, [insertVideoClipTargeted, insertVideoClip, replaceClip])
 
   // Get video sessions
   const videoSessions = allSessions.filter(s => s.type === 'video')
@@ -1533,49 +1653,64 @@ export function GenerationInterface({
                 isPromptMode={isTimelinePromptMode}
                 timelinePromptSlot={isTimelinePromptMode ? (
                   <div className="prompt-from-timeline space-y-2">
-                    <div className="relative">
-                      <div className="px-2 py-1 rounded-md border border-primary/30 bg-primary/10 w-[calc(100%-8.5rem)]">
+                    <div className="flex items-center gap-3">
+                      <div className="px-2 py-1 rounded-md border border-primary/30 bg-primary/10 flex-1">
                         <span className="text-[10px] text-primary/90 font-mono uppercase tracking-wider">
                           Snapshot Prompt Mode
                         </span>
                       </div>
                       <button
                         onClick={handleReturnToTimeline}
-                        className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] px-2 py-0.5 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+                        className="w-[112px] inline-flex items-center justify-center gap-1 text-[10px] px-2 py-1 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
                       >
+                        <Undo2 className="h-3 w-3" />
                         Back to timeline
                       </button>
                     </div>
                     <VideoInput
-                      variant="overlay"
+                      variant="default"
                       prompt={prompt}
                       onPromptChange={setPrompt}
                       onGenerate={async (promptText, options) => {
                         const snapState = useTimelineStore.getState().snapshotPrompt
-                        if (snapState.clipId && snapState.trackId) {
-                          pendingTimelineInsertRef.current = {
-                            clipId: snapState.clipId,
-                            trackId: snapState.trackId,
-                            isAtClipEnd: snapState.isAtClipEnd,
-                          }
-                        }
+                        const insertionTarget =
+                          snapState.clipId && snapState.trackId
+                            ? {
+                                clipId: snapState.clipId,
+                                trackId: snapState.trackId,
+                                isAtClipEnd: snapState.isAtClipEnd,
+                              }
+                            : null
                         const snapUrl = snapState.snapshotUrl
                         const snapIsHttp = typeof snapUrl === 'string' && snapUrl.startsWith('http')
-                        await handleGenerate(promptText, {
+                        const generated = await handleGenerate(promptText, {
                           ...options,
                           referenceImageUrl: snapIsHttp ? snapUrl : options?.referenceImageUrl,
                           ...(snapIsHttp ? {} : { referenceImage: timelineSnapshotFileRef.current ?? options?.referenceImage }),
                         })
+                        if (insertionTarget && generated?.id) {
+                          const durationSec = (parameters as any).duration ?? 5
+                          void watchSnapshotGenerationAndInsert(
+                            generated.id,
+                            insertionTarget,
+                            durationSec * 1000
+                          )
+                        }
                         handleReturnToTimeline()
                       }}
                       parameters={parameters}
-                      onParametersChange={setParameters}
+                      onParametersChange={handleTimelinePromptParametersChange}
                       selectedModel={selectedModel}
-                      onModelSelect={setSelectedModel}
+                      onModelSelect={handleTimelinePromptModelSelect}
                       referenceImageUrl={snapshotPrompt.snapshotUrl || referenceImageUrl}
                       onClearReferenceImage={() => { handleReturnToTimeline() }}
                       onSetReferenceImageUrl={setReferenceImageUrl}
                       onRegisterPasteHandler={registerPasteHandler}
+                      hideSnapshotRail
+                      hideEndFrame
+                      hideStartFrame
+                      hideReferencePicker
+                      lockedReferenceImage
                     />
                   </div>
                 ) : undefined}

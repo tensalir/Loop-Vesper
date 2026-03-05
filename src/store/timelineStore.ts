@@ -58,6 +58,7 @@ interface TimelineStore {
     referenceClipId: string, referenceTrackId: string,
     startMs?: number
   ) => boolean
+  replaceClip: (clipId: string, fileUrl: string, outputId: string, durationMs?: number) => boolean
   resetTimeline: () => void
 }
 
@@ -196,6 +197,39 @@ export const useTimelineStore = create<TimelineStore>()(
           },
           false,
           'insertVideoClipTargeted'
+        )
+        return true
+      },
+
+      replaceClip: (clipId, fileUrl, outputId, durationMs) => {
+        const currentSequence = get().sequence
+        if (!currentSequence) return false
+        let found = false
+        const tracks = currentSequence.tracks.map((track) => ({
+          ...track,
+          clips: track.clips.map((clip) => {
+            if (clip.id !== clipId) return clip
+            found = true
+            const newEndMs = durationMs != null ? clip.startMs + durationMs : clip.endMs
+            const newSourceDurationMs = durationMs ?? clip.sourceDurationMs
+            return {
+              ...clip,
+              fileUrl,
+              outputId,
+              endMs: newEndMs,
+              sourceDurationMs: newSourceDurationMs,
+              outPointMs: newSourceDurationMs,
+            }
+          }),
+        }))
+        if (!found) return false
+        set(
+          {
+            sequence: { ...currentSequence, tracks, durationMs: computeSequenceDuration(tracks) },
+            isDirty: true,
+          },
+          false,
+          'replaceClip'
         )
         return true
       },
