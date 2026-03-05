@@ -24,6 +24,7 @@ const LABEL_WIDTH = 80
 
 export interface SnapshotRequest {
   blob: Blob
+  timelineMs: number
   timecodeMs: number
   clipId: string
   trackId: string
@@ -427,6 +428,7 @@ export function TimelineEditor({
     const isAtEnd = (clip.endMs - clampTargetMs) <= clipEndThreshold
     onSnapshotRequest({
       blob: frame.blob,
+      timelineMs: clampTargetMs,
       timecodeMs: Math.round(localMs),
       clipId: clip.id,
       trackId,

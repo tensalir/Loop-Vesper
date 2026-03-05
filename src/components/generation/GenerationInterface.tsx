@@ -1300,7 +1300,7 @@ export function GenerationInterface({
   }, [selectedModel, setParameters])
 
   const handleTimelineSnapshotRequest = useCallback(async (req: {
-    blob: Blob; timecodeMs: number; clipId: string; trackId: string;
+    blob: Blob; timelineMs: number; timecodeMs: number; clipId: string; trackId: string;
     isAtClipEnd: boolean; fileUrl: string; outputId: string | null;
   }) => {
     if (!session?.projectId || !req.outputId) return
@@ -1367,7 +1367,7 @@ export function GenerationInterface({
 
       setSnapshotPrompt({
         snapshotUrl: localUrl, clipId: req.clipId, trackId: req.trackId,
-        timecodeMs: req.timecodeMs, isAtClipEnd: req.isAtClipEnd,
+        timelineMs: req.timelineMs, timecodeMs: req.timecodeMs, isAtClipEnd: req.isAtClipEnd,
         outputId: req.outputId,
       })
       setReferenceImageUrl(localUrl)
@@ -1394,6 +1394,7 @@ export function GenerationInterface({
         snapshotUrl: uploadedUrl,
         clipId: req.clipId,
         trackId: req.trackId,
+        timelineMs: req.timelineMs,
         timecodeMs: req.timecodeMs,
         isAtClipEnd: req.isAtClipEnd,
         outputId: req.outputId,
@@ -1434,7 +1435,7 @@ export function GenerationInterface({
   // the generation and swap the placeholder for the real video when complete.
   const watchSnapshotGenerationAndInsert = useCallback(async (
     generationId: string,
-    target: { clipId: string; trackId: string; isAtClipEnd: boolean },
+    target: { clipId: string; trackId: string; isAtClipEnd: boolean; timelineMs: number },
     placeholderDurationMs: number
   ) => {
     if (snapshotInsertionWatchersRef.current.has(generationId)) return
@@ -1449,7 +1450,8 @@ export function GenerationInterface({
       placeholderDurationMs,
       target.isAtClipEnd ? 'sameTrackAfter' : 'newTrackAbove',
       target.clipId,
-      target.trackId
+      target.trackId,
+      target.isAtClipEnd ? undefined : target.timelineMs
     )
 
     try {
@@ -1717,6 +1719,7 @@ export function GenerationInterface({
                                 clipId: snapState.clipId,
                                 trackId: snapState.trackId,
                                 isAtClipEnd: snapState.isAtClipEnd,
+                                timelineMs: snapState.timelineMs,
                               }
                             : null
                         const snapUrl = snapState.snapshotUrl

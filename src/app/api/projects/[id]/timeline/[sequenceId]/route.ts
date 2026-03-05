@@ -4,6 +4,15 @@ import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 
 const TIMELINE_MAX_DURATION_MS = 120_000
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID_REGEX.test(value)
+}
+
+function ensureUuid(value: unknown): string {
+  return isUuid(value) ? value : crypto.randomUUID()
+}
 
 async function verifySequenceAccess(sequenceId: string, userId: string) {
   return prisma.timelineSequence.findFirst({
@@ -138,11 +147,18 @@ export async function PATCH(
       // Replace tracks + clips + captions if provided
       if (Array.isArray(tracks)) {
         await tx.timelineTrack.deleteMany({ where: { sequenceId: params.sequenceId } })
+        const clipIdMap = new Map<string, string>()
 
-        for (const track of tracks) {
+        for (let trackIndex = 0; trackIndex < tracks.length; trackIndex++) {
+          const track = tracks[trackIndex]
+          const clientTrackId =
+            typeof track?.id === 'string' && track.id.length > 0
+              ? track.id
+              : `track-${trackIndex}-${crypto.randomUUID()}`
+          const persistedTrackId = ensureUuid(clientTrackId)
           const createdTrack = await tx.timelineTrack.create({
             data: {
-              id: track.id,
+              id: persistedTrackId,
               sequenceId: params.sequenceId,
               kind: track.kind,
               label: track.label || 'Track',
@@ -151,28 +167,40 @@ export async function PATCH(
             },
           })
 
-          if (Array.isArray(track.clips)) {
+          if (Array.isArray(track.clips) && track.clips.length > 0) {
             await tx.timelineClip.createMany({
-              data: track.clips.map((clip: any) => ({
-                id: clip.id,
-                trackId: createdTrack.id,
-                outputId: clip.outputId || null,
-                fileUrl: clip.fileUrl,
-                fileType: clip.fileType,
-                startMs: clip.startMs,
-                endMs: clip.endMs,
-                inPointMs: clip.inPointMs ?? 0,
-                outPointMs: clip.outPointMs,
-                sourceDurationMs: clip.sourceDurationMs,
-                sortOrder: clip.sortOrder ?? 0,
-              })),
+              data: track.clips.map((clip: any, clipIndex: number) => {
+                const clientClipId =
+                  typeof clip?.id === 'string' && clip.id.length > 0
+                    ? clip.id
+                    : `clip-${trackIndex}-${clipIndex}-${crypto.randomUUID()}`
+                const persistedClipId = ensureUuid(clientClipId)
+                clipIdMap.set(clientClipId, persistedClipId)
+                return {
+                  id: persistedClipId,
+                  trackId: createdTrack.id,
+                  outputId: isUuid(clip.outputId) ? clip.outputId : null,
+                  fileUrl: clip.fileUrl,
+                  fileType: clip.fileType,
+                  startMs: clip.startMs,
+                  endMs: clip.endMs,
+                  inPointMs: clip.inPointMs ?? 0,
+                  outPointMs: clip.outPointMs,
+                  sourceDurationMs: clip.sourceDurationMs,
+                  sortOrder: clip.sortOrder ?? 0,
+                }
+              }),
             })
           }
 
-          if (Array.isArray(track.captions)) {
+          if (Array.isArray(track.captions) && track.captions.length > 0) {
             await tx.timelineCaption.createMany({
-              data: track.captions.map((cap: any) => ({
-                id: cap.id,
+              data: track.captions.map((cap: any, captionIndex: number) => ({
+                id: ensureUuid(
+                  typeof cap?.id === 'string' && cap.id.length > 0
+                    ? cap.id
+                    : `caption-${trackIndex}-${captionIndex}-${crypto.randomUUID()}`
+                ),
                 trackId: createdTrack.id,
                 text: cap.text,
                 startMs: cap.startMs,
@@ -188,16 +216,42 @@ export async function PATCH(
       if (Array.isArray(transitions)) {
         await tx.timelineTransition.deleteMany({ where: { sequenceId: params.sequenceId } })
         if (transitions.length > 0) {
+          const normalizedTransitions = transitions
+            .map((t: any, transitionIndex: number) => {
+              const fromClipId =
+                clipIdMap.get(t.fromClipId) ??
+                (isUuid(t.fromClipId) ? t.fromClipId : null)
+              const toClipId =
+                clipIdMap.get(t.toClipId) ??
+                (isUuid(t.toClipId) ? t.toClipId : null)
+              if (!fromClipId || !toClipId) return null
+              return {
+                id: ensureUuid(
+                  typeof t?.id === 'string' && t.id.length > 0
+                    ? t.id
+                    : `transition-${transitionIndex}-${crypto.randomUUID()}`
+                ),
+                sequenceId: params.sequenceId,
+                type: t.type || 'cross_dissolve',
+                fromClipId,
+                toClipId,
+                durationMs: t.durationMs ?? 500,
+              }
+            })
+            .filter((transition): transition is {
+              id: string
+              sequenceId: string
+              type: string
+              fromClipId: string
+              toClipId: string
+              durationMs: number
+            } => transition !== null)
+
+          if (normalizedTransitions.length > 0) {
           await tx.timelineTransition.createMany({
-            data: transitions.map((t: any) => ({
-              id: t.id,
-              sequenceId: params.sequenceId,
-              type: t.type || 'cross_dissolve',
-              fromClipId: t.fromClipId,
-              toClipId: t.toClipId,
-              durationMs: t.durationMs ?? 500,
-            })),
+              data: normalizedTransitions,
           })
+          }
         }
       }
 

@@ -24,7 +24,7 @@ interface TimelineShellProps {
   projectId: string
   className?: string
   onSnapshotRequest?: (req: {
-    blob: Blob; timecodeMs: number; clipId: string; trackId: string;
+    blob: Blob; timelineMs: number; timecodeMs: number; clipId: string; trackId: string;
     isAtClipEnd: boolean; fileUrl: string; outputId: string | null;
   }) => void
   isPromptMode?: boolean

@@ -24,6 +24,7 @@ interface TimelineStore {
     snapshotUrl: string | null
     clipId: string | null
     trackId: string | null
+    timelineMs: number
     timecodeMs: number
     isAtClipEnd: boolean
     outputId: string | null
@@ -77,7 +78,7 @@ export const useTimelineStore = create<TimelineStore>()(
       isDirty: false,
       snapshotPrompt: {
         snapshotUrl: null, clipId: null, trackId: null,
-        timecodeMs: 0, isAtClipEnd: false, outputId: null,
+        timelineMs: 0, timecodeMs: 0, isAtClipEnd: false, outputId: null,
       },
       isLibraryOpen: false,
       isExportPanelOpen: false,
@@ -112,7 +113,7 @@ export const useTimelineStore = create<TimelineStore>()(
       markClean: () => set({ isDirty: false }, false, 'markClean'),
       setSnapshotPrompt: (snap) => set({ snapshotPrompt: snap }, false, 'setSnapshotPrompt'),
       clearSnapshotPrompt: () => set({
-        snapshotPrompt: { snapshotUrl: null, clipId: null, trackId: null, timecodeMs: 0, isAtClipEnd: false, outputId: null },
+        snapshotPrompt: { snapshotUrl: null, clipId: null, trackId: null, timelineMs: 0, timecodeMs: 0, isAtClipEnd: false, outputId: null },
       }, false, 'clearSnapshotPrompt'),
       setLibraryOpen: (open) => set({ isLibraryOpen: open }, false, 'setLibraryOpen'),
       setExportPanelOpen: (open) => set({ isExportPanelOpen: open }, false, 'setExportPanelOpen'),
@@ -247,7 +248,7 @@ export const useTimelineStore = create<TimelineStore>()(
             isDirty: false,
             snapshotPrompt: {
               snapshotUrl: null, clipId: null, trackId: null,
-              timecodeMs: 0, isAtClipEnd: false, outputId: null,
+              timelineMs: 0, timecodeMs: 0, isAtClipEnd: false, outputId: null,
             },
             isLibraryOpen: false,
             isExportPanelOpen: false,
