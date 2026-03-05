@@ -172,6 +172,7 @@ export function GenerationInterface({
     parameters: Record<string, unknown>
   } | null>(null)
   const snapshotPromptHasManualOverridesRef = useRef(false)
+  const timelineVideoSessionIdRef = useRef<string | null>(null)
   
   // State for pasted images (passed to input components)
   const [pastedImageFiles, setPastedImageFiles] = useState<File[]>([])
@@ -1051,8 +1052,30 @@ export function GenerationInterface({
         extraModelParams.quality = typedParameters.quality
       }
 
+      let targetSessionId = session.id
+      if (isTimelineMode) {
+        if (session.type === 'video') {
+          targetSessionId = session.id
+        } else if (timelineVideoSessionIdRef.current) {
+          targetSessionId = timelineVideoSessionIdRef.current
+        } else {
+          const existingVideoSession = videoSessions[0]
+          if (existingVideoSession) {
+            targetSessionId = existingVideoSession.id
+            timelineVideoSessionIdRef.current = existingVideoSession.id
+          } else if (onSessionCreate) {
+            const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            const newSession = await onSessionCreate('video', `Video - ${dateStr}`, { skipSwitch: true })
+            if (newSession) {
+              targetSessionId = newSession.id
+              timelineVideoSessionIdRef.current = newSession.id
+            }
+          }
+        }
+      }
+
       const result = await generateMutation.mutateAsync({
-        sessionId: session.id,
+        sessionId: targetSessionId,
         modelId: selectedModel,
         prompt,
         parameters: {
@@ -1351,20 +1374,20 @@ export function GenerationInterface({
       setPrompt('')
       setComposerMode('timelinePrompt')
 
+      // Upload snapshot as a plain reference image (no Generation/Output record).
+      // This prevents timeline snapshots from appearing in any session gallery.
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('timecodeMs', String(req.timecodeMs))
-      if (session?.id) formData.append('sessionId', session.id)
+      formData.append('purpose', 'reference')
 
-      const res = await fetch(`/api/outputs/${req.outputId}/snapshots`, {
+      const res = await fetch('/api/upload/reference-image', {
         method: 'POST', body: formData, credentials: 'include',
       })
       if (!res.ok) throw new Error('Snapshot upload failed')
       const data = await res.json()
-      const uploadedUrl = data.output?.fileUrl
+      const uploadedUrl = data?.url as string | undefined
       if (!uploadedUrl) return
 
-      // Ignore stale async responses from older clicks.
       if (flowId !== snapshotFlowIdRef.current) return
 
       setSnapshotPrompt({
@@ -1526,9 +1549,24 @@ export function GenerationInterface({
       deduped.push(gen)
     }
     
-    // Reverse so oldest is at top, newest at bottom
-    return deduped.reverse()
-  }, [generations])
+    const isVideoGeneration = (gen: GenerationWithOutputs) => {
+      if (gen.outputs && gen.outputs.length > 0) {
+        return gen.outputs.some((output) => output.fileType === 'video')
+      }
+      const modelType = allModels.find((m) => m.id === gen.modelId)?.type
+      return modelType === 'video'
+    }
+
+    // Reverse so oldest is at top, newest at bottom.
+    // Also filter out internal snapshot-capture records and cross-type items.
+    return deduped
+      .filter((gen) => gen.modelId !== 'snapshot-capture')
+      .filter((gen) => {
+        const videoGen = isVideoGeneration(gen)
+        return generationType === 'video' ? videoGen : !videoGen
+      })
+      .reverse()
+  }, [allModels, generationType, generations])
 
   if (!session) {
     return (
