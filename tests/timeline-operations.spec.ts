@@ -438,3 +438,23 @@ test.describe('Track removal and cleanup', () => {
     expect(computeSequenceDuration(tracks)).toBe(3000)
   })
 })
+
+test.describe('Mixed-media insert', () => {
+  test('insertClip accepts image fileType with 5s default', () => {
+    const track = createTrack('video', 'V1', 0)
+    const { track: updated, clip } = insertClip(track, 'http://img.png', 'image', 5000, 'out-1')
+    expect(clip.fileType).toBe('image')
+    expect(clip.sourceDurationMs).toBe(5000)
+    expect(clip.endMs - clip.startMs).toBe(5000)
+    expect(updated.clips).toHaveLength(1)
+  })
+
+  test('mixed video and image clips compute correct duration', () => {
+    const track = createTrack('video', 'V1', 0)
+    const { track: t1 } = insertClip(track, 'http://v.mp4', 'video', 8000, 'out-v')
+    const { track: t2 } = insertClip(t1, 'http://img.png', 'image', 5000, 'out-i')
+    expect(computeSequenceDuration([t2])).toBe(13000)
+    expect(t2.clips[0].fileType).toBe('video')
+    expect(t2.clips[1].fileType).toBe('image')
+  })
+})

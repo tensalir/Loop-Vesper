@@ -38,7 +38,12 @@ export function TimelineShell({
   isPromptMode = false,
   timelinePromptSlot,
 }: TimelineShellProps) {
-  const { sequence, setSequence, setLibraryOpen, setLibraryInsertTarget, finishModeSwitch, resetTimeline } = useTimelineStore()
+  const sequence = useTimelineStore((s) => s.sequence)
+  const setSequence = useTimelineStore((s) => s.setSequence)
+  const setLibraryOpen = useTimelineStore((s) => s.setLibraryOpen)
+  const setLibraryInsertTarget = useTimelineStore((s) => s.setLibraryInsertTarget)
+  const finishModeSwitch = useTimelineStore((s) => s.finishModeSwitch)
+  const resetTimeline = useTimelineStore((s) => s.resetTimeline)
   const { data: sequences, isLoading, refetch: refetchSequences } = useTimelineSequences(projectId)
   const createMutation = useCreateSequence(projectId)
   const deleteMutation = useDeleteSequence(projectId)

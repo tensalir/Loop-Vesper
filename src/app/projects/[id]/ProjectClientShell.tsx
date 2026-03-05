@@ -128,6 +128,7 @@ export function ProjectClientShell({
   const [updating, setUpdating] = useState(false)
   const [activeSession, setActiveSession] = useState<Session | null>(null)
   const [generationType, setGenerationType] = useState<'image' | 'video'>('image')
+  const [surfaceMode, setSurfaceMode] = useState<'image' | 'video' | 'editor'>('image')
   // Track last active session ID for each type so we can restore it when switching tabs
   const lastActiveSessionByTypeRef = useRef<{ image: string | null; video: string | null }>({
     image: null,
@@ -576,6 +577,7 @@ export function ProjectClientShell({
 
   const handleGenerationTypeChange = (type: 'image' | 'video') => {
     setGenerationType(type)
+    setSurfaceMode(type)
     const sessionsOfType = sessions.filter((s) => s.type === type)
     
     // Try to restore the last active session for this type
@@ -590,6 +592,13 @@ export function ProjectClientShell({
     
     // Fall back to first session of this type (sorted by updatedAt)
     setActiveSession(sessionsOfType[0] || null)
+  }
+
+  const handleSurfaceModeChange = (mode: 'image' | 'video' | 'editor') => {
+    setSurfaceMode(mode)
+    if (mode !== 'editor') {
+      handleGenerationTypeChange(mode)
+    }
   }
 
   const handleSessionRename = async (session: Session, newName: string) => {
@@ -781,7 +790,13 @@ export function ProjectClientShell({
               sessions={sessions}
               activeSession={activeSession}
               generationType={generationType}
-              onSessionSelect={setActiveSession}
+              onSessionSelect={(session) => {
+                setActiveSession(session)
+                if (surfaceMode === 'editor') {
+                  setSurfaceMode(session.type)
+                  setGenerationType(session.type)
+                }
+              }}
               onSessionCreate={handleSessionCreate}
               onSessionRename={canManageSessions ? handleSessionRename : undefined}
               onSessionDelete={canManageSessions ? handleSessionDelete : undefined}
@@ -793,6 +808,9 @@ export function ProjectClientShell({
         <GenerationInterface
           session={activeSession}
           generationType={generationType}
+          surfaceMode={surfaceMode}
+          onSurfaceModeChange={handleSurfaceModeChange}
+          projectId={projectId}
           allSessions={sessions}
           onSessionCreate={handleSessionCreate}
           onSessionSwitch={handleSessionSwitch}

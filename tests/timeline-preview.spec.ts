@@ -152,3 +152,31 @@ test.describe('resolvePreviewClip — ignores non-video and muted tracks', () =>
     expect(clip!.fileUrl).toBe('http://v.mp4')
   })
 })
+
+test.describe('resolvePreviewClip — image clips', () => {
+  test('resolves an image clip on a video track', () => {
+    const track = createTrack('video', 'V1', 0)
+    track.sequenceId = 'seq'
+    const { track: t1 } = insertClip(track, 'http://img.png', 'image', 5000)
+
+    const clip = resolvePreviewClip([t1], 2500)
+    expect(clip).not.toBeNull()
+    expect(clip!.fileUrl).toBe('http://img.png')
+    expect(clip!.fileType).toBe('image')
+  })
+
+  test('image clip on higher track wins over video on lower track', () => {
+    const lower = createTrack('video', 'Bot', 0)
+    lower.sequenceId = 'seq'
+    const { track: lTrack } = insertClip(lower, 'http://v.mp4', 'video', 10000)
+
+    const upper = createTrack('video', 'Top', 1)
+    upper.sequenceId = 'seq'
+    const { track: uTrack } = insertClip(upper, 'http://overlay.png', 'image', 5000)
+
+    const clip = resolvePreviewClip([lTrack, uTrack], 2500)
+    expect(clip).not.toBeNull()
+    expect(clip!.fileUrl).toBe('http://overlay.png')
+    expect(clip!.fileType).toBe('image')
+  })
+})

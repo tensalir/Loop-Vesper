@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState, useEffect, useLayoutEffect, useMemo, type ReactNode } from 'react'
+import { useCallback, useRef, useState, useEffect, useLayoutEffect, useMemo, memo, type ReactNode } from 'react'
 import {
   Scissors, Type, MousePointer2, Play, Pause, SkipBack,
   FolderOpen, Download, Plus, ZoomIn, ZoomOut,
@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 import { useTimelineStore } from '@/store/timelineStore'
 import { msToTimecode, type TimelineTrack, type TimelineClip, type TimelineTransition, type TimelineSequence } from '@/types/timeline'
 import {
-  createTrack, splitClipAtPlayhead, removeClip,
+  createTrack, insertClip, splitClipAtPlayhead, removeClip,
   addCrossDissolve, addCaption,
   computeSequenceDuration,
   trimClipLeft, trimClipRight,
@@ -21,6 +21,8 @@ import {
 } from '@/lib/timeline/operations'
 import { captureCurrentFrameAsync } from '@/lib/video/captureFrame'
 import { resolvePreviewClip } from '@/lib/timeline/preview'
+import { TimelineGallery, TIMELINE_GALLERY_DRAG_MIME } from './TimelineGallery'
+import type { ProjectOutput } from '@/hooks/useTimelineOutputs'
 
 const LABEL_WIDTH = 80
 const CLIP_JOIN_TOLERANCE_MS = 1
@@ -59,13 +61,28 @@ export function TimelineEditor({
   onSwitchSequence, onRenameSequence, onDeleteSequence, isCreating, className,
   onSnapshotRequest, flushNow, isSaving, isPromptMode = false, timelinePromptSlot,
 }: TimelineEditorProps) {
-  const {
-    sequence, playheadMs, zoom, scrollLeftMs, isPlaying, activeTool,
-    selectedClipId, selectedTrackId, isExportPanelOpen, snapshotPrompt,
-    setSequence, setPlayheadMs, setZoom, setScrollLeftMs, setIsPlaying,
-    setActiveTool, setSelectedClipId, setSelectedTrackId,
-    setExportPanelOpen, markDirty, isDirty, finishModeSwitch,
-  } = useTimelineStore()
+  const sequence = useTimelineStore((s) => s.sequence)
+  const playheadMs = useTimelineStore((s) => s.playheadMs)
+  const zoom = useTimelineStore((s) => s.zoom)
+  const scrollLeftMs = useTimelineStore((s) => s.scrollLeftMs)
+  const isPlaying = useTimelineStore((s) => s.isPlaying)
+  const activeTool = useTimelineStore((s) => s.activeTool)
+  const selectedClipId = useTimelineStore((s) => s.selectedClipId)
+  const selectedTrackId = useTimelineStore((s) => s.selectedTrackId)
+  const isExportPanelOpen = useTimelineStore((s) => s.isExportPanelOpen)
+  const snapshotPrompt = useTimelineStore((s) => s.snapshotPrompt)
+  const isDirty = useTimelineStore((s) => s.isDirty)
+  const setSequence = useTimelineStore((s) => s.setSequence)
+  const setPlayheadMs = useTimelineStore((s) => s.setPlayheadMs)
+  const setZoom = useTimelineStore((s) => s.setZoom)
+  const setScrollLeftMs = useTimelineStore((s) => s.setScrollLeftMs)
+  const setIsPlaying = useTimelineStore((s) => s.setIsPlaying)
+  const setActiveTool = useTimelineStore((s) => s.setActiveTool)
+  const setSelectedClipId = useTimelineStore((s) => s.setSelectedClipId)
+  const setSelectedTrackId = useTimelineStore((s) => s.setSelectedTrackId)
+  const setExportPanelOpen = useTimelineStore((s) => s.setExportPanelOpen)
+  const markDirty = useTimelineStore((s) => s.markDirty)
+  const finishModeSwitch = useTimelineStore((s) => s.finishModeSwitch)
 
   const tracksAreaRef = useRef<HTMLDivElement>(null)
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -79,6 +96,8 @@ export function TimelineEditor({
   const renameInputRef = useRef<HTMLInputElement>(null)
   const seqMenuRef = useRef<HTMLDivElement>(null)
   const isDraggingPlayheadRef = useRef(false)
+  const [stagedPreview, setStagedPreview] = useState<ProjectOutput | null>(null)
+  const stagedVideoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -137,10 +156,12 @@ export function TimelineEditor({
     [sequence, playheadMs],
   )
 
+  const isPreviewImage = previewClip?.fileType === 'image'
+
   useLayoutEffect(() => {
     const video = previewVideoRef.current
     if (!video) return
-    if (!previewClip) { video.pause(); return }
+    if (!previewClip || isPreviewImage) { video.pause(); return }
 
     const targetSrc = previewClip.fileUrl
     const srcChanged = activePreviewSrcRef.current !== targetSrc
@@ -217,18 +238,28 @@ export function TimelineEditor({
     return Math.max(0, ms)
   }, [viewDurationMs, scrollLeftMs])
 
-  // ── Draggable playhead ──
+  // ── Draggable playhead (rAF-throttled) ──
+  const scrubRafRef = useRef<number>(0)
   const handlePlayheadDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     isDraggingPlayheadRef.current = true
     setIsPlaying(false)
+    let pendingX = e.clientX
+    const tick = () => {
+      if (!isDraggingPlayheadRef.current) return
+      setPlayheadMs(pxToMs(pendingX))
+    }
     const onMove = (ev: MouseEvent) => {
       if (!isDraggingPlayheadRef.current) return
-      setPlayheadMs(pxToMs(ev.clientX))
+      pendingX = ev.clientX
+      cancelAnimationFrame(scrubRafRef.current)
+      scrubRafRef.current = requestAnimationFrame(tick)
     }
     const onUp = () => {
       isDraggingPlayheadRef.current = false
+      cancelAnimationFrame(scrubRafRef.current)
+      setPlayheadMs(pxToMs(pendingX))
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
       document.body.style.cursor = ''
@@ -333,6 +364,16 @@ export function TimelineEditor({
     }
     markDirty()
   }, [sequence, selectedTrackId, selectedClipId, setSequence, setSelectedTrackId, setSelectedClipId, markDirty])
+
+  const handleDropMedia = useCallback((trackId: string, fileUrl: string, outputId: string, durationMs: number, fileType: 'video' | 'image') => {
+    if (!sequence) return
+    const track = sequence.tracks.find((t) => t.id === trackId)
+    if (!track) return
+    const { track: updatedTrack } = insertClip(track, fileUrl, fileType, durationMs, outputId)
+    const newTracks = sequence.tracks.map((t) => (t.id === updatedTrack.id ? updatedTrack : t))
+    setSequence({ ...sequence, tracks: newTracks, durationMs: computeSequenceDuration(newTracks) })
+    markDirty()
+  }, [sequence, setSequence, markDirty])
 
   const handleDeleteSelected = useCallback(() => {
     if (!sequence) return
@@ -791,12 +832,14 @@ export function TimelineEditor({
       <div
         className={cn(
           'relative w-full rounded-lg bg-black/70 overflow-hidden timeline-scanline-boot',
-          isPromptMode ? 'border border-transparent' : 'border border-border/30'
+          isPromptMode ? 'border border-transparent' : 'border border-border/30',
+          stagedPreview && !isPromptMode && 'border-primary/35 shadow-[0_0_0_1px_rgba(74,222,128,0.12),0_0_24px_rgba(74,222,128,0.16)]',
         )}
-        style={{ aspectRatio: '16 / 8.2' }}
+        style={{ aspectRatio: '16 / 8.2', maxHeight: 'min(50vh, 480px)' }}
       >
         {promptReferenceUrl ? (
           <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={promptReferenceUrl}
               alt="Reference frame for generation"
@@ -806,6 +849,39 @@ export function TimelineEditor({
               Reference Frame
             </div>
           </>
+        ) : stagedPreview && !isPlaying ? (
+          <>
+            {stagedPreview.fileType === 'video' ? (
+              <video
+                ref={stagedVideoRef}
+                src={stagedPreview.fileUrl}
+                className="w-full h-full object-contain"
+                crossOrigin="anonymous"
+                muted
+                playsInline
+                preload="auto"
+                controls={false}
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={stagedPreview.fileUrl}
+                alt={stagedPreview.prompt || 'Preview'}
+                className="w-full h-full object-contain"
+              />
+            )}
+            <div className="absolute top-2 right-2 px-2 py-1 rounded bg-primary/85 text-[10px] text-primary-foreground font-mono uppercase tracking-wider">
+              Preview
+            </div>
+            <button
+              type="button"
+              onClick={() => setStagedPreview(null)}
+              className="absolute top-2 left-2 p-1 rounded bg-black/50 text-white/80 hover:bg-red-500/80 hover:text-white transition-colors"
+              title="Dismiss preview"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </>
         ) : (
           <>
             <canvas
@@ -813,15 +889,24 @@ export function TimelineEditor({
               className="absolute inset-0 w-full h-full object-contain pointer-events-none z-[1]"
               style={{ display: 'none' }}
             />
-            <video
-              ref={previewVideoRef}
-              className={cn('w-full h-full object-contain', !previewClip && 'hidden')}
-              crossOrigin="anonymous"
-              muted playsInline preload="auto"
-            />
+            {isPreviewImage && previewClip ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewClip.fileUrl}
+                alt="Image clip preview"
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <video
+                ref={previewVideoRef}
+                className={cn('w-full h-full object-contain', !previewClip && 'hidden')}
+                crossOrigin="anonymous"
+                muted playsInline preload="auto"
+              />
+            )}
             {!previewClip && (
               <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground/60 font-mono uppercase tracking-wider">
-                Add a video clip to preview
+                Add a clip to preview
               </div>
             )}
           </>
@@ -830,6 +915,22 @@ export function TimelineEditor({
           {msToTimecode(playheadMs)}
         </div>
       </div>
+
+      {/* Generated output gallery */}
+      {!isPromptMode && projectId && (
+        <TimelineGallery
+          projectId={projectId}
+          onPreview={(output) => setStagedPreview(output)}
+          onInsert={(output) => {
+            const durationMs = output.fileType === 'video' && output.duration
+              ? Math.round(output.duration * 1000)
+              : 5000
+            const store = useTimelineStore.getState()
+            store.insertVideoClip(output.fileUrl, output.id, durationMs, output.fileType)
+            setStagedPreview(null)
+          }}
+        />
+      )}
 
       {/* Controls */}
       {!isPromptMode && (
@@ -960,6 +1061,7 @@ export function TimelineEditor({
                       onInsertFromLibrary={onInsertFromLibrary}
                       onToggleMute={handleToggleMute}
                       onDeleteTrack={handleDeleteTrack}
+                      onDropMedia={handleDropMedia}
                     />
                   ))}
                   {/* Add track buttons */}
@@ -1145,11 +1247,11 @@ function TrackRuler({ durationMs, startMs = 0 }: { durationMs: number; startMs?:
 
 // ── TrackLane with trim handles and dissolve chips ──
 
-function TrackLane({
+const TrackLane = memo(function TrackLane({
   track, viewDurationMs, viewStartMs, selectedClipId, isSelectedTrack,
   onClipClick, onSelectTrack, activeTool,
   onTrim, pxToMs, transitions, onDissolveDurationChange,
-  onSnapshotAtPoint, onInsertFromLibrary, onToggleMute, onDeleteTrack,
+  onSnapshotAtPoint, onInsertFromLibrary, onToggleMute, onDeleteTrack, onDropMedia,
 }: {
   track: TimelineTrack
   viewDurationMs: number
@@ -1167,6 +1269,7 @@ function TrackLane({
   onInsertFromLibrary?: (trackId: string, afterMs: number) => void
   onToggleMute: (trackId: string) => void
   onDeleteTrack?: (trackId: string) => void
+  onDropMedia?: (trackId: string, fileUrl: string, outputId: string, durationMs: number, fileType: 'video' | 'image') => void
 }) {
   const kindColors: Record<string, { bg: string; border: string; selected: string }> = {
     video: { bg: 'bg-primary/15', border: 'border-primary/25', selected: 'border-primary ring-1 ring-primary/30' },
@@ -1218,10 +1321,33 @@ function TrackLane({
   const sortedClips = useMemo(() => [...track.clips].sort((a, b) => a.startMs - b.startMs), [track.clips])
   const [snapshotCursor, setSnapshotCursor] = useState<{ clipId: string; ratio: number } | null>(null)
 
+  const [isDragOver, setIsDragOver] = useState(false)
+
+  const handleLaneDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    const raw = e.dataTransfer.getData(TIMELINE_GALLERY_DRAG_MIME)
+    if (!raw || !onDropMedia) return
+    try {
+      const data = JSON.parse(raw) as { id: string; fileUrl: string; fileType: 'video' | 'image'; duration: number | null }
+      const durationMs = data.fileType === 'video' && data.duration
+        ? Math.round(data.duration * 1000)
+        : 5000
+      onDropMedia(track.id, data.fileUrl, data.id, durationMs, data.fileType)
+    } catch { /* ignore malformed data */ }
+  }, [onDropMedia, track.id])
+
   return (
     <div
-      className={cn('flex items-stretch h-12 border-b border-border/20 group/lane relative', isSelectedTrack && 'bg-primary/5')}
+      className={cn(
+        'flex items-stretch h-12 border-b border-border/20 group/lane relative',
+        isSelectedTrack && 'bg-primary/5',
+        isDragOver && 'bg-primary/10 ring-1 ring-primary/30 ring-inset',
+      )}
       onClick={() => onSelectTrack(track.id)}
+      onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
+      onDragLeave={() => setIsDragOver(false)}
+      onDrop={handleLaneDrop}
     >
       <div className="w-[80px] flex-shrink-0 flex items-center gap-1 px-2 border-r border-border/20">
         <GripVertical className="h-3 w-3 text-muted-foreground/30 opacity-0 group-hover/lane:opacity-100 transition-opacity cursor-grab" />
@@ -1325,6 +1451,17 @@ function TrackLane({
                     flushRight={touchesNext}
                   />
                 )}
+                {clip.fileType === 'image' && (
+                  <div className={cn(
+                    'absolute inset-0 flex overflow-hidden opacity-50 pointer-events-none',
+                    !touchesPrev && !touchesNext && 'rounded-md',
+                    touchesPrev && 'rounded-l-none',
+                    touchesNext && 'rounded-r-none',
+                  )}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={clip.fileUrl} alt="" className="h-full w-auto object-cover" draggable={false} />
+                  </div>
+                )}
                 <span className="absolute inset-0 flex items-center justify-center text-[8px] text-foreground/70 font-mono tabular-nums truncate pointer-events-none z-[1] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
                   {((clip.endMs - clip.startMs) / 1000).toFixed(1)}s
                 </span>
@@ -1395,7 +1532,7 @@ function TrackLane({
       </div>
     </div>
   )
-}
+})
 
 // ── EmptyTrackPrompt ──
 

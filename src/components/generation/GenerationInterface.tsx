@@ -85,6 +85,9 @@ const ExportPanel = dynamic(
 interface GenerationInterfaceProps {
   session: Session | null
   generationType: 'image' | 'video'
+  surfaceMode?: 'image' | 'video' | 'editor'
+  onSurfaceModeChange?: (mode: 'image' | 'video' | 'editor') => void
+  projectId?: string
   allSessions?: Session[]
   onSessionCreate?: (type: 'image' | 'video', name: string, options?: { skipSwitch?: boolean }) => Promise<Session | null>
   onSessionSwitch?: (sessionId: string) => void
@@ -108,6 +111,9 @@ interface GenerationInterfaceProps {
 export function GenerationInterface({
   session,
   generationType,
+  surfaceMode = generationType,
+  onSurfaceModeChange,
+  projectId: shellProjectId,
   allSessions = [],
   onSessionCreate,
   onSessionSwitch,
@@ -135,7 +141,8 @@ export function GenerationInterface({
   const snapshotPrompt = useTimelineStore((s) => s.snapshotPrompt)
   const setSnapshotPrompt = useTimelineStore((s) => s.setSnapshotPrompt)
   const clearSnapshotPrompt = useTimelineStore((s) => s.clearSnapshotPrompt)
-  const isTimelineMode = composerMode === 'timeline' || composerMode === 'timelinePrompt'
+  const isEditorSurface = surfaceMode === 'editor'
+  const isTimelineMode = isEditorSurface || composerMode === 'timeline' || composerMode === 'timelinePrompt'
   const isTimelinePromptMode = composerMode === 'timelinePrompt'
   const isExportPanelOpen = useTimelineStore((s) => s.isExportPanelOpen)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -1281,7 +1288,10 @@ export function GenerationInterface({
   const handleExitTimeline = useCallback(() => {
     clearSnapshotPrompt()
     setComposerMode('generate')
-  }, [clearSnapshotPrompt, setComposerMode])
+    if (isEditorSurface) {
+      onSurfaceModeChange?.(generationType)
+    }
+  }, [clearSnapshotPrompt, setComposerMode, isEditorSurface, onSurfaceModeChange, generationType])
 
   // ── Timeline snapshot → prompt morph ──
   const handleTimelinePromptModelSelect = useCallback((modelId: string) => {
@@ -1687,7 +1697,7 @@ export function GenerationInterface({
       .reverse()
   }, [allModels, generationType, generations])
 
-  if (!session) {
+  if (!session && !isEditorSurface) {
     return (
       <div className="flex-1 pl-[var(--dock-left-gutter)] flex items-center justify-center text-muted-foreground bg-grid-soft">
         <div className="text-center">
@@ -1698,114 +1708,25 @@ export function GenerationInterface({
     )
   }
 
-  return (
-    <div className="flex-1 flex flex-col relative">
-      {/* Gallery Area - Always show, even if empty. Blur/fade when timeline is active. */}
-      <div
-        ref={scrollContainerRef}
-        className={cn(
-          "flex-1 overflow-y-auto bg-grid-soft transition-all duration-350",
-          isTimelineMode && "timeline-backdrop-blur"
-        )}
-        style={{ scrollbarGutter: 'stable' }}
-      >
-        {isLoading ? (
-          // Loading state
-          <div className="h-full pl-[var(--dock-left-gutter)] flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <p className="text-lg mb-2">Loading generations...</p>
-            </div>
-          </div>
-        ) : (
-          <div ref={scrollContentRef} className={cn(
-            "pt-24 pb-72 flex justify-center",
-            "pl-[var(--dock-left-gutter)]",
-            "transition-[padding] duration-300 ease-in-out"
-          )}>
-            <div className="w-full max-w-7xl 2xl:max-w-[1400px] min-[1800px]:max-w-[1600px]">
-              {/* Sentinel at TOP for loading older items when scrolling up */}
-              <div ref={loadOlderRef} className="h-1 w-full" />
-              
-              {/* Loading indicator for older items */}
-              {isFetchingNextPage && (
-                <div className="flex justify-center py-4">
-                  <div className="text-sm text-muted-foreground">Loading older generations...</div>
-                </div>
-              )}
-              
-              {/* Show "load older" hint if there are more pages */}
-              {hasNextPage && !isFetchingNextPage && displayGenerations.length > 0 && (
-                <div className="flex justify-center py-2 mb-4">
-                  <span className="text-xs text-muted-foreground">↑ Scroll up to load older generations</span>
-                </div>
-              )}
-              
-              <GenerationGallery
-                generations={displayGenerations}
-                sessionId={session?.id || null}
-                projectId={session?.projectId || ''}
-                onReuseParameters={handleReuseParameters}
-                onRerunGeneration={handleRerunGeneration}
-                videoSessions={videoSessions}
-                onConvertToVideo={handleConvertToVideo}
-                onCreateVideoSession={onSessionCreate}
-                currentGenerationType={generationType}
-                currentUser={currentUser}
-                onDismissGeneration={handleDismissGeneration}
-                scrollContainerRef={scrollContainerRef}
-                scrollToOutputId={scrollToOutputId}
-                highlightOutputId={highlightOutputId}
-                onScrollToOutputComplete={() => setScrollToOutputId(null)}
-                onUseAsReference={(imageUrl) => {
-                  // Clear prompt and any existing images, leaving only the reference
-                  setPrompt('')
-                  if (generationType === 'video') {
-                    setReferenceImageUrl(imageUrl)
-                  } else {
-                    // Replace all existing reference images with just this one
-                    setReferenceImageUrls([imageUrl])
-                  }
-                  toast({
-                    title: 'Reference added',
-                    description: 'Prompt cleared. Image set as reference.',
-                  })
-                }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-      
-      {/* New items indicator - shown when not pinned to bottom and new items arrive */}
-      {showNewItemsIndicator && (
-        <button
-          onClick={scrollToBottom}
-          className="absolute bottom-48 left-1/2 -translate-x-1/2 z-20 px-4 py-2 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-all animate-bounce"
-        >
-          ↓ New items
-        </button>
-      )}
+  const editorProjectId = shellProjectId || session?.projectId || ''
 
-      {/* Composer Area - Floating Card at Bottom */}
-      <div className={cn(
-        "absolute bottom-[var(--dock-bottom)] left-1/2 -translate-x-1/2",
-        "w-full px-4 xl:px-6 z-30",
-        "transition-[max-width] duration-300 ease-in-out",
-        isTimelineMode
-          ? "max-w-[var(--dock-prompt-max-w-multi)]"
-          : supportsMultiImage 
-            ? "max-w-[var(--dock-prompt-max-w-multi)]" 
-            : "max-w-[var(--dock-prompt-max-w)]"
-      )}>
-        <div className="flex items-end gap-3">
-          {/* Prompt Bar / Timeline Shell — timeline prompt renders inline inside timeline tracks area */}
-          <div className={cn(
-            "flex-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl composer-surface-transition",
-            isTimelineMode ? "p-3" : "p-4"
-          )}>
-            {isTimelineMode ? (
+  if (isEditorSurface) {
+    return (
+      <div className="flex-1 flex flex-col relative">
+        {/* Editor Workspace — full-canvas timeline surface */}
+        <div className="flex-1 overflow-y-auto bg-background">
+          <div
+            className={cn(
+              "pt-16 pb-24 px-4 xl:px-6",
+              "pl-[var(--dock-left-gutter)]",
+              "flex justify-center",
+            )}
+          >
+            <div className="w-full max-w-[var(--dock-prompt-max-w-multi)]">
+              <div className="flex items-start gap-3">
+              <div className="flex-1 min-w-0 bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl p-3">
               <TimelineShell
-                projectId={session?.projectId || ''}
+                projectId={editorProjectId}
                 onSnapshotRequest={handleTimelineSnapshotRequest}
                 isPromptMode={isTimelinePromptMode}
                 timelinePromptSlot={isTimelinePromptMode ? (
@@ -1820,7 +1741,6 @@ export function GenerationInterface({
                       </button>
                     </div>
 
-                    {/* End-frame generation sub-panel */}
                     {endFrameGenOpen && (
                       <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.04] p-2.5 space-y-2">
                         <div className="flex items-center justify-between">
@@ -1862,7 +1782,6 @@ export function GenerationInterface({
                           </button>
                         </div>
 
-                        {/* Candidate thumbnails */}
                         {endFrameGenCandidates.length > 0 && (
                           <div className="flex items-center gap-1.5 overflow-x-auto py-1">
                             {endFrameGenCandidates.map((candidate) => (
@@ -1952,50 +1871,244 @@ export function GenerationInterface({
                   </div>
                 ) : undefined}
               />
+              </div>
+
+              {/* Vertical Control Bar — hugs the editor card */}
+              <div className="flex flex-col gap-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-1.5 self-end sticky top-4">
+                <button
+                  onClick={() => onSurfaceModeChange?.('image')}
+                  className="p-2 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                  title="Image generation"
+                >
+                  <ImageIcon className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => onSurfaceModeChange?.('video')}
+                  className="p-2 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                  title="Video generation"
+                >
+                  <Video className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => onSurfaceModeChange?.(generationType)}
+                  className="p-2 rounded-lg transition-all bg-primary text-primary-foreground"
+                  title="Exit editor"
+                >
+                  <Film className="h-4 w-4" />
+                </button>
+
+                <div className="flex-1 min-h-2" />
+                <div className="h-px bg-border/50 mx-1" />
+
+                <div className="relative">
+                  <button
+                    onClick={onToggleChat}
+                    className={cn(
+                      'p-2 rounded-lg transition-all relative z-50',
+                      isChatOpen
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                    )}
+                    title={isChatOpen ? "Close chat assistant" : "Open chat assistant"}
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Export Panel */}
+        {isExportPanelOpen && editorProjectId && (
+          <div className="absolute bottom-[calc(var(--dock-bottom)+260px)] right-4 xl:right-6 z-30 w-72">
+            <ExportPanel projectId={editorProjectId} />
+          </div>
+        )}
+
+        {/* Video Browse Library */}
+        {isLibraryOpen && editorProjectId && (
+          <VideoBrowseModal
+            isOpen={isLibraryOpen}
+            onClose={() => setLibraryOpen(false)}
+            projectId={editorProjectId}
+            onSelectVideo={(videoUrl, outputId, durationMs) => {
+              let inserted = false
+              const target = libraryInsertTarget
+              if (target) {
+                const refClips = useTimelineStore.getState().sequence?.tracks
+                  .find((t) => t.id === target.trackId)?.clips ?? []
+                const refClip = refClips
+                  .filter((c) => c.endMs <= target.timelineMs + 50)
+                  .sort((a, b) => b.endMs - a.endMs)[0]
+                if (refClip) {
+                  inserted = insertVideoClipTargeted(
+                    videoUrl, outputId, durationMs,
+                    'sameTrackAfter', refClip.id, target.trackId, target.timelineMs
+                  )
+                } else {
+                  inserted = insertVideoClipTargeted(
+                    videoUrl, outputId, durationMs,
+                    'sameTrackAfter', '', target.trackId, target.timelineMs
+                  )
+                }
+                setLibraryInsertTarget(null)
+              } else {
+                inserted = insertVideoClip(videoUrl, outputId, durationMs)
+              }
+              if (inserted) {
+                toast({ title: 'Video added', description: 'Clip added to timeline' })
+                setLibraryOpen(false)
+              } else {
+                toast({
+                  title: 'Could not add video',
+                  description: 'Load a timeline sequence first, then try again.',
+                  variant: 'destructive',
+                })
+              }
+            }}
+          />
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 flex flex-col relative">
+      {/* Gallery Area - Always show, even if empty. */}
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto bg-grid-soft transition-all duration-350"
+        style={{ scrollbarGutter: 'stable' }}
+      >
+        {isLoading ? (
+          // Loading state
+          <div className="h-full pl-[var(--dock-left-gutter)] flex items-center justify-center">
+            <div className="text-center text-muted-foreground">
+              <p className="text-lg mb-2">Loading generations...</p>
+            </div>
+          </div>
+        ) : (
+          <div ref={scrollContentRef} className={cn(
+            "pt-24 pb-72 flex justify-center",
+            "pl-[var(--dock-left-gutter)]",
+            "transition-[padding] duration-300 ease-in-out"
+          )}>
+            <div className="w-full max-w-7xl 2xl:max-w-[1400px] min-[1800px]:max-w-[1600px]">
+              {/* Sentinel at TOP for loading older items when scrolling up */}
+              <div ref={loadOlderRef} className="h-1 w-full" />
+              
+              {/* Loading indicator for older items */}
+              {isFetchingNextPage && (
+                <div className="flex justify-center py-4">
+                  <div className="text-sm text-muted-foreground">Loading older generations...</div>
+                </div>
+              )}
+              
+              {/* Show "load older" hint if there are more pages */}
+              {hasNextPage && !isFetchingNextPage && displayGenerations.length > 0 && (
+                <div className="flex justify-center py-2 mb-4">
+                  <span className="text-xs text-muted-foreground">↑ Scroll up to load older generations</span>
+                </div>
+              )}
+              
+              <GenerationGallery
+                generations={displayGenerations}
+                sessionId={session?.id || null}
+                projectId={session?.projectId || ''}
+                onReuseParameters={handleReuseParameters}
+                onRerunGeneration={handleRerunGeneration}
+                videoSessions={videoSessions}
+                onConvertToVideo={handleConvertToVideo}
+                onCreateVideoSession={onSessionCreate}
+                currentGenerationType={generationType}
+                currentUser={currentUser}
+                onDismissGeneration={handleDismissGeneration}
+                scrollContainerRef={scrollContainerRef}
+                scrollToOutputId={scrollToOutputId}
+                highlightOutputId={highlightOutputId}
+                onScrollToOutputComplete={() => setScrollToOutputId(null)}
+                onUseAsReference={(imageUrl) => {
+                  // Clear prompt and any existing images, leaving only the reference
+                  setPrompt('')
+                  if (generationType === 'video') {
+                    setReferenceImageUrl(imageUrl)
+                  } else {
+                    // Replace all existing reference images with just this one
+                    setReferenceImageUrls([imageUrl])
+                  }
+                  toast({
+                    title: 'Reference added',
+                    description: 'Prompt cleared. Image set as reference.',
+                  })
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+      
+      {/* New items indicator - shown when not pinned to bottom and new items arrive */}
+      {showNewItemsIndicator && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-48 left-1/2 -translate-x-1/2 z-20 px-4 py-2 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-all animate-bounce"
+        >
+          ↓ New items
+        </button>
+      )}
+
+      {/* Composer Area - Floating Card at Bottom */}
+      <div className={cn(
+        "absolute bottom-[var(--dock-bottom)] left-1/2 -translate-x-1/2",
+        "w-full px-4 xl:px-6 z-30",
+        "transition-[max-width] duration-300 ease-in-out",
+        supportsMultiImage 
+          ? "max-w-[var(--dock-prompt-max-w-multi)]" 
+          : "max-w-[var(--dock-prompt-max-w)]"
+      )}>
+        <div className="flex items-end gap-3">
+          <div className="flex-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl composer-surface-transition p-4">
+            {generationType === 'video' ? (
+              <VideoInput
+                prompt={prompt}
+                onPromptChange={setPrompt}
+                onGenerate={handleGenerate}
+                parameters={parameters}
+                onParametersChange={setParameters}
+                selectedModel={selectedModel}
+                onModelSelect={setSelectedModel}
+                referenceImageUrl={referenceImageUrl}
+                onClearReferenceImage={() => setReferenceImageUrl(null)}
+                onSetReferenceImageUrl={setReferenceImageUrl}
+                onRegisterPasteHandler={registerPasteHandler}
+              />
             ) : (
-              <>
-                {generationType === 'video' ? (
-                  <VideoInput
-                    prompt={prompt}
-                    onPromptChange={setPrompt}
-                    onGenerate={handleGenerate}
-                    parameters={parameters}
-                    onParametersChange={setParameters}
-                    selectedModel={selectedModel}
-                    onModelSelect={setSelectedModel}
-                    referenceImageUrl={referenceImageUrl}
-                    onClearReferenceImage={() => setReferenceImageUrl(null)}
-                    onSetReferenceImageUrl={setReferenceImageUrl}
-                    onRegisterPasteHandler={registerPasteHandler}
-                  />
-                ) : (
-                  <ChatInput
-                    prompt={prompt}
-                    onPromptChange={setPrompt}
-                    onGenerate={handleGenerate}
-                    parameters={parameters}
-                    onParametersChange={setParameters}
-                    generationType={generationType}
-                    selectedModel={selectedModel}
-                    onModelSelect={setSelectedModel}
-                    isGenerating={false}
-                    referenceImageUrls={referenceImageUrls}
-                    onReferenceImageUrlsChange={setReferenceImageUrls}
-                    onRegisterPasteHandler={registerPasteHandler}
-                  />
-                )}
-              </>
+              <ChatInput
+                prompt={prompt}
+                onPromptChange={setPrompt}
+                onGenerate={handleGenerate}
+                parameters={parameters}
+                onParametersChange={setParameters}
+                generationType={generationType}
+                selectedModel={selectedModel}
+                onModelSelect={setSelectedModel}
+                isGenerating={false}
+                referenceImageUrls={referenceImageUrls}
+                onReferenceImageUrlsChange={setReferenceImageUrls}
+                onRegisterPasteHandler={registerPasteHandler}
+              />
             )}
           </div>
 
           {/* Vertical Control Bar */}
           <div className="flex flex-col gap-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-1.5">
-            {/* Image/Video Toggle */}
             <button
-              onClick={() => { if (isTimelineMode) handleExitTimeline(); onGenerationTypeChange?.('image') }}
+              onClick={() => onSurfaceModeChange?.('image')}
               className={cn(
                 'p-2 rounded-lg transition-all',
-                !isTimelineMode && generationType === 'image'
+                surfaceMode === 'image'
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
               )}
@@ -2004,10 +2117,10 @@ export function GenerationInterface({
               <ImageIcon className="h-4 w-4" />
             </button>
             <button
-              onClick={() => { if (isTimelineMode) handleExitTimeline(); onGenerationTypeChange?.('video') }}
+              onClick={() => onSurfaceModeChange?.('video')}
               className={cn(
                 'p-2 rounded-lg transition-all',
-                !isTimelineMode && generationType === 'video'
+                surfaceMode === 'video'
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
               )}
@@ -2016,27 +2129,17 @@ export function GenerationInterface({
               <Video className="h-4 w-4" />
             </button>
 
-            {/* Timeline button — positioned under video, above brainstorm */}
             <button
-              onClick={() => isTimelineMode ? handleExitTimeline() : setComposerMode('timeline')}
-              className={cn(
-                'p-2 rounded-lg transition-all',
-                isTimelineMode
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-              )}
-              title={isTimelineMode ? 'Exit timeline editor' : 'Timeline editor'}
+              onClick={() => onSurfaceModeChange?.('editor')}
+              className="p-2 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-muted/60"
+              title="Editor"
             >
               <Film className="h-4 w-4" />
             </button>
 
-            {/* Spacer */}
             <div className="flex-1 min-h-2" />
-
-            {/* Divider */}
             <div className="h-px bg-border/50 mx-1" />
 
-            {/* Chat Button */}
             <div className="relative">
               <button
                 onClick={onToggleChat}
@@ -2050,62 +2153,10 @@ export function GenerationInterface({
               >
                 <MessageCircle className="h-4 w-4" />
               </button>
-              
             </div>
           </div>
         </div>
       </div>
-
-      {/* Export Panel — lazy-mounted only when user requests it (progressive disclosure) */}
-      {isTimelineMode && isExportPanelOpen && session?.projectId && (
-        <div className="absolute bottom-[calc(var(--dock-bottom)+260px)] right-4 xl:right-6 z-30 w-72">
-          <ExportPanel projectId={session.projectId} />
-        </div>
-      )}
-
-      {/* Video Browse Library — lazy-mounted only when open */}
-      {isLibraryOpen && session?.projectId && (
-        <VideoBrowseModal
-          isOpen={isLibraryOpen}
-          onClose={() => setLibraryOpen(false)}
-          projectId={session.projectId}
-          onSelectVideo={(videoUrl, outputId, durationMs) => {
-            let inserted = false
-            const target = libraryInsertTarget
-            if (target) {
-              const refClips = useTimelineStore.getState().sequence?.tracks
-                .find((t) => t.id === target.trackId)?.clips ?? []
-              const refClip = refClips
-                .filter((c) => c.endMs <= target.timelineMs + 50)
-                .sort((a, b) => b.endMs - a.endMs)[0]
-              if (refClip) {
-                inserted = insertVideoClipTargeted(
-                  videoUrl, outputId, durationMs,
-                  'sameTrackAfter', refClip.id, target.trackId, target.timelineMs
-                )
-              } else {
-                inserted = insertVideoClipTargeted(
-                  videoUrl, outputId, durationMs,
-                  'sameTrackAfter', '', target.trackId, target.timelineMs
-                )
-              }
-              setLibraryInsertTarget(null)
-            } else {
-              inserted = insertVideoClip(videoUrl, outputId, durationMs)
-            }
-            if (inserted) {
-              toast({ title: 'Video added', description: 'Clip added to timeline' })
-              setLibraryOpen(false)
-            } else {
-              toast({
-                title: 'Could not add video',
-                description: 'Load a timeline sequence first, then try again.',
-                variant: 'destructive',
-              })
-            }
-          }}
-        />
-      )}
     </div>
   )
 }

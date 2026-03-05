@@ -56,12 +56,13 @@ interface TimelineStore {
   setLibraryOpen: (open: boolean) => void
   setLibraryInsertTarget: (target: { trackId: string; timelineMs: number } | null) => void
   setExportPanelOpen: (open: boolean) => void
-  insertVideoClip: (videoUrl: string, outputId: string, durationMs: number) => boolean
+  insertVideoClip: (videoUrl: string, outputId: string, durationMs: number, fileType?: 'video' | 'image') => boolean
   insertVideoClipTargeted: (
     videoUrl: string, outputId: string, durationMs: number,
     mode: 'sameTrackAfter' | 'newTrackAbove',
     referenceClipId: string, referenceTrackId: string,
-    startMs?: number
+    startMs?: number,
+    fileType?: 'video' | 'image'
   ) => boolean
   replaceClip: (clipId: string, fileUrl: string, outputId: string, durationMs?: number) => boolean
   resetTimeline: () => void
@@ -125,7 +126,7 @@ export const useTimelineStore = create<TimelineStore>()(
       setLibraryOpen: (open) => set({ isLibraryOpen: open }, false, 'setLibraryOpen'),
       setLibraryInsertTarget: (target) => set({ libraryInsertTarget: target }, false, 'setLibraryInsertTarget'),
       setExportPanelOpen: (open) => set({ isExportPanelOpen: open }, false, 'setExportPanelOpen'),
-      insertVideoClip: (videoUrl, outputId, durationMs) => {
+      insertVideoClip: (videoUrl, outputId, durationMs, fileType = 'video') => {
         let currentSequence = get().sequence
 
         if (!currentSequence) {
@@ -154,7 +155,7 @@ export const useTimelineStore = create<TimelineStore>()(
         const { track: updatedTrack } = insertClip(
           videoTrack,
           videoUrl,
-          'video',
+          fileType,
           durationMs,
           outputId
         )
@@ -176,7 +177,7 @@ export const useTimelineStore = create<TimelineStore>()(
         return true
       },
 
-      insertVideoClipTargeted: (videoUrl, outputId, durationMs, mode, referenceClipId, referenceTrackId, startMs) => {
+      insertVideoClipTargeted: (videoUrl, outputId, durationMs, mode, referenceClipId, referenceTrackId, startMs, fileType = 'video') => {
         let currentSequence = get().sequence
         if (!currentSequence) return false
 
@@ -187,12 +188,12 @@ export const useTimelineStore = create<TimelineStore>()(
           if (!track) return false
           const refClip = track.clips.find((c) => c.id === referenceClipId)
           const insertAt = startMs ?? (refClip ? refClip.endMs : 0)
-          const { track: updatedTrack } = insertClipAt(track, videoUrl, 'video', durationMs, insertAt, outputId)
+          const { track: updatedTrack } = insertClipAt(track, videoUrl, fileType, durationMs, insertAt, outputId)
           tracks = tracks.map((t) => (t.id === updatedTrack.id ? updatedTrack : t))
         } else {
           const { tracks: reordered, newTrack } = insertTrackAbove(tracks, referenceTrackId, 'video')
           const insertAt = startMs ?? 0
-          const { track: updatedTrack } = insertClipAt(newTrack, videoUrl, 'video', durationMs, insertAt, outputId)
+          const { track: updatedTrack } = insertClipAt(newTrack, videoUrl, fileType, durationMs, insertAt, outputId)
           tracks = reordered.map((t) => (t.id === updatedTrack.id ? updatedTrack : t))
           for (let i = 0; i < tracks.length; i++) {
             tracks[i] = { ...tracks[i], sequenceId: currentSequence.id }
