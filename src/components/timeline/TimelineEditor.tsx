@@ -934,7 +934,7 @@ export function TimelineEditor({
 
       {/* Controls */}
       {!isPromptMode && (
-      <div className="flex flex-col gap-2 rounded-lg border border-border/30 bg-muted/20 px-2.5 py-2">
+      <div className="flex flex-col gap-2 rounded-lg border border-border/30 bg-card/60 px-2.5 py-2">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="font-mono text-xs text-muted-foreground tabular-nums bg-muted/30 px-2 py-1 rounded-md border border-border/30 min-w-[90px] text-center">
             {msToTimecode(playheadMs)}
@@ -1022,7 +1022,7 @@ export function TimelineEditor({
           'relative rounded-lg overflow-hidden min-h-[160px]',
           isPromptMode
             ? 'bg-transparent border border-transparent max-h-[36vh]'
-            : 'bg-muted/20 border border-border/30 timeline-glow'
+            : 'bg-card/80 border border-border/30'
         )}
       >
         {isPromptMode && timelinePromptSlot ? (

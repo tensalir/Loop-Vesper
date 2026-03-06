@@ -1713,19 +1713,18 @@ export function GenerationInterface({
   if (isEditorSurface) {
     return (
       <div className="flex-1 flex flex-col relative">
-        {/* Editor Workspace — full-canvas timeline surface */}
-        <div className="flex-1 overflow-y-auto bg-background">
+        {/* Editor Workspace — embedded in the canvas, not a panel */}
+        <div className="absolute inset-0 bg-background overflow-hidden">
           <div
             className={cn(
-              "pt-16 pb-24 px-4 xl:px-6",
+              "h-full pt-14 pb-4 px-4 xl:px-6",
               "pl-[var(--dock-left-gutter)]",
-              "flex justify-center",
+              "pr-[60px]",
             )}
           >
-            <div className="w-full max-w-[var(--dock-prompt-max-w-multi)]">
-              <div className="flex items-start gap-3">
-              <div className="flex-1 min-w-0 bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl p-3">
+            <div className="h-full w-full surface-morph">
               <TimelineShell
+                className="h-full"
                 projectId={editorProjectId}
                 onSnapshotRequest={handleTimelineSnapshotRequest}
                 isPromptMode={isTimelinePromptMode}
@@ -1871,51 +1870,51 @@ export function GenerationInterface({
                   </div>
                 ) : undefined}
               />
-              </div>
+            </div>
+          </div>
+        </div>
 
-              {/* Vertical Control Bar — hugs the editor card */}
-              <div className="flex flex-col gap-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-1.5 self-end sticky top-4">
-                <button
-                  onClick={() => onSurfaceModeChange?.('image')}
-                  className="p-2 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-muted/60"
-                  title="Image generation"
-                >
-                  <ImageIcon className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => onSurfaceModeChange?.('video')}
-                  className="p-2 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-muted/60"
-                  title="Video generation"
-                >
-                  <Video className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => onSurfaceModeChange?.(generationType)}
-                  className="p-2 rounded-lg transition-all bg-primary text-primary-foreground"
-                  title="Exit editor"
-                >
-                  <Film className="h-4 w-4" />
-                </button>
+        {/* Mode rail — fixed right edge, matching prompt bar rail positioning */}
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 z-30">
+          <div className="flex flex-col gap-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-1.5">
+            <button
+              onClick={() => onSurfaceModeChange?.('image')}
+              className="p-2 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-muted/60"
+              title="Image generation"
+            >
+              <ImageIcon className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => onSurfaceModeChange?.('video')}
+              className="p-2 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-muted/60"
+              title="Video generation"
+            >
+              <Video className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => onSurfaceModeChange?.(generationType)}
+              className="p-2 rounded-lg transition-all bg-primary text-primary-foreground"
+              title="Exit editor"
+            >
+              <Film className="h-4 w-4" />
+            </button>
 
-                <div className="flex-1 min-h-2" />
-                <div className="h-px bg-border/50 mx-1" />
+            <div className="flex-1 min-h-2" />
+            <div className="h-px bg-border/50 mx-1" />
 
-                <div className="relative">
-                  <button
-                    onClick={onToggleChat}
-                    className={cn(
-                      'p-2 rounded-lg transition-all relative z-50',
-                      isChatOpen
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-                    )}
-                    title={isChatOpen ? "Close chat assistant" : "Open chat assistant"}
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-              </div>
+            <div className="relative">
+              <button
+                onClick={onToggleChat}
+                className={cn(
+                  'p-2 rounded-lg transition-all relative z-50',
+                  isChatOpen
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                )}
+                title={isChatOpen ? "Close chat assistant" : "Open chat assistant"}
+              >
+                <MessageCircle className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </div>

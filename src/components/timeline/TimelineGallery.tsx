@@ -33,7 +33,7 @@ export function TimelineGallery({ projectId, onPreview, onInsert, className }: T
 
   return (
     <div className={cn(
-      'flex flex-col rounded-lg border border-border/30 bg-muted/20 overflow-hidden transition-all duration-200 ease-out',
+      'flex flex-col rounded-lg border border-border/30 bg-card/60 overflow-hidden transition-all duration-200 ease-out',
       isExpanded ? 'max-h-[120px]' : 'max-h-[28px]',
       className,
     )}>
@@ -54,7 +54,7 @@ export function TimelineGallery({ projectId, onPreview, onInsert, className }: T
           <div
             ref={scrollRef}
             onScroll={handleScrollEnd}
-            className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5"
+            className="flex items-center gap-1.5 asset-rail-scroll py-0.5"
           >
             {outputs.map((output) => (
               <GalleryTile
