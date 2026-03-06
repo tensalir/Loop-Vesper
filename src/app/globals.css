@@ -45,6 +45,8 @@
     --dock-panel-w: 320px;            /* brainstorm panel width */
     --dock-prompt-max-w: 42rem;       /* max-w-2xl equivalent */
     --dock-prompt-max-w-multi: 48rem; /* wider for multi-image models (max-w-3xl) */
+    --dock-editor-max-w: 54rem;       /* editor workspace cap — between prompt bar and full bleed */
+    --dock-editor-side-pad: 6rem;     /* symmetric left/right inset for editor surface */
   }
 
   .dark {
@@ -77,6 +79,8 @@
     --dock-panel-w: 360px;
     --dock-prompt-max-w: 48rem;       /* max-w-3xl */
     --dock-prompt-max-w-multi: 56rem; /* max-w-4xl */
+    --dock-editor-max-w: 58rem;
+    --dock-editor-side-pad: 7rem;
   }
 }
 
@@ -86,6 +90,8 @@
     --dock-panel-w: 400px;
     --dock-prompt-max-w: 56rem;       /* max-w-4xl */
     --dock-prompt-max-w-multi: 64rem; /* max-w-5xl */
+    --dock-editor-max-w: 68rem;
+    --dock-editor-side-pad: 12rem;
   }
 }
 
@@ -94,6 +100,8 @@
     --dock-panel-w: 440px;
     --dock-prompt-max-w: 64rem;       /* max-w-5xl */
     --dock-prompt-max-w-multi: 72rem; /* max-w-6xl */
+    --dock-editor-max-w: 78rem;
+    --dock-editor-side-pad: 12rem;
   }
 }
 
@@ -102,6 +110,8 @@
     --dock-panel-w: 500px;
     --dock-prompt-max-w: 72rem;       /* max-w-6xl */
     --dock-prompt-max-w-multi: 80rem; /* max-w-7xl */
+    --dock-editor-max-w: 88rem;
+    --dock-editor-side-pad: 12rem;
   }
 }
 

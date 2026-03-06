@@ -1713,208 +1713,208 @@ export function GenerationInterface({
   if (isEditorSurface) {
     return (
       <div className="flex-1 flex flex-col relative">
-        {/* Editor Workspace — embedded in the canvas, not a panel */}
+        {/* Editor Workspace — centered with symmetric spacing, rail in-flow */}
         <div className="absolute inset-0 bg-background overflow-hidden">
           <div
             className={cn(
-              "h-full pt-14 pb-4 px-4 xl:px-6",
-              "pl-[var(--dock-left-gutter)]",
-              "pr-[60px]",
+              "h-full pt-14 pb-4 flex justify-center",
+              "pl-[var(--dock-editor-side-pad)]",
+              "pr-[var(--dock-editor-side-pad)]",
             )}
           >
-            <div className="h-full w-full surface-morph">
-              <TimelineShell
-                className="h-full"
-                projectId={editorProjectId}
-                onSnapshotRequest={handleTimelineSnapshotRequest}
-                isPromptMode={isTimelinePromptMode}
-                timelinePromptSlot={isTimelinePromptMode ? (
-                  <div className="prompt-from-timeline space-y-2">
-                    <div className="flex items-center justify-end">
-                      <button
-                        onClick={handleReturnToTimeline}
-                        className="inline-flex items-center justify-center gap-1 text-[10px] px-2 py-1 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
-                      >
-                        <Undo2 className="h-3 w-3" />
-                        Back to timeline
-                      </button>
-                    </div>
-
-                    {endFrameGenOpen && (
-                      <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.04] p-2.5 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-mono uppercase tracking-wider text-amber-500/80">Generate End Frame</span>
-                          <button
-                            onClick={() => setEndFrameGenOpen(false)}
-                            className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={endFrameGenModelId}
-                            onChange={(e) => setEndFrameGenModelId(e.target.value)}
-                            className="h-7 text-[10px] px-2 rounded-md bg-muted/50 border border-border/50 text-foreground"
-                          >
-                            {allModels.filter((m) => m.type === 'image').map((m) => (
-                              <option key={m.id} value={m.id}>{m.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={endFrameGenPrompt}
-                            onChange={(e) => setEndFrameGenPrompt(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEndFrameGenerate() } }}
-                            placeholder="Describe the end frame..."
-                            className="flex-1 h-8 text-xs px-3 rounded-lg bg-muted/30 border border-border/40 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-amber-500/40"
-                          />
-                          <button
-                            onClick={handleEndFrameGenerate}
-                            disabled={endFrameGenerating || !endFrameGenPrompt.trim()}
-                            className="h-8 px-3 text-xs font-medium rounded-lg bg-amber-500/90 text-white hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
-                          >
-                            {endFrameGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                            Generate
-                          </button>
-                        </div>
-
-                        {endFrameGenCandidates.length > 0 && (
-                          <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-                            {endFrameGenCandidates.map((candidate) => (
-                              <div key={candidate.id} className="relative flex-shrink-0">
-                                {candidate.status === 'processing' ? (
-                                  <div className="w-[48px] h-[48px] rounded-md border border-amber-500/30 bg-muted/30 flex items-center justify-center">
-                                    <Loader2 className="h-4 w-4 animate-spin text-amber-500/60" />
-                                  </div>
-                                ) : candidate.status === 'failed' ? (
-                                  <div className="w-[48px] h-[48px] rounded-md border border-red-500/30 bg-red-500/5 flex items-center justify-center">
-                                    <X className="h-4 w-4 text-red-400" />
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      endFrameSelectedUrlRef.current = candidate.url
-                                      setEndFrameGenOpen(false)
-                                      toast({ title: 'End frame selected', description: 'Attached as end frame for video generation.' })
-                                    }}
-                                    className="w-[48px] h-[48px] rounded-md border-2 border-amber-500/40 hover:border-amber-500 overflow-hidden transition-all hover:scale-105"
-                                    title="Use as end frame"
-                                  >
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={candidate.url} alt="End frame candidate" className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/30 transition-colors">
-                                      <Check className="h-4 w-4 text-white opacity-0 hover:opacity-100" />
-                                    </div>
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
+            <div className="h-full w-full max-w-[var(--dock-editor-max-w)] flex items-start gap-3 surface-morph">
+              <div className="flex-1 min-w-0 h-full">
+                <TimelineShell
+                  className="h-full"
+                  projectId={editorProjectId}
+                  onSnapshotRequest={handleTimelineSnapshotRequest}
+                  isPromptMode={isTimelinePromptMode}
+                  timelinePromptSlot={isTimelinePromptMode ? (
+                    <div className="prompt-from-timeline space-y-2">
+                      <div className="flex items-center justify-end">
+                        <button
+                          onClick={handleReturnToTimeline}
+                          className="inline-flex items-center justify-center gap-1 text-[10px] px-2 py-1 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+                        >
+                          <Undo2 className="h-3 w-3" />
+                          Back to timeline
+                        </button>
                       </div>
+
+                      {endFrameGenOpen && (
+                        <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.04] p-2.5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono uppercase tracking-wider text-amber-500/80">Generate End Frame</span>
+                            <button
+                              onClick={() => setEndFrameGenOpen(false)}
+                              className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={endFrameGenModelId}
+                              onChange={(e) => setEndFrameGenModelId(e.target.value)}
+                              className="h-7 text-[10px] px-2 rounded-md bg-muted/50 border border-border/50 text-foreground"
+                            >
+                              {allModels.filter((m) => m.type === 'image').map((m) => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={endFrameGenPrompt}
+                              onChange={(e) => setEndFrameGenPrompt(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEndFrameGenerate() } }}
+                              placeholder="Describe the end frame..."
+                              className="flex-1 h-8 text-xs px-3 rounded-lg bg-muted/30 border border-border/40 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                            />
+                            <button
+                              onClick={handleEndFrameGenerate}
+                              disabled={endFrameGenerating || !endFrameGenPrompt.trim()}
+                              className="h-8 px-3 text-xs font-medium rounded-lg bg-amber-500/90 text-white hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                            >
+                              {endFrameGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                              Generate
+                            </button>
+                          </div>
+
+                          {endFrameGenCandidates.length > 0 && (
+                            <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+                              {endFrameGenCandidates.map((candidate) => (
+                                <div key={candidate.id} className="relative flex-shrink-0">
+                                  {candidate.status === 'processing' ? (
+                                    <div className="w-[48px] h-[48px] rounded-md border border-amber-500/30 bg-muted/30 flex items-center justify-center">
+                                      <Loader2 className="h-4 w-4 animate-spin text-amber-500/60" />
+                                    </div>
+                                  ) : candidate.status === 'failed' ? (
+                                    <div className="w-[48px] h-[48px] rounded-md border border-red-500/30 bg-red-500/5 flex items-center justify-center">
+                                      <X className="h-4 w-4 text-red-400" />
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        endFrameSelectedUrlRef.current = candidate.url
+                                        setEndFrameGenOpen(false)
+                                        toast({ title: 'End frame selected', description: 'Attached as end frame for video generation.' })
+                                      }}
+                                      className="w-[48px] h-[48px] rounded-md border-2 border-amber-500/40 hover:border-amber-500 overflow-hidden transition-all hover:scale-105"
+                                      title="Use as end frame"
+                                    >
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={candidate.url} alt="End frame candidate" className="w-full h-full object-cover" />
+                                      <div className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/30 transition-colors">
+                                        <Check className="h-4 w-4 text-white opacity-0 hover:opacity-100" />
+                                      </div>
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <VideoInput
+                        variant="default"
+                        prompt={prompt}
+                        onPromptChange={setPrompt}
+                        onGenerate={async (promptText, options) => {
+                          const snapState = useTimelineStore.getState().snapshotPrompt
+                          const insertionTarget =
+                            snapState.clipId && snapState.trackId
+                              ? {
+                                  clipId: snapState.clipId,
+                                  trackId: snapState.trackId,
+                                  isAtClipEnd: snapState.isAtClipEnd,
+                                  timelineMs: snapState.timelineMs,
+                                }
+                              : null
+                          const snapUrl = snapState.snapshotUrl
+                          const snapIsHttp = typeof snapUrl === 'string' && snapUrl.startsWith('http')
+                          const generated = await handleGenerate(promptText, {
+                            ...options,
+                            referenceImageUrl: snapIsHttp ? snapUrl : options?.referenceImageUrl,
+                            ...(snapIsHttp ? {} : { referenceImage: timelineSnapshotFileRef.current ?? options?.referenceImage }),
+                            ...(endFrameSelectedUrlRef.current ? { endFrameImageUrl: endFrameSelectedUrlRef.current } : {}),
+                          })
+                          if (insertionTarget && generated?.id) {
+                            const durationSec = (parameters as any).duration ?? 5
+                            void watchSnapshotGenerationAndInsert(
+                              generated.id,
+                              insertionTarget,
+                              durationSec * 1000
+                            )
+                          }
+                          endFrameSelectedUrlRef.current = null
+                          handleReturnToTimeline()
+                        }}
+                        parameters={parameters}
+                        onParametersChange={handleTimelinePromptParametersChange}
+                        selectedModel={selectedModel}
+                        onModelSelect={handleTimelinePromptModelSelect}
+                        referenceImageUrl={snapshotPrompt.snapshotUrl || referenceImageUrl}
+                        onClearReferenceImage={() => { handleReturnToTimeline() }}
+                        onSetReferenceImageUrl={setReferenceImageUrl}
+                        onRegisterPasteHandler={registerPasteHandler}
+                        hideSnapshotRail
+                        hideStartFrame
+                        hideReferencePicker
+                        lockedReferenceImage
+                        endFrameImageUrl={endFrameSelectedUrlRef.current}
+                        onGenerateEndFrame={handleOpenEndFrameGen}
+                      />
+                    </div>
+                  ) : undefined}
+                />
+              </div>
+
+              {/* Mode rail — in-flow beside the timeline shell */}
+              <div className="flex flex-col gap-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-1.5 self-start mt-1">
+                <button
+                  onClick={() => onSurfaceModeChange?.('image')}
+                  className="p-2 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                  title="Image generation"
+                >
+                  <ImageIcon className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => onSurfaceModeChange?.('video')}
+                  className="p-2 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                  title="Video generation"
+                >
+                  <Video className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => onSurfaceModeChange?.(generationType)}
+                  className="p-2 rounded-lg transition-all bg-primary text-primary-foreground"
+                  title="Exit editor"
+                >
+                  <Film className="h-4 w-4" />
+                </button>
+
+                <div className="flex-1 min-h-2" />
+                <div className="h-px bg-border/50 mx-1" />
+
+                <div className="relative">
+                  <button
+                    onClick={onToggleChat}
+                    className={cn(
+                      'p-2 rounded-lg transition-all relative z-50',
+                      isChatOpen
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
                     )}
-
-                    <VideoInput
-                      variant="default"
-                      prompt={prompt}
-                      onPromptChange={setPrompt}
-                      onGenerate={async (promptText, options) => {
-                        const snapState = useTimelineStore.getState().snapshotPrompt
-                        const insertionTarget =
-                          snapState.clipId && snapState.trackId
-                            ? {
-                                clipId: snapState.clipId,
-                                trackId: snapState.trackId,
-                                isAtClipEnd: snapState.isAtClipEnd,
-                                timelineMs: snapState.timelineMs,
-                              }
-                            : null
-                        const snapUrl = snapState.snapshotUrl
-                        const snapIsHttp = typeof snapUrl === 'string' && snapUrl.startsWith('http')
-                        const generated = await handleGenerate(promptText, {
-                          ...options,
-                          referenceImageUrl: snapIsHttp ? snapUrl : options?.referenceImageUrl,
-                          ...(snapIsHttp ? {} : { referenceImage: timelineSnapshotFileRef.current ?? options?.referenceImage }),
-                          ...(endFrameSelectedUrlRef.current ? { endFrameImageUrl: endFrameSelectedUrlRef.current } : {}),
-                        })
-                        if (insertionTarget && generated?.id) {
-                          const durationSec = (parameters as any).duration ?? 5
-                          void watchSnapshotGenerationAndInsert(
-                            generated.id,
-                            insertionTarget,
-                            durationSec * 1000
-                          )
-                        }
-                        endFrameSelectedUrlRef.current = null
-                        handleReturnToTimeline()
-                      }}
-                      parameters={parameters}
-                      onParametersChange={handleTimelinePromptParametersChange}
-                      selectedModel={selectedModel}
-                      onModelSelect={handleTimelinePromptModelSelect}
-                      referenceImageUrl={snapshotPrompt.snapshotUrl || referenceImageUrl}
-                      onClearReferenceImage={() => { handleReturnToTimeline() }}
-                      onSetReferenceImageUrl={setReferenceImageUrl}
-                      onRegisterPasteHandler={registerPasteHandler}
-                      hideSnapshotRail
-                      hideStartFrame
-                      hideReferencePicker
-                      lockedReferenceImage
-                      endFrameImageUrl={endFrameSelectedUrlRef.current}
-                      onGenerateEndFrame={handleOpenEndFrameGen}
-                    />
-                  </div>
-                ) : undefined}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Mode rail — fixed right edge, matching prompt bar rail positioning */}
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 z-30">
-          <div className="flex flex-col gap-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-1.5">
-            <button
-              onClick={() => onSurfaceModeChange?.('image')}
-              className="p-2 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-muted/60"
-              title="Image generation"
-            >
-              <ImageIcon className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => onSurfaceModeChange?.('video')}
-              className="p-2 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-muted/60"
-              title="Video generation"
-            >
-              <Video className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => onSurfaceModeChange?.(generationType)}
-              className="p-2 rounded-lg transition-all bg-primary text-primary-foreground"
-              title="Exit editor"
-            >
-              <Film className="h-4 w-4" />
-            </button>
-
-            <div className="flex-1 min-h-2" />
-            <div className="h-px bg-border/50 mx-1" />
-
-            <div className="relative">
-              <button
-                onClick={onToggleChat}
-                className={cn(
-                  'p-2 rounded-lg transition-all relative z-50',
-                  isChatOpen
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-                )}
-                title={isChatOpen ? "Close chat assistant" : "Open chat assistant"}
-              >
-                <MessageCircle className="h-4 w-4" />
-              </button>
+                    title={isChatOpen ? "Close chat assistant" : "Open chat assistant"}
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

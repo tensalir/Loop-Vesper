@@ -127,13 +127,26 @@ export function ProjectClientShell({
   const [isAdmin, setIsAdmin] = useState(initialIsAdmin)
   const [updating, setUpdating] = useState(false)
   const [activeSession, setActiveSession] = useState<Session | null>(null)
-  const [generationType, setGenerationType] = useState<'image' | 'video'>('image')
-  const [surfaceMode, setSurfaceMode] = useState<'image' | 'video' | 'editor'>('image')
+  const [generationType, setGenerationType] = useState<'image' | 'video'>(() => {
+    if (typeof window !== 'undefined') {
+      const h = window.location.hash.replace('#', '') as 'image' | 'video' | 'editor'
+      if (h === 'image' || h === 'video') return h
+    }
+    return 'image'
+  })
+  const [surfaceMode, setSurfaceMode] = useState<'image' | 'video' | 'editor'>(() => {
+    if (typeof window !== 'undefined') {
+      const h = window.location.hash.replace('#', '') as 'image' | 'video' | 'editor'
+      if (h === 'image' || h === 'video' || h === 'editor') return h
+    }
+    return 'image'
+  })
   // Track last active session ID for each type so we can restore it when switching tabs
   const lastActiveSessionByTypeRef = useRef<{ image: string | null; video: string | null }>({
     image: null,
     video: null,
   })
+  const lastSurfaceModeBySessionRef = useRef<Record<string, 'image' | 'video' | 'editor'>>({})
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     // Initialize from DOM class or default to dark
     if (typeof window !== 'undefined') {
@@ -285,6 +298,39 @@ export function ProjectClientShell({
       lastActiveSessionByTypeRef.current[activeSession.type] = activeSession.id
     }
   }, [activeSession])
+
+  // Track last surface mode per session so we can restore it
+  useEffect(() => {
+    if (activeSession) {
+      lastSurfaceModeBySessionRef.current[activeSession.id] = surfaceMode
+    }
+  }, [activeSession, surfaceMode])
+
+  // Sync surfaceMode -> URL hash (replaceState to avoid history spam)
+  useEffect(() => {
+    const desired = `#${surfaceMode}`
+    if (window.location.hash !== desired) {
+      history.replaceState(null, '', desired)
+    }
+  }, [surfaceMode])
+
+  // Listen for browser back/forward changing the hash
+  useEffect(() => {
+    const onHashChange = () => {
+      const h = window.location.hash.replace('#', '') as 'image' | 'video' | 'editor'
+      if (h === 'image' || h === 'video' || h === 'editor') {
+        if (h !== surfaceMode) {
+          if (h === 'editor') {
+            setSurfaceMode('editor')
+          } else {
+            handleGenerationTypeChange(h)
+          }
+        }
+      }
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [surfaceMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track which sessions we've already prefetched
   const prefetchedSessionsRef = useRef<Set<string>>(new Set())
@@ -792,7 +838,13 @@ export function ProjectClientShell({
               generationType={generationType}
               onSessionSelect={(session) => {
                 setActiveSession(session)
-                if (surfaceMode === 'editor') {
+                const remembered = lastSurfaceModeBySessionRef.current[session.id]
+                if (remembered) {
+                  setSurfaceMode(remembered)
+                  if (remembered !== 'editor') {
+                    setGenerationType(remembered)
+                  }
+                } else if (surfaceMode === 'editor') {
                   setSurfaceMode(session.type)
                   setGenerationType(session.type)
                 }
