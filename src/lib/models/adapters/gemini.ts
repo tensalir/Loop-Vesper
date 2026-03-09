@@ -155,6 +155,77 @@ const parseGeminiContentBlock = (data: any): string | null => {
   return null // No content block detected
 }
 
+const VEO_SUPPORT_CODE_CATEGORIES: Record<string, string> = {
+  '58061214': 'child safety',
+  '17301594': 'child safety',
+  '29310472': 'celebrity likeness',
+  '15236754': 'celebrity likeness',
+  '90789179': 'sexual content',
+  '43188360': 'sexual content',
+  '61493863': 'violence',
+  '56562880': 'violence',
+  '62263041': 'dangerous content',
+  '57734940': 'hate speech',
+  '22137204': 'hate speech',
+  '78610348': 'toxic content',
+  '32635315': 'vulgar content',
+  '64151117': 'video safety violation',
+  '42237218': 'video safety violation',
+  '89371032': 'prohibited content',
+  '49114662': 'prohibited content',
+  '63429089': 'prohibited content',
+  '72817394': 'prohibited content',
+  '60599140': 'prohibited content',
+  '74803281': 'safety policy',
+  '29578790': 'safety policy',
+  '42876398': 'safety policy',
+  '35561574': 'third-party content',
+  '35561575': 'third-party content',
+}
+
+const parseVeoSafetyBlock = (videoResponse: any, statusError: any): string | null => {
+  if (statusError) {
+    const msg = statusError.message || statusError.code || JSON.stringify(statusError)
+    return `Video generation failed: ${msg}`
+  }
+
+  const filteredCount = videoResponse?.raiMediaFilteredCount
+  const reasons: string[] = videoResponse?.raiMediaFilteredReasons || []
+
+  if (!filteredCount && reasons.length === 0) return null
+
+  const isAudioFilter = reasons.some((r: string) =>
+    r.toLowerCase().includes('audio') || r.toLowerCase().includes('audio for your prompt')
+  )
+
+  const supportCodes = reasons.flatMap((r: string) => {
+    const match = r.match(/Support codes?:\s*([\d,\s]+)/i)
+    return match ? match[1].split(',').map((c: string) => c.trim()).filter(Boolean) : []
+  })
+
+  const categories = [...new Set(
+    supportCodes
+      .map((code: string) => VEO_SUPPORT_CODE_CATEGORIES[code])
+      .filter(Boolean)
+  )]
+
+  if (isAudioFilter) {
+    return 'Video blocked by content safety filter (audio). This is often a false positive — try generating again with the same prompt.'
+  }
+
+  if (categories.length > 0) {
+    const categoryList = categories.join(', ')
+    return `Video blocked by content safety filter (${categoryList}). The input image or prompt may contain restricted content. Try a different image or rephrase your prompt.`
+  }
+
+  if (reasons.length > 0) {
+    const cleanReason = reasons[0].replace(/\s*Support codes?:.*$/i, '').trim()
+    return `Video blocked by content safety filter: ${cleanReason}. Try a different image or rephrase your prompt.`
+  }
+
+  return `Video blocked by content safety filter. Try a different image or rephrase your prompt.`
+}
+
 const redactLargeStrings = (value: any, maxLen = 256) => {
   const seen = new WeakSet<object>()
   const walk = (v: any): any => {
@@ -1413,9 +1484,19 @@ export class GeminiAdapter extends BaseModelAdapter {
         operationComplete = status.done
         
         if (operationComplete) {
-          const generatedVideo = status.response?.generateVideoResponse?.generatedSamples?.[0]
+          const videoResponse = status.response?.generateVideoResponse
+          const generatedVideo = videoResponse?.generatedSamples?.[0]
           if (!generatedVideo) {
-            throw new Error('No video in response')
+            const safetyError = parseVeoSafetyBlock(videoResponse, status.error)
+            if (safetyError) {
+              console.warn('[Veo 3.1] Content safety block:', {
+                raiMediaFilteredCount: videoResponse?.raiMediaFilteredCount,
+                raiMediaFilteredReasons: videoResponse?.raiMediaFilteredReasons,
+                statusError: status.error,
+              })
+              throw new Error(safetyError)
+            }
+            throw new Error('No video in response — the generation completed but returned no output. Try again.')
           }
           
           const videoUri = generatedVideo.video.uri
