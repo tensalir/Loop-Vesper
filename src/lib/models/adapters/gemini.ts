@@ -203,11 +203,11 @@ const parseVeoSafetyBlock = (videoResponse: any, statusError: any): string | nul
     return match ? match[1].split(',').map((c: string) => c.trim()).filter(Boolean) : []
   })
 
-  const categories = [...new Set(
+  const categories = Array.from(new Set(
     supportCodes
       .map((code: string) => VEO_SUPPORT_CODE_CATEGORIES[code])
       .filter(Boolean)
-  )]
+  ))
 
   if (isAudioFilter) {
     return 'Video blocked by content safety filter (audio). This is often a false positive — try generating again with the same prompt.'
