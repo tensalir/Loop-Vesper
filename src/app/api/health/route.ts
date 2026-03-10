@@ -34,7 +34,6 @@ export async function GET() {
         services: {
           database: 'error',
         },
-        error: error?.message,
         timestamp: new Date().toISOString(),
       },
       { status: 500 }

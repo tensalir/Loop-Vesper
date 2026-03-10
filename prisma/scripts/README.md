@@ -7,7 +7,11 @@ They are **not** Prisma migrations and should not be run via `prisma migrate`.
 ## Scripts
 
 ### `enable_rls_policies.sql`
-Row Level Security (RLS) policies for all tables. Run this in Supabase SQL Editor to enable RLS protection for direct database access via Supabase client.
+Row Level Security (RLS) policies for **all** public tables, plus view and function hardening. Run this in Supabase SQL Editor to enable RLS protection for direct database access via Supabase client.
+
+The script is idempotent (safe to re-run) and should be updated whenever new tables are added to the Prisma schema. It also:
+- Fixes the `failed_generations_view` security invoker setting
+- Hardens the `handle_new_user()` function with `SET search_path = ''`
 
 Note: API routes use Prisma which bypasses RLS, so these policies only apply to direct Supabase client queries.
 

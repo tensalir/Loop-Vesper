@@ -40,9 +40,11 @@ function verifyWebhookSignature(
   signature: string | null,
   secret: string | null
 ): boolean {
-  if (!secret || !signature) {
-    // If no secret configured, skip verification (less secure)
+  if (!secret) {
     return true
+  }
+  if (!signature) {
+    return false
   }
 
   try {

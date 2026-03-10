@@ -76,7 +76,7 @@ The randomness suggests:
 ### 4. 🔍 Identified Potential Issues
 
 **Issue A: `INTERNAL_API_SECRET` Not Set**
-- User confirmed it's set in Vercel: `INTERNAL_API_SECRET=7b9b1a0c9f3f4d2a8e6c1d0b3a5f9e2c6a8d4f1b0c7e2a9d5f3c1e8b2a6d9c0f`
+- User confirmed it's set in Vercel: `INTERNAL_API_SECRET=<REDACTED — rotate this value>`
 - But might not be available to all serverless functions
 - Or might be scoped incorrectly (Production vs Preview)
 
@@ -102,7 +102,7 @@ The randomness suggests:
 ### Vercel Logs (Server)
 ```
 [generation-id] Response status: 401 Unauthorized
-[process] Auth check - received: NOT RECEIVED, expected: 7b9b...c0f, match: false
+[process] Auth check - received: NOT RECEIVED, expected: <REDACTED>, match: false
 ```
 
 ### Database State

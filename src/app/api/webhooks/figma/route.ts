@@ -26,6 +26,13 @@ export async function POST(request: NextRequest) {
     const eventType = body.event_type ?? (body as unknown as Record<string, string>).event_type
     const fileKey = body.file_key ?? (body as unknown as Record<string, string>).file_key
 
+    // Verify passcode when configured (fail-closed: reject if secret is set but missing/wrong)
+    const expectedPasscode = process.env.FIGMA_WEBHOOK_PASSCODE
+    if (expectedPasscode && body.passcode !== expectedPasscode) {
+      console.warn('[Figma Webhook] Invalid or missing passcode')
+      return NextResponse.json({ error: 'Invalid passcode' }, { status: 401 })
+    }
+
     if (eventType === 'PING' || !eventType) {
       return NextResponse.json({ received: true })
     }

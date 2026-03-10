@@ -45,3 +45,6 @@ next-env.d.ts
 # prisma - migrations are now version controlled
 # prisma/migrations
 
+# supabase CLI local state
+supabase/.temp/
+

@@ -778,21 +778,16 @@ export async function POST(request: NextRequest) {
   }
   
   // Allow internal calls via secret header OR authenticated users
-  // This endpoint can be called from:
-  // 1. Server-side (internal) with secret header
-  // 2. Authenticated users (frontend fallback)
   const internalSecret = request.headers.get('x-internal-secret')
   const expectedSecret = process.env.INTERNAL_API_SECRET
+  const isInternalCall = !!(internalSecret && expectedSecret && internalSecret === expectedSecret)
   
-  const hasReceivedSecret = Boolean(internalSecret)
-  const hasExpectedSecret = Boolean(expectedSecret)
-  const secretsMatch = internalSecret === expectedSecret
-  console.log(`[process] Auth check - received: ${hasReceivedSecret}, configured: ${hasExpectedSecret}, match: ${secretsMatch}`)
+  console.log(`[process] Auth check - internal: ${isInternalCall}`)
   
-  // If internal secret is provided and matches, skip auth check
-  const isInternalCall = internalSecret && expectedSecret && internalSecret === expectedSecret
+  // For non-internal calls, require a valid user session and store the
+  // authenticated userId so we can verify generation ownership below.
+  let authenticatedUserId: string | null = null
   
-  // If no internal secret or it doesn't match, check auth (for frontend calls)
   if (!isInternalCall) {
     try {
       const { createRouteHandlerClient } = await import('@supabase/auth-helpers-nextjs')
@@ -800,23 +795,15 @@ export async function POST(request: NextRequest) {
       const supabase = createRouteHandlerClient({ cookies })
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       
-      if (authError) {
-        console.error(`[process] Auth error: ${authError.message}`)
-        return respond({ error: 'Unauthorized', details: authError.message }, 401)
+      if (authError || !user) {
+        return respond({ error: 'Unauthorized' }, 401)
       }
       
-      if (!user) {
-        console.warn(`[process] No user found - cookies may not be available`)
-        return respond({ error: 'Unauthorized', details: 'No active session' }, 401)
-      }
-      
+      authenticatedUserId = user.id
       console.log(`[process] Auth successful - user: ${user.id}`)
     } catch (authCheckError: any) {
-      // If auth check fails and no valid internal secret, deny access
       console.error(`[process] Auth check exception:`, authCheckError?.message || authCheckError)
-      if (!isInternalCall) {
-        return respond({ error: 'Unauthorized', details: authCheckError?.message || 'Auth check failed' }, 401)
-      }
+      return respond({ error: 'Unauthorized' }, 401)
     }
   }
   
@@ -837,6 +824,31 @@ export async function POST(request: NextRequest) {
 
     if (directGenerationId) {
       metricMeta.generationId = directGenerationId
+
+      // For non-internal calls, verify the caller owns this generation or
+      // has access to its project before allowing processing.
+      if (authenticatedUserId) {
+        const gen = await prisma.generation.findUnique({
+          where: { id: directGenerationId },
+          select: {
+            userId: true,
+            session: { select: { project: { select: { ownerId: true, members: { where: { userId: authenticatedUserId }, select: { id: true } } } } } },
+          },
+        })
+
+        if (!gen) {
+          return respond({ error: 'Generation not found' }, 404)
+        }
+
+        const isOwner = gen.userId === authenticatedUserId
+        const isProjectOwner = gen.session.project.ownerId === authenticatedUserId
+        const isProjectMember = gen.session.project.members.length > 0
+
+        if (!isOwner && !isProjectOwner && !isProjectMember) {
+          return respond({ error: 'Forbidden' }, 403)
+        }
+      }
+
       handles.push({ generationId: directGenerationId })
     } else if (GENERATION_QUEUE_ENABLED) {
       const jobs = await claimGenerationJobs(GENERATION_QUEUE_BATCH_SIZE)

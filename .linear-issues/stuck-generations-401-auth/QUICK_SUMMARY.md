@@ -26,7 +26,7 @@ Generations get stuck in `processing` state and never complete. Happening random
 - `hooks/useGenerateMutation.ts` - Frontend fallback trigger
 
 ## Environment Variable
-- `INTERNAL_API_SECRET=7b9b1a0c9f3f4d2a8e6c1d0b3a5f9e2c6a8d4f1b0c7e2a9d5f3c1e8b2a6d9c0f`
+- `INTERNAL_API_SECRET=<REDACTED — rotate this value>`
 - ⚠️ Verify it's set for **all** environments (Production, Preview, Development)
 
 ## Next Steps

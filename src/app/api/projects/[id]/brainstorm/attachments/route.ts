@@ -61,6 +61,24 @@ export async function POST(
       return NextResponse.json({ error: 'No files provided' }, { status: 400 })
     }
 
+    const ALLOWED_MIME_PREFIXES = ['image/', 'application/pdf']
+    const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20 MB
+
+    for (const file of files) {
+      if (!ALLOWED_MIME_PREFIXES.some((p) => file.type.startsWith(p))) {
+        return NextResponse.json(
+          { error: `File type not allowed: ${file.type}` },
+          { status: 400 },
+        )
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json(
+          { error: `File too large: ${file.name} (max 20 MB)` },
+          { status: 400 },
+        )
+      }
+    }
+
     const uploadedFiles: { 
       name: string
       url: string

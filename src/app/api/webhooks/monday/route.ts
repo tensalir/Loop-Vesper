@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getMondayItem } from '@/lib/monday/client'
 import { persistEvent, toRevisionEvent } from '@/lib/sync/normalize'
 import type { CreativeWorkItem } from '@/lib/sync/contracts'
+import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +28,28 @@ interface MondayEventPayload {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as MondayChallengePayload & MondayEventPayload
+    const rawBody = await request.text()
+
+    // Verify HMAC signature when signing secret is configured
+    const signingSecret = process.env.MONDAY_WEBHOOK_SECRET
+    if (signingSecret) {
+      const signature = request.headers.get('authorization')
+      if (!signature) {
+        console.warn('[Monday Webhook] Missing authorization header')
+        return NextResponse.json({ error: 'Missing signature' }, { status: 401 })
+      }
+      const expected = crypto.createHmac('sha256', signingSecret).update(rawBody).digest('base64')
+      const isValid = crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expected),
+      )
+      if (!isValid) {
+        console.warn('[Monday Webhook] Invalid HMAC signature')
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+      }
+    }
+
+    const body = JSON.parse(rawBody) as MondayChallengePayload & MondayEventPayload
 
     if (body.challenge != null) {
       return NextResponse.json({ challenge: body.challenge })

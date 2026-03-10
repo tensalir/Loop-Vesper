@@ -160,7 +160,7 @@ BEGIN
   );
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- Create a trigger to run the function on signup
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
