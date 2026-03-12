@@ -219,6 +219,29 @@ export function useGenerationsRealtime(sessionId: string | null, userId: string 
     }
   }, [sessionId, queryClient, debouncedInvalidate])
 
+  // When the browser tab becomes visible again after being backgrounded,
+  // force a refetch of all generations to catch up on missed realtime events.
+  // Chrome throttles WebSockets and timers in background tabs, so the Supabase
+  // realtime channel may have silently disconnected and polling may have stopped.
+  useEffect(() => {
+    if (!sessionId || isTempSession) return
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('🔴 Tab became visible — refetching generations to catch up on missed updates')
+        queryClient.invalidateQueries({
+          queryKey: ['generations', 'infinite', sessionId],
+          refetchType: 'active',
+        })
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [sessionId, isTempSession, queryClient])
+
   useEffect(() => {
     // Avoid realtime subscriptions for optimistic "temp-*" session IDs
     if (!sessionId || !userId || isTempSession) return
