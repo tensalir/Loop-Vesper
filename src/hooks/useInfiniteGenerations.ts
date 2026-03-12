@@ -220,7 +220,17 @@ export function useInfiniteGenerations(sessionId: string | null, limit: number =
     staleTime: 30 * 1000, // 30 seconds - rely on realtime + optimistic updates
     gcTime: 30 * 60 * 1000, // 30 minutes - keep in memory for faster navigation
     refetchOnMount: false, // Don't auto-refetch - rely on optimistic updates and real-time subscriptions
-    refetchOnWindowFocus: false,
+    // Refetch on window focus ONLY when there are processing generations.
+    // This catches updates missed while the tab was backgrounded (Chrome throttles
+    // WebSockets and timers in background tabs, so realtime + polling may both fail).
+    refetchOnWindowFocus: (query) => {
+      const allData = query.state.data as InfiniteData<PaginatedGenerationsResponse> | undefined
+      if (!allData) return false
+      const hasProcessing = allData.pages.some((page) =>
+        page.data.some((gen) => gen.status === 'processing')
+      )
+      return hasProcessing ? 'always' : false
+    },
     refetchInterval: (query) => {
       // Poll less frequently as a fallback for processing generations
       // Realtime subscriptions should handle most updates
