@@ -40,6 +40,7 @@ interface ChatInputProps {
   referenceImageUrls?: string[] // URLs to hydrate reference images from
   onReferenceImageUrlsChange?: (urls: string[]) => void // Keep parent URLs in sync with UI removals
   onRegisterPasteHandler?: (handler: (files: File[]) => void) => () => void // Register to receive pasted images
+  onRegisterSubmit?: (submit: () => void) => () => void // Register submit for global shortcut
 }
 
 export function ChatInput({
@@ -55,6 +56,7 @@ export function ChatInput({
   referenceImageUrls,
   onReferenceImageUrlsChange,
   onRegisterPasteHandler,
+  onRegisterSubmit,
 }: ChatInputProps) {
   const params = useParams()
   const { toast } = useToast()
@@ -587,16 +589,18 @@ export function ChatInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [referenceImageUrls]) // Only depend on referenceImageUrls
 
-  // Cleanup preview URLs on unmount
+  // Cleanup blob preview URLs on unmount only (point-of-removal revocation is
+  // handled by handleRemoveImage, model-switch, and hydration-clear individually).
   useEffect(() => {
     return () => {
-      imagePreviewUrls.forEach(url => {
+      imagePreviewUrlsRef.current.forEach(url => {
         if (url.startsWith('blob:')) {
           URL.revokeObjectURL(url)
         }
       })
     }
-  }, [imagePreviewUrls])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Register paste handler with parent component
   useEffect(() => {
@@ -608,6 +612,15 @@ export function ChatInput({
     
     return unregister
   }, [onRegisterPasteHandler, supportsImageEditing])
+
+  // Register submit handler with parent for global Cmd/Ctrl+Enter shortcut
+  const handleSubmitRef = useRef(handleSubmit)
+  handleSubmitRef.current = handleSubmit
+
+  useEffect(() => {
+    if (!onRegisterSubmit) return
+    return onRegisterSubmit(() => handleSubmitRef.current())
+  }, [onRegisterSubmit])
 
   return (
     <div 
@@ -634,7 +647,7 @@ export function ChatInput({
           {supportsMultiImage && supportsImageEditing && (
             <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
               {imagePreviewUrls.map((previewUrl, index) => (
-                <div key={index} className="relative group flex-shrink-0">
+                <div key={previewUrl} className="relative group flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => handleThumbnailClick(previewUrl)}

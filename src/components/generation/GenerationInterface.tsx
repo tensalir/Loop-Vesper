@@ -588,6 +588,27 @@ export function GenerationInterface({
     }
   }, [])
 
+  // Callback for input components to register their submit handlers (global shortcut)
+  const submitCallbackRef = useRef<(() => void) | null>(null)
+  const registerSubmit = useCallback((submit: () => void) => {
+    submitCallbackRef.current = submit
+    return () => { submitCallbackRef.current = null }
+  }, [])
+
+  // Global Cmd/Ctrl+Enter shortcut — fires even when the textarea is not focused
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        const el = document.activeElement as HTMLElement | null
+        if (el?.tagName === 'TEXTAREA' || el?.tagName === 'INPUT') return
+        e.preventDefault()
+        submitCallbackRef.current?.()
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [])
+
   // Set numOutputs based on generationType and model config
   useEffect(() => {
     // Wait for models to load before enforcing model type
@@ -1717,15 +1738,15 @@ export function GenerationInterface({
         <div className="absolute inset-0 bg-background overflow-hidden">
           <div
             className={cn(
-              "h-full pt-14 pb-4 flex justify-center",
+              "h-full pt-14 pb-4 flex items-start justify-center",
               "pl-[var(--dock-editor-side-pad)]",
               "pr-[var(--dock-editor-side-pad)]",
             )}
           >
-            <div className="h-full w-full max-w-[var(--dock-editor-max-w)] flex items-start gap-3 surface-morph">
-              <div className="flex-1 min-w-0 h-full">
+            <div className="w-full max-w-[var(--dock-editor-max-w)] flex items-end gap-3 surface-morph">
+              <div className="flex-1 min-w-0">
                 <TimelineShell
-                  className="h-full"
+                  className="w-full"
                   projectId={editorProjectId}
                   onSnapshotRequest={handleTimelineSnapshotRequest}
                   isPromptMode={isTimelinePromptMode}
@@ -1861,6 +1882,7 @@ export function GenerationInterface({
                         onClearReferenceImage={() => { handleReturnToTimeline() }}
                         onSetReferenceImageUrl={setReferenceImageUrl}
                         onRegisterPasteHandler={registerPasteHandler}
+                        onRegisterSubmit={registerSubmit}
                         hideSnapshotRail
                         hideStartFrame
                         hideReferencePicker
@@ -1873,8 +1895,8 @@ export function GenerationInterface({
                 />
               </div>
 
-              {/* Mode rail — in-flow beside the timeline shell */}
-              <div className="flex flex-col gap-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-1.5 self-start mt-1">
+              {/* Mode rail — in-flow beside the timeline shell, bottom-aligned with timeline */}
+              <div className="flex flex-col gap-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-1.5 self-end">
                 <button
                   onClick={() => onSurfaceModeChange?.('image')}
                   className="p-2 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-muted/60"
@@ -2082,6 +2104,7 @@ export function GenerationInterface({
                 onClearReferenceImage={() => setReferenceImageUrl(null)}
                 onSetReferenceImageUrl={setReferenceImageUrl}
                 onRegisterPasteHandler={registerPasteHandler}
+                onRegisterSubmit={registerSubmit}
               />
             ) : (
               <ChatInput
@@ -2097,6 +2120,7 @@ export function GenerationInterface({
                 referenceImageUrls={referenceImageUrls}
                 onReferenceImageUrlsChange={setReferenceImageUrls}
                 onRegisterPasteHandler={registerPasteHandler}
+                onRegisterSubmit={registerSubmit}
               />
             )}
           </div>

@@ -73,6 +73,8 @@ interface VideoInputProps {
   hideStartFrame?: boolean
   /** Callback to open end-frame generation flow (from timeline prompt) */
   onGenerateEndFrame?: () => void
+  /** Register submit for global shortcut */
+  onRegisterSubmit?: (submit: () => void) => () => void
 }
 
 export function VideoInput({
@@ -99,6 +101,7 @@ export function VideoInput({
   hideEndFrame = false,
   hideStartFrame = false,
   onGenerateEndFrame,
+  onRegisterSubmit,
 }: VideoInputProps) {
   const params = useParams()
   const { toast } = useToast()
@@ -888,6 +891,15 @@ export function VideoInput({
     
     return unregister
   }, [onRegisterPasteHandler, supportsImageToVideo, hideStartFrame])
+
+  // Register submit handler with parent for global Cmd/Ctrl+Enter shortcut
+  const handleSubmitRef = useRef(handleSubmit)
+  handleSubmitRef.current = handleSubmit
+
+  useEffect(() => {
+    if (!onRegisterSubmit) return
+    return onRegisterSubmit(() => handleSubmitRef.current())
+  }, [onRegisterSubmit])
 
   return (
     <div 
