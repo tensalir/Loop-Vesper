@@ -64,7 +64,7 @@ export function ImageBranchStack({
   if (branches.length === 0) return null
 
   return (
-    <div className={cn('absolute -right-10 top-0 flex flex-col gap-1.5 z-[2]', className)}>
+    <div className={cn('absolute right-1.5 top-1.5 flex flex-col gap-1 z-10', className)}>
       {branches.slice(0, 5).map((branch) => {
         const KindIcon = kindIcons[branch.sourceKind || 'original'] || ImageIcon
         return (
@@ -76,9 +76,10 @@ export function ImageBranchStack({
               onSwap?.(branch.outputId, branch.fileUrl)
             }}
             className={cn(
-              'relative w-8 h-8 rounded-md overflow-hidden border border-border/40',
-              'hover:border-primary/60 hover:scale-110 transition-all duration-150',
-              'bg-muted shadow-sm'
+              'relative w-7 h-7 rounded overflow-hidden',
+              'border-2 border-white/70 shadow-md',
+              'hover:border-primary hover:scale-110 transition-all duration-150',
+              'bg-muted'
             )}
             title={branch.label || (branch.sourceKind === 'snapshot' ? 'Snapshot branch' : branch.sourceKind === 'edited' ? 'Edited branch' : 'Branch')}
           >
@@ -88,7 +89,6 @@ export function ImageBranchStack({
               className="w-full h-full object-cover"
               draggable={false}
             />
-            {/* Source kind indicator */}
             <div className="absolute bottom-0 right-0 p-[2px] bg-black/60 rounded-tl-sm">
               <KindIcon className="h-2 w-2 text-white/80" />
             </div>
@@ -96,7 +96,7 @@ export function ImageBranchStack({
         )
       })}
       {branches.length > 5 && (
-        <div className="text-[8px] text-muted-foreground text-center">
+        <div className="text-[8px] text-white/70 text-center drop-shadow-sm">
           +{branches.length - 5}
         </div>
       )}

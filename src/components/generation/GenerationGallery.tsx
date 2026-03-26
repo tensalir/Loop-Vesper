@@ -1505,7 +1505,7 @@ export function GenerationGallery({
               {(generation.outputs || []).map((output) => {
                 const aspectRatio = (generation.parameters as any)?.aspectRatio || '1:1'
                 return (
-                <div key={output.id} className="group relative overflow-visible">
+                <div key={output.id} className="group relative">
                   {/* Video iterations indicator - glow effect + video button */}
                   {currentGenerationType === 'image' && (
                     <VideoIterationsStackHint 
@@ -1513,19 +1513,6 @@ export function GenerationGallery({
                       onClick={() => handleVideoConversion(output.id, output.fileUrl)}
                     />
                   )}
-
-                  {/* Branch thumbnails — snapshot/edited variants of this image */}
-                  <ImageBranchStack
-                    primaryOutputId={output.id}
-                    generations={generations}
-                    onSwap={(branchOutputId, branchFileUrl) => {
-                      setLightboxData({
-                        imageUrl: branchFileUrl,
-                        output: { ...output, id: branchOutputId, fileUrl: branchFileUrl },
-                        generation,
-                      })
-                    }}
-                  />
                   
                   {/* Main image card */}
                   <div
@@ -1534,8 +1521,20 @@ export function GenerationGallery({
                         ? 'border-primary ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse'
                         : 'border-border/50'
                     }`}
-                    style={{ aspectRatio: getAspectRatioStyle(aspectRatio), zIndex: 1 }}
+                    style={{ aspectRatio: getAspectRatioStyle(aspectRatio) }}
                   >
+                    {/* Branch thumbnails — inside card to prevent overlap with adjacent grid cells */}
+                    <ImageBranchStack
+                      primaryOutputId={output.id}
+                      generations={generations}
+                      onSwap={(branchOutputId, branchFileUrl) => {
+                        setLightboxData({
+                          imageUrl: branchFileUrl,
+                          output: { ...output, id: branchOutputId, fileUrl: branchFileUrl },
+                          generation,
+                        })
+                      }}
+                    />
                     {/* Source-kind badge for snapshot/edited images */}
                     {(() => {
                       const kind = (generation.parameters as any)?.sourceKind
