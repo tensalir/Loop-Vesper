@@ -154,6 +154,54 @@ export function calculateKlingOfficialCost(
 }
 
 /**
+ * Calculate cost for OpenAI GPT Image models.
+ * gpt-image-2 pricing is token-based; when actual token counts are
+ * available from the API response we use those, otherwise we fall
+ * back to representative estimates based on quality + size.
+ *
+ * Rough per-image estimates (output tokens only, 1024x1024):
+ *   low  ≈ $0.006   medium ≈ $0.053   high ≈ $0.211
+ * Input tokens add a small amount on top (text prompt + ref images).
+ */
+export function calculateOpenAICost(
+  modelId: string,
+  options: {
+    outputCount?: number
+    quality?: string
+    inputTokens?: number
+    outputTokens?: number
+  } = {}
+): CostCalculationResult {
+  const { outputCount = 1, quality = 'medium', inputTokens, outputTokens } = options
+
+  // Token-based pricing: $2.50 / 1M input tokens, $10 / 1M output tokens
+  const INPUT_PRICE_PER_TOKEN = 2.5 / 1_000_000
+  const OUTPUT_PRICE_PER_TOKEN = 10 / 1_000_000
+
+  if (inputTokens != null && outputTokens != null) {
+    const cost = inputTokens * INPUT_PRICE_PER_TOKEN + outputTokens * OUTPUT_PRICE_PER_TOKEN
+    return {
+      cost,
+      unit: `${inputTokens} in + ${outputTokens} out tokens`,
+      isActual: true,
+    }
+  }
+
+  const estimatePerImage: Record<string, number> = {
+    low: 0.006,
+    medium: 0.053,
+    high: 0.211,
+    auto: 0.053,
+  }
+  const perImage = estimatePerImage[quality] ?? estimatePerImage.medium
+  return {
+    cost: perImage * outputCount,
+    unit: `~$${perImage.toFixed(3)}/image (${quality}) × ${outputCount}`,
+    isActual: false,
+  }
+}
+
+/**
  * Calculate cost for FAL.ai models
  * FAL.ai pricing is similar to Replicate (compute time based)
  */
@@ -226,6 +274,10 @@ export function calculateGenerationCost(
 
   if (modelId.startsWith('replicate-')) {
     return calculateReplicateCost(modelId, computeTimeSeconds)
+  }
+
+  if (modelId.startsWith('openai-')) {
+    return calculateOpenAICost(modelId, { outputCount })
   }
 
   if (modelId.startsWith('fal-')) {

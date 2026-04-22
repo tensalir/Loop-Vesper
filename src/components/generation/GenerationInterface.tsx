@@ -1087,8 +1087,11 @@ export function GenerationInterface({
       
       const extraModelParams: Record<string, unknown> = {}
       const typedParameters = parameters as unknown as Record<string, unknown>
-      if (typeof typedParameters.quality !== 'undefined') {
-        extraModelParams.quality = typedParameters.quality
+      const extraKeys = ['quality', 'outputFormat', 'outputCompression', 'background', 'moderation', 'mask'] as const
+      for (const key of extraKeys) {
+        if (typeof typedParameters[key] !== 'undefined') {
+          extraModelParams[key] = typedParameters[key]
+        }
       }
 
       let targetSessionId = session.id

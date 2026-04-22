@@ -17,6 +17,7 @@ import { AspectRatioSelector } from './AspectRatioSelector'
 import { ModelPicker } from './ModelPicker'
 import { ImageBrowseModal } from './ImageBrowseModal'
 import { ProductRendersBrowseModal } from './ProductRendersBrowseModal'
+import { ModelOptionControls } from './ModelOptionControls'
 import { PromptEnhancementButton } from './PromptEnhancementButton'
 import { PdfBucketRail, PDF_BUCKET_MIME } from './PdfBucketRail'
 import { usePdfIngestion } from '@/hooks/usePdfIngestion'
@@ -84,6 +85,8 @@ export function ChatInput({
   const [transformedPrompt, setTransformedPrompt] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const maskInputRef = useRef<HTMLInputElement>(null)
+  const [maskPreviewUrl, setMaskPreviewUrl] = useState<string | null>(null)
   
   // Brief visual feedback when generate is triggered
   const [showGeneratingFeedback, setShowGeneratingFeedback] = useState(false)
@@ -156,7 +159,7 @@ export function ChatInput({
         }
       }
       
-      // Clear reference images if switching to a model that doesn't support editing
+      // Clear reference images and mask if switching to a model that doesn't support editing
       if (!supportsEditing) {
         // Clean up all preview URLs
         imagePreviewUrlsRef.current.forEach(url => {
@@ -167,17 +170,60 @@ export function ChatInput({
         setImagePreviewUrls([])
         setReferenceImages([])
         setReferenceImage(null)
+        setMaskPreviewUrl(null)
         lastLoadedUrlsRef.current = []
         hydrateInFlightKeyRef.current = null
         hydrateRequestIdRef.current += 1
         onReferenceImageUrlsChange?.([])
       }
       
+      // Reset model-specific extended parameters to config defaults (or undefined)
+      const extendedKeys = ['quality', 'outputFormat', 'outputCompression', 'background', 'moderation'] as const
+      for (const key of extendedKeys) {
+        const paramDef = modelParameters.find(p => p.name === key)
+        if (paramDef) {
+          if ((parameters as any)[key] === undefined) {
+            updates[key] = paramDef.default
+          }
+        } else if ((parameters as any)[key] !== undefined) {
+          updates[key] = undefined
+        }
+      }
+
       if (Object.keys(updates).length > 0) {
         onParametersChange({ ...parameters, ...updates })
       }
     }
   }, [modelConfig, selectedModel, modelParameters])
+
+  const handleMaskSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+
+    if (file.type !== 'image/png') {
+      toast({ title: 'Invalid mask', description: 'Mask must be a PNG file with an alpha channel.', variant: 'destructive' })
+      return
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      toast({ title: 'Mask too large', description: 'Mask must be under 50 MB.', variant: 'destructive' })
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      setMaskPreviewUrl(dataUrl)
+      onParametersChange({ ...parameters, mask: dataUrl })
+    }
+    reader.readAsDataURL(file)
+  }, [parameters, onParametersChange, toast])
+
+  const handleClearMask = useCallback(() => {
+    setMaskPreviewUrl(null)
+    const { mask: _removed, ...rest } = parameters as any
+    onParametersChange(rest)
+  }, [parameters, onParametersChange])
 
   const handleSubmit = async () => {
     // Best practice (see `.sentinel.md`): avoid submitting during transient UI state.
@@ -993,6 +1039,52 @@ export function ChatInput({
             </SelectContent>
           </Select>
         )}
+
+        {/* Mask upload — visible when editing model + refs attached */}
+        {supportsImageEditing && imagePreviewUrls.length > 0 && (
+          <div className="relative group">
+            <button
+              type="button"
+              onClick={() => maskInputRef.current?.click()}
+              className={`h-8 px-2 rounded-lg border text-xs flex items-center gap-1 transition-all ${
+                maskPreviewUrl
+                  ? 'border-primary/50 bg-primary/5'
+                  : 'border-dashed border-muted-foreground/30 hover:border-primary/50'
+              }`}
+              title={maskPreviewUrl ? 'Change mask' : 'Add mask (PNG with alpha)'}
+            >
+              {maskPreviewUrl ? (
+                <img src={maskPreviewUrl} alt="Mask" className="h-5 w-5 object-cover rounded-sm" />
+              ) : (
+                <Circle className="h-3.5 w-3.5 text-muted-foreground/70" />
+              )}
+              <span className="text-muted-foreground">Mask</span>
+            </button>
+            {maskPreviewUrl && (
+              <button
+                onClick={handleClearMask}
+                className="absolute -top-1 -right-1 bg-background border border-border rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-destructive hover:text-destructive-foreground z-10"
+                title="Remove mask"
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            )}
+            <input
+              ref={maskInputRef}
+              type="file"
+              accept="image/png"
+              className="hidden"
+              onChange={handleMaskSelect}
+            />
+          </div>
+        )}
+
+        {/* Model-specific option controls (quality, format, etc.) */}
+        <ModelOptionControls
+          modelParameters={modelParameters}
+          parameters={parameters}
+          onParametersChange={onParametersChange}
+        />
 
         {/* Keyboard Shortcut */}
         <span className="text-xs text-muted-foreground ml-auto hidden lg:inline-flex items-center gap-1">

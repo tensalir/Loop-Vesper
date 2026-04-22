@@ -31,6 +31,18 @@ interface GenerateParams {
     /** End frame pre-uploaded HTTP URL (preferred over base64) */
     endFrameImageUrl?: string
     endFrameImageId?: string
+    /** Mask image base64 data URL for inpainting (OpenAI edits) */
+    mask?: string
+    /** OpenAI quality setting */
+    quality?: 'low' | 'medium' | 'high' | 'auto'
+    /** OpenAI output format */
+    outputFormat?: 'png' | 'jpeg' | 'webp'
+    /** JPEG/WebP compression 0-100 */
+    outputCompression?: number
+    /** Background mode (opaque or auto) */
+    background?: 'opaque' | 'auto'
+    /** Content moderation level */
+    moderation?: 'auto' | 'low'
     /** Brand World zone/stage association */
     brandWorldStageId?: string
     /** Lineage / branching */

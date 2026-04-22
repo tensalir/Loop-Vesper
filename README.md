@@ -63,7 +63,7 @@ cd Loop-Vesper
 npm install
 ```
 
-Configure your local project settings with the required database, storage, auth, and provider credentials. See the repo's configuration example for the full list of required fields.
+Configure your local project settings with the required database, storage, auth, and provider credentials. See the repo's configuration example for the full list of required fields. For OpenAI GPT Image 2, set `OPENAI_API_KEY` in `.env.local` and complete [API Organization Verification](https://help.openai.com/en/articles/10910291-api-organization-verification) from the OpenAI developer console.
 
 ```bash
 npm run prisma:push

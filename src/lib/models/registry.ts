@@ -16,6 +16,10 @@ import {
   KlingOfficialAdapter,
   KLING_OFFICIAL_CONFIG,
 } from './adapters/kling'
+import {
+  OpenAIAdapter,
+  GPT_IMAGE_2_CONFIG,
+} from './adapters/openai'
 
 /**
  * Model Registry
@@ -44,6 +48,9 @@ class ModelRegistry {
     
     // Register Official Kling API (preferred for frame interpolation)
     this.register(KLING_OFFICIAL_CONFIG, KlingOfficialAdapter)
+    
+    // Register OpenAI models
+    this.register(GPT_IMAGE_2_CONFIG, OpenAIAdapter)
   }
 
   /**

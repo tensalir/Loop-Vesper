@@ -6,6 +6,11 @@ interface GenerationParameters {
   resolution: number
   numOutputs: number
   duration?: number
+  quality?: 'low' | 'medium' | 'high' | 'auto'
+  outputFormat?: 'png' | 'jpeg' | 'webp'
+  outputCompression?: number
+  background?: 'opaque' | 'auto'
+  moderation?: 'auto' | 'low'
 }
 
 interface UIState {
