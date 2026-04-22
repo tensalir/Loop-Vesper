@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse, unstable_after as after } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { waitUntil } from '@vercel/functions'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
@@ -444,7 +445,7 @@ export async function POST(request: NextRequest) {
         }
       }
       
-      after(async () => {
+      waitUntil((async () => {
         try {
           await triggerProcessing()
         } catch (error) {
@@ -460,7 +461,7 @@ export async function POST(request: NextRequest) {
             },
           }).catch(console.error)
         }
-      })
+      })())
     } else {
       console.log(`[${generation.id}] Queue mode enabled - awaiting worker pull`)
     }

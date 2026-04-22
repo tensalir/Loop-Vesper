@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse, unstable_after as after } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { waitUntil } from '@vercel/functions'
 import { prisma } from '@/lib/prisma'
 import { getModel } from '@/lib/models/registry'
 import { uploadBase64ToStorage, uploadUrlToStorage } from '@/lib/supabase/storage'
@@ -863,7 +864,7 @@ export async function POST(request: NextRequest) {
 
     const generationIds = handles.map((h) => h.generationId)
 
-    after(async () => {
+    waitUntil((async () => {
       const afterStartedAt = Date.now()
       let afterMetricStatus: 'success' | 'error' = 'success'
       const afterMetricMeta: Record<string, any> = { ...metricMeta }
@@ -888,7 +889,7 @@ export async function POST(request: NextRequest) {
         const hasFailure = results.some((r) => r.status === 'failed')
         if (hasFailure) afterMetricStatus = 'error'
       } catch (error: any) {
-        console.error('Background generation error (after):', error)
+        console.error('Background generation error (waitUntil):', error)
         afterMetricStatus = 'error'
       } finally {
         logMetric({
@@ -901,7 +902,7 @@ export async function POST(request: NextRequest) {
           },
         })
       }
-    })
+    })())
 
     return NextResponse.json(
       { accepted: true, generationIds },
