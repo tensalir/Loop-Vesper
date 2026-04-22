@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, unstable_after as after } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getModel } from '@/lib/models/registry'
 import { uploadBase64ToStorage, uploadUrlToStorage } from '@/lib/supabase/storage'
@@ -861,48 +861,51 @@ export async function POST(request: NextRequest) {
       return respond({ error: 'Generation ID is required' }, 400)
     }
 
-    const results: GenerationProcessResult[] = []
+    const generationIds = handles.map((h) => h.generationId)
 
-    for (const handle of handles) {
-      const result = await processGenerationById(handle.generationId)
-      results.push(result)
-      if (handle.job) {
-        await resolveJobHandle(handle.job, result)
+    after(async () => {
+      const afterStartedAt = Date.now()
+      let afterMetricStatus: 'success' | 'error' = 'success'
+      const afterMetricMeta: Record<string, any> = { ...metricMeta }
+
+      try {
+        const results: GenerationProcessResult[] = []
+
+        for (const handle of handles) {
+          const result = await processGenerationById(handle.generationId)
+          results.push(result)
+          if (handle.job) {
+            await resolveJobHandle(handle.job, result)
+          }
+        }
+
+        afterMetricMeta.results = results.map((r) => ({
+          id: r.id,
+          status: r.status,
+          errorCategory: r.errorCategory,
+        }))
+
+        const hasFailure = results.some((r) => r.status === 'failed')
+        if (hasFailure) afterMetricStatus = 'error'
+      } catch (error: any) {
+        console.error('Background generation error (after):', error)
+        afterMetricStatus = 'error'
+      } finally {
+        logMetric({
+          name: 'api_generate_process_post',
+          status: afterMetricStatus,
+          durationMs: Date.now() - afterStartedAt,
+          meta: {
+            ...afterMetricMeta,
+            phase: 'after',
+          },
+        })
       }
-    }
+    })
 
-    metricMeta.results = results.map((r) => ({ id: r.id, status: r.status, errorCategory: r.errorCategory }))
-
-    const failedResults = results.filter((r) => r.status === 'failed')
-    const hasFailure = failedResults.length > 0
-    
-    // Use the classified HTTP status instead of blanket 500.
-    // For single-result requests, use the specific error's HTTP status.
-    // For batch requests, pick the "worst" status (highest priority error).
-    let httpStatus = 200
-    if (hasFailure) {
-      if (failedResults.length === 1) {
-        httpStatus = failedResults[0].errorHttpStatus || 500
-      } else {
-        // Multiple failures: prioritize by severity (500 > 502 > 429 > 422)
-        const statusPriority: Record<number, number> = { 500: 4, 502: 3, 429: 2, 422: 1, 400: 0 }
-        httpStatus = failedResults.reduce((worst, r) => {
-          const status = r.errorHttpStatus || 500
-          return (statusPriority[status] ?? 0) > (statusPriority[worst] ?? 0) ? status : worst
-        }, failedResults[0].errorHttpStatus || 500)
-      }
-    }
-
-    if (handles.length === 1 && !handles[0].job) {
-      return respond(results[0], httpStatus)
-    }
-
-    return respond(
-      {
-        processed: results.length,
-        results,
-      },
-      httpStatus
+    return NextResponse.json(
+      { accepted: true, generationIds },
+      { status: 202 }
     )
   } catch (error: any) {
     console.error('Background generation error:', error)
@@ -924,6 +927,7 @@ export async function POST(request: NextRequest) {
       meta: {
         ...metricMeta,
         statusCode,
+        phase: 'request',
       },
     })
   }

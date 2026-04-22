@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, unstable_after as after } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
@@ -444,18 +444,22 @@ export async function POST(request: NextRequest) {
         }
       }
       
-      triggerProcessing().catch((error) => {
-        console.error(`[${generation.id}] Background processing trigger failed completely:`, error)
-        prisma.generation.update({
-          where: { id: generation.id },
-          data: { 
-            status: 'failed',
-            parameters: {
-              ...generationParameters,
-              error: 'Failed to start background processing',
-            }
-          },
-        }).catch(console.error)
+      after(async () => {
+        try {
+          await triggerProcessing()
+        } catch (error) {
+          console.error(`[${generation.id}] Background processing trigger failed completely:`, error)
+          await prisma.generation.update({
+            where: { id: generation.id },
+            data: { 
+              status: 'failed',
+              parameters: {
+                ...generationParameters,
+                error: 'Failed to start background processing',
+              }
+            },
+          }).catch(console.error)
+        }
       })
     } else {
       console.log(`[${generation.id}] Queue mode enabled - awaiting worker pull`)
