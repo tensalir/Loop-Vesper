@@ -87,11 +87,19 @@ test.describe('resolveSize — aspect ratio + resolution → OpenAI size', () =>
 // ---- Generations body construction patterns ----
 
 test.describe('Generations body construction', () => {
+  test('omits response_format for gpt-image-2', () => {
+    const body: Record<string, any> = {
+      model: 'gpt-image-2',
+      prompt: 'test',
+    }
+
+    expect(body.response_format).toBeUndefined()
+  })
+
   test('omits output_compression when format is png', () => {
     const body: Record<string, any> = {
       model: 'gpt-image-2',
       prompt: 'test',
-      response_format: 'b64_json',
     }
     const format = 'png'
     if (format !== 'png') body.output_compression = 85
@@ -102,7 +110,6 @@ test.describe('Generations body construction', () => {
     const body: Record<string, any> = {
       model: 'gpt-image-2',
       prompt: 'test',
-      response_format: 'b64_json',
     }
     const format: string = 'jpeg'
     if (format !== 'png') body.output_compression = 85
@@ -113,7 +120,6 @@ test.describe('Generations body construction', () => {
     const body: Record<string, any> = {
       model: 'gpt-image-2',
       prompt: 'test',
-      response_format: 'b64_json',
     }
     const format: string = 'webp'
     if (format !== 'png') body.output_compression = 50

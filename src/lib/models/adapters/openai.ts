@@ -243,7 +243,6 @@ export class OpenAIAdapter extends BaseModelAdapter {
     const body: Record<string, any> = {
       model: 'gpt-image-2',
       prompt,
-      response_format: 'b64_json',
     }
     if (opts.size) body.size = opts.size
     if (opts.quality) body.quality = opts.quality
