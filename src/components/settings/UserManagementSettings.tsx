@@ -48,6 +48,7 @@ import {
   Layers,
   ChevronLeft,
   ChevronRight,
+  KeyRound,
 } from 'lucide-react'
 
 interface AdminUser {
@@ -56,6 +57,10 @@ interface AdminUser {
   displayName: string | null
   avatarUrl: string | null
   role: 'admin' | 'user'
+  // Per-user grant for the private /headless landing page. Admins always
+  // see /headless via their role, so this flag is only meaningful for
+  // role: 'user' accounts (Loop teammates and external partners).
+  headlessAccess: boolean
   pausedAt: string | null
   deletedAt: string | null
   createdAt: string
@@ -205,6 +210,28 @@ export function UserManagementSettings() {
     }
   }
 
+  const handleToggleHeadlessAccess = async (user: AdminUser) => {
+    setActionLoading(user.id)
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/headless-access`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !user.headlessAccess }),
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        let message = 'Failed to update headless access'
+        try { message = JSON.parse(text).error || message } catch { /* non-JSON */ }
+        throw new Error(message)
+      }
+      await fetchUsers()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update headless access')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   const handleDelete = async () => {
     if (!deleteTarget) return
     setActionLoading(deleteTarget.id)
@@ -320,6 +347,15 @@ export function UserManagementSettings() {
                               {user.role === 'admin' && (
                                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Admin</Badge>
                               )}
+                              {user.role !== 'admin' && user.headlessAccess && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] px-1.5 py-0 border-primary/40 text-primary"
+                                  title="This user can view the private /headless landing page"
+                                >
+                                  Headless
+                                </Badge>
+                              )}
                               <span className="md:hidden">
                                 <StatusBadge status={status} />
                               </span>
@@ -364,6 +400,12 @@ export function UserManagementSettings() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleToggleHeadlessAccess(user)}>
+                                <KeyRound className="h-4 w-4 mr-2" />
+                                {user.headlessAccess
+                                  ? 'Revoke Headless Access'
+                                  : 'Grant Headless Access'}
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => setPauseTarget(user)}>
                                 {user.pausedAt ? (
                                   <>
