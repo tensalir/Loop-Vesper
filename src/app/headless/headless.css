@@ -373,6 +373,17 @@
   transform: translateX(-50%);
 }
 
+.vh-orbit__pill--primary {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+  box-shadow: 0 8px 22px -8px hsl(var(--primary) / 0.55);
+}
+
+.vh-orbit__pill--primary .vh-orbit__pill-dot {
+  background: hsl(var(--primary-foreground));
+}
+
 .vh-orbit__pill--right {
   top: 44%;
   right: 0;
@@ -773,6 +784,43 @@
   box-shadow: 0 0 0 2px hsl(var(--primary)), 0 0 0 4px hsl(var(--background));
 }
 
+/* Recommended surface (MCP) — soft mint fill that persists even when the
+   option is not the active tab. The eye should land here first. */
+.vh-surfaces__option--recommended {
+  background: linear-gradient(
+    160deg,
+    hsl(var(--primary) / 0.18),
+    hsl(var(--primary) / 0.06) 60%,
+    hsl(var(--card)) 100%
+  );
+  border-color: hsl(var(--primary) / 0.55);
+  box-shadow: 0 8px 24px -16px hsl(var(--primary) / 0.5);
+}
+
+.vh-surfaces__option--recommended:hover {
+  border-color: hsl(var(--primary));
+}
+
+.vh-surfaces__option--recommended.is-active {
+  background: linear-gradient(
+    160deg,
+    hsl(var(--primary) / 0.28),
+    hsl(var(--primary) / 0.08) 70%
+  );
+  border-color: hsl(var(--primary));
+}
+
+/* Placeholder surfaces (e.g. Skill bundle while distribution is prepared)
+   are dimmed slightly so they read as "exists, not the recommended path". */
+.vh-surfaces__option--placeholder {
+  opacity: 0.78;
+}
+
+.vh-surfaces__option--placeholder:hover,
+.vh-surfaces__option--placeholder.is-active {
+  opacity: 1;
+}
+
 .vh-surfaces__icon {
   display: grid;
   place-items: center;
@@ -787,21 +835,60 @@
   flex-shrink: 0;
 }
 
-.vh-surfaces__option.is-active .vh-surfaces__icon {
+.vh-surfaces__option.is-active .vh-surfaces__icon,
+.vh-surfaces__option--recommended .vh-surfaces__icon {
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
 }
 
 .vh-surfaces__copy {
   display: grid;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
+}
+
+.vh-surfaces__name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .vh-surfaces__name {
   font-size: 14.5px;
   font-weight: 600;
   color: hsl(var(--foreground));
+}
+
+.vh-surfaces__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.vh-surfaces__badge--recommended {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+}
+
+.vh-surfaces__badge--live {
+  background: hsl(var(--secondary));
+  color: hsl(var(--muted-foreground));
+  border-color: hsl(var(--border));
+}
+
+.vh-surfaces__badge--placeholder {
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  border-color: hsl(var(--border));
 }
 
 .vh-surfaces__verb {
@@ -815,8 +902,26 @@
   font-size: 16px;
 }
 
-.vh-surfaces__option.is-active .vh-surfaces__caret {
+.vh-surfaces__option.is-active .vh-surfaces__caret,
+.vh-surfaces__option--recommended .vh-surfaces__caret {
   color: hsl(var(--primary));
+}
+
+/* Right-hand panel gets a matching mint hairline when the active surface
+   is the recommended one, so the visual tie-in is unambiguous. */
+.vh-surfaces__panel--recommended {
+  border-color: hsl(var(--primary) / 0.55);
+  box-shadow:
+    0 20px 50px -28px hsl(var(--primary) / 0.4),
+    0 20px 50px -28px rgba(0, 0, 0, 0.5);
+}
+
+.vh-surfaces__panel--recommended .vh-surfaces__panel-head {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--primary) / 0.12),
+    hsl(var(--secondary) / 0.6)
+  );
 }
 
 .vh-surfaces__panel {

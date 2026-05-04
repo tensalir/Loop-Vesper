@@ -18,9 +18,9 @@ import { SurfacesSelector } from './SurfacesSelector'
 import './headless.css'
 
 export const metadata = {
-  title: 'Vesper Headless · The creative engine behind the workspace',
+  title: 'Vesper Headless · For Loop partners',
   description:
-    'A private overview of the Vesper headless creative engine — REST API and MCP for partners and integrators inside Loop.',
+    'A private overview of Vesper Headless: the same image and video workshop the Loop Studio team uses, ready to plug into Claude, Cursor, and your own systems.',
   robots: { index: false, follow: false },
 }
 
@@ -123,19 +123,19 @@ export default async function HeadlessPage() {
               </dl>
             </div>
 
-            <aside className="vh-hero__panel" aria-label="Vesper engine overview">
+            <aside className="vh-hero__panel" aria-label="Where Vesper shows up">
               <span className="vh-hero__panel-halo" aria-hidden="true" />
               <header className="vh-hero__panel-head">
                 <span className="vh-hero__panel-dot" aria-hidden="true" />
-                <span className="vh-hero__panel-label">One engine · four surfaces</span>
+                <span className="vh-hero__panel-label">One Vesper · four ways in</span>
                 <span className="vh-hero__panel-live">Live</span>
               </header>
               <div className="vh-orbit" aria-hidden="true">
                 <span className="vh-orbit__ring vh-orbit__ring--outer" />
                 <span className="vh-orbit__ring vh-orbit__ring--inner" />
-                <span className="vh-orbit__pill vh-orbit__pill--top">
+                <span className="vh-orbit__pill vh-orbit__pill--top vh-orbit__pill--primary">
                   <span className="vh-orbit__pill-dot" />
-                  <span>Web app</span>
+                  <span>MCP server</span>
                 </span>
                 <span className="vh-orbit__pill vh-orbit__pill--right">
                   <span className="vh-orbit__pill-dot" />
@@ -143,15 +143,15 @@ export default async function HeadlessPage() {
                 </span>
                 <span className="vh-orbit__pill vh-orbit__pill--bottom-left">
                   <span className="vh-orbit__pill-dot" />
-                  <span>MCP</span>
+                  <span>Web app</span>
                 </span>
                 <span className="vh-orbit__pill vh-orbit__pill--bottom-right">
                   <span className="vh-orbit__pill-dot" />
                   <span>Skill</span>
                 </span>
                 <span className="vh-orbit__core">
-                  <strong>Vesper engine</strong>
-                  <span>Substrate</span>
+                  <strong>Vesper</strong>
+                  <span>Loop know-how</span>
                 </span>
               </div>
             </aside>
