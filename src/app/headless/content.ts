@@ -14,8 +14,7 @@ export const nav = {
   links: [
     { id: 'why', label: 'Why this matters', href: '#why' },
     { id: 'engine', label: 'What is inside', href: '#engine' },
-    { id: 'surfaces', label: 'Where you use it', href: '#surfaces' },
-    { id: 'use', label: 'Setup', href: '#use' },
+    { id: 'surfaces', label: 'How to use it', href: '#surfaces' },
   ] as NavLink[],
 }
 
@@ -157,6 +156,20 @@ export type SurfaceId = 'mcp' | 'rest' | 'web' | 'skill'
 
 export type SurfaceStatus = 'recommended' | 'live' | 'placeholder'
 
+/** A copy-pasteable field rendered as a labelled value with a Copy button. */
+export type SurfaceField = {
+  label: string
+  value: string
+  /** Optional one-liner shown below the field. Plain language only. */
+  hint?: string
+}
+
+/** A single install step. `main` is the headline, `detail` adds context. */
+export type SurfaceInstruction = {
+  main: string
+  detail?: string
+}
+
 export type Surface = {
   id: SurfaceId
   icon: string
@@ -167,15 +180,26 @@ export type Surface = {
   /** Optional short label rendered next to the title in the detail panel
    *  (e.g. "Recommended", "API", "Coming soon"). */
   badge?: string
-  detail: { title: string; meta: string; lines: string[] }
+  detail: {
+    title: string
+    meta: string
+    /** Optional intro paragraph shown above the fields. */
+    body?: string
+    /** Copy-pasteable values. Render as a list of label + value + Copy button. */
+    fields?: SurfaceField[]
+    /** Optional install steps shown under the fields. */
+    instructions?: SurfaceInstruction[]
+    /** Optional small footnote at the bottom of the panel (e.g. known gaps). */
+    footnote?: string
+  }
 }
 
 export const surfacesSection = {
-  eyebrow: 'Where you use it',
+  eyebrow: 'How to use it',
   title: 'One Vesper.',
   titleEm: 'A few different ways to reach it.',
   lede:
-    'For most partners, the recommended way in is the connector. You install Vesper inside Claude or Cursor, sign in once with your Loop account, and Vesper shows up as a built-in tool. No keys to copy, no code to glue together.',
+    'The recommended way in is the MCP connector. You add Vesper to your AI client once, with two values Loop sends you, and Vesper shows up as a built-in tool. No code to write, no keys to manage. The other surfaces are for developers and for the Studio team itself.',
   panelLabel: 'Vesper engine · v1',
 }
 
@@ -183,35 +207,46 @@ export const surfaces: Surface[] = [
   {
     id: 'mcp',
     icon: '◇',
-    name: 'Cursor connector',
-    verb: 'Install once. Use natively.',
-    who: 'The recommended way to use Vesper today. Loop sends you a personal access token when you are added to the preview. The same address also works from the Anthropic API and from any other tool that lets you set custom HTTP headers on an MCP server.',
+    name: 'MCP connector',
+    verb: 'Two values to paste. Five-minute install.',
+    who: 'The recommended way for everyone. Add Vesper to your AI client once, then ask the assistant to use it directly.',
     status: 'recommended',
     badge: 'Recommended',
     detail: {
-      title: 'Cursor connector',
-      meta: 'Settings -> MCP -> Add server',
-      lines: [
-        '// In Cursor, open Settings -> MCP -> Add server.',
-        '// Paste this JSON. Replace the token with the one Loop sends you.',
-        '',
-        '{',
-        '  "vesper": {',
-        '    "url": "https://vesper.loop.dev/api/mcp",',
-        '    "headers": {',
-        '      "Authorization": "Bearer vsp_live_..."',
-        '    }',
-        '  }',
-        '}',
-        '',
-        '// Restart Cursor. Vesper appears with three tools:',
-        '//   \u2022 Make a prompt better',
-        '//   \u2022 See alternatives',
-        '//   \u2022 Find the right model',
-        '',
-        '// Same shape works in any MCP-aware client that allows',
-        '// custom HTTP headers (Anthropic API, Claude desktop config, etc).',
+      title: 'Vesper MCP connector',
+      meta: 'Two values to paste',
+      body:
+        'Loop emails you a personal access token when you join the preview. Paste the two values below into your AI client, and Vesper shows up as a connector with three tools.',
+      fields: [
+        {
+          label: 'Server URL',
+          value: 'https://vesper.loop.dev/api/mcp',
+          hint: 'The same address for every partner.',
+        },
+        {
+          label: 'Authorization header',
+          value: 'Bearer vsp_live_<your-token>',
+          hint: 'Replace <your-token> with the one Loop emails you. Treat it like a password.',
+        },
       ],
+      instructions: [
+        {
+          main: 'Open the MCP settings in your AI client.',
+          detail:
+            'Cursor: Settings, then MCP, then Add server. Claude Desktop: open the Developer settings and edit claude_desktop_config.json. Anthropic API: add Vesper to the mcp_servers field on your request.',
+        },
+        {
+          main: 'Paste the Server URL above into the new entry.',
+        },
+        {
+          main: 'Paste the Authorization header. Swap the placeholder for your token.',
+        },
+        {
+          main: 'Restart the client. Vesper appears with three tools: make a prompt better, see alternatives, find the right model.',
+        },
+      ],
+      footnote:
+        'Adding Vesper directly inside the Claude.ai web app is a known gap. The web app form does not accept a pasted token; it requires a sign-in handshake we have not built. Cursor, Claude Desktop, and the Anthropic API all work today.',
     },
   },
   {
@@ -219,25 +254,40 @@ export const surfaces: Surface[] = [
     icon: '{ }',
     name: 'API for your systems',
     verb: 'For developers wiring Vesper into their own tools.',
-    who: 'Used by Loop\u2019s own internal tools. Pick this if you are building a backend that needs Vesper, not a chat or agent surface.',
+    who: 'For backend integrations only. Pick this if you are building a server, not a chat or agent.',
     status: 'live',
     badge: 'API',
     detail: {
       title: 'API for your systems',
-      meta: 'POST /api/headless/v1/prompts/enhance',
-      lines: [
-        '// Server-to-server only. Tokens come from a Loop admin.',
-        '// Not for browsers, end-user apps, or anything pasted into a UI.',
-        '',
-        'POST /api/headless/v1/prompts/enhance',
-        'Authorization: Bearer vsp_live_…',
-        'Content-Type: application/json',
-        '',
-        '{ "prompt": "documentary still of a potter at a wheel",',
-        '  "modelId": "gemini-nano-banana-pro" }',
-        '',
-        '-> { enhancedPrompt, modelId, skill: { hash, lastModified } }',
+      meta: 'For developers',
+      body:
+        'A standard REST surface. Same access token as the MCP connector. Use it when you need Vesper inside your own backend, batch script, or admin tool.',
+      fields: [
+        {
+          label: 'Endpoint',
+          value: 'POST https://vesper.loop.dev/api/headless/v1/prompts/enhance',
+        },
+        {
+          label: 'Authorization header',
+          value: 'Bearer vsp_live_<your-token>',
+          hint: 'Server-to-server only. Never paste this into a browser or end-user app.',
+        },
       ],
+      instructions: [
+        {
+          main: 'Send a JSON body with your prompt and a model id.',
+          detail:
+            'Example body: { "prompt": "documentary still of a potter", "modelId": "gemini-nano-banana-pro" }',
+        },
+        {
+          main: 'Read the response. Vesper returns the sharpened prompt and the skill version it used.',
+        },
+        {
+          main: 'Watch the rate-limit headers. The remaining minute and day budget is on every response.',
+        },
+      ],
+      footnote:
+        'Full request shapes, error codes, and the rate-limit reference live in `docs/headless-vesper.md` inside the Loop-Vesper repo.',
     },
   },
   {
@@ -245,18 +295,13 @@ export const surfaces: Surface[] = [
     icon: '◐',
     name: 'The Vesper web app',
     verb: 'For the Loop Studio team.',
-    who: 'What the Studio team uses every day. A full canvas for image and video work, with the same Loop know-how underneath.',
+    who: 'What the Studio team uses every day. The full canvas for image and video work, with the same Loop know-how built in.',
     status: 'live',
     detail: {
       title: 'The Vesper web app',
-      meta: 'Live · in-app workspace',
-      lines: [
-        '// The original Vesper. Where the Loop know-how was first built up.',
-        '',
-        'designer  -> writes a prompt, drops in reference images',
-        'vesper    -> sharpens it, generates, branches, animates',
-        'review    -> approved straight from the gallery',
-      ],
+      meta: 'For the Studio team',
+      body:
+        'The original Vesper. A full canvas for image and video work: prompt, reference images, branching, animate-still, gallery review. Sign in with your Loop account and pick up where the Studio team left off.',
     },
   },
   {
@@ -264,23 +309,14 @@ export const surfaces: Surface[] = [
     icon: '✦',
     name: 'Skill bundle',
     verb: 'For Claude.ai and ChatGPT.',
-    who: 'The same know-how, packaged so it drops directly into Claude.ai or ChatGPT. Distribution is being prepared.',
+    who: 'The same know-how, packaged so it drops directly into Claude.ai or ChatGPT.',
     status: 'placeholder',
     badge: 'Coming soon',
     detail: {
       title: 'Skill bundle',
-      meta: 'Loop know-how, portable',
-      lines: [
-        '// The same know-how that powers the connector, packaged so',
-        '// you can upload it directly into Claude.ai or ChatGPT.',
-        '',
-        'name        Loop gen-ai prompting',
-        'version     pinned to a specific release',
-        'updated     2026-05-04',
-        '',
-        '// Reach out to the Studio team if you would like access',
-        '// while the bundle is in private preview.',
-      ],
+      meta: 'In private preview',
+      body:
+        'The Loop know-how packaged as a portable bundle, so it can drop into Claude.ai, ChatGPT, or any agent shell that supports the Skills format. Distribution is being prepared. If you would like early access while the bundle is in private preview, reach out to the Studio team.',
     },
   },
 ]
@@ -305,57 +341,6 @@ export const surfacesFoot = [
       'When the next great image or video model lands, Vesper switches to it. The Loop know-how does not have to be rewritten for the new model.',
   },
 ]
-
-/* ─────────────────────────────────────────────────────────────────────────
- * Use it — concrete adoption steps.
- * ─────────────────────────────────────────────────────────────────────── */
-
-export type UseStep = {
-  n: string
-  title: string
-  body: string
-  detail?: string
-}
-
-export const useSection = {
-  eyebrow: 'Setup',
-  title: 'Add Vesper to Cursor.',
-  titleEm: 'Five minutes, one JSON snippet.',
-  lede:
-    'Cursor is the proven way to use Vesper today. Same shape works from any MCP-aware client that lets you set custom HTTP headers, including the Anthropic API directly. Once Loop adds you to the preview, you will get a personal access token by email.',
-  steps: [
-    {
-      n: '01',
-      title: 'Open Cursor settings.',
-      body:
-        'Open Cursor, go to Settings, and find the MCP section. Click "Add server" to bring up the JSON editor for a new server entry.',
-      detail: 'Cursor: Settings -> MCP -> Add server',
-    },
-    {
-      n: '02',
-      title: 'Paste the Vesper config.',
-      body:
-        'Paste the JSON snippet from the surface card above. The address is the same for every partner: https://vesper.loop.dev/api/mcp.',
-      detail: '{ "vesper": { "url": "...", "headers": { ... } } }',
-    },
-    {
-      n: '03',
-      title: 'Drop in your access token.',
-      body:
-        'Replace the placeholder in the Authorization header with the token Loop sends you. The token is yours, scoped to your access, and Loop can revoke it instantly from the admin side.',
-      detail: 'Authorization: Bearer vsp_live_...',
-    },
-    {
-      n: '04',
-      title: 'Restart Cursor and start asking.',
-      body:
-        'Restart Cursor so it picks up the new server. Vesper appears as a connector with three tools the assistant can call directly: make a prompt better, see alternatives, find the right model.',
-      detail: 'Tools: enhance_prompt · iterate_prompt · list_models',
-    },
-  ] as UseStep[],
-  footnote:
-    'Known gap: adding Vesper directly inside the Claude.ai web app is not yet possible. The web app\u2019s "Add custom connector" form does not accept a pasted access token, only an OAuth sign-in handshake that we have not built. Cursor, the Anthropic API, and any MCP client that supports custom HTTP headers all work today; the full technical reference lives in `docs/headless-vesper.md` inside the Loop-Vesper repo.',
-}
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Close — final framing + contact.

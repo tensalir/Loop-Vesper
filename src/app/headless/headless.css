@@ -960,22 +960,184 @@
 }
 
 .vh-surfaces__panel-body {
+  padding: 22px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  flex: 1;
+  min-width: 0;
+}
+
+.vh-panel-prose {
   margin: 0;
-  padding: 22px 24px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: hsl(var(--foreground) / 0.85);
+}
+
+/* Copy-pasteable fields — labelled values with an inline Copy button.
+   Designed so a non-technical reader can scan: label, value, action. */
+.vh-fields {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.vh-field {
+  display: grid;
+  gap: 6px;
+}
+
+.vh-field__label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.vh-field__row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+
+.vh-field__value {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  background: hsl(var(--background) / 0.7);
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px;
-  line-height: 1.65;
-  color: hsl(var(--foreground) / 0.92);
-  white-space: pre-wrap;
-  word-break: break-word;
-  flex: 1;
+  color: hsl(var(--foreground));
+  overflow-x: auto;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  user-select: all;
+  cursor: text;
 }
 
-.vh-surfaces__panel-body span {
-  display: block;
+.vh-field__hint {
+  margin: 0;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.5;
 }
 
-.vh-surfaces__panel-body .vh-line--c {
+.vh-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: 1px solid hsl(var(--primary));
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 200ms, color 200ms, transform 120ms;
+  flex-shrink: 0;
+  min-height: 40px;
+}
+
+.vh-copy:hover {
+  background: hsl(var(--primary) / 0.9);
+}
+
+.vh-copy:active {
+  transform: scale(0.97);
+}
+
+.vh-copy:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary));
+}
+
+.vh-copy.is-copied {
+  background: hsl(var(--secondary));
+  color: hsl(var(--primary));
+  border-color: hsl(var(--primary) / 0.5);
+}
+
+.vh-copy__icon {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* Plain-language install steps shown under the fields. Numbered for
+   clarity; the number is decorative so it gets aria-hidden in the JSX. */
+.vh-how__h {
+  margin: 0 0 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.vh-how__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.vh-how__step {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.vh-how__num {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: hsl(var(--primary));
+  padding-top: 2px;
+}
+
+.vh-how__copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.vh-how__main {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: hsl(var(--foreground));
+  font-weight: 500;
+}
+
+.vh-how__detail {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: hsl(var(--muted-foreground));
+}
+
+.vh-panel-foot {
+  margin: 4px 0 0;
+  padding: 12px 14px;
+  background: hsl(var(--secondary) / 0.5);
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.55;
   color: hsl(var(--muted-foreground));
 }
 
@@ -984,6 +1146,7 @@
   border-top: 1px solid hsl(var(--border));
   font-size: 13px;
   color: hsl(var(--muted-foreground));
+  margin: 0;
 }
 
 .vh-surfaces__foot {
@@ -1016,87 +1179,6 @@
   font-size: 13.5px;
   color: hsl(var(--muted-foreground));
   line-height: 1.55;
-}
-
-/* ─── Use it (steps) ─────────────────────────────────────────────── */
-
-.vh-steps {
-  display: grid;
-  gap: 14px;
-}
-
-.vh-step {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) minmax(220px, 0.9fr);
-  gap: 22px;
-  align-items: start;
-  padding: 24px 26px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 16px;
-  background: hsl(var(--card));
-}
-
-@media (max-width: 760px) {
-  .vh-step {
-    grid-template-columns: auto 1fr;
-  }
-  .vh-step__detail {
-    grid-column: 1 / -1;
-  }
-}
-
-.vh-step__n {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  color: hsl(var(--primary));
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: hsl(var(--primary) / 0.12);
-  font-weight: 700;
-  align-self: start;
-}
-
-.vh-step__title {
-  margin: 0 0 8px;
-  font-size: 17px;
-  letter-spacing: -0.015em;
-  font-weight: 600;
-  color: hsl(var(--foreground));
-}
-
-.vh-step__body {
-  margin: 0;
-  color: hsl(var(--muted-foreground));
-  font-size: 14.5px;
-  line-height: 1.55;
-}
-
-.vh-step__detail {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  color: hsl(var(--foreground) / 0.85);
-  background: hsl(var(--background) / 0.7);
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  padding: 10px 12px;
-  align-self: start;
-  word-break: break-word;
-}
-
-.vh-use__footnote {
-  margin: 32px 0 0;
-  font-size: 13.5px;
-  color: hsl(var(--muted-foreground));
-}
-
-.vh-use__footnote code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
-  background: hsl(var(--secondary));
-  padding: 2px 6px;
-  border-radius: 4px;
-  border: 1px solid hsl(var(--border));
 }
 
 /* ─── Close + actions ────────────────────────────────────────────── */

@@ -11,7 +11,6 @@ import {
   nav,
   surfacesFoot,
   surfacesSection,
-  useSection,
   why,
 } from './content'
 import { SurfacesSelector } from './SurfacesSelector'
@@ -253,40 +252,6 @@ export default async function HeadlessPage() {
                 </li>
               ))}
             </ul>
-          </div>
-        </section>
-
-        {/* Use it */}
-        <section className="vh-section" id="use">
-          <div className="vh-wrap">
-            <header className="vh-section-head">
-              <p className="vh-section-eyebrow">{useSection.eyebrow}</p>
-              <h2 className="vh-section-title">
-                {useSection.title} <em>{useSection.titleEm}</em>
-              </h2>
-              <p className="vh-section-intro">{useSection.lede}</p>
-            </header>
-
-            <ol className="vh-steps">
-              {useSection.steps.map((step) => (
-                <li key={step.n} className="vh-step">
-                  <span className="vh-step__n">{step.n}</span>
-                  <div>
-                    <h3 className="vh-step__title">{step.title}</h3>
-                    <p className="vh-step__body">{step.body}</p>
-                  </div>
-                  {step.detail && (
-                    <code className="vh-step__detail">{step.detail}</code>
-                  )}
-                </li>
-              ))}
-            </ol>
-
-            <p className="vh-use__footnote">
-              {useSection.footnote.split('`').map((segment, idx) =>
-                idx % 2 === 1 ? <code key={idx}>{segment}</code> : <span key={idx}>{segment}</span>
-              )}
-            </p>
           </div>
         </section>
 
