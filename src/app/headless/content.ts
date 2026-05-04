@@ -30,7 +30,7 @@ export const hero = {
   lede:
     'Vesper is the image and video workshop the Loop Studio team uses every day. It already knows what good Loop work looks like: the brand voice, the product line, the rules a designer would apply on a first pass. Vesper Headless lets you tap into that same know-how from inside Claude, Cursor, or any tool that fits a small connector.',
   meta: [
-    { k: 'Recommended way in', v: 'Connector for Claude and Cursor' },
+    { k: 'Recommended way in', v: 'Cursor connector (works today)' },
     { k: 'Also live', v: 'API for systems · Web app for Studio' },
     { k: 'Status', v: 'Private preview, by invite' },
   ] as { k: string; v: string }[],
@@ -183,31 +183,34 @@ export const surfaces: Surface[] = [
   {
     id: 'mcp',
     icon: '◇',
-    name: 'Claude / Cursor connector',
+    name: 'Cursor connector',
     verb: 'Install once. Use natively.',
-    who: 'The recommended way to use Vesper. Loop sends you the connector details when you are added to the preview. Cursor users can already authenticate today; the Claude sign-in handshake is being prepared.',
+    who: 'The recommended way to use Vesper today. Loop sends you a personal access token when you are added to the preview. The same address also works from the Anthropic API and from any other tool that lets you set custom HTTP headers on an MCP server.',
     status: 'recommended',
     badge: 'Recommended',
     detail: {
-      title: 'Claude / Cursor connector',
-      meta: 'Customize -> Connectors -> + -> Add custom connector',
+      title: 'Cursor connector',
+      meta: 'Settings -> MCP -> Add server',
       lines: [
-        '// Inside Claude, paste these into the "Add custom connector" form.',
+        '// In Cursor, open Settings -> MCP -> Add server.',
+        '// Paste this JSON. Replace the token with the one Loop sends you.',
         '',
-        'Name                  Vesper',
-        'Remote MCP server URL https://vesper.loop.dev/api/mcp',
+        '{',
+        '  "vesper": {',
+        '    "url": "https://vesper.loop.dev/api/mcp",',
+        '    "headers": {',
+        '      "Authorization": "Bearer vsp_live_..."',
+        '    }',
+        '  }',
+        '}',
         '',
-        '// Open Advanced settings. Loop sends you these when you are invited:',
-        'OAuth Client ID       <provided by Loop>',
-        'OAuth Client Secret   <provided by Loop>',
+        '// Restart Cursor. Vesper appears with three tools:',
+        '//   \u2022 Make a prompt better',
+        '//   \u2022 See alternatives',
+        '//   \u2022 Find the right model',
         '',
-        '// After you save, Claude opens a Loop sign-in window.',
-        '// Vesper then appears alongside Claude\u2019s built-in tools:',
-        '//   • Make a prompt better',
-        '//   • See alternatives',
-        '//   • Find the right model',
-        '',
-        '// Cursor: same URL, paste under Settings -> MCP.',
+        '// Same shape works in any MCP-aware client that allows',
+        '// custom HTTP headers (Anthropic API, Claude desktop config, etc).',
       ],
     },
   },
@@ -316,42 +319,42 @@ export type UseStep = {
 
 export const useSection = {
   eyebrow: 'Setup',
-  title: 'Add Vesper to Claude.',
-  titleEm: 'Five minutes, no code.',
+  title: 'Add Vesper to Cursor.',
+  titleEm: 'Five minutes, one JSON snippet.',
   lede:
-    'Once Loop adds you to the preview, here is exactly what to do inside Claude. The same shape works inside Cursor, under Settings -> MCP.',
+    'Cursor is the proven way to use Vesper today. Same shape works from any MCP-aware client that lets you set custom HTTP headers, including the Anthropic API directly. Once Loop adds you to the preview, you will get a personal access token by email.',
   steps: [
     {
       n: '01',
-      title: 'Open Claude and find Customize.',
+      title: 'Open Cursor settings.',
       body:
-        'In any Claude surface, whether the web app, the desktop app, or Claude Code, open the Customize sidebar. The Connectors panel lives there.',
-      detail: 'Settings -> Customize -> Connectors',
+        'Open Cursor, go to Settings, and find the MCP section. Click "Add server" to bring up the JSON editor for a new server entry.',
+      detail: 'Cursor: Settings -> MCP -> Add server',
     },
     {
       n: '02',
-      title: 'Add a custom connector.',
+      title: 'Paste the Vesper config.',
       body:
-        'Click the + button at the top right of the Connectors panel. Choose "Add custom connector" from the dropdown.',
-      detail: '+ -> Add custom connector',
+        'Paste the JSON snippet from the surface card above. The address is the same for every partner: https://vesper.loop.dev/api/mcp.',
+      detail: '{ "vesper": { "url": "...", "headers": { ... } } }',
     },
     {
       n: '03',
-      title: 'Paste the Vesper details.',
+      title: 'Drop in your access token.',
       body:
-        'Name the connector "Vesper" and paste the address Loop sends you. Open Advanced settings and paste the two access codes Loop will provide.',
-      detail: 'Name: Vesper · URL: https://vesper.loop.dev/api/mcp',
+        'Replace the placeholder in the Authorization header with the token Loop sends you. The token is yours, scoped to your access, and Loop can revoke it instantly from the admin side.',
+      detail: 'Authorization: Bearer vsp_live_...',
     },
     {
       n: '04',
-      title: 'Sign in once. Vesper is ready.',
+      title: 'Restart Cursor and start asking.',
       body:
-        'Claude opens a Loop sign-in window. Approve the connection. Vesper now appears alongside Claude\u2019s built-in tools, ready to call.',
-      detail: 'Loop sign-in · approve · tools auto-discovered',
+        'Restart Cursor so it picks up the new server. Vesper appears as a connector with three tools the assistant can call directly: make a prompt better, see alternatives, find the right model.',
+      detail: 'Tools: enhance_prompt · iterate_prompt · list_models',
     },
   ] as UseStep[],
   footnote:
-    'Heads up: the Loop sign-in handshake (the standard "OAuth" flow) is being prepared right now. Loop will hand you the access codes when you are added to the preview. Cursor users and direct script integrations can already authenticate today using a token; the full technical reference lives in `docs/headless-vesper.md` inside the Loop-Vesper repo.',
+    'Known gap: adding Vesper directly inside the Claude.ai web app is not yet possible. The web app\u2019s "Add custom connector" form does not accept a pasted access token, only an OAuth sign-in handshake that we have not built. Cursor, the Anthropic API, and any MCP client that supports custom HTTP headers all work today; the full technical reference lives in `docs/headless-vesper.md` inside the Loop-Vesper repo.',
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

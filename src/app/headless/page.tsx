@@ -135,7 +135,7 @@ export default async function HeadlessPage() {
                 <span className="vh-orbit__ring vh-orbit__ring--inner" />
                 <span className="vh-orbit__pill vh-orbit__pill--top vh-orbit__pill--primary">
                   <span className="vh-orbit__pill-dot" />
-                  <span>MCP server</span>
+                  <span>Connector</span>
                 </span>
                 <span className="vh-orbit__pill vh-orbit__pill--right">
                   <span className="vh-orbit__pill-dot" />
