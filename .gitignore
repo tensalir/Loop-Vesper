@@ -31,6 +31,9 @@ yarn-error.log*
 # Playwright MCP screenshots (generated)
 .playwright-mcp/
 
+# Playwright test runner output (per-run, not committed)
+/test-results/
+
 # local env files
 .env*.local
 .env

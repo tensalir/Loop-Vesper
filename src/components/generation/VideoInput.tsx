@@ -20,6 +20,7 @@ import { ImageBrowseModal } from './ImageBrowseModal'
 import { ProductRendersBrowseModal } from './ProductRendersBrowseModal'
 import { useParams } from 'next/navigation'
 import { PromptEnhancementButton } from './PromptEnhancementButton'
+import { IterationButton } from './IterationButton'
 import { SnapshotRail, SNAPSHOT_RAIL_MIME } from './SnapshotRail'
 
 interface VideoInputProps {
@@ -960,8 +961,8 @@ export function VideoInput({
               isResizing ? '' : 'transition-all'
             } ${
               isOverlay 
-                ? 'py-3.5 pr-10' 
-                : 'py-3 pr-10'
+                ? 'py-3.5 pr-16' 
+                : 'py-3 pr-16'
             } ${
               isEnhancing
                 ? 'border-transparent'
@@ -970,6 +971,16 @@ export function VideoInput({
                 : 'border-border focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary/50'
             } ${isEnhancing ? 'enhancing-text' : ''}`}
             disabled={generating}
+          />
+          <IterationButton
+            prompt={prompt}
+            modelId={selectedModel}
+            referenceImage={referenceImage || imagePreviewUrl || null}
+            onApplyToPrompt={(variantPrompt) => {
+              setTransformedPrompt(null)
+              onPromptChange(variantPrompt)
+            }}
+            disabled={generating || isEnhancing}
           />
           <PromptEnhancementButton
             prompt={prompt}

@@ -19,6 +19,7 @@ import { ImageBrowseModal } from './ImageBrowseModal'
 import { ProductRendersBrowseModal } from './ProductRendersBrowseModal'
 import { ModelOptionControls } from './ModelOptionControls'
 import { PromptEnhancementButton } from './PromptEnhancementButton'
+import { IterationButton } from './IterationButton'
 import { PdfBucketRail, PDF_BUCKET_MIME } from './PdfBucketRail'
 import { usePdfIngestion } from '@/hooks/usePdfIngestion'
 import { useParams } from 'next/navigation'
@@ -818,7 +819,7 @@ export function ChatInput({
               onKeyDown={handleKeyDown}
               data-generation-input="true"
               style={{ height: `${inputHeight}px` }}
-              className={`resize-none px-4 py-3 text-sm rounded-lg bg-muted/50 border pr-10 overflow-y-auto ${
+              className={`resize-none px-4 py-3 text-sm rounded-lg bg-muted/50 border pr-16 overflow-y-auto ${
                 isResizing ? '' : 'transition-all'
               } ${
                 isEnhancing 
@@ -827,6 +828,16 @@ export function ChatInput({
                   ? 'border-primary/50'
                   : 'border-border focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary'
               } ${isEnhancing ? 'enhancing-text' : ''}`}
+            />
+            <IterationButton
+              prompt={prompt}
+              modelId={selectedModel}
+              referenceImage={referenceImage}
+              onApplyToPrompt={(variantPrompt) => {
+                setTransformedPrompt(null)
+                onPromptChange(variantPrompt)
+              }}
+              disabled={isGenerating || isEnhancing}
             />
             <PromptEnhancementButton
               prompt={prompt}

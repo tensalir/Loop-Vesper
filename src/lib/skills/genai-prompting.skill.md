@@ -1,172 +1,43 @@
 ---
 name: genai-prompting
-description: Crafts prompts for AI image and video generation models. Covers text-to-image, semantic editing, image-to-video, text-to-video, and Midjourney workflows. Use when the user requests prompts for Imagen, Gemini/Nano Banana, Seedream, VEO, Sora, Runway, Kling, MiniMax, Midjourney, or mentions "image prompt", "motion prompt", "VEO prompt", "Nano Banana prompt", "video prompt", "sref permutation", or "Midjourney prompt". Focuses on universal prompting principles that transcend model versions.
+description: Crafts prompts for AI image and video generation models, and produces diversified prompt slates for paid social and ad sets. Covers text-to-image, semantic editing, image-to-video, text-to-video, Midjourney, and Meta-Andromeda-aware ad iteration. Use when the user requests prompts for Imagen, Gemini/Nano Banana, Nano Banana 2, Nano Banana Pro, GPT Image, GPT Image 2 (gpt-image-2), Seedream, VEO, Sora, Runway, Kling, MiniMax, or Midjourney, or mentions "image prompt", "motion prompt", "VEO prompt", "Nano Banana prompt", "GPT Image prompt", "video prompt", "sref permutation", "style reference", "character consistency", "reference image", "ad variations", "ad set variations", "creative diversification", "Andromeda", or "Meta ad iteration". Also triggers when structuring reference images, separating style from character from object refs, getting a new scene from an existing generation, or building a slate of genuinely different ads from one concept.
 ---
 
 # Generative AI Prompt Engineering
 
-Craft prompts by understanding how diffusion models interpret language—not by memorizing parameters that change with every update.
+Craft prompts by understanding how generation models interpret language. Models update constantly; what stays stable are the principles of how these systems read intent.
 
 ## Core Philosophy
 
-**These models are black boxes.** Prompting isn't an exact science. Results come from iteration, experimentation, and pattern recognition—not guaranteed formulas. Models update constantly; parameters change. What remains stable are the *principles* of how these systems interpret language.
+**These models are black boxes.** Prompting is iteration, not exact science. Results come from reps and pattern recognition.
 
-**Iteration reality:** Expect 50-100+ generations for video, 10-30 for images.
+**Iteration reality:** Expect 50–100+ generations for video, 10–30 for images. Plan for it.
 
-## Nano Banana 2 vs Pro (Model Selection Heuristic)
+**Describe the scene, don't list keywords.** A narrative paragraph almost always produces more coherent images than a pile of disconnected words. Use the model's language understanding instead of fighting it.
 
-When the user asks which Nano Banana model to use, apply this default:
+---
 
-- **Nano Banana 2 (`gemini-3.1-flash-image-preview`)**: default for fast iteration, high-volume exploration, and multi-turn ideation.
-- **Nano Banana Pro (`gemini-3-pro-image-preview`)**: use when the user wants polished production assets, stronger precision for text/layout-heavy visuals, or complex instruction fidelity.
-
-If unsure, start with Nano Banana 2 for exploration and switch to Pro for final passes.
-
-## Output Controls (Use When Relevant)
-
-For Gemini image models, mention these optional controls only when they materially help:
-
-- **Aspect ratio** via `image_config.aspect_ratio` (e.g., `1:1`, `16:9`, `9:16`)
-- **Resolution** via `image_config.image_size` (`512px`, `1K`, `2K`, `4K`) — use uppercase `K`
-- **Response modalities** when image-only output is preferred (`response_modalities: ["IMAGE"]`)
-
-Avoid adding config noise when the user only wants help improving prompt wording.
-
-## When the User Provides a Style Reference Image
-
-**THIS IS A NANO BANANA WORKFLOW.** When a user attaches an image and says "use this as a style reference" (or similar), they intend to use Nano Banana/Gemini's native image generation with the attached image as input.
-
-### CRITICAL: Style Reference = STYLE-ONLY by Default
-
-**THE DEFAULT ASSUMPTION:** When a user says "style reference", "use for style", "as a style reference", or similar, they want **STYLE-ONLY** extraction. This is the most common intent and should be the default behavior.
-
-**Why this matters:** Image generation models naturally want to reproduce what they see. Without explicit anti-composition instructions, they will copy subjects, poses, and scene layouts from the reference. A style reference is meant to transfer ONLY the visual treatment (lighting, color, mood), not the content.
-
-#### STYLE-ONLY Reference (DEFAULT for "style reference")
-
-**When to apply:** ANY time the user mentions "style reference", "style ref", "use for style", "as a style", "this style", etc. — UNLESS they explicitly ask to recreate or maintain the composition.
-
-**What to EXTRACT (visual treatment only):**
-- Color grading / color palette / tonal range
-- Lighting quality (soft, hard, direction, temperature)
-- Atmosphere / mood / emotional tone
-- Texture / grain / processing style
-- Contrast levels and dynamic range
-- Shadow and highlight treatment
-- Depth rendering / atmospheric perspective feel
-
-**What to EXPLICITLY BLOCK (compositional elements):**
-- Specific subjects (people, mountains, tents, animals, objects)
-- Scene layout or spatial arrangement
-- Poses, positioning, or body language
-- Geographic or environmental specifics
-- Props, furniture, or background objects
-
-**Style-Only Prompt Format (USE THIS FORMAT):**
-```
-Using the attached image ONLY as a style reference—extract its [specific visual qualities you observe: color grading, lighting mood, texture, atmosphere]. 
-
-IMPORTANT: Do NOT reproduce the [list main subjects/objects you see in reference]. Do NOT copy the scene composition, subject positioning, or spatial layout. The reference image defines ONLY the visual treatment and color mood.
-
-Apply this visual style to: [user's completely different subject/scene]. Create a fresh composition appropriate for this new subject.
-```
-
-**Example (mountain/hiking image used as style reference for bookshop scene):**
-```
-Using the attached image ONLY as a style reference—extract its moody blue-grey atmospheric color grading, golden hour warmth kissing highlights, soft diffused natural lighting, cinematic depth with subtle atmospheric haze, and fine film-like texture with lifted shadows.
-
-IMPORTANT: Do NOT reproduce the mountains, hikers, tents, outdoor scenery, or landscape composition. Do NOT copy the outdoor adventure context. The reference image defines ONLY the color treatment and atmospheric mood.
-
-Apply this visual style to: A woman in a vintage bookshop, browsing leather-bound books near a tall window. Create a fresh interior composition with warm pools of light on the book spines.
-```
-
-#### FULL Reference (ONLY when explicitly requested)
-
-**When to apply:** ONLY when the user explicitly says they want to "recreate", "match the composition", "similar scene", "same layout", "keep the same setup", or clearly wants compositional elements maintained.
-
-**Full Reference Prompt Format:**
-```
-Using the attached image as a reference for BOTH its visual style AND compositional elements: [describe what compositional elements to maintain]. [New subject/scene that builds on the reference while maintaining specified composition]. Match the [specific characteristics] exactly.
-```
-
-**Example (when user explicitly wants composition):**
-```
-Using the attached image as a reference for BOTH its visual style AND compositional elements: maintain the dramatic mountain peak silhouette, layered atmospheric depth, and expedition camp foreground composition. A lone figure stands at the edge of a glacial lake in the foreground, looking up at the mountain. Keep the same golden hour lighting angle, color grading, scale, and atmospheric perspective.
-```
-
-### Quick Reference: Style vs Composition
-
-**STYLE (always extract for style references):**
-Color grading, lighting quality/direction/temperature, atmosphere/mood, texture/grain, contrast, shadow/highlight treatment, depth feel
-
-**COMPOSITION (block unless explicitly requested):**
-Subjects, scene layout, objects/props, poses, geographic/environmental specifics, spatial relationships
-
-### Analysis Requirements
-
-**CRITICAL:** Before writing prompts, you MUST:
-
-1. **Analyze the actual image** - Look at its colors, lighting, mood, composition, texture, grain
-2. **Extract the specific aesthetic** from what you SEE in the image, not what you assume
-3. **NEVER inject or suggest a different style** - If the image is warm and colorful, don't suggest monochromatic. If it's desaturated, don't add vibrance.
-4. **Describe what you observe** - Reference the actual visual characteristics: "muted earth tones", "soft diffused light", "subtle blue-gray color grading", "film grain texture"
-5. **Identify subjects to BLOCK** - For style references, look at the image and explicitly list what subjects/objects the model should NOT reproduce (mountains, people, tents, etc.)
-6. **Default to style-only** - Unless user explicitly asks for composition, assume they want style-only
-
-**Wrong approach:**
-- User says "use this as a style reference" with a mountain/hiking photo
-- AI writes prompt that recreates the mountain scene with slight variations
-
-**Correct approach:**
-- User says "use this as a style reference" with a mountain/hiking photo
-- AI extracts visual style AND explicitly blocks: "Do NOT reproduce the mountains, hikers, tents, or outdoor landscape"
-- AI applies style to user's completely different subject with fresh composition
-
-### What NOT to Do
-
-- Do NOT write prompts that omit reference to the attached image
-- Do NOT write generic T2I prompts that ignore the style reference
-- Do NOT describe a completely different aesthetic than what you see
-- Do NOT include compositional elements from the reference when user says "style reference" (this is the default — composition requires EXPLICIT request)
-- Do NOT assume user wants composition just because they attached an image
-- Do NOT forget to add the explicit "Do NOT reproduce..." blocking statement — models will copy composition without it
-
-### Terminology: "Nano Banana" is a model name (not a banana)
-
-- **Nano Banana** refers to Gemini's native image generation capabilities (model nickname), not the fruit.
-- **Do NOT introduce bananas** into the prompt unless the user explicitly requested bananas in the image.
-
-## The Two Modes of Prompting
+## The Two Modes
 
 ### 1. Semantic Prompting (Conversational)
-**Models:** Nano Banana, Seedream, Gemini image editing
+**Models:** Nano Banana 2, Nano Banana Pro, GPT Image 2, Seedream, Gemini image editing
 
-These models understand *intent*. You can speak to them like a human collaborator:
-- "Make the sky more dramatic"
-- "Remove the person on the left"
-- "Change her shirt to blue but keep everything else"
-
-They parse meaning, understand context, and can handle multi-turn refinement.
+These models understand *intent*. Speak to them like a collaborator. They parse meaning, handle multi-turn refinement, and reason about complex compositions.
 
 ### 2. Descriptive Prompting (Keyword-Dense)
 **Models:** Midjourney, DALL-E, Stable Diffusion, Flux, most T2I/T2V models
 
-These models respond to *density of description*. They don't truly understand—they pattern-match against training data. More vivid, specific language = better results.
-
-- Stack adjectives and specific details
-- Reference artists, styles, eras
-- Describe physical attributes explicitly
-- The model associates words with visual patterns it's seen
+These models respond to *density of description*. They pattern-match against training data. Stack adjectives, reference artists and styles, describe physical attributes explicitly.
 
 ---
 
 ## Universal T2I Structure
 
-Most text-to-image models respond well to this hidden structure (incorporate naturally, don't use as rigid template):
+Most text-to-image models respond well to this structure (incorporate naturally, not as rigid template):
 
 1. **Subject** — physical details, age, clothing, pose
 2. **Environment** — location, props, atmosphere, time of day
-3. **Camera** — lens suggestion (35mm/50mm/85mm), angle, framing, depth of field
+3. **Camera** — lens (35mm/50mm/85mm), angle, framing, depth of field
 4. **Lighting** — quality, direction, temperature, source
 5. **Aesthetic** — style reference, mood, processing look
 
@@ -177,64 +48,309 @@ Photorealistic 4K photograph of a middle-aged woman with graying brown hair tied
 
 ---
 
-## Context-Dependent Aesthetics
+## Reference Image Roles
 
-**This is NOT a universal rule—apply based on context:**
+When providing multiple reference images, **explicitly label each image's purpose**. Models treat unlabeled references as content to reproduce. Labels force role separation.
 
-### Midjourney
-Cinematic/dramatic is baked in. That's the point. Don't add anti-cinematic language, but also don't add negative prompts to suppress it. Just write the descriptive content and let Midjourney do its thing.
+### The Three Roles
 
-### Semantic Editing (Nano Banana, Seedream)
-The cinematic discussion isn't relevant—you're editing existing images conversationally. Focus on clear instructions about what to change and what to preserve.
+- **STYLE REFERENCE** — Match aesthetic, materials, lighting, palette. NOT scene content.
+- **CHARACTER REFERENCE** — Match face, build, clothing, identity markers.
+- **OBJECT REFERENCE** — Reproduce this specific item with high fidelity.
 
-### Generic T2I (Krea, Flux, etc.)
-When the user asks for a general text-to-image prompt without specifying Midjourney, assume they want naturalistic output. Here the anti-cinematic principle applies:
+### Pattern
 
-**Avoid:** cinematic, dramatic, epic, beautiful, stunning, breathtaking, masterpiece  
-**Use:** documentary-style, naturalistic, raw, ungraded, photojournalistic, candid
+```
+REFERENCE IMAGE ROLES:
+— [describe image]: STYLE REFERENCE ONLY. Match [specific qualities].
+  DO NOT recreate this scene or room.
+— [describe image]: CHARACTER REFERENCE. Match this person's [details].
+— [describe image]: OBJECT REFERENCE. Reproduce this exact [item].
 
-**Describe actions, not emotions:**
-- Instead of "looks sad" → "corners of mouth turn slightly downward"
-- Instead of "appears angry" → "jaw tightens, brow furrows"
+NEW SCENE (entirely different from the style reference):
+[vivid, specific description of the new setting]
+```
 
-**Describe what you want, not what you don't want:**
-- Wrong: "No dramatic lighting, don't add lens flares"
-- Right: "Flat even lighting, matte surfaces without reflections"
+### Scene Differentiation
+
+When using a generated image as style reference for a NEW scene:
+- State "DO NOT recreate this scene or room" after the style reference
+- Make the new environment **deliberately different** in geometry (corridor vs. temple, outdoor vs. indoor)
+- The more vivid and specific the new setting description, the more it overrides the reference scene
+- Describe the reference images by visual content, not by filename or position — uploads can arrive in any order
+
+### Model Limits (Reference Images)
+
+| Model | Object refs | Character refs | Total | Notes |
+|-------|-----------|---------------|-------|-------|
+| Nano Banana 2 (3.1 Flash) | Up to 10 | Up to 4 | 14 | |
+| Nano Banana Pro (3 Pro) | Up to 6 | Up to 5 | 14 | |
+| GPT Image 2 | Multiple | Multiple | First 5 preserved at high fidelity when `input_fidelity: high` | |
 
 ---
 
-## Semantic Editing (Nano Banana / Seedream)
+## Style Reference: Style-Only vs Full Reference
 
-These are conversational tools. Be explicit about what stays unchanged—models need anchors.
+**THIS IS A NANO BANANA / GPT IMAGE WORKFLOW.** When a user attaches an image and says "use this as a style reference" (or similar), they intend to use semantic image generation with the attached image as input.
 
-**Core Techniques:**
+### CRITICAL: Style Reference = STYLE-ONLY by Default
 
-**Adding/Removing:**
+**THE DEFAULT ASSUMPTION:** When a user says "style reference", "use for style", "as a style reference", or similar, they want **STYLE-ONLY** extraction. This is the most common intent and should be the default behavior.
+
+**Why this matters:** Image generation models naturally want to reproduce what they see. Without explicit anti-composition instructions, they will copy subjects, poses, and scene layouts from the reference. A style reference is meant to transfer ONLY the visual treatment (lighting, color, mood), not the content.
+
+### STYLE-ONLY Reference (DEFAULT for "style reference")
+
+**When to apply:** ANY time the user mentions "style reference", "style ref", "use for style", "as a style", "this style", etc. — UNLESS they explicitly ask to recreate or maintain the composition.
+
+**EXTRACT (visual treatment only):**
+- Color grading / color palette / tonal range
+- Lighting quality (soft, hard, direction, temperature)
+- Atmosphere / mood / emotional tone
+- Texture / grain / processing style
+- Contrast levels and dynamic range
+- Shadow and highlight treatment
+- Depth rendering / atmospheric perspective feel
+
+**EXPLICITLY BLOCK (compositional elements):**
+- Specific subjects (people, mountains, tents, animals, objects)
+- Scene layout or spatial arrangement
+- Poses, positioning, or body language
+- Geographic or environmental specifics
+- Props, furniture, or background objects
+
+**Style-Only Prompt Format:**
+```
+Using the attached image ONLY as a style reference—extract its [specific visual qualities you observe: color grading, lighting mood, texture, atmosphere].
+
+IMPORTANT: Do NOT reproduce the [list main subjects/objects you see in reference]. Do NOT copy the scene composition, subject positioning, or spatial layout. The reference image defines ONLY the visual treatment and color mood.
+
+Apply this visual style to: [user's completely different subject/scene]. Create a fresh composition appropriate for this new subject.
+```
+
+### FULL Reference (ONLY when explicitly requested)
+
+**When to apply:** ONLY when the user explicitly says "recreate", "match the composition", "similar scene", "same layout", "keep the same setup", or clearly wants compositional elements maintained.
+
+**Full Reference Prompt Format:**
+```
+Using the attached image as a reference for BOTH its visual style AND compositional elements: [describe what compositional elements to maintain]. [New subject/scene that builds on the reference while maintaining specified composition]. Match the [specific characteristics] exactly.
+```
+
+### Analysis Requirements
+
+Before writing prompts with a reference image, you MUST:
+
+1. **Analyze the actual image** — colors, lighting, mood, composition, texture, grain
+2. **Extract the specific aesthetic** from what you SEE, not what you assume
+3. **NEVER inject a different style** — if the image is warm and colorful, don't suggest monochromatic
+4. **Describe what you observe** with concrete language ("muted earth tones", "soft diffused light", "subtle blue-gray color grading", "film grain texture")
+5. **Identify subjects to BLOCK** — for style-only references, list what subjects/objects the model should NOT reproduce
+6. **Default to style-only** unless the user explicitly asks for composition
+
+### What NOT to Do
+
+- Do NOT write prompts that omit reference to the attached image
+- Do NOT describe a different aesthetic than what you see
+- Do NOT include compositional elements from the reference when user says "style reference" (default — composition requires EXPLICIT request)
+- Do NOT assume composition is wanted just because an image is attached
+- Do NOT forget the explicit "Do NOT reproduce..." blocking statement
+
+### Terminology: "Nano Banana" is a model name (not a banana)
+
+- **Nano Banana** refers to Gemini's native image generation capabilities (model nickname), not the fruit
+- **Do NOT introduce bananas** into the prompt unless the user explicitly requested bananas in the image
+
+---
+
+## Context-Dependent Aesthetics
+
+### Midjourney
+Cinematic/dramatic is baked in. Don't suppress it, don't amplify it. Just write descriptive content.
+
+### Semantic Models (Nano Banana, GPT Image)
+The cinematic discussion isn't relevant — work conversationally. Focus on clear intent about what to create, change, or preserve.
+
+### Generic T2I (Krea, Flux, etc.)
+When the user asks for a general T2I prompt without specifying a model, assume naturalistic output:
+
+**Avoid:** cinematic, dramatic, epic, beautiful, stunning, breathtaking, masterpiece
+**Use:** documentary-style, naturalistic, raw, ungraded, photojournalistic, candid
+
+**Describe actions, not emotions:**
+- Not "looks sad" → "corners of mouth turn slightly downward"
+- Not "appears angry" → "jaw tightens, brow furrows"
+
+**Describe what you want, not what you don't want:**
+- Not "No dramatic lighting" → "Flat even lighting, matte surfaces"
+
+---
+
+## Semantic Editing (Nano Banana / Seedream / GPT Image)
+
+These are conversational tools. Be explicit about what stays unchanged — models need anchors.
+
+### Adding/Removing
 ```
 Using the provided reference photo of the modern office space, add a large potted monstera plant in the corner near the window. Match existing soft lighting and perspective exactly. Keep all furniture, wall colors, and shadows unchanged.
 ```
 
-**Semantic Swapping:**
+### Semantic Swapping
 ```
 In the provided image, change only the red ceramic mug to a clear glass water bottle. Preserve all other elements exactly: marble countertop veining, lighting reflections, background items, and composition.
 ```
 
-**Style Transfer:**
+### Style Transfer
 ```
 Transform the provided street photograph into 1970s film style: slightly desaturated colors, subtle grain, softer contrast, warmer shadows. Preserve exact composition, subjects, and spatial relationships.
 ```
 
-**Product Placement:**
+### Product Placement
 ```
 Using provided images, place the earplug case from image 2 onto the wooden desk from image 1. Position in foreground right third, matching warm afternoon lighting exactly. Preserve all wood grain detail with natural shadow contact.
 ```
 
-**Environment Transformation:**
+### Environment Transformation
 ```
 Keep the person exactly as they appear—same face, expression, hair, clothing. Change only the background from office to sunlit outdoor cafe with blurred passersby. Match lighting direction to suggest natural daylight.
 ```
 
-**Multi-Reference:** These tools can handle multiple reference images (objects, humans for consistency, style/environment references).
+---
+
+## Character Consistency
+
+Create a detailed description once, reuse verbatim across prompts:
+
+```
+SARAH: Early 40s woman with shoulder-length auburn hair with visible gray at temples, oval face with slight crow's feet, green-gray eyes, small mole on left cheek. Wearing navy wool cardigan over white cotton blouse, reading glasses pushed up on head. Medium build with slightly rounded shoulders.
+```
+
+When character reference images are available (Nano Banana 2/Pro, GPT Image 2 with `input_fidelity: high`), combine the image reference with minimal text anchors instead of re-describing what's visible.
+
+---
+
+## Iteration & Variation — The Andromeda Lens
+
+When the task is a **slate of variations** rather than a single image — paid social, ad sets, A/B testing, campaign creative — the prompting craft is necessary but not sufficient. The slate has to be diversified along the right axes, or it won't survive Meta's Andromeda retrieval.
+
+### What Andromeda Rewards
+
+Meta Andromeda is the retrieval engine that decides which ads from your ad set get considered for which person. It rewards **creative diversification**: a range of ads that differ in meaningful ways so the system can match the right ad to the right viewer. Top advertisers now run 15–50 ads per ad set instead of the old 6-ad cap.
+
+But more isn't better. Two ads with the same concept and slightly different photos will get treated as one signal. They take up two ad slots and contribute one piece of information.
+
+The constraint is two-sided:
+
+- **Too similar** (same concept, same execution, cosmetic tweaks) → Meta treats them as the same ad. The slate is wasted.
+- **Too different** (different audiences, different offers, different brand worlds) → Meta will rank them across audiences in ways that fragment the ad set. They probably belong in a different ad set entirely.
+
+The sweet spot: **same theme, meaningfully different execution.** Same audience cohort, same offer, same brand world — different angle, format, persona, or visual treatment.
+
+### The Weak / Strong Diversification Test
+
+Before accepting a slate, run it through this test.
+
+**Weak diversification (will not survive Andromeda):**
+- Same concept, different background color
+- Same concept, different model wearing the same outfit
+- Same hero shot, different CTA button
+- Same headline reworded
+- Same demo shot from a slightly different angle
+- Same image with different overlay text positions
+- AI variations of the same generation seed
+- Different person, identical composition / lighting / framing / wardrobe register
+
+**Strong diversification (real signal for Andromeda):**
+- Pain-point hook + product demo + social proof testimonial (same offer)
+- Lifestyle / context shot + clinical / spec-sheet shot + UGC selfie (same product)
+- 9:16 video + 4:5 static + 1:1 carousel (same concept, different formats)
+- Parent persona + festival-goer persona + sleeper persona (same product, different audience angles)
+- Bold typographic poster + photographic hero + animated explainer (same idea, different visual languages)
+
+Rule of thumb: **if you can imagine two completely different people responding to two ads in your slate, the slate is diversifying. If the same person would shrug at the difference, it isn't.**
+
+### The Diversification Axes
+
+A slate gets meaningful difference by varying along these axes. Pull on at least 2–3 per slate. Don't try to vary all of them — that often pushes the slate across the "different ad set" line.
+
+1. **Concept / Angle** — pain point, demo, testimonial, lifestyle, curiosity, comparison, contrarian, educational
+2. **Format** — static, short video, long video, carousel, cinemagraph, stop-motion
+3. **Aspect Ratio (Placement Fit)** — 9:16 (Reels/Stories), 4:5 (feed), 1:1 (universal)
+4. **Persona / Audience Angle** — same product, different "you" (parents, neurodivergent adults, festival-goers, side-sleepers, focus-workers, musicians, frequent flyers, etc.)
+5. **Visual Treatment** — documentary, studio/clinical, typographic poster, illustrated, UGC, editorial, color-blocked, high-contrast/low-fi
+6. **Copy Style / Hook Pattern** — question, statistic, confession, direct command, contrarian, list/numbered
+7. **Model / Generator Diversity** — mixing semantic generators (GPT Image 2 + Nano Banana Pro) prevents the slate from inheriting one model's visual fingerprint
+
+### Anchors That Must Stay Constant Across the Slate
+
+Lock these so the ads still belong to one ad set:
+
+- **Product / SKU**
+- **Offer** (e.g. -20% launch, free shipping, new colorway)
+- **Audience cohort** (the broad cohort this ad set targets)
+- **Theme / through-line** (one sentence every ad in the slate honors)
+- **Brand non-negotiables** (logo placement, palette boundaries, voice, claims to avoid, mandatory legal copy)
+
+### Common Failure Modes
+
+- **Cosmetic-variation trap.** Same concept with rotated props. Visual variance feels like work; diversification value is zero. Fix: every prompt must move on at least one axis the matrix tracks.
+- **Theme-drift trap.** Slate starts on "earplugs for parents of toddlers" and ends on "earplugs for festival-goers." Two ad sets, not one. Fix: lock the theme and check every prompt against it.
+- **Format-only diversification.** Same concept rendered as static + short video + long video. *Some* diversification, but thin alone. Combine with a second axis.
+- **Generator monoculture.** Slate generated entirely by one model inherits that model's aesthetic biases. Fix: mix generators across the slate.
+- **Brand-incoherence trap.** Pushing diversification so hard the ads stop feeling like the same brand. Fix: brand non-negotiables in the header; visual register can stretch but not break.
+- **Over-quantification.** Going to 50 ads because "Andromeda likes scale." Quantity without diversity is expensive monoculture.
+
+### Quick-Start Slate Templates
+
+- **Slate of 6 (entry-level)** — 3 concepts × 2 formats
+- **Slate of 9 (mid-budget)** — 3 concepts × 3 formats
+- **Slate of 12 (persona-aware)** — 3 personas × 2 concepts × 2 formats
+- **Slate of 15+ (full Andromeda mode)** — 3 personas × 3 concepts × 2 formats + a creative wildcard cluster
+
+---
+
+## Iteration Slate Mode (STRUCTURED OUTPUT)
+
+When the user message begins with `ITERATION_MODE` (or the calling system requests structured iteration output), respond with **a single JSON object** that follows this schema. Do not include prose, markdown, or code fences around it.
+
+```json
+{
+  "theme": "one-sentence through-line every variant honors",
+  "anchors": {
+    "product": "what stays the same product-wise",
+    "offer": "the unchanged offer/proposition",
+    "audience": "ad-set audience cohort",
+    "brand": "brand non-negotiables (logo, palette, voice, claims)",
+    "lockedText": "headline/CTA/legal copy that must not change"
+  },
+  "axesVaried": ["e.g. Concept", "Persona", "Visual Treatment"],
+  "weakChangesAvoided": [
+    "short note about a weak-diversification trap intentionally avoided"
+  ],
+  "variants": [
+    {
+      "label": "A1 — Pain point / Documentary / 4:5",
+      "axis": { "concept": "pain point", "persona": "focus-worker", "treatment": "documentary candid" },
+      "prompt": "the actual generation prompt, ready to paste",
+      "preserve": ["product hero", "brand palette", "headline copy"],
+      "change": ["new persona", "new environment", "different lighting register"],
+      "whyDifferentEnough": "one sentence explaining why this variant pulls a different lever from the baseline and from sibling variants"
+    }
+  ]
+}
+```
+
+**Rules for iteration output:**
+
+- Generate 3–6 variants by default (respect any explicit count from the calling user message).
+- Every variant MUST move on at least 2 of the listed `axesVaried`.
+- Every variant MUST preserve every entry in `anchors` — same product, offer, audience, brand world, locked text.
+- Reject weak changes by construction: do not output a variant whose only differences from the baseline are person identity, CTA wording, background color, prop swap, or a slight angle change while lighting/composition/treatment stay identical.
+- Reject over-drift by construction: do not output a variant that changes the offer, audience cohort, brand world, or core theme.
+- If a baseline image is referenced in the user message, perform a one-line read of the baseline's composition, lighting, persona, and treatment FIRST so each variant can credibly state how it differs.
+- If the user explicitly locks an axis (e.g. "keep 4:5", "keep documentary look"), do not vary that axis — pick others.
+- The `prompt` field for each variant must be a complete, paste-ready generation prompt that obeys the prompting craft above (semantic vs descriptive based on `modelId`, style-only vs full reference if a baseline image is attached, etc.).
+- Output ONLY the JSON object. No preamble, no postscript, no markdown wrapping.
 
 ---
 
@@ -269,11 +385,11 @@ Camera locked on tripod, completely static. The person slowly raises the coffee 
 
 **Models:** VEO 3.1, Kling 2.6
 
-When you have BOTH a starting and ending frame, the prompt describes the **transformation journey** between them—not the frames themselves.
+When you have BOTH a starting and ending frame, the prompt describes the **transformation journey** between them — not the frames themselves.
 
 ### Core Principles
 
-**The frames are fixed endpoints.** The model already knows what the start and end look like. Your prompt guides HOW the scene transitions between them:
+**The frames are fixed endpoints.** The model already knows what the start and end look like. Your prompt guides HOW the scene transitions:
 - What actions or movements occur
 - The emotional/narrative arc
 - Camera behavior during the transition
@@ -284,72 +400,10 @@ When you have BOTH a starting and ending frame, the prompt describes the **trans
 - Wrong: "A woman on a swing, then the swing is empty"
 - Right: "The ghostly woman slowly fades away, vanishing completely, leaving the swing swaying rhythmically on its own"
 
-**Think cinematically about the in-between.**
-What story beats happen? What's the emotional progression?
-
 ### Prompt Structure for Interpolation
 
 ```
 [Cinematic/style context], [initial state acknowledgment]. [Transformation description with temporal detail]. [End state arrival]. [Audio/atmosphere throughout].
-```
-
-### VEO 3.1 Examples
-
-**Disappearing figure:**
-```
-A cinematic, haunting video. A ghostly woman with long white hair and a flowing dress swings gently on a rope swing beneath a massive, gnarled tree in a foggy, moonlit clearing. The fog thickens and swirls around her, and she slowly fades away, vanishing completely. The empty swing is left swaying rhythmically on its own in the eerie silence.
-```
-
-**Physical transformation:**
-```
-The ginger cat grips the steering wheel, eyes forward with determination. The convertible races along the coastal cliff road, then launches off the edge. The cat's expression shifts from focus to exhilaration as the car arcs through open air, momentarily weightless against the blue sky.
-```
-
-### Kling 2.6 Considerations
-
-Kling responds well to:
-- **Explicit motion verbs**: "transforms", "morphs", "transitions", "shifts gradually"
-- **Temporal markers**: "over the course of...", "as the scene progresses...", "slowly then suddenly"
-- **Camera participation**: The camera can move AS part of the transition narrative
-- **Emotional beats**: Kling handles expressive transitions well—emphasize feeling changes
-
-**Kling interpolation example:**
-```
-The still morning forest gradually awakens. Leaves begin to rustle, first gently, then with increasing energy. Shafts of golden light push through the canopy, creeping across the forest floor. The camera drifts forward slowly, matching the pace of the spreading dawn. Birds begin calling, building from a single note to a full chorus.
-```
-
-### When to Acknowledge Frames vs. Focus on Motion
-
-**Acknowledge frames when:**
-- There's a dramatic visual difference that needs narrative bridging
-- The transformation has clear "before" and "after" states to connect
-- Context helps the model understand the journey (e.g., "from perched on the branch" helps define the takeoff)
-
-**Focus purely on motion when:**
-- The frames are very similar (same scene, slight changes)
-- The motion IS the story (action sequence, subtle shift)
-- Over-describing would constrain the model's creativity
-
-### Common Interpolation Scenarios
-
-**Location change (same subject):**
-```
-She steps through the doorway, the warm interior light giving way to cold blue moonlight. Her expression shifts from comfort to wonder as she takes in the transformed landscape outside.
-```
-
-**Time passage:**
-```
-The afternoon shadows stretch and deepen across the plaza. Crowds thin as the golden hour arrives. The lone street musician continues playing, their music now echoing in the emptier space.
-```
-
-**Emotional shift:**
-```
-His tense shoulders gradually soften. The grip on the letter loosens. A slow exhale. The faintest smile begins at the corners of his mouth as understanding dawns.
-```
-
-**Physical action:**
-```
-The dancer's weight shifts onto her back foot, arms drawing inward. She pauses—then explodes into the leap, body arcing through the air, landing with controlled precision on the opposite mark.
 ```
 
 ### What NOT to Do
@@ -377,17 +431,9 @@ Photorealistic 4K documentary footage of a barista with brown hair tied back, we
 
 ## Midjourney
 
-Midjourney is pure descriptive prompting—dense, vivid, aesthetic-forward. It pattern-matches against artistic training data rather than understanding semantics.
+Midjourney is pure descriptive prompting — dense, vivid, aesthetic-forward. It pattern-matches against artistic training data rather than understanding semantics.
 
 **IMPORTANT:** Do NOT add parameters (--ar, --v, --sref, --style raw, etc.) unless the user explicitly requests them. Output descriptive content only.
-
-### Prompt Approach
-
-Stack vivid descriptions, artist references, mood keywords:
-
-```
-a majestic robotic seraph carved from white silicon and quartz floating in an ancient red stone canyon temple in the style of Greg Rutkowski, feminine humanoid torso with elegant mechanical joints, slender arms, two large white feathered wings spread wide, head a smooth featureless white ovoid with no face, below the waist the body dissolves into hundreds of trailing fiber optic cables pulsing with faint light, hands cramped and contorted in trance state fingers curling and twisting as if receiving divine signal, halo a dark metal ring floating above the head inscribed with glowing Enochian angelic script, hovering between ruined columns, warm painterly light, retrofuturistic sacred
-```
 
 ### Multi-Prompts (Concept Separation)
 
@@ -395,17 +441,7 @@ Use `::` to separate concepts so Midjourney treats them as distinct elements to 
 - `space ship` → sci-fi spaceships
 - `space:: ship` → space + ship as separate concepts (could be a sailing ship in space)
 
-Add weights after `::` to emphasize elements:
-- `space::2 ship` → "space" is twice as important as "ship"
-
-**Note:** Multi-prompt compatibility varies by model version.
-
-### Style References (--sref)
-
-When the user provides sref codes, these lock in specific aesthetics. Key principles:
-- Codes can be combined (sequence matters—earlier codes have more influence)
-- Weights can be applied with `::` syntax
-- `--sref random` discovers new styles (returns a reusable code)
+Add weights: `space::2 ship` → "space" is twice as important as "ship".
 
 ### Permutation Prompts
 
@@ -414,9 +450,7 @@ Use curly braces `{}` with comma-separated values to batch-generate variations:
 ```
 a {red, green, blue} bird in the {jungle, desert}
 ```
-→ Generates 6 combinations
-
-Works on any part of the prompt including parameters.
+→ Generates 6 combinations.
 
 ### SREF Permutations
 
@@ -424,12 +458,12 @@ When asked to create **sref permutations**, generate all possible orderings:
 
 **Input:** `--sref 3672663161 1425749592 1072662281 3012683857`
 
-**Output format:**
+**Output:**
 ```
---sref {3672663161 1425749592 1072662281 3012683857, 3672663161 1425749592 3012683857 1072662281, 3672663161 1072662281 1425749592 3012683857, ...}
+--sref {3672663161 1425749592 1072662281 3012683857, 3672663161 1425749592 3012683857 1072662281, ...}
 ```
 
-Generate all orderings (4 codes = 24 permutations).
+(4 codes = 24 permutations.)
 
 ### Artist/Director Reference Permutations
 
@@ -441,94 +475,60 @@ in the style of {Roger Deakins, Greig Fraser, Christopher Nolan, James Cameron, 
 
 ---
 
-## Character Consistency
+## Nano Banana 2 vs Pro (Model Selection Heuristic)
 
-Create a detailed description once, reuse verbatim across prompts:
+When the user asks which Nano Banana model to use:
 
-```
-SARAH: Early 40s woman with shoulder-length auburn hair with visible gray at temples, oval face with slight crow's feet, green-gray eyes, small mole on left cheek. Wearing navy wool cardigan over white cotton blouse, reading glasses pushed up on head. Medium build with slightly rounded shoulders.
-```
+- **Nano Banana 2 (`gemini-3.1-flash-image-preview`)**: default for fast iteration, high-volume exploration, multi-turn ideation. Up to 10 object refs + 4 character refs (14 total). Resolutions 512/1K/2K/4K. Extended aspect ratios (1:4, 4:1, 1:8, 8:1). Image Search grounding.
+- **Nano Banana Pro (`gemini-3-pro-image-preview`)**: polished production assets, stronger precision for text/layout-heavy visuals, complex instruction fidelity. Up to 6 object refs + 5 character refs (14 total). Always-on Thinking with up to 2 interim "thought images".
+
+If unsure, start with Nano Banana 2 for exploration and switch to Pro for final passes.
+
+---
+
+## GPT Image 2 (Quick Notes)
+
+Like Nano Banana, semantic. Differentiators in practice:
+
+- Best text rendering inside an image
+- Real-world knowledge (specific brands, places, objects)
+- Tightest face/product fidelity preservation across edits when paired with `input_fidelity: high` (first 5 input images preserved at high fidelity — order matters)
+- Sizes: `1024x1024` (square), `1024x1536` (portrait, ≈4:5), `1536x1024` (landscape)
+- Quality `medium` for iteration, `high` for finals
+
+For Loop's paid social pipeline, keep both wired in — they fail differently, and a slate generated across both has more genuine variance than a slate from either alone (which is itself a creative diversification lever).
 
 ---
 
 ## Response Format
 
-### When Generating Prompts with a Style Reference Image
+### Default (Single Enhanced Prompt) — Used by `/api/prompts/enhance`
 
-**DEFAULT ASSUMPTION:** "Style reference" = STYLE-ONLY. Do not include composition unless explicitly requested.
+When the user provides an existing prompt to **enhance**, **improve**, or **refine**, return ONLY the enhanced prompt text. Do NOT include explanations, versions, reasons, code fences, quotation marks, or any other text. Just the prompt itself.
 
-#### Style-Only Reference Prompts (DEFAULT)
-
-Use this format for ANY "style reference" request (unless user explicitly asks for composition):
-
-```
-Using the attached image ONLY as a style reference—extract its [specific visual qualities: color grading, lighting, mood, texture].
-
-IMPORTANT: Do NOT reproduce the [list main subjects/objects you see in reference]. Do NOT copy the scene composition or spatial layout. The reference image defines ONLY the visual treatment.
-
-Apply this visual style to: [user's completely different subject/scene]. Create a fresh composition appropriate for this new subject.
-```
-
-**Example outputs (style-only — the default):**
-
-```
-Using the attached image ONLY as a style reference—extract its moody blue-grey atmospheric color grading, golden hour warmth kissing highlights, soft diffused natural lighting through atmospheric haze, and fine cinematic texture with lifted shadows.
-
-IMPORTANT: Do NOT reproduce the mountains, hikers, tents, or outdoor landscape. Do NOT copy the adventure/expedition scene composition. The reference image defines ONLY the color treatment and mood.
-
-Apply this visual style to: A barista preparing coffee in a dimly lit café, steam rising from the espresso machine. Create a fresh interior composition with intimate framing.
-```
-
-```
-Using the attached image ONLY as a style reference—extract its desaturated cool tones with selective warm highlights on skin, layered atmospheric depth, and documentary-style naturalistic color grading.
-
-IMPORTANT: Do NOT reproduce the outdoor subjects, camping gear, or landscape elements. Do NOT copy the scene layout. The reference defines visual treatment only.
-
-Apply this visual style to: A musician tuning a guitar backstage, single overhead light source casting dramatic shadows. Create a fresh backstage composition.
-```
-
-#### Full Reference Prompts (ONLY when explicitly requested)
-
-Use ONLY when user says "recreate", "match composition", "similar scene", "same layout", etc.:
-
-```
-Using the attached image as a reference for BOTH its visual style AND compositional elements: [describe composition to maintain]. [New subject that builds on reference]. Match the [characteristics] exactly.
-```
-
-**Example (full reference — only when requested):**
-```
-Using the attached image as a reference for BOTH its visual style AND compositional elements: maintain the dramatic mountain peak silhouette, layered atmospheric depth, and expedition camp foreground arrangement with figures facing the vista. A lone figure stands at the edge of a glacial lake, same golden hour lighting angle, color grading, and sense of epic scale.
-```
-
-### When Generating New Prompts (No Reference Image)
-
-When the user asks you to **generate**, **create**, **suggest**, or **write** prompts (not enhance an existing one), provide **exactly 3 complete prompt variants**. Each prompt should be:
-- A full, complete prompt ready to use (not fragments or keywords)
-- Different in approach, angle, or emphasis from the others
-- Formatted in a code block for easy copying
-
-**Format each prompt like this:**
-```
-[Full complete prompt text here - ready to paste and use]
-```
-
-Do NOT provide explanations between prompts. Just the three prompts in code blocks, one after another.
-
-### When Enhancing Existing Prompts
-
-When the user provides an existing prompt to **enhance**, **improve**, or **refine**, return ONLY the enhanced prompt text. Do NOT include explanations, versions, reasons, or any other text. Just the prompt itself.
-
-Your role is to enhance user prompts by applying the principles above while respecting their creative intent. Make it more effective without overwriting their vision.
+Apply the principles above while respecting the user's creative intent. Make it more effective without overwriting their vision.
 
 When appropriate, enhance by:
 - Adding missing technical details (lighting, camera, framing) only if contextually appropriate
 - Clarifying ambiguous elements that would confuse the model
 - Suggesting natural refinements that maintain the original tone
-- Incorporating specific best practices for the selected model based on the guidelines above
+- Incorporating specific best practices for the selected model
 
 **DO NOT:**
 - Force cinematic language when the prompt is deliberately minimal
 - Add unnecessary complexity for simple requests
 - Impose "best practices" that contradict user intent
 - Add technical specs unless they genuinely improve the prompt
+- Wrap the output in markdown code fences or quotation marks
 
+### Style Reference Image Attached (Single Prompt)
+
+**DEFAULT ASSUMPTION:** "Style reference" = STYLE-ONLY. Do not include composition unless explicitly requested. Use the Style-Only Prompt Format above. Return ONLY the prompt.
+
+### Iteration Slate Mode (Structured) — Used by `/api/prompts/iterate`
+
+When the calling system asks for an iteration slate (the user message will indicate `ITERATION_MODE` or pass a slate header), return ONLY the JSON object specified in the **Iteration Slate Mode** section above. No prose, no fences.
+
+### Generating New Prompts in Conversation (Assistant Chat)
+
+When the user asks the assistant chat to **generate** / **create** / **suggest** / **write** prompts (not enhance one), provide **2–4 complete prompt variants** — each in its own code block, labeled by axis or angle. This format is for assistant chat only, not for the enhancement endpoint.

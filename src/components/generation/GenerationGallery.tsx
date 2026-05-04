@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, forwardRef, useMemo, memo } from 'react'
 import Image from 'next/image'
-import { Download, RotateCcw, Info, Copy, Bookmark, Check, Video, Wand2, X, Trash2, Pin, ArrowDownRight, Camera, Paintbrush, Film } from 'lucide-react'
+import { Download, RotateCcw, Info, Copy, Bookmark, Check, Video, Wand2, X, Trash2, Pin, ArrowDownRight, Camera, Paintbrush, Film, Layers } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { GenerationWithOutputs } from '@/types/generation'
 import type { Session } from '@/types/project'
@@ -16,6 +16,7 @@ import { ImageToVideoOverlay } from './ImageToVideoOverlay'
 import { VideoIterationsStackHint } from './VideoIterationsStackHint'
 import { ImageBranchStack } from './ImageBranchStack'
 import { InlineEditComposer } from './InlineEditComposer'
+import { IterationSlateDialog } from './IterationSlateDialog'
 import {
   formatDate,
   formatModelWithProvider,
@@ -435,6 +436,11 @@ export function GenerationGallery({
 
   // Inline edit composer state
   const [editingOutputId, setEditingOutputId] = useState<string | null>(null)
+  // Iteration slate dialog state — opened from the gallery for image-card iteration
+  const [iterationContext, setIterationContext] = useState<{
+    output: { id: string; fileUrl: string }
+    generation: GenerationWithOutputs
+  } | null>(null)
 
   const handleInlineEdit = useCallback(async (
     editPrompt: string,
@@ -475,6 +481,70 @@ export function GenerationGallery({
       throw err
     }
   }, [sessionId, queryClient, toast])
+
+  /**
+   * Generate a single iteration variant as a branch off the source output.
+   * Reuses the same lineage metadata (sourceRootOutputId / sourceKind: 'edited')
+   * as the inline edit flow so the variant shows up in ImageBranchStack.
+   *
+   * The variant prompt is the full Andromeda-aware prompt; the sourceLabel
+   * surfaces the slate label (e.g. "A1 \u2014 Pain point / Documentary / 4:5").
+   */
+  const handleGenerateVariant = useCallback(
+    async (args: {
+      prompt: string
+      sourceLabel: string
+      referenceImage?: string | File | null
+      baselineOutputId?: string
+    }) => {
+      const { prompt: variantPrompt, sourceLabel, referenceImage, baselineOutputId } = args
+      const refUrl =
+        typeof referenceImage === 'string' && referenceImage.startsWith('http')
+          ? referenceImage
+          : undefined
+
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            sessionId,
+            modelId: iterationContext?.generation.modelId || 'gemini-nano-banana-2',
+            prompt: variantPrompt,
+            parameters: {
+              aspectRatio:
+                (iterationContext?.generation.parameters as any)?.aspectRatio || '1:1',
+              resolution:
+                (iterationContext?.generation.parameters as any)?.resolution || 1024,
+              numOutputs: 1,
+              referenceImageUrl: refUrl,
+              sourceRootOutputId: baselineOutputId,
+              sourceKind: 'edited',
+              sourceLabel: sourceLabel.slice(0, 80),
+            },
+          }),
+        })
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          throw new Error(errData.error || `Generation failed: ${res.status}`)
+        }
+
+        toast({ title: 'Variant queued', description: sourceLabel.slice(0, 80) })
+        queryClient.invalidateQueries({ queryKey: ['generations'] })
+      } catch (err: any) {
+        console.error('Iteration variant error:', err)
+        toast({
+          title: 'Variant failed',
+          description: err.message || 'Could not start variant generation',
+          variant: 'destructive',
+        })
+        throw err
+      }
+    },
+    [sessionId, iterationContext, queryClient, toast]
+  )
 
   const [lightboxData, setLightboxData] = useState<{
     imageUrl: string
@@ -1644,6 +1714,21 @@ export function GenerationGallery({
                     >
                       <Paintbrush className="h-3.5 w-3.5 text-white" />
                     </button>
+                    {output.fileType === 'image' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setIterationContext({
+                            output: { id: output.id, fileUrl: output.fileUrl },
+                            generation,
+                          })
+                        }}
+                        className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
+                        title="Create iterations (Andromeda-aware)"
+                      >
+                        <Layers className="h-3.5 w-3.5 text-white" />
+                      </button>
+                    )}
                   </div>
                   
                   {/* Bottom Right - Use as Reference (positioned left of the VideoIterationsStackHint video button) */}
@@ -1735,6 +1820,30 @@ export function GenerationGallery({
           imageUrl={overlayImageUrl}
           projectId={projectId}
           onCreateSession={onCreateVideoSession}
+        />
+      )}
+
+      {/* Iteration slate dialog (gallery branch entry point) */}
+      {iterationContext && (
+        <IterationSlateDialog
+          open={!!iterationContext}
+          onOpenChange={(o) => {
+            if (!o) setIterationContext(null)
+          }}
+          baselinePrompt={iterationContext.generation.prompt || ''}
+          modelId={iterationContext.generation.modelId}
+          referenceImage={iterationContext.output.fileUrl}
+          baselineOutputId={iterationContext.output.id}
+          onApplyToPrompt={(variantPrompt) => {
+            // Reuse the existing parameter-reuse flow but override the prompt
+            // so the variant lands in the prompt bar with the source's params.
+            const baseGen = iterationContext.generation
+            onReuseParameters({
+              ...baseGen,
+              prompt: variantPrompt,
+            } as GenerationWithOutputs)
+          }}
+          onGenerateVariant={handleGenerateVariant}
         />
       )}
     </>

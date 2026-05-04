@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { classifyError } from '@/lib/errors/classification'
-import { enhancePrompt } from '@/lib/prompts/enhance'
+import { validateBody, PromptIterateSchema } from '@/lib/api/validation'
+import { enhanceLimiter } from '@/lib/api/rate-limit'
+import { iteratePrompt } from '@/lib/prompts/iterate'
 
 /**
- * POST /api/prompts/enhance
+ * POST /api/prompts/iterate
  *
- * Cookie-authenticated UI route. Delegates the actual enhancement to the
- * shared `enhancePrompt` service so the headless REST/MCP surfaces use
- * exactly the same Gen-AI prompting substrate.
+ * Cookie-authenticated UI route. Delegates to the shared `iteratePrompt`
+ * service. Returns the same shape as before so existing callers keep
+ * working: `{ slate, raw, variantCount }`.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -23,27 +25,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { prompt, modelId, referenceImage } = await request.json()
+    const limited = enhanceLimiter.check(user.id)
+    if (limited) return limited
 
-    if (!prompt || !modelId) {
-      return NextResponse.json(
-        { error: 'Prompt and modelId are required' },
-        { status: 400 }
-      )
-    }
+    const { data, error } = await validateBody(request, PromptIterateSchema)
+    if (error) return error
 
-    const result = await enhancePrompt({ prompt, modelId, referenceImage })
+    const result = await iteratePrompt(data)
 
     return NextResponse.json({
-      originalPrompt: result.originalPrompt,
-      enhancedPrompt: result.enhancedPrompt,
-      enhancementPromptId: result.enhancementPromptId,
+      slate: result.slate,
+      raw: result.raw,
+      variantCount: result.variantCount,
     })
   } catch (error: unknown) {
-    const err = error as { message?: string; status?: number; statusCode?: number }
-    const errorMsg = err?.message || 'Failed to enhance prompt'
+    const err = error as { message?: string; status?: number; statusCode?: number; rawText?: string }
+    const errorMsg = err?.message || 'Failed to iterate prompt'
     const classified = classifyError(errorMsg)
-    console.error(`Error enhancing prompt [${classified.label}]:`, error)
+    console.error(`Error iterating prompt [${classified.label}]:`, error)
 
     const anthropicStatus = err?.status || err?.statusCode
     let httpStatus = classified.httpStatus
@@ -64,8 +63,16 @@ export async function POST(request: NextRequest) {
       errorCategory = 'upstream_unavailable'
     }
 
+    // Slate parse failures are treated as upstream/internal — the user can retry.
+    if (errorMsg.includes('unparseable slate')) {
+      return NextResponse.json(
+        { error: errorMsg, errorCategory: 'internal' },
+        { status: 502 }
+      )
+    }
+
     return NextResponse.json(
-      { error: 'Failed to enhance prompt', details: errorMsg, errorCategory },
+      { error: 'Failed to iterate prompt', details: errorMsg, errorCategory },
       { status: httpStatus }
     )
   }
