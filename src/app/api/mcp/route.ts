@@ -367,11 +367,22 @@ async function runTool(
   throw new Error(`Tool '${name}' is not implemented yet.`)
 }
 
-export async function POST(request: NextRequest) {
+/**
+ * Shared MCP POST handler. Used by both `/api/mcp` (header bearer auth)
+ * and `/api/mcp/[token]` (token in URL path, for Claude's custom-connector
+ * form which has no auth field). Sibling routes call this directly so we
+ * don't have to reconstruct the request to forward an Authorization
+ * header — `verifyHeadlessRequest` accepts the path token via options.
+ */
+export async function handleMcpPost(
+  request: NextRequest,
+  options: { tokenFromPath?: string } = {}
+) {
   // Cheap allowlist check for tool name happens inside the dispatcher,
   // but rate-limiting uses the same DB-backed buckets as REST.
   const verify = await verifyHeadlessRequest(request, {
     surface: 'mcp',
+    tokenFromPath: options.tokenFromPath,
     // We don't require a single tool here — `tools/call` enforces per-call
     // tool allowlists via the `principal.allowedTools` list. Bearer +
     // owner-active are enough to handshake and list tools.
@@ -429,6 +440,10 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(responses, {
     headers: verify.rateLimitHeaders,
   })
+}
+
+export async function POST(request: NextRequest) {
+  return handleMcpPost(request)
 }
 
 // Public capability probe — no auth required. Used by some MCP discovery

@@ -44,6 +44,14 @@ export interface VerifyOptions {
   surface: HeadlessSurface
   /** Skip the durable rate-limit increment (useful for cheap discovery routes). */
   skipRateLimit?: boolean
+  /**
+   * Optional token pulled from the URL path (e.g. `/api/mcp/<token>`). When
+   * provided, this is used in preference to the `Authorization` header so
+   * partners can paste a single URL into Claude's custom-connector form,
+   * which has no header/auth field. The token is hashed and looked up the
+   * same way as a header bearer.
+   */
+  tokenFromPath?: string
 }
 
 export interface VerifyFailure {
@@ -88,11 +96,19 @@ export async function verifyHeadlessRequest(
   request: NextRequest | Request,
   options: VerifyOptions
 ): Promise<VerifyResult> {
-  const headerValue = request.headers.get('authorization')
-  const rawToken = extractBearerToken(headerValue)
+  // Prefer a path-supplied token (e.g. /api/mcp/<token>) when present.
+  // This lets the Claude custom-connector form, which has no header/auth
+  // field, authenticate via a unique URL per partner. Falls back to the
+  // standard `Authorization: Bearer ...` header for Cursor and direct
+  // API clients.
+  let rawToken: string | null = options.tokenFromPath?.trim() || null
+  if (!rawToken) {
+    const headerValue = request.headers.get('authorization')
+    rawToken = extractBearerToken(headerValue)
+  }
   if (!rawToken) {
     return deny(401, {
-      error: 'Missing or malformed Vesper API token. Provide `Authorization: Bearer vsp_live_...`.',
+      error: 'Missing or malformed Vesper API token. Provide `Authorization: Bearer vsp_live_...` or use a `/api/mcp/<token>` URL.',
       errorCategory: 'auth',
     })
   }

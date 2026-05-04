@@ -11,7 +11,6 @@ import {
   nav,
   surfacesFoot,
   surfacesSection,
-  why,
 } from './content'
 import { SurfacesSelector } from './SurfacesSelector'
 import './headless.css'
@@ -154,30 +153,6 @@ export default async function HeadlessPage() {
                 </span>
               </div>
             </aside>
-          </div>
-        </section>
-
-        {/* Why headless */}
-        <section className="vh-section vh-section--soft" id="why">
-          <div className="vh-wrap">
-            <header className="vh-section-head">
-              <p className="vh-section-eyebrow">{why.eyebrow}</p>
-              <h2 className="vh-section-title">
-                {why.title} <em>{why.titleEm}</em>
-              </h2>
-              <p className="vh-section-intro">{why.lede}</p>
-            </header>
-            <div className="vh-why-grid">
-              {why.points.map((point, idx) => (
-                <article key={point.id} className="vh-why-card">
-                  <span className="vh-why-card__num">
-                    {String(idx + 1).padStart(2, '0')}
-                  </span>
-                  <h3 className="vh-why-card__title">{point.title}</h3>
-                  <p className="vh-why-card__body">{point.body}</p>
-                </article>
-              ))}
-            </div>
           </div>
         </section>
 

@@ -133,6 +133,26 @@ export function SurfacesSelector() {
               </div>
             )}
 
+          {active.detail.action && (
+            <div className="vh-action">
+              <a
+                className="vh-action__btn"
+                href={active.detail.action.href}
+                {...(active.detail.action.filename
+                  ? { download: active.detail.action.filename }
+                  : {})}
+              >
+                <span aria-hidden="true" className="vh-action__icon">
+                  ↓
+                </span>
+                <span>{active.detail.action.label}</span>
+              </a>
+              {active.detail.action.hint && (
+                <p className="vh-action__hint">{active.detail.action.hint}</p>
+              )}
+            </div>
+          )}
+
           {active.detail.footnote && (
             <p className="vh-panel-foot">
               <span className="sr-only">{surfacesSection.panelLabel}. </span>

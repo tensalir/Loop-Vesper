@@ -12,7 +12,6 @@ export const nav = {
   brandSub: 'For Loop partners',
   status: 'By Loop · Studio',
   links: [
-    { id: 'why', label: 'Why this matters', href: '#why' },
     { id: 'engine', label: 'What is inside', href: '#engine' },
     { id: 'surfaces', label: 'How to use it', href: '#surfaces' },
   ] as NavLink[],
@@ -38,34 +37,6 @@ export const hero = {
 /* ─────────────────────────────────────────────────────────────────────────
  * Why headless — the shift this page is responding to.
  * ─────────────────────────────────────────────────────────────────────── */
-
-export const why = {
-  eyebrow: 'Why this matters',
-  title: 'Most AI tools are clever.',
-  titleEm: 'Few of them know your taste.',
-  lede:
-    'Models keep changing. New AI tools land every month. The one thing that stays steady is what your team has already learned about Loop: how it talks, what a great ad looks like, what Studio approves on the first pass. Build that into one place, and every new tool you adopt inherits it the day you turn it on.',
-  points: [
-    {
-      id: 'multiplying',
-      title: 'New tools every month.',
-      body:
-        'A copilot here, an agent there, a plugin somewhere else. Each team picks something different. Each new tool starts from zero on what Loop is.',
-    },
-    {
-      id: 'churn',
-      title: 'Models keep moving.',
-      body:
-        'What you wired up for one model often breaks on the next. Models come and go. What your team knows stays, and Vesper carries it across.',
-    },
-    {
-      id: 'context',
-      title: 'Loop know-how is the difference.',
-      body:
-        'Product names, brand voice, what Studio approves on the first pass. That is the part no off-the-shelf AI can guess. Captured once inside Vesper, every tool that talks to it inherits the same taste.',
-    },
-  ],
-}
 
 /* ─────────────────────────────────────────────────────────────────────────
  * The engine — what Vesper actually exposes.
@@ -170,6 +141,20 @@ export type SurfaceInstruction = {
   detail?: string
 }
 
+/**
+ * A primary action on a surface card. Today this is used to offer the
+ * `.skill` bundle as a download from the Skill bundle surface.
+ */
+export type SurfaceAction = {
+  label: string
+  href: string
+  /** When set, the link is rendered with a `download` attribute and this
+   *  value is used as the suggested filename. */
+  filename?: string
+  /** Small text rendered under the action button. Plain language. */
+  hint?: string
+}
+
 export type Surface = {
   id: SurfaceId
   icon: string
@@ -189,6 +174,8 @@ export type Surface = {
     fields?: SurfaceField[]
     /** Optional install steps shown under the fields. */
     instructions?: SurfaceInstruction[]
+    /** Optional primary action (e.g. download a bundle). */
+    action?: SurfaceAction
     /** Optional small footnote at the bottom of the panel (e.g. known gaps). */
     footnote?: string
   }
@@ -207,46 +194,41 @@ export const surfaces: Surface[] = [
   {
     id: 'mcp',
     icon: '◇',
-    name: 'MCP connector',
-    verb: 'Two values to paste. Five-minute install.',
-    who: 'The recommended way for everyone. Add Vesper to your AI client once, then ask the assistant to use it directly.',
+    name: 'Add to Claude',
+    verb: 'One URL to paste. Five-minute install.',
+    who: 'The recommended way for everyone. Loop emails you a unique URL. You paste it once into Claude. Vesper shows up as a built-in tool the assistant can call directly.',
     status: 'recommended',
     badge: 'Recommended',
     detail: {
-      title: 'Vesper MCP connector',
-      meta: 'Two values to paste',
+      title: 'Add Vesper to Claude',
+      meta: 'One URL to paste',
       body:
-        'Loop emails you a personal access token when you join the preview. Paste the two values below into your AI client, and Vesper shows up as a connector with three tools.',
+        'Vesper plugs into Claude as a custom connector. Loop sends you a unique URL when you join the preview. There is nothing else to install and no separate login to remember.',
       fields: [
         {
           label: 'Server URL',
-          value: 'https://vesper.loop.dev/api/mcp',
-          hint: 'The same address for every partner.',
-        },
-        {
-          label: 'Authorization header',
-          value: 'Bearer vsp_live_<your-token>',
-          hint: 'Replace <your-token> with the one Loop emails you. Treat it like a password.',
+          value: 'https://vesper.loop.dev/api/mcp/<your-token>',
+          hint: 'Loop emails you the unique URL when you join the preview. Treat it like a password — anyone with the URL can call Vesper as you.',
         },
       ],
       instructions: [
         {
-          main: 'Open the MCP settings in your AI client.',
+          main: 'Open Claude and go to Customize, then Connectors.',
           detail:
-            'Cursor: Settings, then MCP, then Add server. Claude Desktop: open the Developer settings and edit claude_desktop_config.json. Anthropic API: add Vesper to the mcp_servers field on your request.',
+            'In claude.ai, the desktop app, or Cowork, find the Customize sidebar. The Connectors panel is there.',
         },
         {
-          main: 'Paste the Server URL above into the new entry.',
+          main: 'Click the + button at the top right, then Add custom connector.',
         },
         {
-          main: 'Paste the Authorization header. Swap the placeholder for your token.',
+          main: 'Paste the URL Loop sent you into the Remote MCP server URL field. Leave Advanced settings empty.',
         },
         {
-          main: 'Restart the client. Vesper appears with three tools: make a prompt better, see alternatives, find the right model.',
+          main: 'Click Add. Vesper now appears in the Connectors list with three tools: make a prompt better, see alternatives, find the right model.',
         },
       ],
       footnote:
-        'Adding Vesper directly inside the Claude.ai web app is a known gap. The web app form does not accept a pasted token; it requires a sign-in handshake we have not built. Cursor, Claude Desktop, and the Anthropic API all work today.',
+        'Building inside Cursor or directly against the Anthropic API instead? The same engine is available via a bearer-token URL — see `docs/headless-vesper.md` in the Loop-Vesper repo for the developer setup.',
     },
   },
   {
@@ -309,14 +291,20 @@ export const surfaces: Surface[] = [
     icon: '✦',
     name: 'Skill bundle',
     verb: 'For Claude.ai and ChatGPT.',
-    who: 'The same know-how, packaged so it drops directly into Claude.ai or ChatGPT.',
-    status: 'placeholder',
-    badge: 'Coming soon',
+    who: 'The same Loop know-how, packaged so it drops directly into Claude.ai, ChatGPT, or any agent shell that understands the Anthropic Skills format.',
+    status: 'live',
+    badge: 'Download',
     detail: {
       title: 'Skill bundle',
-      meta: 'In private preview',
+      meta: 'genai-prompting · v2026-05',
       body:
-        'The Loop know-how packaged as a portable bundle, so it can drop into Claude.ai, ChatGPT, or any agent shell that supports the Skills format. Distribution is being prepared. If you would like early access while the bundle is in private preview, reach out to the Studio team.',
+        'The Loop gen-ai prompting know-how, packaged as a single .skill file. Inside Claude.ai it drops into Customize. In ChatGPT or any agent shell that supports Skills, it sits next to your other capabilities. Same source as the connector above.',
+      action: {
+        label: 'Download genai-prompting.skill',
+        href: '/skills/genai-prompting.skill',
+        filename: 'genai-prompting.skill',
+        hint: 'About 20 KB. Open Claude.ai, then drop it into Customize -> Skills.',
+      },
     },
   },
 ]

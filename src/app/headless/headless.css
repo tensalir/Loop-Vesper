@@ -474,53 +474,6 @@
   line-height: 1.55;
 }
 
-/* ─── Why grid ───────────────────────────────────────────────────── */
-
-.vh-why-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(20px, 3vw, 32px);
-}
-
-@media (max-width: 880px) {
-  .vh-why-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.vh-why-card {
-  padding: 28px 26px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 16px;
-  background: hsl(var(--card));
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.vh-why-card__num {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  color: hsl(var(--primary));
-  font-weight: 600;
-}
-
-.vh-why-card__title {
-  margin: 0;
-  font-size: 18px;
-  letter-spacing: -0.015em;
-  font-weight: 600;
-  color: hsl(var(--foreground));
-}
-
-.vh-why-card__body {
-  margin: 0;
-  color: hsl(var(--muted-foreground));
-  font-size: 14.5px;
-  line-height: 1.55;
-}
-
 /* ─── Engine flow ────────────────────────────────────────────────── */
 
 .vh-engine {
@@ -1139,6 +1092,60 @@
   font-size: 12.5px;
   line-height: 1.55;
   color: hsl(var(--muted-foreground));
+}
+
+/* Primary action on a surface card. Today this is a download link for
+   the .skill bundle on the Skill bundle surface. Same mint-fill family
+   as the Copy button so the visual language stays unified. */
+.vh-action {
+  display: grid;
+  gap: 6px;
+}
+
+.vh-action__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  align-self: flex-start;
+  padding: 12px 18px;
+  border-radius: 10px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: 1px solid hsl(var(--primary));
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 200ms, transform 120ms;
+  box-shadow: 0 12px 24px -12px hsl(var(--primary) / 0.55);
+}
+
+.vh-action__btn:hover {
+  background: hsl(var(--primary) / 0.9);
+}
+
+.vh-action__btn:active {
+  transform: scale(0.98);
+}
+
+.vh-action__btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary));
+}
+
+.vh-action__icon {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.vh-action__hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.5;
 }
 
 .vh-surfaces__panel-who {
