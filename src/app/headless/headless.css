@@ -1148,6 +1148,117 @@
   line-height: 1.5;
 }
 
+/* ─── Self-service MCP token control ──────────────────────────────── */
+
+.vh-mcp {
+  display: grid;
+  gap: 8px;
+}
+
+.vh-mcp__meta {
+  margin: 0;
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.55;
+}
+
+.vh-mcp__error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: hsl(var(--destructive) / 0.12);
+  border: 1px solid hsl(var(--destructive) / 0.32);
+  color: hsl(var(--destructive));
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.vh-mcp__linkbtn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.vh-mcp__linkbtn:hover {
+  text-decoration: none;
+}
+
+.vh-mcp__linkbtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary));
+  border-radius: 4px;
+}
+
+.vh-mcp__confirm {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+/* Masked / placeholder URL pills — same field styling as the static
+   field, but with reduced opacity so the user reads them as
+   informational rather than something to copy. */
+.vh-field__value--masked,
+.vh-field__value--placeholder {
+  color: hsl(var(--muted-foreground));
+  user-select: none;
+  cursor: default;
+}
+
+/* Ghost variant of the Copy button used for the Regenerate action so
+   the destructive intent doesn't read as the primary thing to do. */
+.vh-copy--ghost {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+  box-shadow: none;
+}
+
+.vh-copy--ghost:hover {
+  background: hsl(var(--secondary));
+  border-color: hsl(var(--primary) / 0.4);
+}
+
+/* Banner shown when a fresh URL is on screen and when the user is
+   confirming a destructive replace. Mint family so it ties back to the
+   primary surface, but bordered so it is clearly an alert, not a CTA. */
+.vh-token-warning {
+  margin: 6px 0 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: hsl(var(--primary) / 0.12);
+  border: 1px solid hsl(var(--primary) / 0.5);
+  color: hsl(var(--foreground));
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.vh-token-warning strong {
+  color: hsl(var(--primary));
+  font-weight: 700;
+}
+
+/* Destructive variant of the action button used for the regenerate
+   confirmation. Uses the destructive token rather than primary so the
+   visual weight matches the action. */
+.vh-action__btn--danger {
+  background: hsl(var(--destructive));
+  border-color: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+  box-shadow: 0 12px 24px -12px hsl(var(--destructive) / 0.55);
+}
+
+.vh-action__btn--danger:hover {
+  background: hsl(var(--destructive) / 0.92);
+}
+
 .vh-surfaces__panel-who {
   padding: 14px 24px 18px;
   border-top: 1px solid hsl(var(--border));

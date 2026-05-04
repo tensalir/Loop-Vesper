@@ -37,8 +37,12 @@ export const dynamic = 'force-dynamic'
  * Anyone without access is redirected back to /projects rather than
  * shown a "no access" screen — the page is essentially invisible to
  * users who were not given the URL.
+ *
+ * Returns the verified user id so the page can fetch any per-user data
+ * (e.g. the self-issued MCP credential metadata) without re-running the
+ * Supabase auth call.
  */
-async function requireHeadlessAccess() {
+async function requireHeadlessAccess(): Promise<{ userId: string }> {
   const supabase = createServerClient()
   const {
     data: { user },
@@ -66,10 +70,47 @@ async function requireHeadlessAccess() {
   if (!hasAccess) {
     redirect('/projects')
   }
+
+  return { userId: user.id }
 }
 
+/**
+ * Fetch metadata about the user's self-issued MCP credential, if any.
+ * Mirrors the `Self-issued (vesper-headless)` name used by the
+ * `/api/me/headless-credential` endpoint so the user-facing flow only
+ * touches credentials it created itself, never admin-issued ones.
+ */
+async function getSelfIssuedCredential(userId: string) {
+  const credential = await prisma.headlessCredential.findFirst({
+    where: {
+      ownerId: userId,
+      name: 'Self-issued (vesper-headless)',
+      revokedAt: null,
+    },
+    select: {
+      tokenPrefix: true,
+      createdAt: true,
+      lastUsedAt: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  if (!credential) return null
+
+  return {
+    tokenPrefix: credential.tokenPrefix,
+    createdAt: credential.createdAt.toISOString(),
+    lastUsedAt: credential.lastUsedAt
+      ? credential.lastUsedAt.toISOString()
+      : null,
+  }
+}
+
+export type McpAccessSummary = Awaited<ReturnType<typeof getSelfIssuedCredential>>
+
 export default async function HeadlessPage() {
-  await requireHeadlessAccess()
+  const { userId } = await requireHeadlessAccess()
+  const mcpAccess = await getSelfIssuedCredential(userId)
 
   return (
     <div className="vh-shell">
@@ -217,7 +258,7 @@ export default async function HeadlessPage() {
               <p className="vh-section-intro">{surfacesSection.lede}</p>
             </header>
 
-            <SurfacesSelector />
+            <SurfacesSelector mcpAccess={mcpAccess} />
 
             <ul className="vh-surfaces__foot">
               {surfacesFoot.map((point) => (

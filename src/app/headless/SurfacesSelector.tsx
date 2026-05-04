@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { surfaces, surfacesSection, type Surface, type SurfaceId } from './content'
+import { McpAccessControl, type McpAccessSummary } from './McpAccessControl'
 
 /**
  * Interactive surface picker for the /headless landing page.
@@ -18,7 +19,17 @@ import { surfaces, surfacesSection, type Surface, type SurfaceId } from './conte
  * screen readers all use the same `<button>` semantics; the panel is an
  * `aria-live` region so swaps are announced.
  */
-export function SurfacesSelector() {
+export function SurfacesSelector({
+  mcpAccess = null,
+}: {
+  /**
+   * Server-rendered metadata about the calling user's self-issued MCP
+   * credential (or `null` if they have not generated one yet). Used by
+   * the `McpAccessControl` widget that replaces the static Server URL
+   * field on the recommended MCP surface.
+   */
+  mcpAccess?: McpAccessSummary
+}) {
   const initialId: SurfaceId =
     surfaces.find((s) => s.status === 'recommended')?.id ??
     surfaces[0]?.id ??
@@ -96,19 +107,29 @@ export function SurfacesSelector() {
             <p className="vh-panel-prose">{active.detail.body}</p>
           )}
 
-          {active.detail.fields && active.detail.fields.length > 0 && (
-            <ul className="vh-fields" role="list">
-              {active.detail.fields.map((field) => (
-                <li key={field.label} className="vh-field">
-                  <label className="vh-field__label">{field.label}</label>
-                  <div className="vh-field__row">
-                    <code className="vh-field__value">{field.value}</code>
-                    <CopyButton value={field.value} label={field.label} />
-                  </div>
-                  {field.hint && <p className="vh-field__hint">{field.hint}</p>}
-                </li>
-              ))}
-            </ul>
+          {active.id === 'mcp' ? (
+            // Self-service token UI: replaces the static Server URL field
+            // with a Generate / Just-created / Has-token / Confirming state
+            // machine. Reads the user's existing self-issued credential
+            // metadata from the server-rendered prop so the initial paint
+            // matches reality without an extra fetch.
+            <McpAccessControl initial={mcpAccess} />
+          ) : (
+            active.detail.fields &&
+            active.detail.fields.length > 0 && (
+              <ul className="vh-fields" role="list">
+                {active.detail.fields.map((field) => (
+                  <li key={field.label} className="vh-field">
+                    <label className="vh-field__label">{field.label}</label>
+                    <div className="vh-field__row">
+                      <code className="vh-field__value">{field.value}</code>
+                      <CopyButton value={field.value} label={field.label} />
+                    </div>
+                    {field.hint && <p className="vh-field__hint">{field.hint}</p>}
+                  </li>
+                ))}
+              </ul>
+            )
           )}
 
           {active.detail.instructions &&
