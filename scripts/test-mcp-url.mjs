@@ -1,0 +1,235 @@
+/**
+ * End-to-end smoke test for the token-in-URL MCP endpoint.
+ *
+ *   1. Mints a temporary `vsp_live_*` credential directly in the
+ *      database, scoped to a chosen owner (defaults to the first admin
+ *      profile we can find), with all 3 MCP tools and full model access.
+ *   2. Hits the chosen MCP base URL with the standard JSON-RPC 2.0
+ *      handshake: initialize -> notifications/initialized -> tools/list
+ *      -> tools/call(list_models). list_models reads the local registry
+ *      so we get a real round-trip without paying any provider cost.
+ *   3. Revokes the test credential whether the test passes or fails so
+ *      the database is left clean.
+ *
+ * Run with:
+ *   node scripts/test-mcp-url.mjs
+ *   node scripts/test-mcp-url.mjs --base https://loopvesper-one.vercel.app
+ *   node scripts/test-mcp-url.mjs --base http://localhost:3000
+ */
+
+import { PrismaClient } from '@prisma/client'
+import crypto from 'node:crypto'
+
+const args = Object.fromEntries(
+  process.argv
+    .slice(2)
+    .map((arg, i, all) => (arg.startsWith('--') ? [arg.slice(2), all[i + 1]] : null))
+    .filter(Boolean),
+)
+
+const BASE = args.base?.trim() || 'https://loopvesper-one.vercel.app'
+const TEST_NAME = `mcp-url-smoke-test-${Date.now()}`
+
+const prisma = new PrismaClient()
+
+function issueRawToken() {
+  const prefixRandom = crypto.randomBytes(8).toString('hex') // 16 hex chars
+  const secretRandom = crypto.randomBytes(24).toString('hex') // 48 hex chars
+  const tokenPrefix = `vsp_live_${prefixRandom}`
+  const rawToken = `${tokenPrefix}_${secretRandom}`
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+  return { rawToken, tokenPrefix, tokenHash }
+}
+
+async function rpc(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const text = await res.text()
+  let parsed = null
+  try {
+    parsed = text ? JSON.parse(text) : null
+  } catch {
+    /* leave parsed null */
+  }
+  return { status: res.status, headers: Object.fromEntries(res.headers), body: parsed, raw: text }
+}
+
+function ok(label) {
+  console.log(`  PASS  ${label}`)
+}
+
+function fail(label, detail) {
+  console.error(`  FAIL  ${label}`)
+  if (detail !== undefined) console.error('         ', detail)
+  process.exitCode = 1
+}
+
+async function main() {
+  console.log(`MCP token-in-URL smoke test`)
+  console.log(`  Base URL : ${BASE}`)
+
+  // 1. Find an owner to attach the test credential to. Prefer an active
+  // admin since admins always pass any per-owner gating; fall back to
+  // any active profile.
+  const owner =
+    (await prisma.profile.findFirst({
+      where: { role: 'admin', deletedAt: null, pausedAt: null },
+      select: { id: true, displayName: true, username: true, role: true },
+    })) ||
+    (await prisma.profile.findFirst({
+      where: { deletedAt: null, pausedAt: null },
+      select: { id: true, displayName: true, username: true, role: true },
+    }))
+
+  if (!owner) {
+    fail('Find an active profile to own the test credential')
+    await prisma.$disconnect()
+    return
+  }
+  console.log(
+    `  Owner    : ${owner.displayName || owner.username || owner.id} (${owner.role})`,
+  )
+
+  // 2. Mint the credential.
+  const { rawToken, tokenPrefix, tokenHash } = issueRawToken()
+  const credential = await prisma.headlessCredential.create({
+    data: {
+      ownerId: owner.id,
+      name: TEST_NAME,
+      tokenHash,
+      tokenPrefix,
+      allowedTools: ['enhance_prompt', 'iterate_prompt', 'list_models'],
+      allowedModels: ['*'],
+    },
+    select: { id: true, tokenPrefix: true, createdAt: true },
+  })
+  console.log(`  Token    : ${tokenPrefix}_********  (id ${credential.id})`)
+
+  const url = `${BASE.replace(/\/$/, '')}/api/mcp/${rawToken}`
+  console.log(`  Endpoint : ${BASE}/api/mcp/${tokenPrefix}_********`)
+  console.log('')
+
+  try {
+    // 3a. initialize
+    console.log('Step 1: initialize')
+    const init = await rpc(url, {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-11-25',
+        capabilities: {},
+        clientInfo: { name: 'mcp-url-smoke-test', version: '0.1.0' },
+      },
+    })
+    if (init.status !== 200) {
+      fail(`HTTP ${init.status} on initialize`, init.body || init.raw)
+    } else if (!init.body?.result?.serverInfo?.name) {
+      fail('initialize did not return serverInfo.name', init.body)
+    } else {
+      ok(
+        `initialize -> ${init.body.result.serverInfo.name} v${init.body.result.serverInfo.version} (protocol ${init.body.result.protocolVersion})`,
+      )
+    }
+
+    // 3b. notifications/initialized (no response expected, server should 202)
+    console.log('Step 2: notifications/initialized')
+    const initd = await rpc(url, {
+      jsonrpc: '2.0',
+      method: 'notifications/initialized',
+    })
+    if (initd.status === 202 || initd.status === 200) {
+      ok(`notifications/initialized -> HTTP ${initd.status}`)
+    } else {
+      fail(`HTTP ${initd.status} on notifications/initialized`, initd.body || initd.raw)
+    }
+
+    // 3c. tools/list
+    console.log('Step 3: tools/list')
+    const tools = await rpc(url, {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/list',
+    })
+    if (tools.status !== 200) {
+      fail(`HTTP ${tools.status} on tools/list`, tools.body || tools.raw)
+    } else if (!Array.isArray(tools.body?.result?.tools)) {
+      fail('tools/list did not return an array of tools', tools.body)
+    } else {
+      const names = tools.body.result.tools.map((t) => t.name).sort()
+      ok(`tools/list -> [${names.join(', ')}]`)
+      const expected = ['enhance_prompt', 'iterate_prompt', 'list_models'].sort()
+      const matches = JSON.stringify(names) === JSON.stringify(expected)
+      if (!matches) {
+        fail(`Expected exactly [${expected.join(', ')}], got [${names.join(', ')}]`)
+      }
+    }
+
+    // 3d. tools/call list_models  (cost-free: reads local registry)
+    console.log('Step 4: tools/call list_models')
+    const call = await rpc(url, {
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: { name: 'list_models', arguments: {} },
+    })
+    if (call.status !== 200) {
+      fail(`HTTP ${call.status} on tools/call`, call.body || call.raw)
+    } else if (!call.body?.result?.content?.length) {
+      fail('tools/call did not return a content array', call.body)
+    } else {
+      const totalModels = call.body.result.structuredContent?.total ?? 'unknown'
+      const wildcard = call.body.result.structuredContent?.wildcardAccess ?? false
+      ok(
+        `tools/call list_models -> ${totalModels} models visible (wildcard access: ${wildcard})`,
+      )
+    }
+
+    // Rate-limit headers: present on every authenticated response.
+    const rlMin = tools.headers['x-ratelimit-remaining-minute']
+    const rlDay = tools.headers['x-ratelimit-remaining-day']
+    if (rlMin !== undefined || rlDay !== undefined) {
+      ok(`rate-limit headers visible (minute remaining: ${rlMin ?? 'n/a'}, day remaining: ${rlDay ?? 'n/a'})`)
+    }
+
+    // 3e. Negative test: a wrong token should return 401, not silently work.
+    console.log('Step 5: bogus token -> 401')
+    const badUrl = `${BASE.replace(/\/$/, '')}/api/mcp/vsp_live_deadbeef_${'0'.repeat(48)}`
+    const bad = await rpc(badUrl, {
+      jsonrpc: '2.0',
+      id: 99,
+      method: 'initialize',
+      params: { protocolVersion: '2025-11-25' },
+    })
+    if (bad.status === 401) {
+      ok(`bogus token -> HTTP 401`)
+    } else {
+      fail(`Expected HTTP 401 for a bogus token, got ${bad.status}`, bad.body || bad.raw)
+    }
+  } finally {
+    // 4. Always revoke the test credential, even if a step failed.
+    await prisma.headlessCredential.update({
+      where: { id: credential.id },
+      data: {
+        revokedAt: new Date(),
+        revokedReason: 'mcp-url-smoke-test cleanup',
+      },
+    })
+    console.log('')
+    console.log(`Cleanup  : revoked test credential ${credential.id}`)
+    await prisma.$disconnect()
+  }
+}
+
+main().catch(async (err) => {
+  console.error('FATAL:', err)
+  try {
+    await prisma.$disconnect()
+  } catch {
+    /* already disconnected */
+  }
+  process.exitCode = 1
+})

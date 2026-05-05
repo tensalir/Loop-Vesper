@@ -94,12 +94,34 @@ async function requireHeadlessUser(): Promise<AccessCheck> {
 }
 
 /**
- * Build the partner-facing MCP URL from the incoming request origin so
- * the value always matches the live host (localhost in dev, the Vercel
- * domain in prod) without needing an env var.
+ * Build the partner-facing MCP URL.
+ *
+ * Resolution order (first non-empty wins):
+ *   1. `NEXT_PUBLIC_APP_URL`            - explicit operator override
+ *   2. `VERCEL_PROJECT_PRODUCTION_URL`  - Vercel-injected canonical prod URL
+ *   3. `VERCEL_URL`                     - Vercel-injected per-deployment URL
+ *   4. The incoming request origin      - final fallback (e.g. localhost)
+ *
+ * The point: a partner copying the URL should never see `http://localhost`
+ * even when the page is generated locally. Setting NEXT_PUBLIC_APP_URL in
+ * `.env.local` makes local dev show the same hostname Loop will email out.
  */
 function buildMcpUrl(request: NextRequest, rawToken: string): string {
-  const origin = new URL(request.url).origin
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  const vercelProd = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()
+  const vercelDeploy = process.env.VERCEL_URL?.trim()
+
+  let origin: string
+  if (explicit) {
+    origin = explicit.replace(/\/$/, '')
+  } else if (vercelProd) {
+    origin = `https://${vercelProd}`
+  } else if (vercelDeploy) {
+    origin = `https://${vercelDeploy}`
+  } else {
+    origin = new URL(request.url).origin
+  }
+
   return `${origin}/api/mcp/${rawToken}`
 }
 

@@ -27,6 +27,66 @@ export const metadata = {
 export const dynamic = 'force-dynamic'
 
 /**
+ * Resolve a friendly first name from a profile + Supabase user, in
+ * order of trustworthiness:
+ *
+ *   1. Profile display name (human-curated, usually properly cased).
+ *   2. Supabase OAuth metadata (`full_name` from Google, etc.).
+ *   3. `given_name` if the OAuth provider split the name out.
+ *   4. Profile username (capitalised).
+ *   5. Email local-part before `.`/`_`/`+` (capitalised).
+ *
+ * Returns `null` when nothing usable is available, so the page can
+ * gracefully fall back to its non-personalised team-voice title.
+ */
+function pickFirstName(
+  profile: { displayName: string | null; username: string | null },
+  user: {
+    email?: string | null
+    user_metadata?: Record<string, unknown> | null
+  }
+): string | null {
+  const display = profile.displayName?.trim()
+  if (display) return display.split(/\s+/)[0]
+
+  const meta = user.user_metadata ?? {}
+  const fullName = typeof meta.full_name === 'string' ? meta.full_name.trim() : ''
+  if (fullName) return fullName.split(/\s+/)[0]
+
+  const givenName =
+    typeof meta.given_name === 'string' ? meta.given_name.trim() : ''
+  if (givenName) return givenName
+
+  const username = profile.username?.trim()
+  if (username) return capitaliseFirstName(username)
+
+  const email = user.email?.trim()
+  if (email) {
+    const local = email.split('@')[0] ?? ''
+    const first = local.split(/[._+]/)[0]
+    if (first && first.length >= 2) return capitaliseFirstName(first)
+  }
+
+  return null
+}
+
+/**
+ * Capitalise a name when it is fully upper- or lower-case. Mixed-case
+ * names like "DeShawn" or "MacIntosh" are left untouched so we do not
+ * butcher capitalisation the user themselves chose.
+ */
+function capitaliseFirstName(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) return trimmed
+  const allUpper = trimmed === trimmed.toUpperCase()
+  const allLower = trimmed === trimmed.toLowerCase()
+  if (allUpper || allLower) {
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase()
+  }
+  return trimmed
+}
+
+/**
  * Per-user gate for the /headless page.
  *
  * Middleware already enforces "must be logged in" via Supabase. Here we
@@ -38,11 +98,15 @@ export const dynamic = 'force-dynamic'
  * shown a "no access" screen — the page is essentially invisible to
  * users who were not given the URL.
  *
- * Returns the verified user id so the page can fetch any per-user data
- * (e.g. the self-issued MCP credential metadata) without re-running the
- * Supabase auth call.
+ * Returns the verified user id and a resolved first name so the page
+ * can render a personalised greeting and fetch per-user data (e.g. the
+ * self-issued MCP credential metadata) without re-running the Supabase
+ * auth call.
  */
-async function requireHeadlessAccess(): Promise<{ userId: string }> {
+async function requireHeadlessAccess(): Promise<{
+  userId: string
+  firstName: string | null
+}> {
   const supabase = createServerClient()
   const {
     data: { user },
@@ -59,6 +123,8 @@ async function requireHeadlessAccess(): Promise<{ userId: string }> {
       headlessAccess: true,
       pausedAt: true,
       deletedAt: true,
+      displayName: true,
+      username: true,
     },
   })
 
@@ -71,7 +137,12 @@ async function requireHeadlessAccess(): Promise<{ userId: string }> {
     redirect('/projects')
   }
 
-  return { userId: user.id }
+  const firstName = pickFirstName(
+    { displayName: profile.displayName, username: profile.username },
+    { email: user.email, user_metadata: user.user_metadata }
+  )
+
+  return { userId: user.id, firstName }
 }
 
 /**
@@ -109,7 +180,7 @@ async function getSelfIssuedCredential(userId: string) {
 export type McpAccessSummary = Awaited<ReturnType<typeof getSelfIssuedCredential>>
 
 export default async function HeadlessPage() {
-  const { userId } = await requireHeadlessAccess()
+  const { userId, firstName } = await requireHeadlessAccess()
   const mcpAccess = await getSelfIssuedCredential(userId)
 
   return (
@@ -149,7 +220,16 @@ export default async function HeadlessPage() {
                 <span>{hero.eyebrow}</span>
               </p>
               <h1 className="vh-hero__title">
-                {hero.titlePre} <em>{hero.titleEm}</em>
+                {firstName ? (
+                  <>
+                    Hi {firstName}, {hero.titlePersonalPre}{' '}
+                    <em>{hero.titleEm}</em>
+                  </>
+                ) : (
+                  <>
+                    {hero.titlePre} <em>{hero.titleEm}</em>
+                  </>
+                )}
               </h1>
               <p className="vh-hero__lede">{hero.lede}</p>
               <dl className="vh-hero__meta">

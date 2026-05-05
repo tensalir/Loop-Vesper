@@ -954,7 +954,7 @@
 
 .vh-field__row {
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   gap: 8px;
   min-width: 0;
 }
@@ -968,10 +968,13 @@
   border-radius: 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px;
+  line-height: 1.55;
   color: hsl(var(--foreground));
-  overflow-x: auto;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  /* Long URLs wrap inside the box rather than getting a horizontal scroll
+     bar. break-all is correct here because the value is a URL with no
+     natural break points; word-break alone would not help. */
+  word-break: break-all;
+  white-space: normal;
   user-select: all;
   cursor: text;
 }

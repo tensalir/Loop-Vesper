@@ -24,6 +24,10 @@ export const nav = {
 export const hero = {
   eyebrow: 'Vesper Headless',
   titlePre: 'The same Vesper your team trusts,',
+  // Personalised variant rendered when the page can resolve a first
+  // name for the visitor. Voice shifts from team ("your team trusts")
+  // to individual ("you trust") so the greeting reads naturally.
+  titlePersonalPre: 'the same Vesper you trust,',
   titleEm: 'now reachable from every tool around it.',
   lede:
     'Vesper is the image and video workshop the Loop Studio team uses every day. It already knows what good Loop work looks like: the brand voice, the product line, the rules a designer would apply on a first pass. Vesper Headless lets you tap into that same know-how from inside Claude, Cursor, or any tool that fits a small connector.',
@@ -160,7 +164,10 @@ export type Surface = {
   icon: string
   name: string
   verb: string
-  who: string
+  /** Short paragraph rendered under the card. Optional because the MCP
+   *  surface already has all the context it needs in `detail.body` and
+   *  the install steps; carrying a `who` line there would just repeat. */
+  who?: string
   status: SurfaceStatus
   /** Optional short label rendered next to the title in the detail panel
    *  (e.g. "Recommended", "API", "Coming soon"). */
@@ -196,19 +203,18 @@ export const surfaces: Surface[] = [
     icon: '◇',
     name: 'Add to Claude',
     verb: 'One URL to paste. Five-minute install.',
-    who: 'The recommended way for everyone. Loop emails you a unique URL. You paste it once into Claude. Vesper shows up as a built-in tool the assistant can call directly.',
     status: 'recommended',
     badge: 'Recommended',
     detail: {
       title: 'Add Vesper to Claude',
       meta: 'One URL to paste',
       body:
-        'Vesper plugs into Claude as a custom connector. Loop sends you a unique URL when you join the preview. There is nothing else to install and no separate login to remember.',
+        'Vesper plugs into Claude as a custom connector. Generate your URL below, then paste it into Claude once. There is nothing else to install and no separate login to remember.',
       fields: [
         {
           label: 'Server URL',
           value: 'https://vesper.loop.dev/api/mcp/<your-token>',
-          hint: 'Loop emails you the unique URL when you join the preview. Treat it like a password — anyone with the URL can call Vesper as you.',
+          hint: 'Treat the URL like a password. Anyone who has it can call Vesper as you.',
         },
       ],
       instructions: [
@@ -221,14 +227,12 @@ export const surfaces: Surface[] = [
           main: 'Click the + button at the top right, then Add custom connector.',
         },
         {
-          main: 'Paste the URL Loop sent you into the Remote MCP server URL field. Leave Advanced settings empty.',
+          main: 'Paste the URL into the Remote MCP server URL field. Leave Advanced settings empty.',
         },
         {
           main: 'Click Add. Vesper now appears in the Connectors list with three tools: make a prompt better, see alternatives, find the right model.',
         },
       ],
-      footnote:
-        'Building inside Cursor or directly against the Anthropic API instead? The same engine is available via a bearer-token URL — see `docs/headless-vesper.md` in the Loop-Vesper repo for the developer setup.',
     },
   },
   {

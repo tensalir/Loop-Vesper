@@ -182,10 +182,12 @@ export function SurfacesSelector({
           )}
         </div>
 
-        <p className="vh-surfaces__panel-who">
-          <span className="sr-only">{surfacesSection.panelLabel} · </span>
-          {active.who}
-        </p>
+        {active.who && (
+          <p className="vh-surfaces__panel-who">
+            <span className="sr-only">{surfacesSection.panelLabel} · </span>
+            {active.who}
+          </p>
+        )}
       </div>
     </div>
   )
