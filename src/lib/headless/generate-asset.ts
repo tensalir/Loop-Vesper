@@ -1,28 +1,43 @@
 /**
- * `generate_asset` MCP tool — Phase 1.
+ * `generate_asset` MCP tool.
  *
  * Synchronous, fast image models only. Calls Vesper's existing image
- * pipeline through `getModel(modelId).generate(...)`, fetches the
- * resulting image bytes, base64-encodes them, and returns them inline
- * as MCP `image` content blocks so Claude (or any MCP-aware client)
- * can render the image directly in the conversation.
+ * pipeline through `getModel(modelId).generate(...)`, persists the
+ * resulting image to Supabase Storage (`generated-images` bucket),
+ * and returns a small JSON response with a `text` summary and one
+ * `resource_link` per output pointing at the stored image.
+ *
+ * Why URLs, not inline base64 (default):
+ *   - Cowork's CoworkArtifactBridge validates IPC payloads when an
+ *     artifact calls back into MCP. Large `image` content blocks
+ *     (~500 KB base64) trigger validation failures and the artifact
+ *     never receives the response.
+ *   - claude.ai web's renderer collapses inline `image` content blocks
+ *     into the tool-use accordion instead of inlining them in the
+ *     reply. URLs let Claude embed `<img src>` in artifacts and let
+ *     users click through to the image directly.
+ *   - Smaller payload = faster tool roundtrip and less token cost.
+ *
+ * Callers that explicitly want inline bytes (e.g. Anthropic API direct
+ * callers without an artifact bridge) can pass `inlineBase64: true` to
+ * also receive the legacy `image` content block alongside the URL.
  *
  * What this is NOT (yet):
  *   - Async / poll for slow video models. Veo, Kling, etc. are
- *     explicitly rejected with a "use the web app" hint. Phase 2.
- *   - Persisted to Supabase Storage. The asset only lives in the
- *     conversation. Phase 2.
+ *     explicitly rejected with a "use the web app" hint. Future work.
  *   - Wired into the `Generation` table the Studio gallery reads from.
- *     Phase 2.
+ *     Future work — needs a per-user MCP Project + Session provisioner.
  *
- * The 25s hard cap matches Anthropic's MCP connector recommendation:
- * tool calls should resolve within ~30s. We give ourselves a 5s
- * buffer for fetch + base64 + JSON serialisation overhead.
+ * The 25s hard cap wraps `adapter.generate` only; storage uploads
+ * happen after the model returns and run within the standard Vercel
+ * function timeout for the route.
  */
 
+import { randomUUID } from 'node:crypto'
 import { HeadlessGenerateAssetSchema } from '@/lib/api/validation'
 import { getModel, getModelConfig } from '@/lib/models/registry'
 import type { GenerationRequest } from '@/lib/models/base'
+import { uploadUrlToStorage } from '@/lib/supabase/storage'
 import { resolveProductRenders } from './list-product-renders'
 
 /**
@@ -46,13 +61,28 @@ const MCP_TOOL_TIMEOUT_MS = 25_000
 /** Standard MCP content block shapes we emit. */
 type McpTextContent = { type: 'text'; text: string }
 type McpImageContent = { type: 'image'; data: string; mimeType: string }
-export type McpContent = McpTextContent | McpImageContent
+type McpResourceLinkContent = {
+  type: 'resource_link'
+  uri: string
+  name: string
+  mimeType?: string
+  description?: string
+}
+export type McpContent =
+  | McpTextContent
+  | McpImageContent
+  | McpResourceLinkContent
 
 export interface GenerateAssetResult {
   content: McpContent[]
   structuredContent: {
     modelId: string
-    outputs: Array<{ width: number; height: number; mimeType: string }>
+    outputs: Array<{
+      url: string
+      width: number
+      height: number
+      mimeType: string
+    }>
     durationMs: number
     estimatedCostUsd: number | null
   }
@@ -63,6 +93,54 @@ export interface GenerateAssetResult {
 
 interface CallerPrincipal {
   allowedModels: string[]
+  /** Used to namespace storage paths so each credential's outputs live
+   *  under their own folder (and so leaks of one URL don't leak another's). */
+  credentialId: string
+}
+
+/** Storage bucket reused from the web app's image pipeline — see
+ *  src/app/api/generate/process/route.ts. Same RLS / public-read posture. */
+const STORAGE_BUCKET = 'generated-images'
+
+/** Map a normalised image MIME type to a sensible file extension. PNG is the
+ *  conservative fallback when the upstream provider sends nothing useful. */
+function extensionForMime(mimeType: string | null | undefined): string {
+  switch ((mimeType || '').toLowerCase()) {
+    case 'image/jpeg':
+    case 'image/jpg':
+      return 'jpg'
+    case 'image/webp':
+      return 'webp'
+    case 'image/gif':
+      return 'gif'
+    case 'image/png':
+      return 'png'
+    default:
+      return 'png'
+  }
+}
+
+/** Probe an upstream URL with HEAD to learn its content-type without
+ *  downloading bytes. Falls back to extension sniffing on the URL itself,
+ *  then to PNG as the conservative default. */
+async function probeMimeType(url: string): Promise<string> {
+  if (url.startsWith('data:')) {
+    const match = url.match(/^data:([^;,]+)/)
+    if (match) return match[1]
+    return 'image/png'
+  }
+  try {
+    const res = await fetch(url, { method: 'HEAD' })
+    const ct = res.headers.get('content-type')?.split(';')[0]?.trim() || ''
+    if (ct.startsWith('image/')) return ct
+  } catch {
+    // Fall through to extension sniffing.
+  }
+  const m = url.toLowerCase().match(/\.(png|jpe?g|webp|gif)(?:[?#]|$)/)
+  if (m) {
+    return m[1] === 'jpg' || m[1] === 'jpeg' ? 'image/jpeg' : `image/${m[1]}`
+  }
+  return 'image/png'
 }
 
 /**
@@ -158,7 +236,9 @@ export async function generateAssetTool(
     productRenderIds,
     numOutputs,
     seed,
+    inlineBase64,
   } = parsed.data
+  const generationId = randomUUID()
 
   // Phase 1 allowlist — applied before the credential allowlist so we
   // can give callers the most useful error message ("video models are
@@ -257,36 +337,83 @@ export async function generateAssetTool(
     throw new Error(`Generation did not complete: ${reason}`)
   }
 
-  const inlined = await Promise.all(
-    generation.outputs.map((output) => inlineImageFromUrl(output.url))
+  // Persist each output to Supabase Storage in parallel. We probe the
+  // upstream MIME first so the storage path's extension matches the
+  // actual bytes (no .png pretending to be jpg). uploadUrlToStorage
+  // streams source -> bucket without holding the full image in memory
+  // here, which keeps the MCP route's memory footprint small.
+  const persisted = await Promise.all(
+    generation.outputs.map(async (output, idx) => {
+      const mimeType = await probeMimeType(output.url)
+      const ext = extensionForMime(mimeType)
+      const path = `mcp/${principal.credentialId}/${generationId}/${idx}.${ext}`
+      const storedUrl = await uploadUrlToStorage(
+        output.url,
+        STORAGE_BUCKET,
+        path
+      )
+      return {
+        url: storedUrl,
+        width: output.width,
+        height: output.height,
+        mimeType,
+        path,
+      }
+    })
   )
 
   const perImage = config?.pricing?.perImage ?? null
-  const estimatedCostUsd = perImage !== null ? perImage * generation.outputs.length : null
+  const estimatedCostUsd =
+    perImage !== null ? perImage * persisted.length : null
 
-  const dimensionsSummary = generation.outputs
-    .map((o) => `${o.width}x${o.height}`)
-    .join(', ')
+  const dimensionsSummary = persisted.map((o) => `${o.width}x${o.height}`).join(', ')
+  const urlsLine =
+    persisted.length === 1
+      ? `View: ${persisted[0].url}`
+      : `View:\n${persisted.map((o, idx) => `${idx + 1}. ${o.url}`).join('\n')}`
+  const summary = `Generated ${persisted.length} image${persisted.length === 1 ? '' : 's'} with ${modelId} (${dimensionsSummary}). ${urlsLine}`
 
-  const summary = `Generated ${generation.outputs.length} image${generation.outputs.length === 1 ? '' : 's'} with ${modelId} (${dimensionsSummary}).`
+  const content: McpContent[] = [{ type: 'text', text: summary }]
 
-  const content: McpContent[] = [
-    { type: 'text', text: summary },
-    ...inlined.map((img) => ({
-      type: 'image' as const,
-      data: img.data,
-      mimeType: img.mimeType,
-    })),
-  ]
+  // Always emit one resource_link per output. MCP-aware clients render
+  // these as typed asset references; clients that don't recognise the
+  // type still get the URL via the text block above.
+  for (let idx = 0; idx < persisted.length; idx++) {
+    const out = persisted[idx]
+    content.push({
+      type: 'resource_link',
+      uri: out.url,
+      name: `${modelId}-${out.width}x${out.height}-${idx}.${extensionForMime(out.mimeType)}`,
+      mimeType: out.mimeType,
+      description: `Image ${idx + 1} of ${persisted.length} from ${modelId}`,
+    })
+  }
+
+  // Opt-in: also include legacy inline base64 image content blocks. Off
+  // by default to keep the response payload small and to dodge bridge-
+  // validation issues in clients like Cowork's CoworkArtifactBridge.
+  if (inlineBase64) {
+    const inlined = await Promise.all(
+      persisted.map((out) => inlineImageFromUrl(out.url))
+    )
+    for (const img of inlined) {
+      content.push({
+        type: 'image',
+        data: img.data,
+        mimeType: img.mimeType,
+      })
+    }
+  }
 
   return {
     content,
     structuredContent: {
       modelId,
-      outputs: generation.outputs.map((o, idx) => ({
+      outputs: persisted.map((o) => ({
+        url: o.url,
         width: o.width,
         height: o.height,
-        mimeType: inlined[idx].mimeType,
+        mimeType: o.mimeType,
       })),
       durationMs: Date.now() - startedAt,
       estimatedCostUsd,

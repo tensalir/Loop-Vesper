@@ -178,6 +178,12 @@ export const HeadlessGenerateAssetSchema = z.object({
     .optional(),
   numOutputs: z.number().int().min(1).max(4).optional().default(1),
   seed: z.number().int().optional(),
+  // Default response is a small JSON body with text + resource_link blocks
+  // referencing the persisted Storage URL. Set true to also receive the
+  // legacy inline `image` content block (~500 KB base64) — useful for
+  // direct Anthropic API callers without an artifact bridge, but rejected
+  // by Cowork's CoworkArtifactBridge IPC validation.
+  inlineBase64: z.boolean().optional().default(false),
 })
 
 // Discovery for the `list_product_renders` MCP tool. All filters are

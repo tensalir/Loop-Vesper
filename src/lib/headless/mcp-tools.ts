@@ -134,7 +134,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'generate_asset',
     title: 'Generate an image',
     description:
-      'Generate an image with a fast Vesper image model. Returns the image inline so Claude can render it in the conversation. Synchronous, fast image models only — for slow video models (Veo, Kling), use the Vesper web app for now.',
+      "Generate an image with a fast Vesper image model. Returns a URL to the image hosted on Vesper Storage so Claude can embed it in artifacts (`<img src=...>`) or share the link inline. Pass `inlineBase64: true` to additionally receive the image bytes as a content block (larger payload; some clients prefer this). Synchronous, fast image models only — for slow video models (Veo, Kling), use the Vesper web app for now.",
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -181,6 +181,12 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         seed: {
           type: 'integer',
           description: 'Optional seed for reproducible generations.',
+        },
+        inlineBase64: {
+          type: 'boolean',
+          description:
+            "Default false. When true, also include the image bytes as a legacy `image` content block alongside the `resource_link` URL. Useful for direct Anthropic API callers without an artifact bridge; not recommended for Cowork artifacts (large payloads fail bridge validation).",
+          default: false,
         },
       },
     },

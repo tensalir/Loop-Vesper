@@ -380,7 +380,11 @@ async function runTool(
   if (name === 'generate_asset') {
     // Phase 1: synchronous, fast image models only. Allowlist + per-credential
     // model check + 25s hard timeout all live inside generateAssetTool.
-    return generateAssetTool(args, { allowedModels: principal.allowedModels })
+    // credentialId is passed through so storage paths are namespaced per token.
+    return generateAssetTool(args, {
+      allowedModels: principal.allowedModels,
+      credentialId: principal.credentialId,
+    })
   }
 
   if (name === 'list_product_renders') {

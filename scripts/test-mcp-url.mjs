@@ -85,6 +85,65 @@ function fail(label, detail) {
   process.exitCode = 1
 }
 
+/**
+ * Assert the JSON-RPC response from a generate_asset call. Validates the
+ * MCP wire shape (text + resource_link content blocks pointing at the
+ * stored Storage URL) and HEAD-probes the URL to confirm it is publicly
+ * fetchable. When `expectInline` is true, also requires at least one
+ * legacy `image` content block (the inlineBase64 backwards-compat path).
+ */
+async function assertGenerateAsset(rpcResponse, { label, expectInline }) {
+  if (rpcResponse.status !== 200) {
+    fail(`HTTP ${rpcResponse.status} on ${label}`, rpcResponse.body || rpcResponse.raw)
+    return
+  }
+  if (rpcResponse.body?.result?.isError) {
+    fail(`${label} returned isError: true`, rpcResponse.body?.result?.content)
+    return
+  }
+  const content = rpcResponse.body?.result?.content ?? []
+  const links = content.filter((c) => c.type === 'resource_link')
+  const images = content.filter((c) => c.type === 'image')
+  if (links.length === 0) {
+    fail(`${label} returned no resource_link content blocks`, rpcResponse.body)
+    return
+  }
+  const sc = rpcResponse.body.result.structuredContent
+  const dim = sc?.outputs?.[0]
+  const cost = sc?.estimatedCostUsd
+  // HEAD-probe the first stored URL to verify it actually serves.
+  let headStatus = 'skipped'
+  try {
+    const head = await fetch(links[0].uri, { method: 'HEAD' })
+    headStatus = `HTTP ${head.status} ${head.headers.get('content-type') ?? ''}`.trim()
+    if (!head.ok) {
+      fail(`${label} resource_link URL did not respond OK to HEAD: ${headStatus}`)
+      return
+    }
+  } catch (err) {
+    fail(`${label} resource_link URL HEAD probe threw`, err?.message || err)
+    return
+  }
+  if (expectInline) {
+    if (images.length === 0) {
+      fail(`${label} expected legacy image content block (inlineBase64: true) but got none`, rpcResponse.body)
+      return
+    }
+    const sizeKB = images[0]?.data ? Math.round((images[0].data.length * 3) / 4 / 1024) : 0
+    ok(
+      `${label} -> ${links.length} link(s) [${headStatus}] + ${images.length} inline image(s) ~${sizeKB}KB, ${dim?.width ?? '?'}x${dim?.height ?? '?'}, ${sc?.durationMs ?? '?'}ms, est cost $${cost ?? 'unknown'}`,
+    )
+  } else {
+    if (images.length > 0) {
+      fail(`${label} should not return inline image blocks by default; got ${images.length}`)
+      return
+    }
+    ok(
+      `${label} -> ${links.length} link(s) [${headStatus}], ${dim?.width ?? '?'}x${dim?.height ?? '?'}, ${sc?.durationMs ?? '?'}ms, est cost $${cost ?? 'unknown'}`,
+    )
+  }
+}
+
 async function main() {
   console.log(`MCP token-in-URL smoke test`)
   console.log(`  Base URL : ${BASE}`)
@@ -270,6 +329,8 @@ async function main() {
 
     // 3g. Optional: real image generation. Costs real money on Gemini, so
     // gated behind --with-generate. Uses the cheapest, fastest image model.
+    // Default response shape is text + resource_link (URL) — base64 image
+    // bytes only come back when the caller passes inlineBase64: true.
     if (WITH_GENERATE) {
       console.log('Step 7: tools/call generate_asset (--with-generate)')
       const gen = await rpc(url, {
@@ -286,25 +347,10 @@ async function main() {
           },
         },
       })
-      if (gen.status !== 200) {
-        fail(`HTTP ${gen.status} on tools/call generate_asset`, gen.body || gen.raw)
-      } else if (gen.body?.result?.isError) {
-        fail(`generate_asset returned isError: true`, gen.body?.result?.content)
-      } else {
-        const content = gen.body?.result?.content ?? []
-        const images = content.filter((c) => c.type === 'image')
-        if (images.length === 0) {
-          fail('generate_asset returned no image content blocks', gen.body)
-        } else {
-          const sc = gen.body.result.structuredContent
-          const cost = sc?.estimatedCostUsd
-          const dim = sc?.outputs?.[0]
-          const sizeKB = images[0]?.data ? Math.round((images[0].data.length * 3) / 4 / 1024) : 0
-          ok(
-            `generate_asset -> ${images.length} image(s), ${dim?.width ?? '?'}x${dim?.height ?? '?'} ${images[0]?.mimeType ?? '?'}, ~${sizeKB}KB, ${sc?.durationMs ?? '?'}ms, est cost $${cost ?? 'unknown'}`,
-          )
-        }
-      }
+      await assertGenerateAsset(gen, {
+        label: 'generate_asset',
+        expectInline: false,
+      })
 
       // 3h. Optional: generate_asset with productRenderIds, exercising the
       // new product-render shortcut end-to-end. Skipped silently if the
@@ -326,32 +372,37 @@ async function main() {
             },
           },
         })
-        if (genRef.status !== 200) {
-          fail(`HTTP ${genRef.status} on generate_asset+productRenderIds`, genRef.body || genRef.raw)
-        } else if (genRef.body?.result?.isError) {
-          fail(
-            `generate_asset+productRenderIds returned isError: true`,
-            genRef.body?.result?.content,
-          )
-        } else {
-          const content = genRef.body?.result?.content ?? []
-          const images = content.filter((c) => c.type === 'image')
-          if (images.length === 0) {
-            fail('generate_asset+productRenderIds returned no image content blocks', genRef.body)
-          } else {
-            const sc = genRef.body.result.structuredContent
-            const dim = sc?.outputs?.[0]
-            const sizeKB = images[0]?.data
-              ? Math.round((images[0].data.length * 3) / 4 / 1024)
-              : 0
-            ok(
-              `generate_asset+productRenderIds -> ${images.length} image(s), ${dim?.width ?? '?'}x${dim?.height ?? '?'} ${images[0]?.mimeType ?? '?'}, ~${sizeKB}KB, ${sc?.durationMs ?? '?'}ms`,
-            )
-          }
-        }
+        await assertGenerateAsset(genRef, {
+          label: 'generate_asset+productRenderIds',
+          expectInline: false,
+        })
       } else {
         console.log('Step 8: skipped (no productRender id available from Step 5)')
       }
+
+      // 3i. Backwards-compat: opt back into inline base64 image blocks via
+      // inlineBase64: true and confirm both shapes coexist (resource_link
+      // for modern clients + image content block for legacy ones).
+      console.log('Step 9: tools/call generate_asset with inlineBase64 (--with-generate)')
+      const genInline = await rpc(url, {
+        jsonrpc: '2.0',
+        id: 7,
+        method: 'tools/call',
+        params: {
+          name: 'generate_asset',
+          arguments: {
+            modelId: 'gemini-nano-banana-2',
+            prompt:
+              'A single soft cumulus cloud against a clear pale blue sky, painterly studio still, square crop',
+            numOutputs: 1,
+            inlineBase64: true,
+          },
+        },
+      })
+      await assertGenerateAsset(genInline, {
+        label: 'generate_asset+inlineBase64',
+        expectInline: true,
+      })
     }
   } finally {
     // 4. Always revoke the test credential, even if a step failed.
