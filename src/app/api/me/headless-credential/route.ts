@@ -31,6 +31,7 @@ const SELF_ISSUED_TOOLS: HeadlessTool[] = [
   'enhance_prompt',
   'iterate_prompt',
   'list_models',
+  'generate_asset',
 ]
 // `*` = wildcard access to every model the registry exposes. Self-service
 // users get the full set; admins can issue narrower credentials via the

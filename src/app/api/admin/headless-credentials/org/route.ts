@@ -35,6 +35,7 @@ const ORG_DEFAULTS = {
     'enhance_prompt',
     'iterate_prompt',
     'list_models',
+    'generate_asset',
   ] as HeadlessTool[],
   allowedModels: ['*'],
   rateLimitPerMinute: 200,

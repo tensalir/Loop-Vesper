@@ -664,7 +664,7 @@ model HeadlessCredential {
   tokenPrefix        String    @map("token_prefix") // e.g. "vsp_live_a1b2"
   // Allowed tools and models — empty arrays mean "no access".
   // Tools mirror the MCP/REST surface names: 'enhance_prompt', 'iterate_prompt',
-  // 'list_models', 'generate_asset' (the last is reserved for later phases).
+  // 'list_models', and 'generate_asset'.
   allowedTools       String[]  @default([]) @map("allowed_tools")
   allowedModels      String[]  @default([]) @map("allowed_models")
   // Per-credential rate limits. NULL means "use the default policy".
