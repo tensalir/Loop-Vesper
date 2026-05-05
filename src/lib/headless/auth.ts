@@ -29,6 +29,7 @@ export type HeadlessTool =
   | 'iterate_prompt'
   | 'list_models'
   | 'generate_asset'
+  | 'list_product_renders'
 
 export interface HeadlessPrincipal {
   credential: HeadlessCredential

@@ -124,6 +124,7 @@ async function main() {
         'iterate_prompt',
         'list_models',
         'generate_asset',
+        'list_product_renders',
       ],
       allowedModels: ['*'],
     },
@@ -189,6 +190,7 @@ async function main() {
         'generate_asset',
         'iterate_prompt',
         'list_models',
+        'list_product_renders',
       ].sort()
       const matches = JSON.stringify(names) === JSON.stringify(expected)
       if (!matches) {
@@ -223,8 +225,36 @@ async function main() {
       ok(`rate-limit headers visible (minute remaining: ${rlMin ?? 'n/a'}, day remaining: ${rlDay ?? 'n/a'})`)
     }
 
-    // 3e. Negative test: a wrong token should return 401, not silently work.
-    console.log('Step 5: bogus token -> 401')
+    // 3e. tools/call list_product_renders  (cost-free: reads Supabase)
+    console.log('Step 5: tools/call list_product_renders')
+    const renders = await rpc(url, {
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+      params: { name: 'list_product_renders', arguments: {} },
+    })
+    let firstRenderId = null
+    if (renders.status !== 200) {
+      fail(`HTTP ${renders.status} on tools/call list_product_renders`, renders.body || renders.raw)
+    } else if (renders.body?.result?.isError) {
+      fail(`list_product_renders returned isError: true`, renders.body?.result?.content)
+    } else {
+      const sc = renders.body?.result?.structuredContent
+      const total = sc?.total ?? (Array.isArray(sc?.renders) ? sc.renders.length : 0)
+      if (total > 0 && Array.isArray(sc.renders) && sc.renders[0]?.id) {
+        firstRenderId = sc.renders[0].id
+        ok(
+          `list_product_renders -> ${total} render(s); first: ${sc.renders[0].name}` +
+            (sc.renders[0].colorway ? ` / ${sc.renders[0].colorway}` : '') +
+            ` (${firstRenderId})`,
+        )
+      } else {
+        ok(`list_product_renders -> ${total} render(s) (catalog empty or no usable id)`)
+      }
+    }
+
+    // 3f. Negative test: a wrong token should return 401, not silently work.
+    console.log('Step 6: bogus token -> 401')
     const badUrl = `${BASE.replace(/\/$/, '')}/api/mcp/vsp_live_deadbeef_${'0'.repeat(48)}`
     const bad = await rpc(badUrl, {
       jsonrpc: '2.0',
@@ -238,10 +268,10 @@ async function main() {
       fail(`Expected HTTP 401 for a bogus token, got ${bad.status}`, bad.body || bad.raw)
     }
 
-    // 3f. Optional: real image generation. Costs real money on Gemini, so
+    // 3g. Optional: real image generation. Costs real money on Gemini, so
     // gated behind --with-generate. Uses the cheapest, fastest image model.
     if (WITH_GENERATE) {
-      console.log('Step 6: tools/call generate_asset (--with-generate)')
+      console.log('Step 7: tools/call generate_asset (--with-generate)')
       const gen = await rpc(url, {
         jsonrpc: '2.0',
         id: 4,
@@ -274,6 +304,53 @@ async function main() {
             `generate_asset -> ${images.length} image(s), ${dim?.width ?? '?'}x${dim?.height ?? '?'} ${images[0]?.mimeType ?? '?'}, ~${sizeKB}KB, ${sc?.durationMs ?? '?'}ms, est cost $${cost ?? 'unknown'}`,
           )
         }
+      }
+
+      // 3h. Optional: generate_asset with productRenderIds, exercising the
+      // new product-render shortcut end-to-end. Skipped silently if the
+      // catalog returned no usable ID in Step 5.
+      if (firstRenderId) {
+        console.log('Step 8: tools/call generate_asset with productRenderIds (--with-generate)')
+        const genRef = await rpc(url, {
+          jsonrpc: '2.0',
+          id: 6,
+          method: 'tools/call',
+          params: {
+            name: 'generate_asset',
+            arguments: {
+              modelId: 'gemini-nano-banana-2',
+              prompt:
+                'Re-photograph the referenced Loop earplug as a clean studio still on a soft cream background, soft daylight, square crop',
+              productRenderIds: [firstRenderId],
+              numOutputs: 1,
+            },
+          },
+        })
+        if (genRef.status !== 200) {
+          fail(`HTTP ${genRef.status} on generate_asset+productRenderIds`, genRef.body || genRef.raw)
+        } else if (genRef.body?.result?.isError) {
+          fail(
+            `generate_asset+productRenderIds returned isError: true`,
+            genRef.body?.result?.content,
+          )
+        } else {
+          const content = genRef.body?.result?.content ?? []
+          const images = content.filter((c) => c.type === 'image')
+          if (images.length === 0) {
+            fail('generate_asset+productRenderIds returned no image content blocks', genRef.body)
+          } else {
+            const sc = genRef.body.result.structuredContent
+            const dim = sc?.outputs?.[0]
+            const sizeKB = images[0]?.data
+              ? Math.round((images[0].data.length * 3) / 4 / 1024)
+              : 0
+            ok(
+              `generate_asset+productRenderIds -> ${images.length} image(s), ${dim?.width ?? '?'}x${dim?.height ?? '?'} ${images[0]?.mimeType ?? '?'}, ~${sizeKB}KB, ${sc?.durationMs ?? '?'}ms`,
+            )
+          }
+        }
+      } else {
+        console.log('Step 8: skipped (no productRender id available from Step 5)')
       }
     }
   } finally {

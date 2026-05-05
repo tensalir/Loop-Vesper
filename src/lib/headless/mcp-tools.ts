@@ -164,6 +164,13 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           description:
             'Optional reference image as a `data:image/...;base64,...` URL. Used as a style/composition anchor for models that support image-to-image.',
         },
+        productRenderIds: {
+          type: 'array',
+          description:
+            'Optional Loop product render UUIDs from `list_product_renders`. Vesper resolves each ID into the product image and passes it to the model as a reference (alongside `referenceImage` if also provided). Multiple IDs require a multi-image model (e.g. `gemini-nano-banana-pro`); single-image models will reject more than one. Combined cap with referenceImage: 4.',
+          items: { type: 'string', format: 'uuid' },
+          maxItems: 4,
+        },
         numOutputs: {
           type: 'integer',
           description: 'How many images to return. Default 1, max 4.',
@@ -174,6 +181,36 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         seed: {
           type: 'integer',
           description: 'Optional seed for reproducible generations.',
+        },
+      },
+    },
+  },
+  {
+    name: 'list_product_renders',
+    title: 'List Loop product renders',
+    description:
+      "Discover Loop's product render library (Switch 2, Engage 2, Quiet 2, Experience 2, Aphrodite, Boreas, Dream, Eclipse and their colorways) from the same Supabase catalog the web app reads. Returns id, name, colorway, angle, render type and image URL. The id values can be passed straight into `generate_asset.productRenderIds` to anchor a generation on real product imagery.",
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        name: {
+          type: 'string',
+          description:
+            "Optional case-insensitive product name filter (e.g. 'Switch', 'Dream'). Partial matches are allowed.",
+          maxLength: 128,
+        },
+        colorway: {
+          type: 'string',
+          description:
+            "Optional case-insensitive colorway filter (e.g. 'Black', 'Lavender Dream'). Partial matches are allowed.",
+          maxLength: 128,
+        },
+        renderType: {
+          type: 'string',
+          description:
+            "Optional render-type filter. 'single' = a single earplug, 'pair' = both earplugs, 'case' = the carrying case.",
+          enum: ['single', 'pair', 'case'],
         },
       },
     },

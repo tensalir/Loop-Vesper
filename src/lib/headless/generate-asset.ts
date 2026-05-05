@@ -23,6 +23,7 @@
 import { HeadlessGenerateAssetSchema } from '@/lib/api/validation'
 import { getModel, getModelConfig } from '@/lib/models/registry'
 import type { GenerationRequest } from '@/lib/models/base'
+import { resolveProductRenders } from './list-product-renders'
 
 /**
  * Image models that respond synchronously and typically complete in
@@ -149,7 +150,15 @@ export async function generateAssetTool(
       `Invalid arguments: ${parsed.error.issues.map((i) => i.message).join('; ')}`
     )
   }
-  const { prompt, modelId, aspectRatio, referenceImage, numOutputs, seed } = parsed.data
+  const {
+    prompt,
+    modelId,
+    aspectRatio,
+    referenceImage,
+    productRenderIds,
+    numOutputs,
+    seed,
+  } = parsed.data
 
   // Phase 1 allowlist — applied before the credential allowlist so we
   // can give callers the most useful error message ("video models are
@@ -180,11 +189,60 @@ export async function generateAssetTool(
     throw new Error(`Unknown model '${modelId}'.`)
   }
 
+  // Resolve productRenderIds (if any) into base64 data URLs so the same
+  // model adapters that power the web app's prompt bar see them as
+  // ordinary reference images. We base64-inline rather than passing raw
+  // Supabase URLs so adapters do not need to make outbound fetches and
+  // we avoid SSRF surface area through the model layer.
+  const renderRefs: string[] = []
+  if (productRenderIds && productRenderIds.length > 0) {
+    const rows = await resolveProductRenders(productRenderIds)
+    const inlinedRefs = await Promise.all(
+      rows.map(async (row) => {
+        const inlined = await inlineImageFromUrl(row.imageUrl)
+        return `data:${inlined.mimeType};base64,${inlined.data}`
+      })
+    )
+    renderRefs.push(...inlinedRefs)
+  }
+
+  // Stitch caller-supplied referenceImage and any productRender data URLs
+  // into one ordered list. Caller's own image first; then renders in the
+  // order they were passed (resolveProductRenders preserves caller order).
+  const allRefs: string[] = []
+  if (referenceImage) allRefs.push(referenceImage)
+  allRefs.push(...renderRefs)
+
+  if (allRefs.length > 4) {
+    throw new Error(
+      `Too many reference images (${allRefs.length}). Cap is 4 across referenceImage + productRenderIds.`
+    )
+  }
+
+  // Multi-image dispatch: only models advertising multiImageEditing get
+  // the array shape. Anything else with >1 reference is an error rather
+  // than a silent drop, so the caller can correct course.
+  const config = getModelConfig(modelId)
+  const supportsMulti = !!config?.capabilities?.multiImageEditing
+  let referenceImagePayload: string | undefined
+  let referenceImagesPayload: string[] | undefined
+  if (allRefs.length === 1) {
+    referenceImagePayload = allRefs[0]
+  } else if (allRefs.length > 1) {
+    if (!supportsMulti) {
+      throw new Error(
+        `Model '${modelId}' only supports one reference image. Drop one of the productRenderIds (or the referenceImage), or pick a multi-image model like gemini-nano-banana-pro.`
+      )
+    }
+    referenceImagesPayload = allRefs
+  }
+
   const request: GenerationRequest = {
     prompt,
     numOutputs,
     ...(aspectRatio ? { aspectRatio } : {}),
-    ...(referenceImage ? { referenceImage } : {}),
+    ...(referenceImagePayload ? { referenceImage: referenceImagePayload } : {}),
+    ...(referenceImagesPayload ? { referenceImages: referenceImagesPayload } : {}),
     ...(typeof seed === 'number' ? { seed } : {}),
   }
 
@@ -203,7 +261,6 @@ export async function generateAssetTool(
     generation.outputs.map((output) => inlineImageFromUrl(output.url))
   )
 
-  const config = getModelConfig(modelId)
   const perImage = config?.pricing?.perImage ?? null
   const estimatedCostUsd = perImage !== null ? perImage * generation.outputs.length : null
 

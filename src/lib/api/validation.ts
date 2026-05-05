@@ -161,7 +161,9 @@ export const HeadlessIterateSchema = z.object({
 // Image generation via the MCP `generate_asset` tool. Synchronous, fast
 // image models only — see PHASE_1_MODEL_IDS in lib/headless/generate-asset.ts.
 // numOutputs is capped at 4 to keep base64-encoded payloads under typical
-// MCP connector limits.
+// MCP connector limits. productRenderIds is the cheap way to anchor a
+// generation on Loop product imagery already stored in Supabase — IDs
+// come from the `list_product_renders` MCP tool.
 export const HeadlessGenerateAssetSchema = z.object({
   prompt: z.string().min(1, 'prompt is required').max(HEADLESS_PROMPT_MAX),
   modelId: z.string().min(1, 'modelId is required').max(128),
@@ -170,6 +172,19 @@ export const HeadlessGenerateAssetSchema = z.object({
     .string()
     .max(HEADLESS_REFERENCE_IMAGE_MAX, 'referenceImage exceeds 6 MB cap')
     .optional(),
+  productRenderIds: z
+    .array(z.string().uuid('productRenderIds must be UUIDs'))
+    .max(4, 'productRenderIds is capped at 4')
+    .optional(),
   numOutputs: z.number().int().min(1).max(4).optional().default(1),
   seed: z.number().int().optional(),
+})
+
+// Discovery for the `list_product_renders` MCP tool. All filters are
+// optional and case-insensitive partial matches except renderType, which
+// is matched exactly so callers can pre-filter to single/pair/case.
+export const HeadlessListProductRendersSchema = z.object({
+  name: z.string().max(128).optional(),
+  colorway: z.string().max(128).optional(),
+  renderType: z.enum(['single', 'pair', 'case']).optional(),
 })

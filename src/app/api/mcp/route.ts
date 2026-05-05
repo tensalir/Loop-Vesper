@@ -4,12 +4,14 @@ import { verifyHeadlessRequest, recordHeadlessUsage } from '@/lib/headless/auth'
 import type { HeadlessTool } from '@/lib/headless/auth'
 import { MCP_TOOLS, findMcpTool } from '@/lib/headless/mcp-tools'
 import { generateAssetTool, type McpContent } from '@/lib/headless/generate-asset'
+import { listProductRenders } from '@/lib/headless/list-product-renders'
 import { enhancePrompt } from '@/lib/prompts/enhance'
 import { iteratePrompt } from '@/lib/prompts/iterate'
 import { getAllModels } from '@/lib/models/registry'
 import {
   HeadlessEnhanceSchema,
   HeadlessIterateSchema,
+  HeadlessListProductRendersSchema,
 } from '@/lib/api/validation'
 import { classifyError } from '@/lib/errors/classification'
 
@@ -379,6 +381,37 @@ async function runTool(
     // Phase 1: synchronous, fast image models only. Allowlist + per-credential
     // model check + 25s hard timeout all live inside generateAssetTool.
     return generateAssetTool(args, { allowedModels: principal.allowedModels })
+  }
+
+  if (name === 'list_product_renders') {
+    const parsed = HeadlessListProductRendersSchema.safeParse(args)
+    if (!parsed.success) {
+      throw new Error(
+        `Invalid arguments: ${parsed.error.issues.map((i) => i.message).join('; ')}`
+      )
+    }
+    const renders = await listProductRenders(parsed.data)
+    const previewLines = renders
+      .slice(0, 25)
+      .map((r) => {
+        const parts = [r.name]
+        if (r.colorway) parts.push(r.colorway)
+        if (r.renderType) parts.push(`(${r.renderType})`)
+        if (r.angle) parts.push(`angle: ${r.angle}`)
+        return `- ${r.id}  ${parts.join(' / ')}`
+      })
+      .join('\n')
+    const overflow = renders.length > 25 ? `\n…and ${renders.length - 25} more.` : ''
+    const text = renders.length
+      ? `${renders.length} product render${renders.length === 1 ? '' : 's'} available:\n${previewLines}${overflow}\n\nPass any id back as productRenderIds in generate_asset to use it as a reference image.`
+      : 'No product renders match those filters. Try removing the filters or call list_product_renders with no arguments to see the full catalog.'
+    return {
+      content: [{ type: 'text', text }],
+      structuredContent: {
+        renders,
+        total: renders.length,
+      },
+    }
   }
 
   throw new Error(`Tool '${name}' is not implemented yet.`)

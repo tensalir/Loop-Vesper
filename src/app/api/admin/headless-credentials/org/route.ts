@@ -36,6 +36,7 @@ const ORG_DEFAULTS = {
     'iterate_prompt',
     'list_models',
     'generate_asset',
+    'list_product_renders',
   ] as HeadlessTool[],
   allowedModels: ['*'],
   rateLimitPerMinute: 200,
