@@ -46,6 +46,9 @@ ALTER TABLE public.timeline_clips               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.timeline_transitions         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.timeline_captions            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.timeline_render_jobs         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.headless_credentials         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.headless_usage_logs          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.headless_rate_buckets        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public._prisma_migrations           ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================================
@@ -463,13 +466,15 @@ CREATE POLICY "Users can create own render jobs"
   ON public.timeline_render_jobs FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- ============================================================================
--- 31-34. SERVICE-ROLE-ONLY TABLES
+-- 31-37. SERVICE-ROLE-ONLY TABLES
 --    RLS is enabled but no permissive policies exist, so only service_role
 --    (used by Prisma / API routes) can access these.
 -- ============================================================================
 
 -- api_usage_counters: internal rate-limit bookkeeping
 -- sync_links, sync_events, sync_revisions, sync_cursors: webhook-driven
+-- headless_credentials, headless_usage_logs, headless_rate_buckets: token and
+--   MCP/API operational tables managed only by trusted server routes
 -- _prisma_migrations: Prisma internal
 
 -- No policies needed — deny-all for anon/authenticated is the desired state.
