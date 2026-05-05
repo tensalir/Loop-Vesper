@@ -37,7 +37,7 @@ import { randomUUID } from 'node:crypto'
 import { HeadlessGenerateAssetSchema } from '@/lib/api/validation'
 import { getModel, getModelConfig } from '@/lib/models/registry'
 import type { GenerationRequest } from '@/lib/models/base'
-import { uploadUrlToStorage } from '@/lib/supabase/storage'
+import { uploadBase64ToStorage, uploadUrlToStorage } from '@/lib/supabase/storage'
 import { resolveProductRenders } from './list-product-renders'
 
 /**
@@ -337,21 +337,19 @@ export async function generateAssetTool(
     throw new Error(`Generation did not complete: ${reason}`)
   }
 
-  // Persist each output to Supabase Storage in parallel. We probe the
-  // upstream MIME first so the storage path's extension matches the
-  // actual bytes (no .png pretending to be jpg). uploadUrlToStorage
-  // streams source -> bucket without holding the full image in memory
-  // here, which keeps the MCP route's memory footprint small.
+  // Persist each output to Supabase Storage in parallel. Adapters return
+  // either an HTTP(S) URL backed by short-lived provider hosting (Replicate,
+  // OpenAI), a gs:// URL (Vertex), or a data: URL with the bytes inline
+  // (Gemini Nano Banana). We branch on prefix to use the right helper —
+  // same pattern as the web app's /api/generate/process route.
   const persisted = await Promise.all(
     generation.outputs.map(async (output, idx) => {
       const mimeType = await probeMimeType(output.url)
       const ext = extensionForMime(mimeType)
       const path = `mcp/${principal.credentialId}/${generationId}/${idx}.${ext}`
-      const storedUrl = await uploadUrlToStorage(
-        output.url,
-        STORAGE_BUCKET,
-        path
-      )
+      const storedUrl = output.url.startsWith('data:')
+        ? await uploadBase64ToStorage(output.url, STORAGE_BUCKET, path)
+        : await uploadUrlToStorage(output.url, STORAGE_BUCKET, path)
       return {
         url: storedUrl,
         width: output.width,
