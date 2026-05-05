@@ -1155,7 +1155,70 @@
 
 .vh-mcp {
   display: grid;
-  gap: 8px;
+  /* Slightly looser than the default field gap so the SERVER URL label,
+     the green-fill URL field, and the helper-text + Regenerate footer
+     each get a clear breathing line between them. */
+  gap: 12px;
+}
+
+/* Footer row that sits below the URL field. Helper text on the left
+   wraps freely; the Regenerate button stays compact and right-aligned.
+   On narrow widths the button drops below the text rather than getting
+   squeezed. */
+.vh-mcp__footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.vh-mcp__hint {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+/* Compact ghost-style button paired with the masked URL. Mint outline
+   so it ties to the field without competing visually. Distinct enough
+   to read as an action — destructive-but-recoverable (the confirm
+   modal handles the actual destructive step). */
+.vh-mcp__regenerate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  color: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary) / 0.4);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.vh-mcp__regenerate:hover {
+  background: hsl(var(--primary) / 0.08);
+  border-color: hsl(var(--primary) / 0.6);
+}
+
+.vh-mcp__regenerate:active {
+  transform: scale(0.97);
+}
+
+.vh-mcp__regenerate:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary));
+}
+
+.vh-mcp__regenerate__icon {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  line-height: 1;
 }
 
 .vh-mcp__meta {
@@ -1208,11 +1271,119 @@
 /* Masked / placeholder URL pills — same field styling as the static
    field, but with reduced opacity so the user reads them as
    informational rather than something to copy. */
-.vh-field__value--masked,
 .vh-field__value--placeholder {
   color: hsl(var(--muted-foreground));
   user-select: none;
   cursor: default;
+}
+
+/* Active-token state. The masked URL is the persistent confirmation that
+   the user has a working credential, so it deserves a brand-fluent green
+   treatment that pops out of the surrounding card. Mint family ties back
+   to the recommended-surface badge and the security warning banner so
+   the visual language stays consistent across the page. */
+.vh-field__value--masked {
+  background: hsl(var(--primary) / 0.08);
+  color: hsl(var(--primary));
+  border-color: hsl(var(--primary) / 0.25);
+  user-select: text;
+  cursor: text;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  /* Single-line with graceful ellipsis. Overrides the base field's
+     wrap-at-any-character behaviour because a long URL with a token
+     run always wraps awkwardly (e.g. one orphaned bullet on the next
+     line). The user already has the full URL in their email; this
+     field is a confirmation surface, not the source of truth. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+/* Wrapper used when an inline icon button sits inside the masked field
+   (e.g. the subtle Copy affordance in the bottom-right corner). The wrap
+   takes the flex slot from the bare `vh-field__value` so the whole
+   value+icon pair grows together. */
+.vh-field__value-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.vh-field__value-wrap > .vh-field__value {
+  width: 100%;
+}
+
+/* Standalone variant: not inside a vh-field__row. Used when the URL
+   field gets the full card width (no side-by-side action button) so
+   long URLs fit on one line and never orphan a single character on a
+   second wrapped line. */
+.vh-field__value-wrap--standalone {
+  display: block;
+  width: 100%;
+}
+
+.vh-field__value--has-inline-copy {
+  /* Reserve just enough room on the right edge for the icon button
+     (24px wide + 6px right offset + 4px breathing room). Keeping this
+     as tight as possible gives the URL more horizontal room to fit
+     before wrapping. */
+  padding-right: 34px;
+}
+
+/* Subtle copy icon docked right-center inside a masked field. The
+   field is single-line + ellipsis-truncated, so vertical centering
+   keeps the icon visually balanced. Mint family with a soft chip
+   background so it reads as a discoverable affordance without
+   competing with anything else on the card. */
+.vh-field__copy-inline {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary) / 0.3);
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.vh-field__copy-inline:hover {
+  background: hsl(var(--primary) / 0.2);
+  border-color: hsl(var(--primary) / 0.45);
+}
+
+.vh-field__copy-inline:active {
+  transform: translateY(-50%) scale(0.95);
+}
+
+.vh-field__copy-inline:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 3px hsl(var(--primary));
+}
+
+.vh-field__copy-inline.is-copied {
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.22);
+  border-color: hsl(var(--primary) / 0.55);
+}
+
+.vh-field__copy-inline__icon {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1;
 }
 
 /* Ghost variant of the Copy button used for the Regenerate action so

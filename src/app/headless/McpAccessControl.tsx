@@ -171,29 +171,46 @@ export function McpAccessControl({ initial }: { initial: McpAccessSummary }) {
         </>
       ) : mode === 'has-token' && existing ? (
         <>
-          <div className="vh-field__row">
-            <code className="vh-field__value vh-field__value--masked">
+          <div className="vh-field__value-wrap vh-field__value-wrap--standalone">
+            <code className="vh-field__value vh-field__value--masked vh-field__value--has-inline-copy">
               {`https://vesper.loop.dev/api/mcp/${existing.tokenPrefix}_\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022`}
             </code>
             <button
               type="button"
-              className="vh-copy vh-copy--ghost"
-              onClick={() => setMode('confirming')}
+              className={`vh-field__copy-inline${copied ? ' is-copied' : ''}`}
+              onClick={() =>
+                copy(
+                  `https://vesper.loop.dev/api/mcp/${existing.tokenPrefix}_\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022`
+                )
+              }
+              aria-label={copied ? 'Copied displayed URL' : 'Copy displayed URL (token is masked — regenerate for the full URL)'}
+              title={copied ? 'Copied' : 'Copy displayed URL'}
             >
-              <span aria-hidden="true" className="vh-copy__icon">
-                {'\u21BB'}
+              <span aria-hidden="true" className="vh-field__copy-inline__icon">
+                {copied ? '\u2713' : '\u29C9'}
               </span>
-              <span className="vh-copy__label">Regenerate</span>
             </button>
           </div>
-          <p className="vh-field__hint">
-            Created {formatDate(existing.createdAt)}
-            {existing.lastUsedAt
-              ? ` \u00B7 last used ${formatRelative(existing.lastUsedAt)}`
-              : ' \u00B7 never used yet'}
-            . Loop already emailed this URL to you. Lost it? Regenerate to get
-            a fresh one (the old URL stops working immediately).
-          </p>
+          <div className="vh-mcp__footer">
+            <p className="vh-field__hint vh-mcp__hint">
+              Created {formatDate(existing.createdAt)}
+              {existing.lastUsedAt
+                ? ` \u00B7 last used ${formatRelative(existing.lastUsedAt)}`
+                : ' \u00B7 never used yet'}
+              . Loop already emailed this URL to you. Lost it? Regenerate to
+              get a fresh one (the old URL stops working immediately).
+            </p>
+            <button
+              type="button"
+              className="vh-mcp__regenerate"
+              onClick={() => setMode('confirming')}
+            >
+              <span aria-hidden="true" className="vh-mcp__regenerate__icon">
+                {'\u21BB'}
+              </span>
+              <span>Regenerate</span>
+            </button>
+          </div>
         </>
       ) : mode === 'confirming' ? (
         <>
