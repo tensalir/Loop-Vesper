@@ -157,3 +157,19 @@ export const HeadlessIterateSchema = z.object({
   lockedAxes: z.array(z.string().min(1).max(64)).max(7).optional(),
   preferredAxes: z.array(z.string().min(1).max(64)).max(7).optional(),
 })
+
+// Image generation via the MCP `generate_asset` tool. Synchronous, fast
+// image models only — see PHASE_1_MODEL_IDS in lib/headless/generate-asset.ts.
+// numOutputs is capped at 4 to keep base64-encoded payloads under typical
+// MCP connector limits.
+export const HeadlessGenerateAssetSchema = z.object({
+  prompt: z.string().min(1, 'prompt is required').max(HEADLESS_PROMPT_MAX),
+  modelId: z.string().min(1, 'modelId is required').max(128),
+  aspectRatio: z.string().max(16).optional(),
+  referenceImage: z
+    .string()
+    .max(HEADLESS_REFERENCE_IMAGE_MAX, 'referenceImage exceeds 6 MB cap')
+    .optional(),
+  numOutputs: z.number().int().min(1).max(4).optional().default(1),
+  seed: z.number().int().optional(),
+})

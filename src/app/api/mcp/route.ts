@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { verifyHeadlessRequest, recordHeadlessUsage } from '@/lib/headless/auth'
 import type { HeadlessTool } from '@/lib/headless/auth'
 import { MCP_TOOLS, findMcpTool } from '@/lib/headless/mcp-tools'
+import { generateAssetTool, type McpContent } from '@/lib/headless/generate-asset'
 import { enhancePrompt } from '@/lib/prompts/enhance'
 import { iteratePrompt } from '@/lib/prompts/iterate'
 import { getAllModels } from '@/lib/models/registry'
@@ -194,6 +195,10 @@ async function dispatch(
       const startedAt = Date.now()
       try {
         const result = await runTool(tool.name, args, principal)
+        // The cost field, if present, is extracted before sending the
+        // response so the client never sees a stray Vesper-internal key
+        // alongside the standard MCP `content` / `structuredContent`.
+        const { costUsd, ...wireResult } = result
         recordHeadlessUsage({
           credentialId: principal.credentialId,
           ownerId: principal.ownerId,
@@ -204,10 +209,11 @@ async function dispatch(
           status: 'success',
           httpStatus: 200,
           durationMs: Date.now() - startedAt,
+          costUsd: costUsd ?? null,
           metadata: { rpcMethod: 'tools/call' },
         }).catch(() => undefined)
 
-        return rpcSuccess(id, result)
+        return rpcSuccess(id, wireResult)
       } catch (err) {
         const e = err as { message?: string; status?: number; statusCode?: number }
         const message = e?.message || 'Tool execution failed'
@@ -256,7 +262,14 @@ async function runTool(
   name: HeadlessTool,
   args: Record<string, unknown>,
   principal: AuthedPrincipal
-): Promise<{ content: Array<{ type: 'text'; text: string }>; structuredContent?: unknown }> {
+): Promise<{
+  content: McpContent[]
+  structuredContent?: unknown
+  /** Internal hint for the dispatcher to record provider cost in the
+   *  audit log. Stripped from the wire response before it reaches the
+   *  MCP client. */
+  costUsd?: number | null
+}> {
   if (name === 'list_models') {
     const all = getAllModels().map((config) => ({
       id: config.id,
@@ -362,8 +375,12 @@ async function runTool(
     }
   }
 
-  // generate_asset is reserved for a future phase. Reject explicitly so
-  // callers don't quietly succeed against a stub.
+  if (name === 'generate_asset') {
+    // Phase 1: synchronous, fast image models only. Allowlist + per-credential
+    // model check + 25s hard timeout all live inside generateAssetTool.
+    return generateAssetTool(args, { allowedModels: principal.allowedModels })
+  }
+
   throw new Error(`Tool '${name}' is not implemented yet.`)
 }
 

@@ -3,31 +3,49 @@
  *
  *   1. Mints a temporary `vsp_live_*` credential directly in the
  *      database, scoped to a chosen owner (defaults to the first admin
- *      profile we can find), with all 3 MCP tools and full model access.
+ *      profile we can find), with all 4 MCP tools and full model access.
  *   2. Hits the chosen MCP base URL with the standard JSON-RPC 2.0
  *      handshake: initialize -> notifications/initialized -> tools/list
  *      -> tools/call(list_models). list_models reads the local registry
  *      so we get a real round-trip without paying any provider cost.
- *   3. Revokes the test credential whether the test passes or fails so
+ *   3. Optionally exercises tools/call(generate_asset) when --with-generate
+ *      is passed. Hits the cheapest, fastest image model and asserts an
+ *      image content block comes back. Costs ~$0.04 per run.
+ *   4. Revokes the test credential whether the test passes or fails so
  *      the database is left clean.
  *
  * Run with:
  *   node scripts/test-mcp-url.mjs
  *   node scripts/test-mcp-url.mjs --base https://loopvesper-one.vercel.app
  *   node scripts/test-mcp-url.mjs --base http://localhost:3000
+ *   node scripts/test-mcp-url.mjs --with-generate              # adds Step 6
  */
 
 import { PrismaClient } from '@prisma/client'
 import crypto from 'node:crypto'
 
-const args = Object.fromEntries(
-  process.argv
-    .slice(2)
-    .map((arg, i, all) => (arg.startsWith('--') ? [arg.slice(2), all[i + 1]] : null))
-    .filter(Boolean),
-)
+// Parse a small flag set: --base <url>, --with-generate (boolean flag).
+function parseArgs(argv) {
+  const out = {}
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (!arg.startsWith('--')) continue
+    const key = arg.slice(2)
+    const next = argv[i + 1]
+    if (next && !next.startsWith('--')) {
+      out[key] = next
+      i++
+    } else {
+      out[key] = true
+    }
+  }
+  return out
+}
 
-const BASE = args.base?.trim() || 'https://loopvesper-one.vercel.app'
+const args = parseArgs(process.argv.slice(2))
+
+const BASE = (typeof args.base === 'string' ? args.base : '').trim() || 'https://loopvesper-one.vercel.app'
+const WITH_GENERATE = Boolean(args['with-generate'])
 const TEST_NAME = `mcp-url-smoke-test-${Date.now()}`
 
 const prisma = new PrismaClient()
@@ -101,7 +119,12 @@ async function main() {
       name: TEST_NAME,
       tokenHash,
       tokenPrefix,
-      allowedTools: ['enhance_prompt', 'iterate_prompt', 'list_models'],
+      allowedTools: [
+        'enhance_prompt',
+        'iterate_prompt',
+        'list_models',
+        'generate_asset',
+      ],
       allowedModels: ['*'],
     },
     select: { id: true, tokenPrefix: true, createdAt: true },
@@ -161,7 +184,12 @@ async function main() {
     } else {
       const names = tools.body.result.tools.map((t) => t.name).sort()
       ok(`tools/list -> [${names.join(', ')}]`)
-      const expected = ['enhance_prompt', 'iterate_prompt', 'list_models'].sort()
+      const expected = [
+        'enhance_prompt',
+        'generate_asset',
+        'iterate_prompt',
+        'list_models',
+      ].sort()
       const matches = JSON.stringify(names) === JSON.stringify(expected)
       if (!matches) {
         fail(`Expected exactly [${expected.join(', ')}], got [${names.join(', ')}]`)
@@ -208,6 +236,45 @@ async function main() {
       ok(`bogus token -> HTTP 401`)
     } else {
       fail(`Expected HTTP 401 for a bogus token, got ${bad.status}`, bad.body || bad.raw)
+    }
+
+    // 3f. Optional: real image generation. Costs real money on Gemini, so
+    // gated behind --with-generate. Uses the cheapest, fastest image model.
+    if (WITH_GENERATE) {
+      console.log('Step 6: tools/call generate_asset (--with-generate)')
+      const gen = await rpc(url, {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: {
+          name: 'generate_asset',
+          arguments: {
+            modelId: 'gemini-nano-banana-2',
+            prompt:
+              'A clean studio still of a single Loop Switch earplug on a soft cream background, soft daylight, brand-fluent, square crop',
+            numOutputs: 1,
+          },
+        },
+      })
+      if (gen.status !== 200) {
+        fail(`HTTP ${gen.status} on tools/call generate_asset`, gen.body || gen.raw)
+      } else if (gen.body?.result?.isError) {
+        fail(`generate_asset returned isError: true`, gen.body?.result?.content)
+      } else {
+        const content = gen.body?.result?.content ?? []
+        const images = content.filter((c) => c.type === 'image')
+        if (images.length === 0) {
+          fail('generate_asset returned no image content blocks', gen.body)
+        } else {
+          const sc = gen.body.result.structuredContent
+          const cost = sc?.estimatedCostUsd
+          const dim = sc?.outputs?.[0]
+          const sizeKB = images[0]?.data ? Math.round((images[0].data.length * 3) / 4 / 1024) : 0
+          ok(
+            `generate_asset -> ${images.length} image(s), ${dim?.width ?? '?'}x${dim?.height ?? '?'} ${images[0]?.mimeType ?? '?'}, ~${sizeKB}KB, ${sc?.durationMs ?? '?'}ms, est cost $${cost ?? 'unknown'}`,
+          )
+        }
+      }
     }
   } finally {
     // 4. Always revoke the test credential, even if a step failed.

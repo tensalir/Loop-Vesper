@@ -11,6 +11,7 @@
  */
 
 import type { HeadlessTool } from './auth'
+import { PHASE_1_MODEL_IDS } from './generate-asset'
 
 export interface McpToolDefinition {
   name: HeadlessTool
@@ -127,6 +128,54 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: 'object',
       additionalProperties: false,
       properties: {},
+    },
+  },
+  {
+    name: 'generate_asset',
+    title: 'Generate an image',
+    description:
+      'Generate an image with a fast Vesper image model. Returns the image inline so Claude can render it in the conversation. Synchronous, fast image models only — for slow video models (Veo, Kling), use the Vesper web app for now.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['prompt', 'modelId'],
+      properties: {
+        prompt: {
+          type: 'string',
+          description:
+            'Plain-text prompt describing what to generate. For best results, run through `enhance_prompt` first.',
+          minLength: 1,
+          maxLength: 8000,
+        },
+        modelId: {
+          type: 'string',
+          description:
+            'The Vesper image model to use. Phase 1 supports synchronous image models only; video models are Phase 2.',
+          enum: [...PHASE_1_MODEL_IDS],
+        },
+        aspectRatio: {
+          type: 'string',
+          description:
+            "Optional aspect ratio (e.g. '1:1', '16:9', '9:16'). Defaults to the model's default. Use `list_models` to see what each model supports.",
+          maxLength: 16,
+        },
+        referenceImage: {
+          type: 'string',
+          description:
+            'Optional reference image as a `data:image/...;base64,...` URL. Used as a style/composition anchor for models that support image-to-image.',
+        },
+        numOutputs: {
+          type: 'integer',
+          description: 'How many images to return. Default 1, max 4.',
+          minimum: 1,
+          maximum: 4,
+          default: 1,
+        },
+        seed: {
+          type: 'integer',
+          description: 'Optional seed for reproducible generations.',
+        },
+      },
     },
   },
 ]
