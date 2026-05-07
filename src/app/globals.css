@@ -141,7 +141,62 @@
   .shadow-lg {
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
   }
-  
+
+  /* CMF pipeline staggered entrance — used by stage cards */
+  @keyframes cmfStageIn {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .cmf-stage-enter {
+    animation-name: cmfStageIn;
+    animation-duration: 500ms;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    animation-fill-mode: both;
+  }
+
+  /* CMF rendering shimmer — used on the per-row image box while a render
+     is in flight. Subtle moving sheen, not a strobe. */
+  @keyframes cmfRenderingShimmer {
+    0% {
+      background-position: -150% 0;
+    }
+    100% {
+      background-position: 250% 0;
+    }
+  }
+
+  .cmf-rendering-shimmer {
+    background-image: linear-gradient(
+      100deg,
+      transparent 30%,
+      hsl(var(--primary) / 0.18) 50%,
+      transparent 70%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    animation: cmfRenderingShimmer 1.6s linear infinite;
+  }
+
+  /* CMF connector spine — animated dashed line travelling between stages.
+     Used in the per-row mini pipeline. */
+  @keyframes cmfConnectorTravel {
+    to {
+      stroke-dashoffset: -12;
+    }
+  }
+
+  .cmf-connector-traveling line {
+    stroke-dasharray: 4 4;
+    animation: cmfConnectorTravel 1.4s linear infinite;
+  }
+
   /* Prompt enhancement glitch animation */
   @keyframes glitch {
     0%, 100% {
