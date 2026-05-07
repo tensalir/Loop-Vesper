@@ -47,6 +47,10 @@ model Profile {
   timelineSequences   TimelineSequence[]
   timelineRenderJobs  TimelineRenderJob[]
   headlessCredentials HeadlessCredential[]
+  cmfImports          CmfImport[]
+  cmfPackets          CmfPacket[]
+  cmfRenders          CmfRender[]
+  cmfClownAssets      CmfClownAsset[]
 
   @@map("profiles")
 }
@@ -739,4 +743,157 @@ model HeadlessRateBucket {
   @@index([credentialId, window])
   @@index([bucket])
   @@map("headless_rate_buckets")
+}
+
+// ── CMF (Color, Material, Finishing) Product Designer Workflow ──
+//
+// One CMF Packet groups one or more SKUs from a single import (e.g. a 4-pack
+// of Switch 2 colorways). Each packet has its own PDF output once renders are
+// generated. The packet's status reflects the slowest job inside it.
+//
+// CmfClownAsset is the catalog of "clown" reference renders — the multi-coloured
+// PNGs used to identify which surface of a product takes which Pantone, e.g.
+// `aphrodite clown 2.png` for Switch 2 Aphrodite. They are owned per-Profile
+// so designers can upload their own without polluting the shared library.
+
+model CmfClownAsset {
+  id          String   @id @default(uuid()) @db.Uuid
+  ownerId     String   @map("owner_id") @db.Uuid
+  // Product slug ("switch2", "engage2", "aphrodite", "case-aphrodite") so a
+  // schema row can resolve a clown by referring to the slug instead of a UUID.
+  productSlug String   @map("product_slug")
+  // Variant slug ("default", "carry", "case", "v2"). Combined with productSlug
+  // gives us the canonical lookup key. Most products will only have one variant.
+  variantSlug String   @default("default") @map("variant_slug")
+  label       String // Human-readable label, e.g. "Aphrodite clown 2"
+  imageUrl    String   @map("image_url")
+  storagePath String   @map("storage_path")
+  // Component map: a JSON describing each colored region on the clown
+  // and the canonical name of the surface. Example:
+  //   [{"region": "pom_ring", "color_hex": "#ff0000", "label": "POM ring"},
+  //    {"region": "cosmetic_cap", "color_hex": "#00ff00", "label": "Cosmetic cap"}]
+  // Keeping this typed as JSON lets us add components per product without
+  // schema migrations. Validated at the application layer via Zod.
+  components  Json     @default("[]")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  owner   Profile     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  renders CmfRender[]
+
+  @@unique([ownerId, productSlug, variantSlug])
+  @@index([ownerId])
+  @@index([productSlug])
+  @@map("cmf_clown_assets")
+}
+
+model CmfImport {
+  id          String   @id @default(uuid()) @db.Uuid
+  ownerId     String   @map("owner_id") @db.Uuid
+  fileName    String   @map("file_name")
+  storagePath String?  @map("storage_path") // Original .xlsx in Supabase Storage
+  // Raw parsed rows the import produced, kept as-is for replay/debugging.
+  rawRows     Json     @map("raw_rows")
+  // Normalised rows after Zod validation. `null` if validation failed; in that
+  // case `errors` carries the structured error report.
+  parsedRows  Json?    @map("parsed_rows")
+  status      String   @default("pending") // 'pending' | 'parsed' | 'validated' | 'failed'
+  errors      Json? // [{row, field, code, message}]
+  rowCount    Int      @default(0) @map("row_count")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  owner   Profile     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  packets CmfPacket[]
+
+  @@index([ownerId])
+  @@index([ownerId, createdAt(sort: Desc)])
+  @@map("cmf_imports")
+}
+
+model CmfPacket {
+  id          String   @id @default(uuid()) @db.Uuid
+  importId    String?  @map("import_id") @db.Uuid // null when packet is created without import
+  ownerId     String   @map("owner_id") @db.Uuid
+  // Display name (e.g. "Switch 2 Spring 2026 4-Pack").
+  name        String
+  // Marketing CMF code that appears in the banner: e.g. "CMF-001234revA".
+  cmfCode     String?  @map("cmf_code")
+  // Free-form designer notes shown on the breakdown page.
+  notes       String?  @db.Text
+  // PDF output state — packet-level. Individual SKU renders track their own
+  // job state on `cmf_renders.status`.
+  status      String   @default("draft") // 'draft' | 'rendering' | 'ready' | 'failed'
+  pdfUrl      String?  @map("pdf_url")
+  pdfPath     String?  @map("pdf_path")
+  pdfError    String?  @map("pdf_error") @db.Text
+  generatedAt DateTime? @map("generated_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  import  CmfImport?  @relation(fields: [importId], references: [id], onDelete: SetNull)
+  owner   Profile     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  renders CmfRender[]
+
+  @@index([ownerId])
+  @@index([ownerId, createdAt(sort: Desc)])
+  @@index([status])
+  @@map("cmf_packets")
+}
+
+// One row per SKU inside a packet. Rendering, prompting, and status all live
+// here so the workspace can show per-SKU progress and re-run an individual SKU
+// without rebuilding the whole packet.
+
+model CmfRender {
+  id          String   @id @default(uuid()) @db.Uuid
+  packetId    String   @map("packet_id") @db.Uuid
+  ownerId     String   @map("owner_id") @db.Uuid
+  // Human-readable SKU label, e.g. "Switch 2 — Sage".
+  label       String
+  // SKU identity from the workbook.
+  productCode String?  @map("product_code")
+  ean         String?
+  productSlug String   @map("product_slug") // matches CmfClownAsset.productSlug
+  variantSlug String   @default("default") @map("variant_slug")
+  colorwayName String? @map("colorway_name")
+  // Resolved clown asset reference — nullable so SKU rows can be saved
+  // before a clown is chosen.
+  clownAssetId String? @map("clown_asset_id") @db.Uuid
+  // Component-level CMF spec for this SKU. Strongly-typed at the app layer.
+  // Example shape:
+  //   [{"region": "pom_ring", "pantone": "PANTONE 17-5641 TCX",
+  //     "material": "POM", "finish": "Matte", "technique": "Injection mould"}]
+  componentSpecs Json @default("[]") @map("component_specs")
+  // Optional palette captured for the breakdown page.
+  paletteSwatches Json @default("[]") @map("palette_swatches")
+  // Prompt + model bookkeeping.
+  modelId        String?  @map("model_id")
+  basePrompt     String?  @db.Text @map("base_prompt")
+  enhancedPrompt String?  @db.Text @map("enhanced_prompt")
+  // Final rendered image stored in Supabase Storage.
+  renderUrl      String?  @map("render_url")
+  renderPath     String?  @map("render_path")
+  renderWidth    Int?     @map("render_width")
+  renderHeight   Int?     @map("render_height")
+  // Status / job control.
+  status         String   @default("draft") // 'draft' | 'queued' | 'rendering' | 'ready' | 'failed'
+  error          String?  @db.Text
+  costUsd        Decimal? @map("cost_usd") @db.Decimal(10, 6)
+  attempts       Int      @default(0)
+  sortOrder      Int      @default(0) @map("sort_order")
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  packet     CmfPacket      @relation(fields: [packetId], references: [id], onDelete: Cascade)
+  owner      Profile        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  clownAsset CmfClownAsset? @relation(fields: [clownAssetId], references: [id], onDelete: SetNull)
+
+  @@index([packetId])
+  @@index([packetId, sortOrder])
+  @@index([ownerId])
+  @@index([status])
+  @@map("cmf_renders")
 }

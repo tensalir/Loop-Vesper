@@ -20,6 +20,7 @@ import {
   X,
   BarChart3,
   Globe,
+  Palette,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -31,6 +32,7 @@ const mobileNavItems = [
   { title: 'Dashboard', href: '/', icon: LayoutDashboard },
   { title: 'Analytics', href: '/analytics', icon: BarChart3 },
   { title: 'Brand World', href: '/brand-world', icon: Globe, adminOnly: true },
+  { title: 'Product', href: '/product', icon: Palette },
   { title: 'Projects', href: '/projects', icon: FolderKanban },
   { title: 'Review', href: '/review', icon: CheckCircle },
   { title: 'Bookmarks', href: '/bookmarks', icon: Bookmark },

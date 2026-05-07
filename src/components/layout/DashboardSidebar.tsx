@@ -13,6 +13,7 @@ import {
   Bookmark,
   BarChart3,
   Globe,
+  Palette,
 } from 'lucide-react'
 
 interface NavItem {
@@ -48,6 +49,11 @@ const mainNavItems: NavItem[] = [
     href: '/brand-world',
     icon: Globe,
     adminOnly: true,
+  },
+  {
+    title: 'Product',
+    href: '/product',
+    icon: Palette,
   },
   {
     title: 'Projects',
