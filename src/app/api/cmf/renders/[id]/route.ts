@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireAuthenticatedProfile } from '@/lib/cmf/service'
+import {
+  CmfForbiddenError,
+  CmfNotFoundError,
+  logCmfActivity,
+  requireAuthenticatedProfile,
+  requireRenderAccess,
+} from '@/lib/cmf/service'
 import { ComponentSpecSchema, PaletteSwatchSchema } from '@/lib/cmf/schema'
 
 export const dynamic = 'force-dynamic'
@@ -17,6 +23,16 @@ const UpdateRenderSchema = z.object({
   paletteSwatches: z.array(PaletteSwatchSchema).optional(),
 })
 
+function translateAccessError(err: unknown) {
+  if (err instanceof CmfNotFoundError) {
+    return NextResponse.json({ error: err.message }, { status: 404 })
+  }
+  if (err instanceof CmfForbiddenError) {
+    return NextResponse.json({ error: err.message }, { status: 403 })
+  }
+  return null
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
@@ -24,9 +40,18 @@ export async function GET(
   const auth = await requireAuthenticatedProfile()
   if (!auth.profile) return auth.response
 
-  const render = await prisma.cmfRender.findFirst({
-    where: { id: params.id, ownerId: auth.profile.userId },
-  })
+  try {
+    await requireRenderAccess({
+      renderId: params.id,
+      userId: auth.profile.userId,
+    })
+  } catch (err) {
+    const translated = translateAccessError(err)
+    if (translated) return translated
+    throw err
+  }
+
+  const render = await prisma.cmfRender.findUnique({ where: { id: params.id } })
   if (!render) {
     return NextResponse.json({ error: 'Render not found' }, { status: 404 })
   }
@@ -40,12 +65,17 @@ export async function PATCH(
   const auth = await requireAuthenticatedProfile()
   if (!auth.profile) return auth.response
 
-  const exists = await prisma.cmfRender.findFirst({
-    where: { id: params.id, ownerId: auth.profile.userId },
-    select: { id: true },
-  })
-  if (!exists) {
-    return NextResponse.json({ error: 'Render not found' }, { status: 404 })
+  let access
+  try {
+    access = await requireRenderAccess({
+      renderId: params.id,
+      userId: auth.profile.userId,
+      minRole: 'editor',
+    })
+  } catch (err) {
+    const translated = translateAccessError(err)
+    if (translated) return translated
+    throw err
   }
 
   let body: unknown
@@ -66,16 +96,22 @@ export async function PATCH(
   const data: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(parsed.data)) {
     if (value === undefined) continue
-    if (key === 'componentSpecs' || key === 'paletteSwatches') {
-      data[key] = value
-    } else {
-      data[key] = value
-    }
+    data[key] = value
   }
 
   const updated = await prisma.cmfRender.update({
     where: { id: params.id },
     data,
+  })
+
+  // Best-effort activity. Captures which fields changed so the timeline
+  // doesn't read like a wall of identical "edited SKU" lines.
+  await logCmfActivity({
+    packetId: access.packetId,
+    userId: auth.profile.userId,
+    action: 'edited_sku',
+    targetId: params.id,
+    metadata: { fields: Object.keys(data) },
   })
 
   return NextResponse.json({ render: updated })
@@ -88,12 +124,18 @@ export async function DELETE(
   const auth = await requireAuthenticatedProfile()
   if (!auth.profile) return auth.response
 
-  const exists = await prisma.cmfRender.findFirst({
-    where: { id: params.id, ownerId: auth.profile.userId },
-    select: { id: true },
-  })
-  if (!exists) {
-    return NextResponse.json({ error: 'Render not found' }, { status: 404 })
+  try {
+    // Require approver-or-owner to delete a SKU row — same posture as
+    // packet delete, since removing a SKU is destructive for everyone.
+    await requireRenderAccess({
+      renderId: params.id,
+      userId: auth.profile.userId,
+      minRole: 'approver',
+    })
+  } catch (err) {
+    const translated = translateAccessError(err)
+    if (translated) return translated
+    throw err
   }
 
   await prisma.cmfRender.delete({ where: { id: params.id } })

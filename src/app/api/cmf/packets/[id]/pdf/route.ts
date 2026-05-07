@@ -8,7 +8,13 @@ import {
   packetPdfStoragePath,
   safeFileSlug,
 } from '@/lib/cmf/storage'
-import { requireAuthenticatedProfile } from '@/lib/cmf/service'
+import {
+  CmfForbiddenError,
+  CmfNotFoundError,
+  logCmfActivity,
+  requireAuthenticatedProfile,
+  requirePacketAccess,
+} from '@/lib/cmf/service'
 import { createRateLimiter } from '@/lib/api/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -34,8 +40,24 @@ export async function POST(
   const limited = cmfPdfLimiter.check(auth.profile.userId)
   if (limited) return limited
 
-  const packet = await prisma.cmfPacket.findFirst({
-    where: { id: params.id, ownerId: auth.profile.userId },
+  try {
+    await requirePacketAccess({
+      packetId: params.id,
+      userId: auth.profile.userId,
+      minRole: 'editor',
+    })
+  } catch (err) {
+    if (err instanceof CmfNotFoundError) {
+      return NextResponse.json({ error: err.message }, { status: 404 })
+    }
+    if (err instanceof CmfForbiddenError) {
+      return NextResponse.json({ error: err.message }, { status: 403 })
+    }
+    throw err
+  }
+
+  const packet = await prisma.cmfPacket.findUnique({
+    where: { id: params.id },
     include: {
       renders: {
         orderBy: { sortOrder: 'asc' },
@@ -78,7 +100,9 @@ export async function POST(
             : 'Pack',
       })
     )
-    const path = packetPdfStoragePath(auth.profile.userId, packet.id, fileSlug)
+    // Storage path is namespaced by the packet owner so PDFs from a packet
+    // never leak across collaborators' folders.
+    const path = packetPdfStoragePath(packet.ownerId, packet.id, fileSlug)
     const dataUrl = `data:application/pdf;base64,${Buffer.from(pdfBytes).toString('base64')}`
     const publicUrl = await uploadBase64ToStorage(dataUrl, CMF_STORAGE_BUCKET, path)
 
@@ -100,6 +124,13 @@ export async function POST(
       },
     })
 
+    await logCmfActivity({
+      packetId: packet.id,
+      userId: auth.profile.userId,
+      action: 'pdf_generated',
+      metadata: { url: publicUrl, allReady },
+    })
+
     return NextResponse.json({ packet: updated })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'PDF generation failed'
@@ -107,6 +138,12 @@ export async function POST(
     await prisma.cmfPacket.update({
       where: { id: packet.id },
       data: { status: 'failed', pdfError: message },
+    })
+    await logCmfActivity({
+      packetId: packet.id,
+      userId: auth.profile.userId,
+      action: 'pdf_failed',
+      metadata: { message },
     })
     return NextResponse.json({ error: message }, { status: 500 })
   }

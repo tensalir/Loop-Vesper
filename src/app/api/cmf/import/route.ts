@@ -6,6 +6,7 @@ import { parseCmfWorkbook, XlsxParseError } from '@/lib/cmf/xlsx'
 import { normaliseRawRows } from '@/lib/cmf/schema'
 import {
   createPacketFromRows,
+  logCmfActivity,
   requireAuthenticatedProfile,
 } from '@/lib/cmf/service'
 import { createRateLimiter } from '@/lib/api/rate-limit'
@@ -124,6 +125,18 @@ export async function POST(request: NextRequest) {
     cmfCode,
     notes,
     rows: normalised.rows,
+  })
+
+  await logCmfActivity({
+    packetId: packet.id,
+    userId: auth.profile.userId,
+    action: 'imported_workbook',
+    targetId: importRecord.id,
+    metadata: {
+      fileName: file.name,
+      rows: normalised.rows.length,
+      errors: normalised.errors.length,
+    },
   })
 
   return NextResponse.json({

@@ -52,7 +52,13 @@ export class CmfRenderError extends Error {
 
 interface RenderArgs {
   renderId: string
-  ownerId: string
+  /**
+   * The user that triggered the render. Used only for logs / future
+   * attribution; does NOT scope storage paths or clown lookups (those use
+   * the render's `ownerId`, i.e. the packet owner, so files stay in one
+   * folder when collaborators trigger renders).
+   */
+  triggeredByUserId?: string
 }
 
 interface ResolvedReferences {
@@ -117,14 +123,20 @@ function ensureSupportedModel(modelId: string): string {
 /**
  * Run a CMF render for a single SKU row. Updates the database row to reflect
  * progress and final state. Returns the updated render record.
+ *
+ * Access checks are the caller's responsibility — the route handler should
+ * have already verified the user can edit this render before calling here.
  */
-export async function runCmfRender({ renderId, ownerId }: RenderArgs) {
-  const render = await prisma.cmfRender.findFirst({
-    where: { id: renderId, ownerId },
+export async function runCmfRender({ renderId }: RenderArgs) {
+  const render = await prisma.cmfRender.findUnique({
+    where: { id: renderId },
   })
   if (!render) {
     throw new CmfRenderError('validation', 'Render not found')
   }
+  // Always operate against the packet owner's storage path / clown library
+  // so files stay namespaced consistently across collaborators.
+  const ownerId = render.ownerId
 
   const product = getCmfProduct(render.productSlug)
   if (!product) {

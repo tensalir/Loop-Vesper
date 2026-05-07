@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import {
   createPacketFromRows,
-  listOwnedPackets,
+  listAccessiblePackets,
   requireAuthenticatedProfile,
 } from '@/lib/cmf/service'
 import { CmfSkuRowSchema } from '@/lib/cmf/schema'
@@ -21,7 +21,7 @@ export async function GET(_request: NextRequest) {
   const auth = await requireAuthenticatedProfile()
   if (!auth.profile) return auth.response
 
-  const packets = await listOwnedPackets(auth.profile.userId)
+  const packets = await listAccessiblePackets(auth.profile.userId)
   return NextResponse.json({
     packets: packets.map((p) => ({
       id: p.id,
@@ -34,6 +34,8 @@ export async function GET(_request: NextRequest) {
       generatedAt: p.generatedAt,
       renderCount: p.renders.length,
       renders: p.renders,
+      role: p.role,
+      isOwner: p.role === 'owner',
     })),
   })
 }

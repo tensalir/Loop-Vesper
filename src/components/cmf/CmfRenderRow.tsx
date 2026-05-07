@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
+import { CmfRenderComments } from './CmfRenderComments'
 import {
   Loader2,
   Wand2,
@@ -217,6 +218,8 @@ export function CmfRenderRow({ render, packetId }: CmfRenderRowProps) {
           </div>
 
           <ComponentChips render={render} />
+
+          <CmfRenderComments packetId={packetId} renderId={render.id} />
 
           <div className="flex items-center justify-between gap-1.5 mt-2">
             <button

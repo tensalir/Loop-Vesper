@@ -1,22 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runCmfRender, CmfRenderError } from '@/lib/cmf/render'
-import { requireAuthenticatedProfile } from '@/lib/cmf/service'
+import {
+  CmfForbiddenError,
+  CmfNotFoundError,
+  logCmfActivity,
+  requireAuthenticatedProfile,
+  requireRenderAccess,
+} from '@/lib/cmf/service'
 import { createRateLimiter } from '@/lib/api/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
-// Rendering hits Nano Banana — keep this conservative so a runaway loop
-// can't churn the user's Gemini quota.
 const cmfRenderLimiter = createRateLimiter({ maxRequests: 30, windowMs: 60_000 })
 
-/**
- * POST /api/cmf/renders/{id}/generate
- *
- * Synchronously runs the render through Nano Banana. Returns the updated
- * render row when finished. Designers see the generated image inside the
- * normal request lifecycle — long-running multi-SKU packs should call this
- * per-render, the UI stays responsive thanks to React Query streaming.
- */
 export async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } }
@@ -27,11 +23,37 @@ export async function POST(
   const limited = cmfRenderLimiter.check(auth.profile.userId)
   if (limited) return limited
 
+  let access
+  try {
+    access = await requireRenderAccess({
+      renderId: params.id,
+      userId: auth.profile.userId,
+      minRole: 'editor',
+    })
+  } catch (err) {
+    if (err instanceof CmfNotFoundError) {
+      return NextResponse.json({ error: err.message }, { status: 404 })
+    }
+    if (err instanceof CmfForbiddenError) {
+      return NextResponse.json({ error: err.message }, { status: 403 })
+    }
+    throw err
+  }
+
   try {
     const render = await runCmfRender({
       renderId: params.id,
-      ownerId: auth.profile.userId,
+      triggeredByUserId: auth.profile.userId,
     })
+
+    await logCmfActivity({
+      packetId: access.packetId,
+      userId: auth.profile.userId,
+      action: 'rendered_sku',
+      targetId: params.id,
+      metadata: { label: render.label, status: render.status },
+    })
+
     return NextResponse.json({ render })
   } catch (err) {
     if (err instanceof CmfRenderError) {
@@ -41,6 +63,13 @@ export async function POST(
           : err.category === 'reference'
           ? 422
           : 502
+      await logCmfActivity({
+        packetId: access.packetId,
+        userId: auth.profile.userId,
+        action: 'render_failed',
+        targetId: params.id,
+        metadata: { category: err.category, message: err.message },
+      })
       return NextResponse.json(
         { error: err.message, category: err.category },
         { status }
@@ -48,6 +77,13 @@ export async function POST(
     }
     const message = err instanceof Error ? err.message : 'Render failed'
     console.error('[cmf/renders/generate] render failed', err)
+    await logCmfActivity({
+      packetId: access.packetId,
+      userId: auth.profile.userId,
+      action: 'render_failed',
+      targetId: params.id,
+      metadata: { message },
+    })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

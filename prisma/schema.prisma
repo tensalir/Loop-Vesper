@@ -51,6 +51,11 @@ model Profile {
   cmfPackets          CmfPacket[]
   cmfRenders          CmfRender[]
   cmfClownAssets      CmfClownAsset[]
+  cmfPacketMemberships  CmfPacketMember[] @relation("CmfPacketMember_user")
+  cmfPacketInvitesIssued CmfPacketMember[] @relation("CmfPacketMember_invitedBy")
+  cmfComments         CmfComment[]      @relation("CmfComment_user")
+  cmfCommentResolutions CmfComment[]    @relation("CmfComment_resolvedBy")
+  cmfActivities       CmfActivity[]
 
   @@map("profiles")
 }
@@ -831,9 +836,12 @@ model CmfPacket {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  import  CmfImport?  @relation(fields: [importId], references: [id], onDelete: SetNull)
-  owner   Profile     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  renders CmfRender[]
+  import     CmfImport?        @relation(fields: [importId], references: [id], onDelete: SetNull)
+  owner      Profile           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  renders    CmfRender[]
+  members    CmfPacketMember[]
+  comments   CmfComment[]
+  activities CmfActivity[]
 
   @@index([ownerId])
   @@index([ownerId, createdAt(sort: Desc)])
@@ -890,10 +898,96 @@ model CmfRender {
   packet     CmfPacket      @relation(fields: [packetId], references: [id], onDelete: Cascade)
   owner      Profile        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   clownAsset CmfClownAsset? @relation(fields: [clownAssetId], references: [id], onDelete: SetNull)
+  comments   CmfComment[]
 
   @@index([packetId])
   @@index([packetId, sortOrder])
   @@index([ownerId])
   @@index([status])
   @@map("cmf_renders")
+}
+
+// ── CMF Collaboration ─────────────────────────────────────────────────────
+//
+// Layer 1 collaboration: scoped sharing per packet, threaded comments, and a
+// per-packet activity log. Owner is implicit (CmfPacket.ownerId); members are
+// additional Profiles with a role that gates what they can do.
+//
+// Roles:
+//   viewer    — read-only (sees the workspace + comments, no edits)
+//   editor    — can edit SKUs, render, comment
+//   approver  — editor + can sign off (approval flow lands in Layer 2;
+//               for now this is metadata so we don't migrate again later).
+
+model CmfPacketMember {
+  id         String   @id @default(uuid()) @db.Uuid
+  packetId   String   @map("packet_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  role       String   @default("editor") // viewer | editor | approver
+  invitedBy  String   @map("invited_by") @db.Uuid
+  invitedAt  DateTime @default(now()) @map("invited_at")
+  acceptedAt DateTime? @map("accepted_at")
+
+  packet    CmfPacket @relation(fields: [packetId], references: [id], onDelete: Cascade)
+  user      Profile   @relation("CmfPacketMember_user", fields: [userId], references: [id], onDelete: Cascade)
+  invitedByUser Profile @relation("CmfPacketMember_invitedBy", fields: [invitedBy], references: [id], onDelete: Cascade)
+
+  @@unique([packetId, userId])
+  @@index([packetId])
+  @@index([userId])
+  @@map("cmf_packet_members")
+}
+
+// Comments are scoped to a packet. When `renderId` is set, the comment is
+// pinned to that SKU row and shown inline; otherwise it's a packet-level
+// note (e.g. "PM, please confirm the EAN for SKU 3"). Resolution is
+// soft — `resolvedAt` flips a row from "open" to "resolved" without
+// destroying history.
+
+model CmfComment {
+  id         String    @id @default(uuid()) @db.Uuid
+  packetId   String    @map("packet_id") @db.Uuid
+  renderId   String?   @map("render_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  body       String    @db.Text
+  resolvedAt DateTime? @map("resolved_at")
+  resolvedBy String?   @map("resolved_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  packet     CmfPacket  @relation(fields: [packetId], references: [id], onDelete: Cascade)
+  render     CmfRender? @relation(fields: [renderId], references: [id], onDelete: Cascade)
+  user       Profile    @relation("CmfComment_user", fields: [userId], references: [id], onDelete: Cascade)
+  resolvedByUser Profile? @relation("CmfComment_resolvedBy", fields: [resolvedBy], references: [id], onDelete: SetNull)
+
+  @@index([packetId, createdAt(sort: Desc)])
+  @@index([renderId])
+  @@index([userId])
+  @@map("cmf_comments")
+}
+
+// Activity log for the packet. One row per meaningful event so a designer +
+// PM can scan "what changed since I last looked". Drives both the activity
+// drawer in the UI and any future Slack/Monday handoff.
+//
+// `action` values are stable strings — UI maps them to icons + copy:
+//   'imported_workbook' | 'created_packet' | 'edited_sku' | 'rendered_sku'
+//   | 'render_failed'    | 'pdf_generated' | 'pdf_failed'  | 'commented'
+//   | 'comment_resolved' | 'invited_member'| 'role_changed'| 'removed_member'
+
+model CmfActivity {
+  id        String   @id @default(uuid()) @db.Uuid
+  packetId  String   @map("packet_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  action    String
+  targetId  String?  @map("target_id") @db.Uuid
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  packet CmfPacket @relation(fields: [packetId], references: [id], onDelete: Cascade)
+  user   Profile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([packetId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("cmf_activity")
 }

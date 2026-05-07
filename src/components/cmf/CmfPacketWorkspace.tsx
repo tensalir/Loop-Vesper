@@ -13,6 +13,9 @@ import { CmfPipelineHeader } from './CmfPipelineHeader'
 import { CmfPacketSelector } from './CmfPacketSelector'
 import { CmfImportDialog } from './CmfImportDialog'
 import { CmfClownLibraryDialog } from './CmfClownLibraryDialog'
+import { CmfMembersDialog } from './CmfMembersDialog'
+import { CmfPresenceStack } from './CmfPresenceStack'
+import { CmfActivityDrawer } from './CmfActivityDrawer'
 import { useToast } from '@/components/ui/use-toast'
 import {
   Loader2,
@@ -37,6 +40,7 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
   const [activePacketId, setActivePacketId] = useState<string | null>(initialPacketId)
   const [importOpen, setImportOpen] = useState(false)
   const [clownOpen, setClownOpen] = useState(false)
+  const [membersOpen, setMembersOpen] = useState(false)
   const [bulkRunning, setBulkRunning] = useState(false)
 
   const { data: packet, isLoading } = useCmfPacket(activePacketId)
@@ -168,6 +172,15 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
             activePacketId={activePacketId}
             onSelect={setActivePacketId}
           />
+          {activePacketId && (
+            <>
+              <CmfPresenceStack
+                packetId={activePacketId}
+                onClick={() => setMembersOpen(true)}
+              />
+              <CmfActivityDrawer packetId={activePacketId} />
+            </>
+          )}
         </div>
       </header>
 
@@ -265,6 +278,11 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
         onPacketCreated={(id) => setActivePacketId(id)}
       />
       <CmfClownLibraryDialog open={clownOpen} onOpenChange={setClownOpen} />
+      <CmfMembersDialog
+        open={membersOpen}
+        onOpenChange={setMembersOpen}
+        packetId={activePacketId}
+      />
     </div>
   )
 }

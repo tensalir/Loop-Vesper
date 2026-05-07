@@ -3,8 +3,10 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import {
   CmfNotFoundError,
-  findOwnedPacket,
+  CmfForbiddenError,
+  findAccessiblePacket,
   requireAuthenticatedProfile,
+  requirePacketAccess,
 } from '@/lib/cmf/service'
 
 export const dynamic = 'force-dynamic'
@@ -23,12 +25,20 @@ export async function GET(
   if (!auth.profile) return auth.response
 
   try {
-    const packet = await findOwnedPacket(params.id, auth.profile.userId)
+    // Any role can read; viewers see exactly the same data shape.
+    await requirePacketAccess({
+      packetId: params.id,
+      userId: auth.profile.userId,
+    })
+    const packet = await findAccessiblePacket(params.id, auth.profile.userId)
     if (!packet) throw new CmfNotFoundError()
     return NextResponse.json({ packet })
   } catch (err) {
     if (err instanceof CmfNotFoundError) {
       return NextResponse.json({ error: err.message }, { status: 404 })
+    }
+    if (err instanceof CmfForbiddenError) {
+      return NextResponse.json({ error: err.message }, { status: 403 })
     }
     throw err
   }
@@ -41,12 +51,21 @@ export async function PATCH(
   const auth = await requireAuthenticatedProfile()
   if (!auth.profile) return auth.response
 
-  const packet = await prisma.cmfPacket.findFirst({
-    where: { id: params.id, ownerId: auth.profile.userId },
-    select: { id: true },
-  })
-  if (!packet) {
-    return NextResponse.json({ error: 'Packet not found' }, { status: 404 })
+  try {
+    // Editing packet metadata requires editor or higher.
+    await requirePacketAccess({
+      packetId: params.id,
+      userId: auth.profile.userId,
+      minRole: 'editor',
+    })
+  } catch (err) {
+    if (err instanceof CmfNotFoundError) {
+      return NextResponse.json({ error: err.message }, { status: 404 })
+    }
+    if (err instanceof CmfForbiddenError) {
+      return NextResponse.json({ error: err.message }, { status: 403 })
+    }
+    throw err
   }
 
   let body: unknown
@@ -79,6 +98,8 @@ export async function DELETE(
   const auth = await requireAuthenticatedProfile()
   if (!auth.profile) return auth.response
 
+  // Only the owner may delete a packet — protects shared packets from
+  // accidental destruction by an editor.
   const packet = await prisma.cmfPacket.findFirst({
     where: { id: params.id, ownerId: auth.profile.userId },
     select: { id: true },
