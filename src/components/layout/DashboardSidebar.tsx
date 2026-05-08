@@ -21,6 +21,14 @@ interface NavItem {
   href: string
   icon: React.ComponentType<{ className?: string }>
   adminOnly?: boolean
+  /** Hide entirely (for surfaces parked until later — keeps the import warm). */
+  hidden?: boolean
+  /**
+   * Visual tone. `subdued` adds a subtle primary-tinted gradient to the
+   * resting state so a section reads as a subordinate "tools" group
+   * without losing the active-state hierarchy.
+   */
+  tone?: 'default' | 'subdued'
 }
 
 // Top section - Dashboard and Analytics
@@ -37,7 +45,8 @@ const topNavItems: NavItem[] = [
   },
 ]
 
-// Main section - Briefings, Brand World, Projects, Review
+// Main section - Briefings, Brand World (hidden until ready), Projects, Review.
+// Product moved to its own subsection below; Brand World is parked.
 const mainNavItems: NavItem[] = [
   {
     title: 'Briefings',
@@ -49,11 +58,7 @@ const mainNavItems: NavItem[] = [
     href: '/brand-world',
     icon: Globe,
     adminOnly: true,
-  },
-  {
-    title: 'Product',
-    href: '/product',
-    icon: Palette,
+    hidden: true,
   },
   {
     title: 'Projects',
@@ -67,7 +72,19 @@ const mainNavItems: NavItem[] = [
   },
 ]
 
-// Below divider - Bookmarks
+// Tools subsection — sits between two dividers as its own visual group.
+// Distinct tone signals "subordinate workflow tools" without competing
+// with the main nav for attention.
+const toolsNavItems: NavItem[] = [
+  {
+    title: 'Product',
+    href: '/product',
+    icon: Palette,
+    tone: 'subdued',
+  },
+]
+
+// Bottom section — Bookmarks lives below its own divider.
 const secondaryNavItems: NavItem[] = [
   {
     title: 'Bookmarks',
@@ -85,8 +102,17 @@ export function DashboardSidebar({ className }: DashboardSidebarProps) {
   const { data: profile } = useProfile()
   const isAdmin = profile?.role === 'admin'
 
+  const isVisible = (item: NavItem) =>
+    !item.hidden && (!item.adminOnly || isAdmin)
+
   const visibleMainNavItems = useMemo(
-    () => mainNavItems.filter((item) => !item.adminOnly || isAdmin),
+    () => mainNavItems.filter(isVisible),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isAdmin]
+  )
+  const visibleToolsNavItems = useMemo(
+    () => toolsNavItems.filter(isVisible),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [isAdmin]
   )
 
@@ -99,6 +125,7 @@ export function DashboardSidebar({ className }: DashboardSidebarProps) {
 
   const NavLink = ({ item }: { item: NavItem }) => {
     const active = isActive(item.href)
+    const subdued = item.tone === 'subdued'
     return (
       <Link
         href={item.href}
@@ -106,10 +133,32 @@ export function DashboardSidebar({ className }: DashboardSidebarProps) {
           'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
           active
             ? 'bg-primary text-primary-foreground shadow-sm'
+            : subdued
+            ? // Resting state for subordinate "tools" — soft primary-tinted
+              // gradient so the row reads distinct from the main nav without
+              // competing with the active-state hierarchy.
+              'text-foreground/80 hover:text-foreground'
             : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
         )}
+        style={
+          !active && subdued
+            ? {
+                backgroundImage:
+                  'linear-gradient(135deg, color-mix(in oklch, hsl(var(--primary)) 8%, transparent) 0%, color-mix(in oklch, hsl(var(--primary)) 3%, transparent) 100%)',
+              }
+            : undefined
+        }
       >
-        <item.icon className={cn('h-4 w-4', active ? 'text-primary-foreground' : '')} />
+        <item.icon
+          className={cn(
+            'h-4 w-4',
+            active
+              ? 'text-primary-foreground'
+              : subdued
+              ? 'text-primary/85'
+              : ''
+          )}
+        />
         <span>{item.title}</span>
       </Link>
     )
@@ -147,20 +196,32 @@ export function DashboardSidebar({ className }: DashboardSidebarProps) {
           ))}
         </div>
 
-        {/* Divider */}
+        {/* Divider — separates dashboard from main work surfaces */}
         <div className="my-3 h-px bg-border/50" />
 
-        {/* Main Section - Briefings, Projects, Review */}
+        {/* Main Section — Briefings, Projects, Review */}
         <div className="space-y-1">
           {visibleMainNavItems.map((item) => (
             <NavLink key={item.href} item={item} />
           ))}
         </div>
 
-        {/* Divider */}
+        {/* Divider — separates main nav from tooling subsection */}
+        {visibleToolsNavItems.length > 0 && (
+          <>
+            <div className="my-3 h-px bg-border/50" />
+            <div className="space-y-1">
+              {visibleToolsNavItems.map((item) => (
+                <NavLink key={item.href} item={item} />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Divider — separates tools from bookmarks */}
         <div className="my-3 h-px bg-border/50" />
 
-        {/* Secondary - Bookmarks */}
+        {/* Bookmarks */}
         <div className="space-y-1">
           {secondaryNavItems.map((item) => (
             <NavLink key={item.href} item={item} />

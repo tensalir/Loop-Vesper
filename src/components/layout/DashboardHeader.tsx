@@ -31,10 +31,11 @@ interface DashboardHeaderProps {
 const mobileNavItems = [
   { title: 'Dashboard', href: '/', icon: LayoutDashboard },
   { title: 'Analytics', href: '/analytics', icon: BarChart3 },
-  { title: 'Brand World', href: '/brand-world', icon: Globe, adminOnly: true },
-  { title: 'Product', href: '/product', icon: Palette },
+  // Brand World is parked until ready — keep the import warm but don't surface it.
+  { title: 'Brand World', href: '/brand-world', icon: Globe, adminOnly: true, hidden: true },
   { title: 'Projects', href: '/projects', icon: FolderKanban },
   { title: 'Review', href: '/review', icon: CheckCircle },
+  { title: 'Product', href: '/product', icon: Palette },
   { title: 'Bookmarks', href: '/bookmarks', icon: Bookmark },
   { title: 'Settings', href: '/settings', icon: Settings },
 ]
@@ -200,7 +201,9 @@ export function DashboardHeader({ className }: DashboardHeaderProps) {
 
             {/* Nav items */}
             <nav className="p-4 space-y-1">
-              {mobileNavItems.filter((item) => !item.adminOnly || isAdmin).map((item) => {
+              {mobileNavItems
+                .filter((item) => !item.hidden && (!item.adminOnly || isAdmin))
+                .map((item) => {
                 const active = isActive(item.href)
                 return (
                   <Link
