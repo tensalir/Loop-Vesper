@@ -77,26 +77,43 @@ async function resolveRowReferences(args: {
   const dataUrls: string[] = []
 
   if (args.clownAssetId) {
-    const asset = await prisma.cmfClownAsset.findFirst({
-      where: { id: args.clownAssetId, ownerId: args.ownerId },
+    // Clowns are now a shared workspace library (20260508), so we no longer
+    // restrict by ownerId here. The render still records `args.ownerId` for
+    // its own audit trail.
+    const asset = await prisma.cmfClownAsset.findUnique({
+      where: { id: args.clownAssetId },
     })
     if (!asset) {
-      throw new CmfRenderError('reference', 'Linked clown asset is missing or not owned by the user')
+      throw new CmfRenderError('reference', 'Linked clown asset is missing')
     }
     const dataUrl = await downloadReferenceImageAsDataUrl(asset.imageUrl)
     dataUrls.push(dataUrl)
   } else {
-    // Fallback: try to find any clown asset the user owns for this product.
-    const fallback = await prisma.cmfClownAsset.findFirst({
+    // Fallback: pick the canonical clown for this (productSlug, variantSlug),
+    // shared across the workspace.
+    const fallback = await prisma.cmfClownAsset.findUnique({
       where: {
-        ownerId: args.ownerId,
-        productSlug: args.productSlug,
-        variantSlug: args.variantSlug,
+        productSlug_variantSlug: {
+          productSlug: args.productSlug,
+          variantSlug: args.variantSlug,
+        },
       },
     })
     if (fallback) {
       const dataUrl = await downloadReferenceImageAsDataUrl(fallback.imageUrl)
       dataUrls.push(dataUrl)
+    } else {
+      // Second-chance fallback: any clown for this product (e.g. designer
+      // hasn't picked the variant yet, just hit "Render"). Better than
+      // failing outright.
+      const productFallback = await prisma.cmfClownAsset.findFirst({
+        where: { productSlug: args.productSlug },
+        orderBy: { variantSlug: 'asc' },
+      })
+      if (productFallback) {
+        const dataUrl = await downloadReferenceImageAsDataUrl(productFallback.imageUrl)
+        dataUrls.push(dataUrl)
+      }
     }
   }
 

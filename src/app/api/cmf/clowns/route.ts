@@ -2,15 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { uploadBase64ToStorage } from '@/lib/supabase/storage'
-import {
-  CMF_STORAGE_BUCKET,
-  clownStoragePath,
-  safeFileSlug,
-} from '@/lib/cmf/storage'
+import { CMF_STORAGE_BUCKET, clownStoragePath } from '@/lib/cmf/storage'
 import { getCmfProduct } from '@/lib/cmf/products'
 import { requireAuthenticatedProfile } from '@/lib/cmf/service'
 
 export const dynamic = 'force-dynamic'
+
+/**
+ * Clown reference library — global as of 20260508.
+ *
+ * GET is open to any authenticated profile and returns every canonical clown.
+ * POST still requires auth (the contributor is recorded on `ownerId` for
+ * audit), but the upsert key is now `(productSlug, variantSlug)` only — any
+ * teammate can replace a clown when a better reference becomes available.
+ */
+
+const SLUG_REGEX = /^[a-z0-9][a-z0-9-]*$/
 
 const ComponentSchema = z.object({
   region: z.string().min(1).max(80),
@@ -25,7 +32,9 @@ const ComponentSchema = z.object({
 /**
  * GET /api/cmf/clowns?productSlug=
  *
- * Returns the calling user's clown asset library, optionally filtered.
+ * Returns the shared clown library for the workspace, optionally filtered
+ * to a single product. Auth-gated to keep the asset URLs out of unindexed
+ * crawlers but otherwise unscoped.
  */
 export async function GET(request: NextRequest) {
   const auth = await requireAuthenticatedProfile()
@@ -35,10 +44,7 @@ export async function GET(request: NextRequest) {
   const productSlug = url.searchParams.get('productSlug') || undefined
 
   const assets = await prisma.cmfClownAsset.findMany({
-    where: {
-      ownerId: auth.profile.userId,
-      ...(productSlug ? { productSlug: productSlug.toLowerCase() } : {}),
-    },
+    where: productSlug ? { productSlug: productSlug.toLowerCase() } : undefined,
     orderBy: [{ productSlug: 'asc' }, { variantSlug: 'asc' }, { label: 'asc' }],
   })
 
@@ -52,6 +58,10 @@ export async function GET(request: NextRequest) {
  *   - file: PNG/JPG of the clown reference (required)
  *   - productSlug, variantSlug, label
  *   - components: optional JSON array (parsed if a string)
+ *
+ * Upserts on `(productSlug, variantSlug)` so re-uploading replaces the
+ * canonical reference for that variant. The caller is recorded as
+ * `ownerId` purely for audit ("who last touched this asset").
  */
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedProfile()
@@ -68,11 +78,10 @@ export async function POST(request: NextRequest) {
   const productSlug = ((formData.get('productSlug') as string | null) || '')
     .trim()
     .toLowerCase()
-  const variantSlug = (
-    (formData.get('variantSlug') as string | null) || 'default'
-  )
-    .trim()
-    .toLowerCase() || 'default'
+  const variantSlug =
+    ((formData.get('variantSlug') as string | null) || 'default')
+      .trim()
+      .toLowerCase() || 'default'
   const label = ((formData.get('label') as string | null) || '').trim()
   const componentsRaw = formData.get('components') as string | null
 
@@ -88,6 +97,12 @@ export async function POST(request: NextRequest) {
   if (!getCmfProduct(productSlug)) {
     return NextResponse.json(
       { error: `unknown productSlug "${productSlug}"` },
+      { status: 400 }
+    )
+  }
+  if (!SLUG_REGEX.test(variantSlug)) {
+    return NextResponse.json(
+      { error: 'variantSlug must be lowercase letters, digits, or dashes' },
       { status: 400 }
     )
   }
@@ -115,18 +130,13 @@ export async function POST(request: NextRequest) {
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
   const ext = file.type.includes('png') ? 'png' : 'jpg'
-  const slugBase = safeFileSlug(`${productSlug}-${variantSlug}-${label}`)
-  const storagePath = clownStoragePath(auth.profile.userId, slugBase, ext)
+  const storagePath = clownStoragePath(productSlug, variantSlug, ext)
   const dataUrl = `data:${file.type};base64,${buffer.toString('base64')}`
   const publicUrl = await uploadBase64ToStorage(dataUrl, CMF_STORAGE_BUCKET, storagePath)
 
   const asset = await prisma.cmfClownAsset.upsert({
     where: {
-      ownerId_productSlug_variantSlug: {
-        ownerId: auth.profile.userId,
-        productSlug,
-        variantSlug,
-      },
+      productSlug_variantSlug: { productSlug, variantSlug },
     },
     create: {
       ownerId: auth.profile.userId,
@@ -138,6 +148,7 @@ export async function POST(request: NextRequest) {
       components: components as unknown as object,
     },
     update: {
+      ownerId: auth.profile.userId,
       label,
       imageUrl: publicUrl,
       storagePath,

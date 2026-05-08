@@ -137,6 +137,73 @@ export const CMF_PRODUCT_CATALOG: CmfProductSpec[] = [
       { region: 'jewel_accent', label: 'Jewel accent', defaultMaterial: 'PC' },
     ],
   },
+  // ─── 20260508 additions: products referenced by the seeded clown library
+  // but not yet present in v1. Component lists mirror the closest existing
+  // product so workbook validators have something to bind to; refine in code
+  // review as the CMF spec firms up for each one.
+  {
+    slug: 'dream',
+    name: 'Loop Dream',
+    category: 'earplug',
+    defaultModelId: NANO_BANANA_PRO,
+    promptDescriptor:
+      'a pair of Loop Dream earplugs, studio-lit hero render, neutral background',
+    components: [
+      { region: 'pom_ring', label: 'POM ring', defaultMaterial: 'POM' },
+      { region: 'cosmetic_cap', label: 'Cosmetic cap', defaultMaterial: 'PC/ABS' },
+      { region: 'silicone_tip', label: 'Silicone tip', defaultMaterial: 'Silicone', defaultFinish: 'Matte' },
+    ],
+  },
+  {
+    slug: 'link',
+    name: 'Loop Link',
+    category: 'earplug',
+    defaultModelId: NANO_BANANA_PRO,
+    promptDescriptor:
+      'a pair of Loop Link earplugs, studio-lit hero render, neutral background',
+    components: [
+      { region: 'pom_ring', label: 'POM ring', defaultMaterial: 'POM' },
+      { region: 'cosmetic_cap', label: 'Cosmetic cap', defaultMaterial: 'PC/ABS' },
+      { region: 'silicone_tip', label: 'Silicone tip', defaultMaterial: 'Silicone', defaultFinish: 'Matte' },
+    ],
+  },
+  {
+    slug: 'cocoon',
+    name: 'Loop Cocoon',
+    category: 'earplug',
+    defaultModelId: NANO_BANANA_PRO,
+    promptDescriptor:
+      'a pair of Loop Cocoon earplugs, studio-lit hero render, neutral background',
+    components: [
+      { region: 'silicone_body', label: 'Silicone body', defaultMaterial: 'Silicone', defaultFinish: 'Matte' },
+      { region: 'silicone_tip', label: 'Silicone tip', defaultMaterial: 'Silicone', defaultFinish: 'Matte' },
+    ],
+  },
+  {
+    slug: 'case-dream',
+    name: 'Loop Dream Carry Case',
+    category: 'case',
+    defaultModelId: NANO_BANANA_PRO,
+    promptDescriptor:
+      'a Loop Dream carry case, opened and closed views, studio-lit hero render, neutral background',
+    components: [
+      { region: 'shell', label: 'Outer shell', defaultMaterial: 'PC/ABS' },
+      { region: 'lid', label: 'Lid', defaultMaterial: 'PC/ABS' },
+      { region: 'tray', label: 'Inner tray', defaultMaterial: 'TPU' },
+      { region: 'lanyard', label: 'Lanyard', defaultMaterial: 'Silicone', defaultFinish: 'Matte' },
+    ],
+  },
+  {
+    slug: 'pouch-link',
+    name: 'Loop Link Pouch',
+    category: 'case',
+    defaultModelId: NANO_BANANA_PRO,
+    promptDescriptor:
+      'a soft pouch carrier for Loop Link earplugs, studio-lit hero render, neutral background',
+    components: [
+      { region: 'pouch_body', label: 'Pouch body', defaultMaterial: 'Silicone', defaultFinish: 'Matte' },
+    ],
+  },
 ]
 
 const PRODUCT_BY_SLUG = new Map(

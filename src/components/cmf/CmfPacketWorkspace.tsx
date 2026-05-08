@@ -13,6 +13,7 @@ import { CmfPipelineHeader } from './CmfPipelineHeader'
 import { CmfPacketSelector } from './CmfPacketSelector'
 import { CmfImportDialog } from './CmfImportDialog'
 import { CmfClownLibraryDialog } from './CmfClownLibraryDialog'
+import { CmfClownLibraryPill } from './CmfClownLibraryPill'
 import { CmfMembersDialog } from './CmfMembersDialog'
 import { CmfPresenceStack } from './CmfPresenceStack'
 import { CmfActivityDrawer } from './CmfActivityDrawer'
@@ -20,7 +21,6 @@ import { useToast } from '@/components/ui/use-toast'
 import {
   Loader2,
   Wand2,
-  ImageIcon,
   ArrowUpRight,
   AlertTriangle,
   Database,
@@ -172,6 +172,11 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
             activePacketId={activePacketId}
             onSelect={setActivePacketId}
           />
+          {/* The clown library is workspace-shared — it doesn't belong inside
+              a packet's empty state. Surfacing it here keeps the per-packet
+              flow focused on workbooks and renders, while still letting
+              designers reach references from any state. */}
+          <CmfClownLibraryPill onClick={() => setClownOpen(true)} />
           {activePacketId && (
             <>
               <CmfPresenceStack
@@ -197,10 +202,7 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
 
       {/* Workspace body */}
       {!activePacketId ? (
-        <EmptyState
-          onImportClick={() => setImportOpen(true)}
-          onClownClick={() => setClownOpen(true)}
-        />
+        <EmptyState onImportClick={() => setImportOpen(true)} />
       ) : isLoading || !packet ? (
         <div className="rounded-2xl border border-border/50 bg-card/30 p-12 flex items-center justify-center text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
@@ -289,13 +291,10 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
 
 /* ─── Empty state ───────────────────────────────────────────────────────── */
 
-function EmptyState({
-  onImportClick,
-  onClownClick,
-}: {
-  onImportClick: () => void
-  onClownClick: () => void
-}) {
+function EmptyState({ onImportClick }: { onImportClick: () => void }) {
+  // The empty state is now strictly about creating a packet. Anything
+  // workspace-wide (clown library, member roster, activity log) lives in
+  // the header pill row above so it's reachable from every state.
   return (
     <div
       className="relative overflow-hidden rounded-2xl border border-dashed border-border/50 bg-card/20 p-10 md:p-14"
@@ -319,10 +318,6 @@ function EmptyState({
           <Button onClick={onImportClick} className="gap-2">
             <Database className="h-4 w-4" />
             Import workbook
-          </Button>
-          <Button onClick={onClownClick} variant="outline" className="gap-2">
-            <ImageIcon className="h-4 w-4" />
-            Manage clowns
           </Button>
         </div>
       </div>

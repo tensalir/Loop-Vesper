@@ -49,14 +49,13 @@ test('getComponentLabel falls back to the region key for unknown components', ()
   expect(getComponentLabel('switch2', 'unknown_region')).toBe('unknown_region')
 })
 
-test('storage paths are owner-scoped and contain no path-traversal characters', () => {
+test('per-user storage paths are owner-scoped and contain no path-traversal characters', () => {
   const owner = '00000000-0000-0000-0000-000000000001'
   const packet = '00000000-0000-0000-0000-000000000002'
   const render = '00000000-0000-0000-0000-000000000003'
   const importId = '00000000-0000-0000-0000-000000000004'
 
   const paths = [
-    clownStoragePath(owner, 'switch2-default-aphrodite', 'png'),
     importStoragePath(owner, importId),
     renderStoragePath(owner, packet, render, 'png'),
     packetPdfStoragePath(owner, packet, 'CMF-001234revA_Switch2_CMF_Sage'),
@@ -67,6 +66,21 @@ test('storage paths are owner-scoped and contain no path-traversal characters', 
     expect(p).not.toContain('..')
     expect(p).not.toContain('//')
   }
+})
+
+test('clown storage paths are global, keyed on (productSlug, variantSlug)', () => {
+  expect(clownStoragePath('switch2', 'motorsport-615', 'png')).toBe(
+    'cmf/clowns/switch2/motorsport-615.png'
+  )
+  expect(clownStoragePath('case-aphrodite', '7613-555', 'png')).toBe(
+    'cmf/clowns/case-aphrodite/7613-555.png'
+  )
+  // Path-traversal protection is enforced at the API layer (slug regex);
+  // this assertion documents the structural contract callers depend on.
+  const p = clownStoragePath('switch2', 'default', 'png')
+  expect(p.startsWith('cmf/clowns/')).toBe(true)
+  expect(p).not.toContain('..')
+  expect(p).not.toContain('//')
 })
 
 test('safeFileSlug strips path-traversal and special characters', () => {

@@ -2,23 +2,33 @@
  * Storage path conventions for the CMF flow.
  *
  * All CMF artefacts live under the existing `generated-images` bucket so we
- * inherit its service-role access policy (no anon read/write). Paths are
- * namespaced by ownerId so a leak of one URL never reveals another user's
- * outputs.
+ * inherit its service-role access policy (no anon read/write).
  *
- *   cmf/{ownerId}/clowns/{slug}.{ext}
- *   cmf/{ownerId}/imports/{importId}.xlsx
+ *   cmf/clowns/{productSlug}/{variantSlug}.{ext}      <- shared across users
+ *   cmf/{ownerId}/imports/{importId}.xlsx              <- per-user
  *   cmf/{ownerId}/packets/{packetId}/renders/{renderId}.{ext}
  *   cmf/{ownerId}/packets/{packetId}/{packetId}.pdf
  *
- * Reads always go through `/api/cmf/...` routes that verify ownership before
- * returning the public URL.
+ * Clowns went from per-user to global on 20260508 — the library is a shared
+ * Loop-wide reference now, so paths drop the ownerId segment. Per-packet
+ * outputs stay per-user since they encode private design intent.
  */
 
 export const CMF_STORAGE_BUCKET = 'generated-images'
 
-export function clownStoragePath(ownerId: string, slug: string, ext: string): string {
-  return `cmf/${ownerId}/clowns/${slug}.${ext}`
+/**
+ * Canonical storage path for a clown reference asset.
+ *
+ * Keyed on (productSlug, variantSlug) — the same composite that uniquely
+ * identifies a CmfClownAsset row. Replacing a clown overwrites the file at
+ * the same path, so every consumer always reads the latest geometry.
+ */
+export function clownStoragePath(
+  productSlug: string,
+  variantSlug: string,
+  ext: string
+): string {
+  return `cmf/clowns/${productSlug}/${variantSlug}.${ext}`
 }
 
 export function importStoragePath(ownerId: string, importId: string): string {

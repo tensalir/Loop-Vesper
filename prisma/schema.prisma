@@ -758,12 +758,17 @@ model HeadlessRateBucket {
 //
 // CmfClownAsset is the catalog of "clown" reference renders — the multi-coloured
 // PNGs used to identify which surface of a product takes which Pantone, e.g.
-// `aphrodite clown 2.png` for Switch 2 Aphrodite. They are owned per-Profile
-// so designers can upload their own without polluting the shared library.
+// `aphrodite clown 2.png` for Switch 2 Aphrodite.
+//
+// As of 20260508 these are SHARED across the workspace: there is one canonical
+// clown per (productSlug, variantSlug). `ownerId` is kept as a nullable audit
+// column ("uploaded by") so we know who contributed each asset, but read /
+// write access is no longer scoped by it. The seed script writes rows with
+// `ownerId = NULL`.
 
 model CmfClownAsset {
   id          String   @id @default(uuid()) @db.Uuid
-  ownerId     String   @map("owner_id") @db.Uuid
+  ownerId     String?  @map("owner_id") @db.Uuid
   // Product slug ("switch2", "engage2", "aphrodite", "case-aphrodite") so a
   // schema row can resolve a clown by referring to the slug instead of a UUID.
   productSlug String   @map("product_slug")
@@ -783,10 +788,10 @@ model CmfClownAsset {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  owner   Profile     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner   Profile?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   renders CmfRender[]
 
-  @@unique([ownerId, productSlug, variantSlug])
+  @@unique([productSlug, variantSlug])
   @@index([ownerId])
   @@index([productSlug])
   @@map("cmf_clown_assets")

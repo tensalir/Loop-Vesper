@@ -64,7 +64,8 @@ export interface CmfPacket {
 
 export interface CmfClownAsset {
   id: string
-  ownerId: string
+  /** Null for canonical / seeded clowns; otherwise the contributor's profile. */
+  ownerId: string | null
   productSlug: string
   variantSlug: string
   label: string
@@ -194,6 +195,55 @@ export function useUploadClown() {
       }
       const data = await res.json()
       return data.asset as CmfClownAsset
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cmf', 'clowns'] })
+    },
+  })
+}
+
+export interface CmfClownBulkResult {
+  zip: string
+  inner: string
+  productSlug: string | null
+  variantSlug: string | null
+  status: 'uploaded' | 'replaced' | 'skipped' | 'error'
+  message?: string
+}
+
+export interface CmfClownBulkResponse {
+  summary: {
+    uploaded: number
+    replaced: number
+    skipped: number
+    total: number
+  }
+  results: CmfClownBulkResult[]
+}
+
+/**
+ * Bulk-upload one or more "Clown Renders" zip files. The server uses the
+ * canonical zip→product mapping (`clown-zip-mapping.ts`) so the same
+ * payload that seeds production locally can be fed by a designer
+ * dragging zips into the dialog.
+ */
+export function useUploadClownsBulk() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: { files: File[] }): Promise<CmfClownBulkResponse> => {
+      const formData = new FormData()
+      for (const file of args.files) {
+        formData.append('files', file)
+      }
+      const res = await fetch('/api/cmf/clowns/bulk', {
+        method: 'POST',
+        body: formData,
+      })
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        throw new Error(error.error || 'Bulk upload failed')
+      }
+      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cmf', 'clowns'] })
