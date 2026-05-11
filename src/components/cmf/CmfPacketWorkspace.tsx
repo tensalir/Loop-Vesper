@@ -17,7 +17,8 @@
  * header carries flow context, the rows do the work.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   CmfPacket,
   useCmfClowns,
@@ -52,7 +53,26 @@ interface CmfPacketWorkspaceProps {
 }
 
 export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps) {
-  const [activePacketId, setActivePacketId] = useState<string | null>(initialPacketId)
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [activePacketId, setActivePacketIdState] = useState<string | null>(initialPacketId)
+
+  // Wrap the setter so every selection change mirrors to the URL via
+  // `?packet=<id>`. Using `router.replace` rather than `push` keeps the
+  // back button useful (it goes to the previous page, not the previous
+  // packet selection).
+  const setActivePacketId = useCallback(
+    (next: string | null) => {
+      setActivePacketIdState(next)
+      const params = new URLSearchParams(searchParams?.toString() ?? '')
+      if (next) params.set('packet', next)
+      else params.delete('packet')
+      const query = params.toString()
+      router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false })
+    },
+    [pathname, router, searchParams]
+  )
   const [importOpen, setImportOpen] = useState(false)
   const [clownOpen, setClownOpen] = useState(false)
   const [clownFocusSlug, setClownFocusSlug] = useState<string | null>(null)
@@ -66,8 +86,14 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
   const generatePdf = useGenerateCmfPdf()
   const { toast } = useToast()
 
+  // Keep the workspace in sync with the URL when the user hits back/forward
+  // or pastes a deep link. We compare against the current state to avoid an
+  // infinite ping-pong with `setActivePacketId` (which writes the URL).
   useEffect(() => {
-    if (initialPacketId) setActivePacketId(initialPacketId)
+    if (initialPacketId !== activePacketId) {
+      setActivePacketIdState(initialPacketId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPacketId])
 
   const readiness = useMemo(() => summarisePacketReadiness(packet), [packet])

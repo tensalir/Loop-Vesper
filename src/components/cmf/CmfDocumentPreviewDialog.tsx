@@ -18,7 +18,7 @@
  * rationale for what is and is not editable here.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CmfDocumentDraft,
   CmfPacket,
@@ -43,10 +43,20 @@ import {
   ArrowUp,
   Check,
   CheckCircle2,
+  Cloud,
+  CloudOff,
   Loader2,
-  Save,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+const AUTOSAVE_DEBOUNCE_MS = 1500
+
+type AutosaveState =
+  | { kind: 'idle' }
+  | { kind: 'dirty' }
+  | { kind: 'saving' }
+  | { kind: 'saved'; at: number }
+  | { kind: 'error'; message: string }
 
 interface CmfDocumentPreviewDialogProps {
   open: boolean
@@ -73,17 +83,100 @@ export function CmfDocumentPreviewDialog({
   const { toast } = useToast()
 
   const [draft, setDraft] = useState<DraftState>(() => packet?.documentDraft ?? {})
+  const [autosave, setAutosave] = useState<AutosaveState>({ kind: 'idle' })
+  /**
+   * Last snapshot we've persisted to the server (or that the server gave us
+   * on open). Used to compute "is this dirty?" and to skip noop saves. Kept
+   * as a JSON string for cheap equality.
+   */
+  const persistedSnapshotRef = useRef<string>(
+    JSON.stringify(packet?.documentDraft ?? {})
+  )
+  /** Track the packet identity so we don't trigger autosave on dialog open. */
+  const lastPacketIdRef = useRef<string | null>(null)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Reset local state whenever the dialog opens or the underlying packet
-  // changes. Edits are local until the designer hits "Save layout".
+  // changes. Edits autosave; the snapshot starts from whatever the server
+  // currently holds.
   useEffect(() => {
-    if (open) setDraft(packet?.documentDraft ?? {})
+    if (!open) return
+    const fresh = packet?.documentDraft ?? {}
+    setDraft(fresh)
+    persistedSnapshotRef.current = JSON.stringify(fresh)
+    lastPacketIdRef.current = packet?.id ?? null
+    setAutosave({ kind: 'idle' })
   }, [open, packet?.id, packet?.documentDraft])
 
   const pages = useMemo(() => resolvePages(packet, draft), [packet, draft])
 
   const skuApproved = pages.filter((p) => p.imageSource === 'approved' && p.imageUrl).length
   const skuTotal = pages.length
+
+  /**
+   * Persist the current draft right now (skip debounce). Returns the promise
+   * so callers (e.g. the close handler) can await before tearing down the
+   * dialog. Never throws; failures land in the autosave state.
+   */
+  const flushDraft = useCallback(async () => {
+    if (!packet) return
+    const snapshot = JSON.stringify(draft)
+    if (snapshot === persistedSnapshotRef.current) return
+    setAutosave({ kind: 'saving' })
+    try {
+      await updateDraft.mutateAsync({ packetId: packet.id, documentDraft: draft })
+      persistedSnapshotRef.current = snapshot
+      setAutosave({ kind: 'saved', at: Date.now() })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Autosave failed'
+      setAutosave({ kind: 'error', message })
+    }
+  }, [packet, draft, updateDraft])
+
+  // Debounced autosave: any change to `draft` schedules a save 1.5s later;
+  // typing rapidly only fires one save at the end. We intentionally skip the
+  // very first render after the dialog opens so we don't autosave the
+  // freshly-loaded server state right back at it.
+  useEffect(() => {
+    if (!packet) return
+    if (lastPacketIdRef.current !== packet.id) {
+      // Dialog just opened or switched packets — let the open-effect prime
+      // the snapshot before we start watching for diffs.
+      lastPacketIdRef.current = packet.id
+      return
+    }
+    const snapshot = JSON.stringify(draft)
+    if (snapshot === persistedSnapshotRef.current) {
+      if (autosave.kind === 'dirty') setAutosave({ kind: 'idle' })
+      return
+    }
+    setAutosave({ kind: 'dirty' })
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    debounceTimerRef.current = setTimeout(() => {
+      void flushDraft()
+    }, AUTOSAVE_DEBOUNCE_MS)
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, packet?.id])
+
+  // Flush before the dialog closes so a quick edit + close cycle never loses
+  // work. Awaits the in-flight save so the dialog only tears down once the
+  // server has acknowledged.
+  const handleOpenChange = useCallback(
+    async (next: boolean) => {
+      if (!next) {
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current)
+          debounceTimerRef.current = null
+        }
+        await flushDraft()
+      }
+      onOpenChange(next)
+    },
+    [flushDraft, onOpenChange]
+  )
 
   function patchDraft(patch: Partial<DraftState>) {
     setDraft((prev) => ({ ...prev, ...patch }))
@@ -117,15 +210,12 @@ export function CmfDocumentPreviewDialog({
     })
   }
 
-  async function handleSave() {
-    if (!packet) return
-    try {
-      await updateDraft.mutateAsync({ packetId: packet.id, documentDraft: draft })
-      toast({ title: 'Layout saved' })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Save failed'
-      toast({ title: 'Save failed', description: message })
+  async function handleManualSave() {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+      debounceTimerRef.current = null
     }
+    await flushDraft()
   }
 
   async function approveAttempt(packetId: string, attemptId: string) {
@@ -139,15 +229,20 @@ export function CmfDocumentPreviewDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-6xl w-[95vw] max-h-[92vh] overflow-y-auto p-0">
         <DialogHeader className="p-5 border-b border-border/40">
-          <DialogTitle>HTML preview · CMF packet</DialogTitle>
-          <DialogDescription>
-            Preview the final 16:9 pages, tweak labels and ordering, approve
-            the best attempt per SKU, then export. The workbook is still the
-            source of truth for component spec.
-          </DialogDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <DialogTitle>HTML preview · CMF packet</DialogTitle>
+              <DialogDescription>
+                Preview the final 16:9 pages, tweak labels and ordering, approve
+                the best attempt per SKU, then export. Edits autosave; the
+                workbook is still the source of truth for component spec.
+              </DialogDescription>
+            </div>
+            <AutosaveBadge state={autosave} />
+          </div>
         </DialogHeader>
 
         {!packet ? (
@@ -231,20 +326,27 @@ export function CmfDocumentPreviewDialog({
               </Field>
 
               <div className="pt-2 border-t border-border/40 space-y-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full gap-1.5"
-                  onClick={handleSave}
-                  disabled={updateDraft.isPending}
-                >
-                  {updateDraft.isPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Save className="h-3.5 w-3.5" />
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground/80">
+                  <span>Edits autosave</span>
+                  {autosave.kind === 'error' && (
+                    <button
+                      type="button"
+                      onClick={handleManualSave}
+                      className="text-destructive hover:underline"
+                    >
+                      Retry save
+                    </button>
                   )}
-                  Save layout
-                </Button>
+                  {autosave.kind === 'dirty' && (
+                    <button
+                      type="button"
+                      onClick={handleManualSave}
+                      className="hover:text-foreground hover:underline"
+                    >
+                      Save now
+                    </button>
+                  )}
+                </div>
                 <Button
                   size="sm"
                   className="w-full gap-1.5"
@@ -636,4 +738,71 @@ function Field({
       {children}
     </div>
   )
+}
+
+function AutosaveBadge({ state }: { state: AutosaveState }) {
+  const [tick, setTick] = useState(0)
+  // Re-render the "Saved 14s ago" timestamp every 15s so it stays accurate
+  // without forcing the parent to subscribe to a clock.
+  useEffect(() => {
+    if (state.kind !== 'saved') return
+    const id = setInterval(() => setTick((v) => v + 1), 15_000)
+    return () => clearInterval(id)
+  }, [state.kind])
+  void tick
+
+  if (state.kind === 'idle') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-background/60 px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground/70 flex-shrink-0">
+        <Cloud className="h-3 w-3" />
+        Up to date
+      </span>
+    )
+  }
+  if (state.kind === 'dirty') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-amber-700 dark:text-amber-200 flex-shrink-0">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+        Unsaved edits
+      </span>
+    )
+  }
+  if (state.kind === 'saving') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-primary flex-shrink-0">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Saving…
+      </span>
+    )
+  }
+  if (state.kind === 'saved') {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-200 flex-shrink-0"
+        title={new Date(state.at).toLocaleString()}
+      >
+        <Check className="h-3 w-3" />
+        Saved {formatAgo(state.at)}
+      </span>
+    )
+  }
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-destructive flex-shrink-0"
+      title={state.message}
+    >
+      <CloudOff className="h-3 w-3" />
+      Autosave failed
+    </span>
+  )
+}
+
+function formatAgo(timestamp: number): string {
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
+  if (seconds < 5) return 'just now'
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  return `${hours}h ago`
 }
