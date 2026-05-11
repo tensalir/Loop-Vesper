@@ -838,6 +838,12 @@ model CmfPacket {
   pdfPath     String?  @map("pdf_path")
   pdfError    String?  @map("pdf_error") @db.Text
   generatedAt DateTime? @map("generated_at")
+  // Editable HTML/PDF document overrides — banner copy, ordering, palette
+  // overrides, packet notes. The workbook stays the source of truth for
+  // component spec; this object only carries layout / labelling tweaks the
+  // designer makes inside the preview before export. Shape validated at the
+  // application layer; see src/lib/cmf/document.ts.
+  documentDraft Json?   @map("document_draft")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
@@ -884,11 +890,18 @@ model CmfRender {
   modelId        String?  @map("model_id")
   basePrompt     String?  @db.Text @map("base_prompt")
   enhancedPrompt String?  @db.Text @map("enhanced_prompt")
-  // Final rendered image stored in Supabase Storage.
+  // Selected / approved attempt image. Mirrored from the approved
+  // CmfRenderAttempt for backwards-compatibility — every read path that
+  // previously consulted `renderUrl` keeps working without code changes,
+  // while the attempt history lives on `cmf_render_attempts`.
   renderUrl      String?  @map("render_url")
   renderPath     String?  @map("render_path")
   renderWidth    Int?     @map("render_width")
   renderHeight   Int?     @map("render_height")
+  /// The currently-selected attempt for this SKU (== approved, except when
+  /// a designer explicitly picks a draft override). Nullable until at least
+  /// one attempt completes.
+  selectedAttemptId String?  @map("selected_attempt_id") @db.Uuid
   // Status / job control.
   status         String   @default("draft") // 'draft' | 'queued' | 'rendering' | 'ready' | 'failed'
   error          String?  @db.Text
@@ -904,12 +917,71 @@ model CmfRender {
   owner      Profile        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   clownAsset CmfClownAsset? @relation(fields: [clownAssetId], references: [id], onDelete: SetNull)
   comments   CmfComment[]
+  renderAttempts CmfRenderAttempt[] @relation("CmfRenderAttempt_render")
+  selectedAttempt CmfRenderAttempt? @relation("CmfRender_selectedAttempt", fields: [selectedAttemptId], references: [id], onDelete: SetNull)
 
   @@index([packetId])
   @@index([packetId, sortOrder])
   @@index([ownerId])
   @@index([status])
   @@map("cmf_renders")
+}
+
+// Individual Nano Banana render attempts per SKU.
+//
+// One CmfRender ("SKU row") fans out to many CmfRenderAttempts. The skill
+// recommends 3–5 attempts per SKU so the designer can pick the best one.
+// Approval is a separate state from completion: a completed attempt is
+// just "ready to inspect"; approval makes it the canonical image used by
+// the HTML preview and PDF export.
+
+model CmfRenderAttempt {
+  id            String   @id @default(uuid()) @db.Uuid
+  renderId      String   @map("render_id") @db.Uuid
+  /// Monotonic per-SKU attempt counter (1, 2, 3, ...). Stable for UX so
+  /// "Attempt 2" keeps meaning "Attempt 2" after archive/restore.
+  attemptNumber Int      @map("attempt_number")
+  /// Lifecycle of the *generation*: 'queued' | 'rendering' | 'ready' | 'failed'.
+  status        String   @default("queued")
+  /// Designer's judgement on the attempt:
+  ///   'pending'   — completed, awaiting review (default for fresh attempts)
+  ///   'approved'  — the canonical image for this SKU (one per SKU)
+  ///   'archived'  — rejected by review; kept for history, not used in export
+  approvalStatus String  @default("pending") @map("approval_status")
+
+  basePrompt     String?  @map("base_prompt") @db.Text
+  enhancedPrompt String?  @map("enhanced_prompt") @db.Text
+  modelId        String?  @map("model_id")
+
+  imageUrl       String?  @map("image_url")
+  imagePath      String?  @map("image_path")
+  imageWidth     Int?     @map("image_width")
+  imageHeight    Int?     @map("image_height")
+
+  error          String?  @db.Text
+  costUsd        Decimal? @map("cost_usd") @db.Decimal(10, 6)
+
+  /// Who triggered the generation (for the activity log / audit trail).
+  triggeredBy    String?  @map("triggered_by") @db.Uuid
+  /// Who approved this attempt (null until approval). Used by the activity
+  /// timeline; only the latest approval is canonical, history stays.
+  approvedBy     String?  @map("approved_by") @db.Uuid
+  approvedAt     DateTime? @map("approved_at")
+  archivedAt     DateTime? @map("archived_at")
+
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  render         CmfRender @relation("CmfRenderAttempt_render", fields: [renderId], references: [id], onDelete: Cascade)
+  selectedFor    CmfRender[] @relation("CmfRender_selectedAttempt")
+
+  @@unique([renderId, attemptNumber])
+  @@index([renderId])
+  @@index([renderId, approvalStatus])
+  @@index([renderId, createdAt(sort: Desc)])
+  @@map("cmf_render_attempts")
 }
 
 // ── CMF Collaboration ─────────────────────────────────────────────────────
@@ -979,6 +1051,8 @@ model CmfComment {
 //   'imported_workbook' | 'created_packet' | 'edited_sku' | 'rendered_sku'
 //   | 'render_failed'    | 'pdf_generated' | 'pdf_failed'  | 'commented'
 //   | 'comment_resolved' | 'invited_member'| 'role_changed'| 'removed_member'
+//   | 'attempt_approved' | 'attempt_archived' | 'attempt_restored'
+//   | 'document_draft_saved'
 
 model CmfActivity {
   id        String   @id @default(uuid()) @db.Uuid

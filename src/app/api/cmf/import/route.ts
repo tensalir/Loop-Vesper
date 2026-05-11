@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { uploadBase64ToStorage } from '@/lib/supabase/storage'
 import { CMF_STORAGE_BUCKET, importStoragePath } from '@/lib/cmf/storage'
-import { parseCmfWorkbook, XlsxParseError } from '@/lib/cmf/xlsx'
-import { normaliseRawRows } from '@/lib/cmf/schema'
+import { getFlatRawRows, parseCmfWorkbook, XlsxParseError } from '@/lib/cmf/xlsx'
+import {
+  normaliseParsedSheets,
+  normaliseRawRows,
+  type NormalizationResult,
+} from '@/lib/cmf/schema'
 import {
   createPacketFromRows,
   logCmfActivity,
@@ -24,9 +28,8 @@ const MAX_WORKBOOK_BYTES = 10 * 1024 * 1024 // 10 MB
  *   - packetName, cmfCode, notes (optional)
  *   - createPacket=true to immediately materialise an editable packet
  *
- * Response:
- *   - import: {id, status, errors, parsedRows}
- *   - packet (if createPacket=true): {id, name, renders: [...]}
+ * Accepts both the transposed CMF schema (one tab per product, columns as
+ * SKUs) and the legacy flat template (single sheet, rows as SKUs).
  */
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedProfile()
@@ -74,25 +77,42 @@ export async function POST(request: NextRequest) {
     throw err
   }
 
-  const normalised = normaliseRawRows(parsed.rows)
+  // Route to the right normaliser. The transposed format keeps rich sheet
+  // metadata (collection, groups) we want to thread into the import record.
+  let normalised: NormalizationResult
+  let parsedRowsForRecord: unknown
+  if (parsed.format === 'transposed') {
+    normalised = normaliseParsedSheets(parsed.sheets)
+    parsedRowsForRecord = {
+      format: 'transposed',
+      sheets: parsed.sheets,
+      unmappedSheets: parsed.unmappedSheets,
+    }
+  } else {
+    const rawRows = getFlatRawRows(buffer)
+    normalised = normaliseRawRows(rawRows)
+    parsedRowsForRecord = {
+      format: 'flat',
+      rows: normalised.rows,
+    }
+  }
 
-  // Persist the import record. We always store the raw rows so designers can
-  // re-validate after we evolve the schema, and the parsed rows for fast
-  // packet creation.
   const importRecord = await prisma.cmfImport.create({
     data: {
       ownerId: auth.profile.userId,
       fileName: file.name,
-      rawRows: parsed.rows as unknown as object,
-      parsedRows: normalised.rows as unknown as object,
+      rawRows:
+        parsed.format === 'transposed'
+          ? ({ sheets: parsed.sheets.map((s) => ({ sheetName: s.sheetName, skuCount: s.skus.length })) } as object)
+          : ({ rows: getFlatRawRows(buffer) } as object),
+      parsedRows: parsedRowsForRecord as object,
       status: normalised.errors.length > 0 ? 'failed' : 'validated',
       errors: normalised.errors.length > 0 ? (normalised.errors as unknown as object) : undefined,
       rowCount: normalised.rows.length,
     },
   })
 
-  // Upload the original .xlsx for traceability. Best-effort — never block
-  // the API call on the upload.
+  // Upload the original .xlsx for traceability. Best-effort.
   try {
     const dataUrl = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${buffer.toString('base64')}`
     const path = importStoragePath(auth.profile.userId, importRecord.id)
@@ -113,11 +133,12 @@ export async function POST(request: NextRequest) {
         errors: normalised.errors,
         rowCount: importRecord.rowCount,
         parsedRows: normalised.rows,
+        format: parsed.format,
+        unmappedSheets: parsed.format === 'transposed' ? parsed.unmappedSheets : [],
       },
     })
   }
 
-  // Immediately build a packet so the designer goes straight to render setup.
   const { packet, renders } = await createPacketFromRows({
     ownerId: auth.profile.userId,
     importId: importRecord.id,
@@ -136,6 +157,7 @@ export async function POST(request: NextRequest) {
       fileName: file.name,
       rows: normalised.rows.length,
       errors: normalised.errors.length,
+      format: parsed.format,
     },
   })
 
@@ -145,6 +167,8 @@ export async function POST(request: NextRequest) {
       status: importRecord.status,
       errors: normalised.errors,
       rowCount: importRecord.rowCount,
+      format: parsed.format,
+      unmappedSheets: parsed.format === 'transposed' ? parsed.unmappedSheets : [],
     },
     packet: {
       id: packet.id,

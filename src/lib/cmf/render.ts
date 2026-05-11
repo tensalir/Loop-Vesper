@@ -2,23 +2,26 @@
  * CMF render service.
  *
  * Given a `CmfRender` row id, this service:
- *   1. Builds the deterministic CMF recolour prompt from the row.
- *   2. Looks up the clown reference image (uploaded asset or product render).
- *   3. Asks `enhancePrompt` to polish the prompt for Nano Banana–style models.
- *   4. Calls the model adapter through the existing Vesper pattern.
- *   5. Persists the rendered image into Supabase Storage and updates the row.
+ *   1. Creates a fresh `CmfRenderAttempt` row tied to that SKU.
+ *   2. Builds the deterministic CMF recolour prompt from the row.
+ *   3. Looks up the clown reference image (uploaded asset or product render).
+ *   4. Asks `enhancePrompt` to polish the prompt for Nano Banana–style models.
+ *   5. Calls the model adapter through the existing Vesper pattern.
+ *   6. Persists the rendered image into Supabase Storage and updates the
+ *      attempt row.
+ *   7. Mirrors the attempt onto the parent `CmfRender` row so legacy
+ *      consumers (PDF, listing endpoints) keep reading `renderUrl` as
+ *      "current SKU image". The render's `selectedAttemptId` always points
+ *      at the canonical attempt (newest by default; approval moves it).
  *
- * The implementation closely mirrors `src/lib/headless/generate-asset.ts` so
- * we get the same provider quirks (timeouts, base64 vs URL outputs) without
- * duplicating model adapter logic.
+ * Multiple attempts per SKU are intentional: Nano Banana is variable, so
+ * the skill recommends 3–5 attempts and lets the designer approve one.
  */
 
 import { prisma } from '@/lib/prisma'
 import { getModel, getModelConfig } from '@/lib/models/registry'
 import { enhancePrompt } from '@/lib/prompts/enhance'
-import {
-  downloadReferenceImageAsDataUrl,
-} from '@/lib/reference-images'
+import { downloadReferenceImageAsDataUrl } from '@/lib/reference-images'
 import {
   uploadBase64ToStorage,
   uploadUrlToStorage,
@@ -52,24 +55,15 @@ export class CmfRenderError extends Error {
 
 interface RenderArgs {
   renderId: string
-  /**
-   * The user that triggered the render. Used only for logs / future
-   * attribution; does NOT scope storage paths or clown lookups (those use
-   * the render's `ownerId`, i.e. the packet owner, so files stay in one
-   * folder when collaborators trigger renders).
-   */
   triggeredByUserId?: string
 }
 
 interface ResolvedReferences {
-  /** Base64 data URLs ready for the model adapter. */
   dataUrls: string[]
-  /** First reference's URL kept for prompt enhancement. */
   primaryDataUrl: string | null
 }
 
 async function resolveRowReferences(args: {
-  ownerId: string
   productSlug: string
   variantSlug: string
   clownAssetId: string | null
@@ -77,20 +71,12 @@ async function resolveRowReferences(args: {
   const dataUrls: string[] = []
 
   if (args.clownAssetId) {
-    // Clowns are now a shared workspace library (20260508), so we no longer
-    // restrict by ownerId here. The render still records `args.ownerId` for
-    // its own audit trail.
     const asset = await prisma.cmfClownAsset.findUnique({
       where: { id: args.clownAssetId },
     })
-    if (!asset) {
-      throw new CmfRenderError('reference', 'Linked clown asset is missing')
-    }
-    const dataUrl = await downloadReferenceImageAsDataUrl(asset.imageUrl)
-    dataUrls.push(dataUrl)
+    if (!asset) throw new CmfRenderError('reference', 'Linked clown asset is missing')
+    dataUrls.push(await downloadReferenceImageAsDataUrl(asset.imageUrl))
   } else {
-    // Fallback: pick the canonical clown for this (productSlug, variantSlug),
-    // shared across the workspace.
     const fallback = await prisma.cmfClownAsset.findUnique({
       where: {
         productSlug_variantSlug: {
@@ -100,19 +86,14 @@ async function resolveRowReferences(args: {
       },
     })
     if (fallback) {
-      const dataUrl = await downloadReferenceImageAsDataUrl(fallback.imageUrl)
-      dataUrls.push(dataUrl)
+      dataUrls.push(await downloadReferenceImageAsDataUrl(fallback.imageUrl))
     } else {
-      // Second-chance fallback: any clown for this product (e.g. designer
-      // hasn't picked the variant yet, just hit "Render"). Better than
-      // failing outright.
       const productFallback = await prisma.cmfClownAsset.findFirst({
         where: { productSlug: args.productSlug },
         orderBy: { variantSlug: 'asc' },
       })
       if (productFallback) {
-        const dataUrl = await downloadReferenceImageAsDataUrl(productFallback.imageUrl)
-        dataUrls.push(dataUrl)
+        dataUrls.push(await downloadReferenceImageAsDataUrl(productFallback.imageUrl))
       }
     }
   }
@@ -123,7 +104,6 @@ async function resolveRowReferences(args: {
       'No clown reference image is available. Upload a clown PNG for this product before rendering.'
     )
   }
-
   return { dataUrls, primaryDataUrl: dataUrls[0] ?? null }
 }
 
@@ -138,21 +118,15 @@ function ensureSupportedModel(modelId: string): string {
 }
 
 /**
- * Run a CMF render for a single SKU row. Updates the database row to reflect
- * progress and final state. Returns the updated render record.
+ * Run a single CMF render attempt for one SKU. Creates and updates a
+ * `CmfRenderAttempt` row, and mirrors the latest result onto the parent
+ * `CmfRender` for backward compatibility with PDF / listing consumers.
  *
- * Access checks are the caller's responsibility — the route handler should
- * have already verified the user can edit this render before calling here.
+ * The caller is responsible for access checks before invoking this.
  */
-export async function runCmfRender({ renderId }: RenderArgs) {
-  const render = await prisma.cmfRender.findUnique({
-    where: { id: renderId },
-  })
-  if (!render) {
-    throw new CmfRenderError('validation', 'Render not found')
-  }
-  // Always operate against the packet owner's storage path / clown library
-  // so files stay namespaced consistently across collaborators.
+export async function runCmfRender({ renderId, triggeredByUserId }: RenderArgs) {
+  const render = await prisma.cmfRender.findUnique({ where: { id: renderId } })
+  if (!render) throw new CmfRenderError('validation', 'Render not found')
   const ownerId = render.ownerId
 
   const product = getCmfProduct(render.productSlug)
@@ -160,8 +134,6 @@ export async function runCmfRender({ renderId }: RenderArgs) {
     throw new CmfRenderError('validation', `Unknown product slug ${render.productSlug}`)
   }
 
-  // Reconstruct a typed row for the prompt builder. We trust the data we
-  // wrote at packet-creation time, so we don't re-validate with Zod here.
   const row: CmfSkuRow = {
     label: render.label,
     productSlug: render.productSlug,
@@ -172,7 +144,6 @@ export async function runCmfRender({ renderId }: RenderArgs) {
     components: (render.componentSpecs as unknown as ComponentSpec[]) ?? [],
     palette: (render.paletteSwatches as unknown as PaletteSwatch[]) ?? [],
   }
-
   if (!row.components || row.components.length === 0) {
     throw new CmfRenderError(
       'validation',
@@ -183,6 +154,30 @@ export async function runCmfRender({ renderId }: RenderArgs) {
   const { basePrompt } = buildCmfPrompt(row)
   const modelId = ensureSupportedModel(render.modelId ?? product.defaultModelId ?? DEFAULT_MODEL_ID)
 
+  // Allocate the next attempt number — monotonic per SKU so attempt 1 stays
+  // attempt 1 even after archiving / restoring.
+  const lastAttempt = await prisma.cmfRenderAttempt.findFirst({
+    where: { renderId },
+    orderBy: { attemptNumber: 'desc' },
+    select: { attemptNumber: true },
+  })
+  const attemptNumber = (lastAttempt?.attemptNumber ?? 0) + 1
+
+  const attempt = await prisma.cmfRenderAttempt.create({
+    data: {
+      renderId,
+      attemptNumber,
+      status: 'rendering',
+      approvalStatus: 'pending',
+      basePrompt,
+      modelId,
+      triggeredBy: triggeredByUserId ?? null,
+      startedAt: new Date(),
+    },
+  })
+
+  // Reflect "currently rendering" on the parent SKU so the workspace can
+  // surface progress without joining attempts everywhere.
   await prisma.cmfRender.update({
     where: { id: renderId },
     data: {
@@ -197,7 +192,6 @@ export async function runCmfRender({ renderId }: RenderArgs) {
 
   try {
     const refs = await resolveRowReferences({
-      ownerId,
       productSlug: render.productSlug,
       variantSlug: render.variantSlug,
       clownAssetId: render.clownAssetId,
@@ -210,18 +204,13 @@ export async function runCmfRender({ renderId }: RenderArgs) {
         modelId,
         referenceImage: refs.primaryDataUrl ?? undefined,
       })
-      if (enhancement.enhancedPrompt) {
-        enhancedPrompt = enhancement.enhancedPrompt
-      }
+      if (enhancement.enhancedPrompt) enhancedPrompt = enhancement.enhancedPrompt
     } catch (err) {
-      // Prompt enhancement is opportunistic — fall back to the base prompt.
       console.warn('[cmf/render] prompt enhancement failed, using base prompt', err)
     }
 
     const adapter = getModel(modelId)
-    if (!adapter) {
-      throw new CmfRenderError('model', `Unknown model ${modelId}`)
-    }
+    if (!adapter) throw new CmfRenderError('model', `Unknown model ${modelId}`)
 
     const config = getModelConfig(modelId)
     const supportsMulti = !!config?.capabilities?.multiImageEditing
@@ -251,47 +240,272 @@ export async function runCmfRender({ renderId }: RenderArgs) {
     ])
 
     if (generation.status !== 'completed' || !generation.outputs?.length) {
-      throw new CmfRenderError(
-        'model',
-        generation.error || 'Model returned no outputs'
-      )
+      throw new CmfRenderError('model', generation.error || 'Model returned no outputs')
     }
 
     const output = generation.outputs[0]
     const ext = output.url.includes('image/png') || output.url.endsWith('.png') ? 'png' : 'jpg'
-    const path = renderStoragePath(ownerId, render.packetId, renderId, ext)
+    // Storage path keys each attempt by id so concurrent attempts don't
+    // overwrite each other's images.
+    const path = renderStoragePath(ownerId, render.packetId, `${renderId}-attempt-${attempt.id}`, ext)
     const persistedUrl = output.url.startsWith('data:')
       ? await uploadBase64ToStorage(output.url, CMF_STORAGE_BUCKET, path)
       : await uploadUrlToStorage(output.url, CMF_STORAGE_BUCKET, path)
 
     const perImage = config?.pricing?.perImage ?? null
 
+    const completedAttempt = await prisma.cmfRenderAttempt.update({
+      where: { id: attempt.id },
+      data: {
+        status: 'ready',
+        enhancedPrompt,
+        imageUrl: persistedUrl,
+        imagePath: path,
+        imageWidth: output.width ?? null,
+        imageHeight: output.height ?? null,
+        completedAt: new Date(),
+        costUsd: perImage,
+      },
+    })
+
+    // Mirror the latest attempt onto the parent SKU. Selection rule:
+    //  - If the SKU already has an approved attempt, keep that as the
+    //    selected/visible image (do not silently overwrite an approval).
+    //  - Otherwise the freshest "ready" attempt becomes the selected image.
+    const hasApproved = await prisma.cmfRenderAttempt.findFirst({
+      where: { renderId, approvalStatus: 'approved' },
+      select: { id: true, imageUrl: true, imagePath: true, imageWidth: true, imageHeight: true },
+    })
+
+    const target = hasApproved ?? completedAttempt
     const updated = await prisma.cmfRender.update({
       where: { id: renderId },
       data: {
         status: 'ready',
-        renderUrl: persistedUrl,
-        renderPath: path,
-        renderWidth: output.width ?? null,
-        renderHeight: output.height ?? null,
+        renderUrl: target.imageUrl ?? null,
+        renderPath: target.imagePath ?? null,
+        renderWidth: target.imageWidth ?? null,
+        renderHeight: target.imageHeight ?? null,
+        selectedAttemptId: target.id,
         enhancedPrompt,
         completedAt: new Date(),
         costUsd: perImage,
       },
     })
 
-    return updated
+    return { render: updated, attempt: completedAttempt }
   } catch (err) {
     const category = err instanceof CmfRenderError ? err.category : 'model'
     const message = err instanceof Error ? err.message : 'Unknown render error'
-    await prisma.cmfRender.update({
-      where: { id: renderId },
+
+    await prisma.cmfRenderAttempt.update({
+      where: { id: attempt.id },
       data: {
         status: 'failed',
         error: `[${category}] ${message}`,
         completedAt: new Date(),
       },
     })
+
+    // If this was the very first attempt for the SKU and it failed, mark
+    // the parent SKU failed too so the workspace surfaces the error.
+    // Otherwise keep the SKU on its previous good state — designers expect
+    // a re-run to fail without losing their approved image.
+    const successfulAttempts = await prisma.cmfRenderAttempt.count({
+      where: { renderId, status: 'ready' },
+    })
+    if (successfulAttempts === 0) {
+      await prisma.cmfRender.update({
+        where: { id: renderId },
+        data: {
+          status: 'failed',
+          error: `[${category}] ${message}`,
+          completedAt: new Date(),
+        },
+      })
+    } else {
+      // Clear the transient rendering state but keep the prior image.
+      await prisma.cmfRender.update({
+        where: { id: renderId },
+        data: {
+          status: 'ready',
+          error: `[${category}] ${message}`,
+        },
+      })
+    }
+
     throw err
   }
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Approval flow
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export class CmfAttemptError extends Error {
+  category: 'validation' | 'forbidden'
+  constructor(category: CmfAttemptError['category'], message: string) {
+    super(message)
+    this.category = category
+    this.name = 'CmfAttemptError'
+  }
+}
+
+/**
+ * Approve one attempt as the canonical image for its SKU. Any previously
+ * approved attempt for the same SKU drops back to "pending" — only ever
+ * exactly one approved attempt per SKU.
+ */
+export async function approveCmfAttempt(args: {
+  attemptId: string
+  userId: string
+}) {
+  const attempt = await prisma.cmfRenderAttempt.findUnique({
+    where: { id: args.attemptId },
+  })
+  if (!attempt) throw new CmfAttemptError('validation', 'Attempt not found')
+  if (attempt.status !== 'ready') {
+    throw new CmfAttemptError(
+      'validation',
+      'Only completed attempts can be approved.'
+    )
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await tx.cmfRenderAttempt.updateMany({
+      where: {
+        renderId: attempt.renderId,
+        approvalStatus: 'approved',
+        id: { not: attempt.id },
+      },
+      data: { approvalStatus: 'pending', approvedAt: null, approvedBy: null },
+    })
+
+    const approved = await tx.cmfRenderAttempt.update({
+      where: { id: attempt.id },
+      data: {
+        approvalStatus: 'approved',
+        approvedAt: new Date(),
+        approvedBy: args.userId,
+        archivedAt: null,
+      },
+    })
+
+    const updatedRender = await tx.cmfRender.update({
+      where: { id: attempt.renderId },
+      data: {
+        selectedAttemptId: approved.id,
+        renderUrl: approved.imageUrl ?? null,
+        renderPath: approved.imagePath ?? null,
+        renderWidth: approved.imageWidth ?? null,
+        renderHeight: approved.imageHeight ?? null,
+        status: 'ready',
+      },
+    })
+
+    return { attempt: approved, render: updatedRender }
+  })
+}
+
+/**
+ * Archive an attempt — soft-delete that keeps the image around for history
+ * but hides it from the gallery's default view. Archiving the currently
+ * selected attempt also picks the next-best attempt as the new selection
+ * (most-recently-ready, falling back to nothing).
+ */
+export async function archiveCmfAttempt(args: { attemptId: string }) {
+  const attempt = await prisma.cmfRenderAttempt.findUnique({
+    where: { id: args.attemptId },
+  })
+  if (!attempt) throw new CmfAttemptError('validation', 'Attempt not found')
+
+  return prisma.$transaction(async (tx) => {
+    const archived = await tx.cmfRenderAttempt.update({
+      where: { id: attempt.id },
+      data: {
+        approvalStatus: 'archived',
+        archivedAt: new Date(),
+        approvedAt: null,
+        approvedBy: null,
+      },
+    })
+
+    // Re-pick the selected attempt if we just archived the canonical one.
+    const render = await tx.cmfRender.findUnique({
+      where: { id: attempt.renderId },
+      select: { selectedAttemptId: true },
+    })
+    if (render?.selectedAttemptId !== attempt.id) {
+      return { attempt: archived }
+    }
+
+    const fallback = await tx.cmfRenderAttempt.findFirst({
+      where: {
+        renderId: attempt.renderId,
+        status: 'ready',
+        approvalStatus: { in: ['approved', 'pending'] },
+        id: { not: attempt.id },
+      },
+      orderBy: [
+        { approvalStatus: 'asc' }, // approved comes first alphabetically
+        { completedAt: 'desc' },
+      ],
+    })
+
+    await tx.cmfRender.update({
+      where: { id: attempt.renderId },
+      data: {
+        selectedAttemptId: fallback?.id ?? null,
+        renderUrl: fallback?.imageUrl ?? null,
+        renderPath: fallback?.imagePath ?? null,
+        renderWidth: fallback?.imageWidth ?? null,
+        renderHeight: fallback?.imageHeight ?? null,
+      },
+    })
+
+    return { attempt: archived }
+  })
+}
+
+/**
+ * Restore a previously archived attempt back to "pending". Does not
+ * change the SKU's selected attempt unless the SKU has no selection at all.
+ */
+export async function restoreCmfAttempt(args: { attemptId: string }) {
+  const attempt = await prisma.cmfRenderAttempt.findUnique({
+    where: { id: args.attemptId },
+  })
+  if (!attempt) throw new CmfAttemptError('validation', 'Attempt not found')
+  if (attempt.approvalStatus !== 'archived') {
+    return { attempt }
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const restored = await tx.cmfRenderAttempt.update({
+      where: { id: attempt.id },
+      data: {
+        approvalStatus: 'pending',
+        archivedAt: null,
+      },
+    })
+
+    const render = await tx.cmfRender.findUnique({
+      where: { id: attempt.renderId },
+      select: { selectedAttemptId: true },
+    })
+    if (!render?.selectedAttemptId) {
+      await tx.cmfRender.update({
+        where: { id: attempt.renderId },
+        data: {
+          selectedAttemptId: restored.id,
+          renderUrl: restored.imageUrl ?? null,
+          renderPath: restored.imagePath ?? null,
+          renderWidth: restored.imageWidth ?? null,
+          renderHeight: restored.imageHeight ?? null,
+        },
+      })
+    }
+
+    return { attempt: restored }
+  })
 }

@@ -3,21 +3,38 @@
 import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import type { CmfPacket } from '@/hooks/useCmf'
-import { Check, Loader2, Database, Image as ImageIcon, Wand2, FileText, AlertTriangle } from 'lucide-react'
+import {
+  Check,
+  Loader2,
+  Database,
+  Image as ImageIcon,
+  Wand2,
+  FileText,
+  AlertTriangle,
+  CheckCircle2,
+  LayoutTemplate,
+} from 'lucide-react'
 
 /**
  * Horizontal CMF pipeline header.
  *
- * Visualises the four stages of the flow as a connected progress spine:
- *   01 Schema · 02 References · 03 Render · 04 Export
+ * Six stages, matching the encoded `loop-cmf-generation` skill workflow:
+ *   01 Schema · 02 References · 03 Generate · 04 Review · 05 Preview · 06 Export
  *
  * Each stage is a clickable card that exposes the data source / drawer for
- * that step (workbook import, clown library, render-all, generate PDF).
- * Connectors between stages render as gradient SVG paths that subtly
- * animate when the upstream stage transitions to "ready".
+ * that step (workbook import, clown library, bulk render, review gallery,
+ * HTML preview, PDF export). Connectors between stages render as gradient
+ * SVG paths that subtly animate when the upstream stage transitions to
+ * "ready".
  */
 
-export type StageKey = 'schema' | 'references' | 'render' | 'export'
+export type StageKey =
+  | 'schema'
+  | 'references'
+  | 'generate'
+  | 'review'
+  | 'preview'
+  | 'export'
 export type StageStatus = 'pending' | 'active' | 'ready' | 'failed'
 
 interface CmfPipelineHeaderProps {
@@ -25,9 +42,13 @@ interface CmfPipelineHeaderProps {
   /** Counts derived elsewhere (clowns / pending-rows etc.) */
   clownCoverage?: { matched: number; total: number }
   importErrorCount?: number
+  /** Aggregate review readiness — approved / draft-only / missing per SKU. */
+  readiness?: { total: number; approved: number; draftOnly: number; missing: number }
   onSchemaClick: () => void
   onReferencesClick: () => void
-  onRenderClick: () => void
+  onGenerateClick: () => void
+  onReviewClick: () => void
+  onPreviewClick: () => void
   onExportClick: () => void
 }
 
@@ -47,18 +68,22 @@ function deriveStages(args: {
   packet: CmfPacket | null
   clownCoverage?: { matched: number; total: number }
   importErrorCount?: number
+  readiness?: { total: number; approved: number; draftOnly: number; missing: number }
   onSchemaClick: () => void
   onReferencesClick: () => void
-  onRenderClick: () => void
+  onGenerateClick: () => void
+  onReviewClick: () => void
+  onPreviewClick: () => void
   onExportClick: () => void
 }): Stage[] {
-  const { packet, clownCoverage, importErrorCount = 0 } = args
+  const { packet, clownCoverage, importErrorCount = 0, readiness } = args
   const renderCount = packet?.renders.length ?? 0
   const readyRenders = packet?.renders.filter((r) => r.status === 'ready').length ?? 0
-  const renderingRenders = packet?.renders.filter(
-    (r) => r.status === 'rendering' || r.status === 'queued'
-  ).length ?? 0
+  const renderingRenders =
+    packet?.renders.filter((r) => r.status === 'rendering' || r.status === 'queued').length ?? 0
   const failedRenders = packet?.renders.filter((r) => r.status === 'failed').length ?? 0
+  const totalAttempts =
+    packet?.renders.reduce((sum, r) => sum + (r.renderAttempts?.length ?? 0), 0) ?? 0
 
   const schemaStatus: StageStatus = !packet
     ? 'pending'
@@ -74,14 +99,34 @@ function deriveStages(args: {
     ? 'ready'
     : 'active'
 
-  const renderStatus: StageStatus = !packet
+  const generateStatus: StageStatus = !packet
     ? 'pending'
     : failedRenders > 0
     ? 'failed'
     : renderingRenders > 0
     ? 'active'
-    : readyRenders === renderCount && renderCount > 0
+    : totalAttempts === 0
+    ? 'pending'
+    : 'ready'
+
+  const reviewApproved = readiness?.approved ?? 0
+  const reviewTotal = readiness?.total ?? renderCount
+  const reviewStatus: StageStatus = !packet
+    ? 'pending'
+    : reviewTotal === 0
+    ? 'pending'
+    : reviewApproved === reviewTotal
     ? 'ready'
+    : reviewApproved > 0
+    ? 'active'
+    : 'pending'
+
+  const previewStatus: StageStatus = !packet
+    ? 'pending'
+    : reviewApproved > 0
+    ? 'ready'
+    : (readiness?.draftOnly ?? 0) > 0
+    ? 'active'
     : 'pending'
 
   const exportStatus: StageStatus = !packet
@@ -125,25 +170,61 @@ function deriveStages(args: {
       disabled: !packet,
     },
     {
-      key: 'render',
+      key: 'generate',
       number: '03',
-      title: 'Render',
-      hint: 'Nano Banana Pro',
+      title: 'Generate',
+      hint: 'Nano Banana bulk',
       meta: !packet
         ? 'Awaiting workbook'
         : failedRenders > 0
-        ? `${readyRenders}/${renderCount} ready · ${failedRenders} failed`
+        ? `${totalAttempts} attempts · ${failedRenders} failed`
         : renderingRenders > 0
-        ? `${readyRenders}/${renderCount} ready · ${renderingRenders} rendering`
-        : `${readyRenders}/${renderCount} ready`,
-      status: renderStatus,
+        ? `${totalAttempts} attempts · ${renderingRenders} running`
+        : totalAttempts === 0
+        ? 'Run a burst across all SKUs'
+        : `${totalAttempts} ${totalAttempts === 1 ? 'attempt' : 'attempts'}`,
+      status: generateStatus,
       icon: Wand2,
-      onClick: args.onRenderClick,
+      onClick: args.onGenerateClick,
       disabled: !packet,
     },
     {
-      key: 'export',
+      key: 'review',
       number: '04',
+      title: 'Review',
+      hint: 'Approve / archive',
+      meta: !packet
+        ? 'Awaiting attempts'
+        : reviewTotal === 0
+        ? '—'
+        : `${reviewApproved}/${reviewTotal} approved${
+            (readiness?.missing ?? 0) > 0 ? ` · ${readiness?.missing} missing` : ''
+          }`,
+      status: reviewStatus,
+      icon: CheckCircle2,
+      onClick: args.onReviewClick,
+      disabled: !packet || totalAttempts === 0,
+    },
+    {
+      key: 'preview',
+      number: '05',
+      title: 'Preview',
+      hint: 'HTML layout',
+      meta: !packet
+        ? 'Awaiting approvals'
+        : reviewApproved === reviewTotal && reviewTotal > 0
+        ? 'Layout ready · click to open'
+        : reviewApproved > 0
+        ? `${reviewApproved} ready · ${reviewTotal - reviewApproved} pending`
+        : 'Approve a SKU first',
+      status: previewStatus,
+      icon: LayoutTemplate,
+      onClick: args.onPreviewClick,
+      disabled: !packet || readyRenders === 0,
+    },
+    {
+      key: 'export',
+      number: '06',
       title: 'Export',
       hint: 'Packet PDF',
       meta: !packet
@@ -154,13 +235,15 @@ function deriveStages(args: {
         ? 'Export failed'
         : packet.status === 'rendering'
         ? 'Generating PDF…'
-        : readyRenders === 0
-        ? 'Render a SKU first'
+        : reviewApproved === 0
+        ? 'Approve a SKU first'
+        : reviewApproved < reviewTotal
+        ? `${reviewApproved}/${reviewTotal} approved · DRAFT export available`
         : 'Ready to export',
       status: exportStatus,
       icon: FileText,
       onClick: args.onExportClick,
-      disabled: !packet || readyRenders === 0,
+      disabled: !packet || reviewApproved === 0,
     },
   ]
 }

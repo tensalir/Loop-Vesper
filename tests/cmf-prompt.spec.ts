@@ -64,11 +64,12 @@ test('buildCmfPrompt emits a recolour line per supplied component', () => {
 
 test('buildCmfPrompt protects untouched components by name', () => {
   const result = buildCmfPrompt(FIXTURE)
-  // Switch 2 has 4 known components; we only set 2, so the other 2 should
-  // appear in a "Do NOT change" guard line.
+  // Switch 2 has 5 known components in the catalog; we only set 2, so the
+  // other 3 should appear in a "Do NOT change" guard line.
   expect(result.basePrompt).toContain('Do NOT change')
-  expect(result.basePrompt).toContain('Silicone tip')
-  expect(result.basePrompt).toContain('Mode indicator')
+  expect(result.basePrompt).toContain('Eartip (hidden flange)')
+  expect(result.basePrompt).toContain('Nozzle piece + retention ring')
+  expect(result.basePrompt).toContain('Artwork')
 })
 
 test('buildCmfPrompt blocks lifestyle/extra-element drift', () => {

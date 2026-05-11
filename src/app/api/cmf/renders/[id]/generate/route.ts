@@ -41,7 +41,7 @@ export async function POST(
   }
 
   try {
-    const render = await runCmfRender({
+    const result = await runCmfRender({
       renderId: params.id,
       triggeredByUserId: auth.profile.userId,
     })
@@ -51,10 +51,15 @@ export async function POST(
       userId: auth.profile.userId,
       action: 'rendered_sku',
       targetId: params.id,
-      metadata: { label: render.label, status: render.status },
+      metadata: {
+        label: result.render.label,
+        status: result.render.status,
+        attemptId: result.attempt.id,
+        attemptNumber: result.attempt.attemptNumber,
+      },
     })
 
-    return NextResponse.json({ render })
+    return NextResponse.json({ render: result.render, attempt: result.attempt })
   } catch (err) {
     if (err instanceof CmfRenderError) {
       const status =

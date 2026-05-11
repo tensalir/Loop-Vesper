@@ -261,7 +261,16 @@ export async function findAccessiblePacket(packetId: string, userId: string) {
   return prisma.cmfPacket.findUnique({
     where: { id: packetId },
     include: {
-      renders: { orderBy: { sortOrder: 'asc' } },
+      renders: {
+        orderBy: { sortOrder: 'asc' },
+        include: {
+          // Newest attempts first so the gallery defaults to the latest
+          // attempt while still letting designers see history.
+          renderAttempts: {
+            orderBy: { attemptNumber: 'desc' },
+          },
+        },
+      },
     },
   })
 }
@@ -322,6 +331,10 @@ export type CmfActivityAction =
   | 'invited_member'
   | 'role_changed'
   | 'removed_member'
+  | 'attempt_approved'
+  | 'attempt_archived'
+  | 'attempt_restored'
+  | 'document_draft_saved'
 
 /**
  * Append an activity row. Designed to be best-effort — never block the

@@ -1,41 +1,45 @@
 /**
  * Zod schema for normalised CMF rows.
  *
- * The XLSX parser produces an array of header-keyed objects. This schema
- * accepts those raw rows, normalises them (lower-cases keys, trims values,
- * collapses synonyms like "ProductCode" / "Product Code") and produces the
- * typed shape the rest of the pipeline expects.
+ * Two normalisation paths land here:
  *
- * The component spec is intentionally permissive: the workbook may use
- * column names like `pom_ring_pantone` and `pom_ring_material`, or a
- * single dotted-style header `pom_ring.pantone`. Both shapes get folded
- * into a stable list of component specs keyed by region.
+ *   1. `normaliseParsedSheets`: takes the rich output of the transposed
+ *      workbook parser (one tab per product, one column per SKU) and
+ *      produces typed `CmfSkuRow[]` ready for packet creation.
+ *   2. `normaliseRawRows`: legacy header-keyed object input from the flat
+ *      workbook shape. Kept so the existing template + tests keep working.
+ *
+ * The component spec is intentionally permissive: a designer may fill only
+ * Material+Colour for one region and skip others. Empty SKU columns
+ * (placeholder text like "xxxxxxxxxxx") are dropped upstream by the parser
+ * so half-filled tabs never block a launch.
  */
 
 import { z } from 'zod'
 import { getCmfProduct, type CmfProductComponent } from './products'
+import type { ParsedComponent, ParsedSheet, ParsedSkuRow } from './xlsx'
 
 export const ComponentSpecSchema = z.object({
   region: z.string().min(1),
   label: z.string().min(1),
-  pantone: z.string().trim().min(1).max(120).optional(),
+  pantone: z.string().trim().min(1).max(160).optional(),
   colorHex: z
     .string()
     .trim()
     .regex(/^#?[0-9a-fA-F]{6}$/i, 'colorHex must be a 6-digit hex value')
     .transform((v) => (v.startsWith('#') ? v : `#${v}`))
     .optional(),
-  material: z.string().trim().max(120).optional(),
-  finish: z.string().trim().max(120).optional(),
-  technique: z.string().trim().max(160).optional(),
-  notes: z.string().trim().max(500).optional(),
+  material: z.string().trim().max(160).optional(),
+  finish: z.string().trim().max(160).optional(),
+  technique: z.string().trim().max(200).optional(),
+  notes: z.string().trim().max(800).optional(),
 })
 
 export type ComponentSpec = z.infer<typeof ComponentSpecSchema>
 
 export const PaletteSwatchSchema = z.object({
   label: z.string().trim().min(1).max(80),
-  pantone: z.string().trim().max(120).optional(),
+  pantone: z.string().trim().max(160).optional(),
   colorHex: z
     .string()
     .trim()
@@ -47,7 +51,6 @@ export const PaletteSwatchSchema = z.object({
 export type PaletteSwatch = z.infer<typeof PaletteSwatchSchema>
 
 export const CmfSkuRowSchema = z.object({
-  /** Optional client-provided id; the API mints one if missing. */
   id: z.string().uuid().optional(),
   label: z.string().trim().min(1, 'label is required').max(160),
   productSlug: z.string().trim().min(1).max(80).transform((v) => v.toLowerCase()),
@@ -60,12 +63,11 @@ export const CmfSkuRowSchema = z.object({
     .default('default'),
   productCode: z.string().trim().max(80).optional(),
   ean: z.string().trim().max(40).optional(),
-  colorwayName: z.string().trim().max(120).optional(),
+  colorwayName: z.string().trim().max(160).optional(),
   cmfCode: z.string().trim().max(80).optional(),
   packetName: z.string().trim().max(160).optional(),
   notes: z.string().trim().max(2000).optional(),
   clownAssetSlug: z.string().trim().max(160).optional(),
-  /** Optional override; otherwise we use the product's defaultModelId. */
   modelId: z.string().trim().max(128).optional(),
   components: z.array(ComponentSpecSchema).min(1, 'at least one component is required'),
   palette: z.array(PaletteSwatchSchema).optional().default([]),
@@ -74,22 +76,169 @@ export const CmfSkuRowSchema = z.object({
 export type CmfSkuRow = z.infer<typeof CmfSkuRowSchema>
 
 export const CmfImportPayloadSchema = z.object({
-  /** A friendly name for the resulting packet group. */
   packetName: z.string().trim().min(1).max(160).optional(),
   cmfCode: z.string().trim().max(80).optional(),
-  rows: z.array(CmfSkuRowSchema).min(1, 'at least one SKU is required').max(50),
+  rows: z.array(CmfSkuRowSchema).min(1, 'at least one SKU is required').max(100),
 })
 
 export type CmfImportPayload = z.infer<typeof CmfImportPayloadSchema>
 
-/* ─────────────────────────────────────────────────────────────────────────
- * Header normalisation
+export interface NormalizationError {
+  rowIndex: number
+  field?: string
+  message: string
+  sheetName?: string
+}
+
+export interface NormalizationResult {
+  rows: CmfSkuRow[]
+  errors: NormalizationError[]
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Transposed normalisation
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Convert parsed sheets from the transposed workbook into validated rows.
  *
- * Accepts spreadsheet-style raw rows. Header lookup is case- and separator-
- * insensitive ("Pantone", "pantone", "PANTONE color" all match). We also
- * fold column families like `pom_ring_pantone` / `cosmetic_cap_material`
- * back into the canonical component specs list.
+ * Each sheet maps to one product; each SKU column in that sheet maps to
+ * one CmfSkuRow. Empty SKU columns have already been dropped by the parser
+ * so we just need to flatten and validate.
  */
+export function normaliseParsedSheets(
+  sheets: ParsedSheet[]
+): NormalizationResult {
+  const rows: CmfSkuRow[] = []
+  const errors: NormalizationError[] = []
+  let rowCounter = 0
+
+  for (const sheet of sheets) {
+    const product = getCmfProduct(sheet.productSlug)
+    if (!product) {
+      errors.push({
+        rowIndex: rowCounter,
+        field: 'productSlug',
+        message: `Unknown product slug "${sheet.productSlug}" for sheet "${sheet.sheetName}"`,
+        sheetName: sheet.sheetName,
+      })
+      continue
+    }
+
+    for (const sku of sheet.skus) {
+      const index = rowCounter++
+      const components = sku.components
+        .map((c) => mergeWithCatalog(c, product.components))
+        .filter((c): c is ComponentSpec => c !== null)
+
+      if (components.length === 0) {
+        errors.push({
+          rowIndex: index,
+          field: 'components',
+          message: `SKU "${sku.skuLabel}" on sheet "${sheet.sheetName}" has no component data`,
+          sheetName: sheet.sheetName,
+        })
+        continue
+      }
+
+      const colorwayName =
+        cleanField(sku.banner.productName) ??
+        cleanField(sku.skuLabel) ??
+        `${product.name} ${index + 1}`
+      const labelParts = [product.name, cleanField(sku.banner.productName) ?? cleanField(sku.skuLabel)].filter(
+        (v): v is string => Boolean(v)
+      )
+      const label = labelParts.length > 1 ? `${product.name} — ${labelParts[1]}` : labelParts[0] || `${product.name} SKU`
+
+      const candidate = {
+        label,
+        productSlug: product.slug,
+        variantSlug: 'default',
+        productCode: cleanField(sku.banner.productCode),
+        ean: cleanField(sku.banner.ean),
+        colorwayName,
+        cmfCode: cleanField(sku.banner.cmfNumber),
+        packetName: cleanField(sheet.collection ?? sheet.productName),
+        notes: bannerNotes(sku),
+        components,
+        palette: [] as PaletteSwatch[],
+      }
+
+      const parsed = CmfSkuRowSchema.safeParse(candidate)
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          errors.push({
+            rowIndex: index,
+            field: issue.path.join('.'),
+            message: issue.message,
+            sheetName: sheet.sheetName,
+          })
+        }
+        continue
+      }
+      rows.push(parsed.data)
+    }
+  }
+  return { rows, errors }
+}
+
+function mergeWithCatalog(
+  parsed: ParsedComponent,
+  catalog: CmfProductComponent[]
+): ComponentSpec | null {
+  // Match by region first, then by label (case-insensitive). The workbook
+  // labels often match the catalog labels exactly, but we tolerate drift.
+  const byRegion = catalog.find((c) => c.region === parsed.region)
+  const byLabel = catalog.find(
+    (c) => c.label.toLowerCase() === parsed.label.toLowerCase()
+  )
+  const known = byRegion ?? byLabel
+  const candidate: Record<string, unknown> = {
+    region: known?.region ?? parsed.region,
+    label: known?.label ?? parsed.label,
+  }
+  if (parsed.pantone) candidate.pantone = parsed.pantone.slice(0, 160)
+  if (parsed.colorHex) candidate.colorHex = parsed.colorHex
+  if (parsed.material) candidate.material = parsed.material.slice(0, 160)
+  else if (known?.defaultMaterial) candidate.material = known.defaultMaterial
+  if (parsed.finish) candidate.finish = parsed.finish.slice(0, 160)
+  else if (known?.defaultFinish) candidate.finish = known.defaultFinish
+  if (parsed.technique) candidate.technique = parsed.technique.slice(0, 200)
+  if (parsed.notes) candidate.notes = parsed.notes.slice(0, 800)
+
+  const result = ComponentSpecSchema.safeParse(candidate)
+  return result.success ? result.data : null
+}
+
+function cleanField(value: string | null | undefined): string | undefined {
+  if (!value) return undefined
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  if (/^x+$/i.test(trimmed)) return undefined
+  if (/^xxxxxxxxxxx$/i.test(trimmed)) return undefined
+  return trimmed
+}
+
+function bannerNotes(sku: ParsedSkuRow): string | undefined {
+  const parts: string[] = []
+  const editDate = cleanField(sku.banner.editDate)
+  const drawnBy = cleanField(sku.banner.drawnBy)
+  const checkedBy1 = cleanField(sku.banner.checkedBy1)
+  const checkedBy2 = cleanField(sku.banner.checkedBy2)
+  if (editDate) parts.push(`Edit date: ${editDate}`)
+  if (drawnBy) parts.push(`Drawn by: ${drawnBy}`)
+  if (checkedBy1) parts.push(`Checked by: ${checkedBy1}`)
+  if (checkedBy2 && checkedBy2 !== checkedBy1) parts.push(`Checked by (2): ${checkedBy2}`)
+  return parts.length ? parts.join(' · ') : undefined
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Header normalisation (flat / legacy format)
+ *
+ * Accepts spreadsheet-style raw rows where each row = one SKU. Header lookup
+ * is case- and separator-insensitive. We also fold column families like
+ * `pom_ring_pantone` back into the canonical component specs list.
+ * ────────────────────────────────────────────────────────────────────────── */
 
 function normaliseHeader(raw: string): string {
   return raw
@@ -103,9 +252,9 @@ const HEADER_ALIASES: Record<string, string[]> = {
   productSlug: ['product_slug', 'product', 'product_code_slug', 'product_id'],
   variantSlug: ['variant_slug', 'variant', 'variant_id'],
   productCode: ['product_code', 'sku_code', 'item_code'],
-  ean: ['ean', 'gtin', 'barcode'],
+  ean: ['ean', 'gtin', 'barcode', 'ean_code'],
   colorwayName: ['colorway_name', 'colorway', 'colour', 'color'],
-  cmfCode: ['cmf_code', 'cmf', 'cmf_revision'],
+  cmfCode: ['cmf_code', 'cmf', 'cmf_revision', 'cmf_number'],
   packetName: ['packet_name', 'pack', 'pack_name', 'collection'],
   notes: ['notes', 'comment', 'comments'],
   clownAssetSlug: ['clown_slug', 'clown', 'clown_asset', 'reference_clown'],
@@ -149,9 +298,6 @@ function buildComponents(
   row: Record<string, unknown>,
   productComponents: CmfProductComponent[]
 ): ComponentSpec[] {
-  // Only seed regions the user actually wrote about. This keeps SKUs lean —
-  // a workbook row that mentions only `pom_ring_pantone` produces exactly
-  // one component, even though the product manifest knows about more.
   const partials = new Map<string, Partial<ComponentSpec> & { region: string }>()
 
   for (const [rawKey, rawValue] of Object.entries(row)) {
@@ -168,9 +314,6 @@ function buildComponents(
       partial = {
         region: parsed.region,
         label: known?.label ?? humanise(parsed.region),
-        // Apply catalog defaults only when this is the first time we see
-        // the region, so a designer who set just the Pantone still gets a
-        // sensible material/finish in the spec sheet.
         material: known?.defaultMaterial,
         finish: known?.defaultFinish,
       }
@@ -186,14 +329,9 @@ function buildComponents(
     partials.set(parsed.region, partial)
   }
 
-  // Validate each component through Zod. Convert to array first so we don't
-  // depend on downlevelIteration of Map.values().
   const filtered: ComponentSpec[] = []
   const partialList = Array.from(partials.values())
   for (const partial of partialList) {
-    // Drop entries where the only signal was a default we applied — the
-    // designer didn't actually configure this region. We compare against
-    // the catalog defaults to detect this.
     const known = productComponents.find((c) => c.region === partial.region)
     const onlyDefaults =
       !partial.pantone &&
@@ -215,9 +353,7 @@ function buildComponents(
       notes: partial.notes,
     }
     const result = ComponentSpecSchema.safeParse(candidate)
-    if (result.success) {
-      filtered.push(result.data)
-    }
+    if (result.success) filtered.push(result.data)
   }
   return filtered
 }
@@ -228,17 +364,6 @@ function humanise(snake: string): string {
     .filter(Boolean)
     .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
     .join(' ')
-}
-
-export interface NormalizationError {
-  rowIndex: number
-  field?: string
-  message: string
-}
-
-export interface NormalizationResult {
-  rows: CmfSkuRow[]
-  errors: NormalizationError[]
 }
 
 /**

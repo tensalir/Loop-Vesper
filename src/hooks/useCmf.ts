@@ -19,6 +19,31 @@ export interface CmfPaletteSwatch {
   colorHex?: string | null
 }
 
+export interface CmfRenderAttempt {
+  id: string
+  renderId: string
+  attemptNumber: number
+  status: 'queued' | 'rendering' | 'ready' | 'failed'
+  approvalStatus: 'pending' | 'approved' | 'archived'
+  basePrompt: string | null
+  enhancedPrompt: string | null
+  modelId: string | null
+  imageUrl: string | null
+  imagePath: string | null
+  imageWidth: number | null
+  imageHeight: number | null
+  error: string | null
+  costUsd: number | null
+  triggeredBy: string | null
+  approvedBy: string | null
+  approvedAt: string | null
+  archivedAt: string | null
+  startedAt: string | null
+  completedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface CmfRender {
   id: string
   packetId: string
@@ -39,12 +64,31 @@ export interface CmfRender {
   renderPath: string | null
   renderWidth: number | null
   renderHeight: number | null
+  selectedAttemptId: string | null
   status: 'draft' | 'queued' | 'rendering' | 'ready' | 'failed'
   error: string | null
   attempts: number
   sortOrder: number
   createdAt: string
   updatedAt: string
+  /** Newest attempts first. Empty when the SKU has not been rendered yet. */
+  renderAttempts?: CmfRenderAttempt[]
+}
+
+export interface CmfDocumentDraft {
+  packetName?: string
+  cmfCode?: string
+  notes?: string
+  order?: string[]
+  skuOverrides?: Array<{
+    renderId: string
+    colorwayLabel?: string
+    subtitle?: string
+    notes?: string
+    imageSource?: 'approved' | 'draft'
+    draftAttemptId?: string | null
+  }>
+  paletteOverrides?: CmfPaletteSwatch[]
 }
 
 export interface CmfPacket {
@@ -57,6 +101,7 @@ export interface CmfPacket {
   pdfPath: string | null
   pdfError: string | null
   generatedAt: string | null
+  documentDraft: CmfDocumentDraft | null
   createdAt: string
   updatedAt: string
   renders: CmfRender[]
@@ -310,12 +355,110 @@ export function useGenerateCmfRender() {
   })
 }
 
+export interface CmfBulkGenerateSummary {
+  sku: number
+  attempts: number
+  started: number
+  failed: number
+}
+
+export interface CmfBulkGenerateResult {
+  summary: CmfBulkGenerateSummary
+  results: Array<{ renderId: string; attempt: number; ok: boolean; error?: string }>
+}
+
+/**
+ * Kick off the "Nano Banana bulk" workflow: 3 attempts per SKU by default.
+ * The packet query is invalidated so the gallery refreshes once attempts
+ * settle on the server.
+ */
+export function useBulkGenerateCmfPacket() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: {
+      packetId: string
+      attemptsPerSku?: number
+      renderIds?: string[]
+    }): Promise<CmfBulkGenerateResult> => {
+      const res = await fetch(`/api/cmf/packets/${args.packetId}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          attemptsPerSku: args.attemptsPerSku,
+          renderIds: args.renderIds,
+        }),
+      })
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        throw new Error(error.error || 'Bulk generation failed')
+      }
+      return res.json()
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['cmf', 'packet', variables.packetId] })
+      queryClient.invalidateQueries({ queryKey: ['cmf', 'packets'] })
+    },
+  })
+}
+
+export function useCmfAttemptAction() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: {
+      attemptId: string
+      packetId: string
+      action: 'approve' | 'archive' | 'restore'
+    }) => {
+      const res = await fetch(`/api/cmf/attempts/${args.attemptId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: args.action }),
+      })
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        throw new Error(error.error || 'Attempt action failed')
+      }
+      return res.json()
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['cmf', 'packet', variables.packetId] })
+      queryClient.invalidateQueries({ queryKey: ['cmf', 'packets'] })
+    },
+  })
+}
+
+export function useUpdateCmfDocumentDraft() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: { packetId: string; documentDraft: CmfDocumentDraft }) => {
+      const res = await fetch(`/api/cmf/packets/${args.packetId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentDraft: args.documentDraft }),
+      })
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        throw new Error(error.error || 'Failed to save document draft')
+      }
+      return res.json()
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['cmf', 'packet', variables.packetId] })
+    },
+  })
+}
+
 export function useGenerateCmfPdf() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (args: { packetId: string }): Promise<CmfPacket> => {
+    mutationFn: async (args: {
+      packetId: string
+      allowDraft?: boolean
+    }): Promise<CmfPacket> => {
       const res = await fetch(`/api/cmf/packets/${args.packetId}/pdf`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allowDraft: !!args.allowDraft }),
       })
       if (!res.ok) {
         const error = await res.json().catch(() => ({}))

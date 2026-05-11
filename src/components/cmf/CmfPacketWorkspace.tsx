@@ -1,14 +1,32 @@
 'use client'
 
+/**
+ * CMF Studio workspace shell.
+ *
+ * Six-stage spine matching the encoded `loop-cmf-generation` skill:
+ *
+ *   01 Schema  → import workbook
+ *   02 References → clown library
+ *   03 Generate → bulk Nano Banana attempts
+ *   04 Review  → gallery / approve / archive
+ *   05 Preview → editable HTML layout
+ *   06 Export  → packet PDF (gated on approvals)
+ *
+ * Stage 03 → 06 all consume the same packet query so the workspace stays a
+ * single source of truth. The gallery is the focal surface — the pipeline
+ * header carries flow context, the rows do the work.
+ */
+
 import { useEffect, useMemo, useState } from 'react'
 import {
+  CmfPacket,
   useCmfClowns,
   useCmfPacket,
   useGenerateCmfPdf,
-  useGenerateCmfRender,
+  useBulkGenerateCmfPacket,
 } from '@/hooks/useCmf'
 import { Button } from '@/components/ui/button'
-import { CmfRenderRow } from './CmfRenderRow'
+import { CmfAttemptGallery } from './CmfAttemptGallery'
 import { CmfPipelineHeader } from './CmfPipelineHeader'
 import { CmfPacketSelector } from './CmfPacketSelector'
 import { CmfImportDialog } from './CmfImportDialog'
@@ -17,6 +35,7 @@ import { CmfClownLibraryPill } from './CmfClownLibraryPill'
 import { CmfMembersDialog } from './CmfMembersDialog'
 import { CmfPresenceStack } from './CmfPresenceStack'
 import { CmfActivityDrawer } from './CmfActivityDrawer'
+import { CmfDocumentPreviewDialog } from './CmfDocumentPreviewDialog'
 import { useToast } from '@/components/ui/use-toast'
 import {
   Loader2,
@@ -24,51 +43,37 @@ import {
   ArrowUpRight,
   AlertTriangle,
   Database,
+  LayoutTemplate,
 } from 'lucide-react'
 
 interface CmfPacketWorkspaceProps {
   initialPacketId: string | null
 }
 
-/**
- * Single dense workspace surface. The pipeline header is the spine; the
- * packet selector + global controls float above the SKU list. Drawers for
- * import / clown library are launched directly from the matching stage
- * card so the data-source connection is visually obvious.
- */
 export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps) {
   const [activePacketId, setActivePacketId] = useState<string | null>(initialPacketId)
   const [importOpen, setImportOpen] = useState(false)
   const [clownOpen, setClownOpen] = useState(false)
   const [membersOpen, setMembersOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [bulkRunning, setBulkRunning] = useState(false)
 
   const { data: packet, isLoading } = useCmfPacket(activePacketId)
   const { data: clowns } = useCmfClowns()
-  const generateRender = useGenerateCmfRender()
+  const bulkGenerate = useBulkGenerateCmfPacket()
   const generatePdf = useGenerateCmfPdf()
   const { toast } = useToast()
 
-  // If the packet hasn't been picked yet but one packet exists, auto-select
-  // it on first render so the page never shows an empty "No packet" panel
-  // when there's an obvious choice. We only do this once per mount.
   useEffect(() => {
     if (initialPacketId) setActivePacketId(initialPacketId)
   }, [initialPacketId])
 
-  const renderStats = useMemo(() => {
-    if (!packet) return { total: 0, ready: 0, rendering: 0, failed: 0 }
-    const stats = { total: packet.renders.length, ready: 0, rendering: 0, failed: 0 }
-    packet.renders.forEach((r) => {
-      if (r.status === 'ready') stats.ready += 1
-      else if (r.status === 'rendering' || r.status === 'queued') stats.rendering += 1
-      else if (r.status === 'failed') stats.failed += 1
-    })
-    return stats
-  }, [packet])
+  const readiness = useMemo(() => summarisePacketReadiness(packet), [packet])
+  const totalAttempts = useMemo(
+    () => packet?.renders.reduce((s, r) => s + (r.renderAttempts?.length ?? 0), 0) ?? 0,
+    [packet]
+  )
 
-  // Coverage: how many SKU rows have a clown asset that matches their
-  // product slug. Drives the references stage in the pipeline header.
   const clownCoverage = useMemo(() => {
     if (!packet || !clowns) return undefined
     const slugs = new Set(clowns.map((c) => `${c.productSlug}:${c.variantSlug}`))
@@ -85,43 +90,44 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
     return { matched, total: packet.renders.length }
   }, [packet, clowns])
 
-  async function handleRenderAll() {
+  async function handleBulkGenerate(attemptsPerSku = 3) {
     if (!packet) return
     setBulkRunning(true)
     try {
-      for (const render of packet.renders) {
-        if (render.status === 'ready') continue
-        try {
-          await generateRender.mutateAsync({
-            renderId: render.id,
-            packetId: packet.id,
-          })
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Render failed'
-          toast({ title: `Render failed: ${render.label}`, description: message })
-        }
-      }
+      const result = await bulkGenerate.mutateAsync({
+        packetId: packet.id,
+        attemptsPerSku,
+      })
+      toast({
+        title: 'Bulk burst complete',
+        description: `${result.summary.started}/${result.summary.attempts} attempts succeeded${
+          result.summary.failed > 0 ? ` · ${result.summary.failed} failed` : ''
+        }`,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Bulk render failed'
+      toast({ title: 'Bulk render failed', description: message })
     } finally {
       setBulkRunning(false)
     }
   }
 
-  async function handleGeneratePdf() {
+  async function handleGeneratePdf(allowDraft = false) {
     if (!packet) {
       setImportOpen(true)
       return
     }
-    if (renderStats.ready === 0) {
+    if (readiness.approved === 0 && !allowDraft) {
       toast({
-        title: 'Render at least one SKU first',
-        description: 'The PDF embeds the rendered images per SKU.',
+        title: 'Approve at least one SKU first',
+        description: 'Export is gated on approvals. Use Preview to approve.',
       })
       return
     }
     try {
-      await generatePdf.mutateAsync({ packetId: packet.id })
+      await generatePdf.mutateAsync({ packetId: packet.id, allowDraft })
       toast({
-        title: 'PDF ready',
+        title: allowDraft ? 'DRAFT PDF ready' : 'PDF ready',
         description: `${packet.name} packet exported.`,
       })
     } catch (err) {
@@ -130,77 +136,72 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
     }
   }
 
-  // Pipeline stage handlers — each opens the right drawer / runs the right
-  // bulk action so the stage card is the entry point for that part of the
-  // flow. Disabled stages already short-circuit clicks via the button.
+  // Stage handlers feed into the pipeline header.
   const handleSchemaClick = () => setImportOpen(true)
   const handleReferencesClick = () => setClownOpen(true)
-  const handleRenderClick = () => {
+  const handleGenerateClick = () => {
     if (!packet) {
       setImportOpen(true)
       return
     }
-    handleRenderAll()
+    handleBulkGenerate()
+  }
+  const handleReviewClick = () => {
+    // Scroll the gallery section into view — the gallery itself is always
+    // visible when a packet is loaded, so we just nudge the page.
+    document.getElementById('cmf-gallery')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+  const handlePreviewClick = () => {
+    if (!packet) return
+    setPreviewOpen(true)
   }
   const handleExportClick = () => {
     if (packet?.pdfUrl) {
       window.open(packet.pdfUrl, '_blank', 'noopener,noreferrer')
       return
     }
-    handleGeneratePdf()
+    handleGeneratePdf(readiness.approved < readiness.total)
   }
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-6">
-      {/* Page header — packet identity + global actions, kept tight */}
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
             Loop · Product · CMF
           </p>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-            CMF Studio
-          </h1>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">CMF Studio</h1>
           <p className="text-sm text-muted-foreground max-w-xl leading-relaxed">
-            One pipeline from a single source of truth: workbook → resolved
-            references → photoreal renders → packet PDF.
+            Workbook in. Nano Banana bulk. Approve, preview, export. The
+            CMF skill carries the judgment; this surface carries the work.
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <CmfPacketSelector
-            activePacketId={activePacketId}
-            onSelect={setActivePacketId}
-          />
-          {/* The clown library is workspace-shared — it doesn't belong inside
-              a packet's empty state. Surfacing it here keeps the per-packet
-              flow focused on workbooks and renders, while still letting
-              designers reach references from any state. */}
+          <CmfPacketSelector activePacketId={activePacketId} onSelect={setActivePacketId} />
           <CmfClownLibraryPill onClick={() => setClownOpen(true)} />
           {activePacketId && (
             <>
-              <CmfPresenceStack
-                packetId={activePacketId}
-                onClick={() => setMembersOpen(true)}
-              />
+              <CmfPresenceStack packetId={activePacketId} onClick={() => setMembersOpen(true)} />
               <CmfActivityDrawer packetId={activePacketId} />
             </>
           )}
         </div>
       </header>
 
-      {/* Pipeline spine */}
       <CmfPipelineHeader
         packet={packet ?? null}
         clownCoverage={clownCoverage}
         importErrorCount={0}
+        readiness={readiness}
         onSchemaClick={handleSchemaClick}
         onReferencesClick={handleReferencesClick}
-        onRenderClick={handleRenderClick}
+        onGenerateClick={handleGenerateClick}
+        onReviewClick={handleReviewClick}
+        onPreviewClick={handlePreviewClick}
         onExportClick={handleExportClick}
       />
 
-      {/* Workspace body */}
       {!activePacketId ? (
         <EmptyState onImportClick={() => setImportOpen(true)} />
       ) : isLoading || !packet ? (
@@ -209,23 +210,29 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
         </div>
       ) : (
         <>
-          {/* Quick action row — drives the SKU table below */}
+          {/* Action row */}
           <div className="flex flex-wrap items-center justify-between gap-3 px-1">
             <div className="text-sm text-muted-foreground">
               <span className="font-semibold text-foreground">
-                {renderStats.total} {renderStats.total === 1 ? 'SKU' : 'SKUs'}
+                {readiness.total} {readiness.total === 1 ? 'SKU' : 'SKUs'}
               </span>
               <span className="mx-2 text-muted-foreground/40">·</span>
-              {renderStats.ready} ready
-              {renderStats.rendering > 0 && ` · ${renderStats.rendering} rendering`}
-              {renderStats.failed > 0 && ` · ${renderStats.failed} failed`}
+              {readiness.approved} approved
+              {readiness.draftOnly > 0 && ` · ${readiness.draftOnly} draft`}
+              {readiness.missing > 0 && ` · ${readiness.missing} missing`}
+              {totalAttempts > 0 && (
+                <>
+                  <span className="mx-2 text-muted-foreground/40">·</span>
+                  {totalAttempts} {totalAttempts === 1 ? 'attempt' : 'attempts'}
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
                 variant="outline"
-                onClick={handleRenderAll}
-                disabled={bulkRunning || renderStats.total === 0}
+                onClick={() => handleBulkGenerate(3)}
+                disabled={bulkRunning || readiness.total === 0}
                 className="gap-1.5"
               >
                 {bulkRunning ? (
@@ -233,12 +240,22 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
                 ) : (
                   <Wand2 className="h-3.5 w-3.5" />
                 )}
-                Render all
+                Bulk · 3 attempts each
               </Button>
               <Button
                 size="sm"
-                onClick={handleGeneratePdf}
-                disabled={renderStats.ready === 0 || generatePdf.isPending}
+                variant="ghost"
+                onClick={() => setPreviewOpen(true)}
+                disabled={readiness.approved === 0 && readiness.draftOnly === 0}
+                className="gap-1.5"
+              >
+                <LayoutTemplate className="h-3.5 w-3.5" />
+                Preview
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => handleGeneratePdf(readiness.approved < readiness.total)}
+                disabled={generatePdf.isPending || readiness.approved === 0}
                 className="gap-1.5"
               >
                 {generatePdf.isPending ? (
@@ -246,28 +263,27 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
                 ) : (
                   <ArrowUpRight className="h-3.5 w-3.5" />
                 )}
-                {packet.pdfUrl ? 'Regenerate PDF' : 'Generate PDF'}
+                {packet.pdfUrl
+                  ? 'Regenerate PDF'
+                  : readiness.approved < readiness.total
+                  ? 'Export DRAFT'
+                  : 'Generate PDF'}
               </Button>
             </div>
           </div>
 
-          {/* Render rows */}
-          <div className="space-y-3">
+          <section id="cmf-gallery" className="space-y-3">
             {packet.renders.map((render) => (
-              <CmfRenderRow
-                key={render.id}
-                render={render}
-                packetId={packet.id}
-              />
+              <CmfAttemptGallery key={render.id} render={render} packetId={packet.id} />
             ))}
-          </div>
+          </section>
 
-          {renderStats.failed > 0 && (
-            <div className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
+          {readiness.missing > 0 && (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-400/40 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-200">
               <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
               <span className="leading-snug">
-                {renderStats.failed} {renderStats.failed === 1 ? 'render' : 'renders'} failed.
-                Open the row for the error and re-run.
+                {readiness.missing} {readiness.missing === 1 ? 'SKU has' : 'SKUs have'} no
+                attempts yet. Run the bulk burst or generate an attempt per row.
               </span>
             </div>
           )}
@@ -285,16 +301,42 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
         onOpenChange={setMembersOpen}
         packetId={activePacketId}
       />
+      <CmfDocumentPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        packet={packet ?? null}
+        onExport={(allowDraft) => handleGeneratePdf(allowDraft)}
+        exporting={generatePdf.isPending}
+      />
     </div>
   )
 }
 
-/* ─── Empty state ───────────────────────────────────────────────────────── */
+/* ── Helpers ────────────────────────────────────────────────────────────── */
+
+function summarisePacketReadiness(packet: CmfPacket | null | undefined) {
+  if (!packet) return { total: 0, approved: 0, draftOnly: 0, missing: 0 }
+  let approved = 0
+  let draftOnly = 0
+  let missing = 0
+  for (const render of packet.renders) {
+    const attempts = render.renderAttempts ?? []
+    const hasApproved = attempts.some((a) => a.approvalStatus === 'approved')
+    if (hasApproved) {
+      approved += 1
+      continue
+    }
+    const hasReady = attempts.some((a) => a.status === 'ready' && a.approvalStatus !== 'archived')
+    if (hasReady) {
+      draftOnly += 1
+    } else {
+      missing += 1
+    }
+  }
+  return { total: packet.renders.length, approved, draftOnly, missing }
+}
 
 function EmptyState({ onImportClick }: { onImportClick: () => void }) {
-  // The empty state is now strictly about creating a packet. Anything
-  // workspace-wide (clown library, member roster, activity log) lives in
-  // the header pill row above so it's reachable from every state.
   return (
     <div
       className="relative overflow-hidden rounded-2xl border border-dashed border-border/50 bg-card/20 p-10 md:p-14"
@@ -311,8 +353,9 @@ function EmptyState({ onImportClick }: { onImportClick: () => void }) {
           A workbook in. A packet PDF out.
         </h2>
         <p className="text-sm text-muted-foreground leading-relaxed max-w-md mx-auto">
-          Drop your CMF schema and Vesper takes it from there: per-SKU
-          recolour with Nano Banana Pro, palette breakdown, packet PDF.
+          Drop your CMF schema and Vesper takes it from there: bulk
+          recolour per SKU, approve the best attempts, preview the layout,
+          export the packet.
         </p>
         <div className="flex items-center justify-center gap-2 pt-2">
           <Button onClick={onImportClick} className="gap-2">

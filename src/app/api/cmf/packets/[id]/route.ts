@@ -5,9 +5,11 @@ import {
   CmfNotFoundError,
   CmfForbiddenError,
   findAccessiblePacket,
+  logCmfActivity,
   requireAuthenticatedProfile,
   requirePacketAccess,
 } from '@/lib/cmf/service'
+import { CmfDocumentDraftSchema } from '@/lib/cmf/document'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +17,7 @@ const UpdatePacketSchema = z.object({
   name: z.string().trim().min(1).max(160).optional(),
   cmfCode: z.string().trim().max(80).optional(),
   notes: z.string().trim().max(2000).optional(),
+  documentDraft: CmfDocumentDraftSchema.optional(),
 })
 
 export async function GET(
@@ -83,10 +86,24 @@ export async function PATCH(
     )
   }
 
+  const dataForUpdate: Record<string, unknown> = { ...parsed.data }
+  if (parsed.data.documentDraft !== undefined) {
+    dataForUpdate.documentDraft = parsed.data.documentDraft as object
+  }
+
   const updated = await prisma.cmfPacket.update({
     where: { id: params.id },
-    data: parsed.data,
+    data: dataForUpdate,
   })
+
+  if (parsed.data.documentDraft !== undefined) {
+    await logCmfActivity({
+      packetId: params.id,
+      userId: auth.profile.userId,
+      action: 'document_draft_saved',
+      metadata: { fields: Object.keys(parsed.data.documentDraft ?? {}) },
+    })
+  }
 
   return NextResponse.json({ packet: updated })
 }
