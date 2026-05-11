@@ -74,16 +74,31 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
     [packet]
   )
 
+  // Coverage mirrors the render service's three-tier fallback so the badge
+  // doesn't lie:
+  //   1. An explicit clownAssetId on the render row → counts.
+  //   2. An exact (productSlug, variantSlug) match in the library → counts.
+  //   3. Any clown for the product (regardless of variant) → counts, because
+  //      runCmfRender will pick that up automatically.
   const clownCoverage = useMemo(() => {
     if (!packet || !clowns) return undefined
-    const slugs = new Set(clowns.map((c) => `${c.productSlug}:${c.variantSlug}`))
+    const productHasAny = new Set<string>()
+    const exactMatch = new Set<string>()
+    for (const c of clowns) {
+      productHasAny.add(c.productSlug)
+      exactMatch.add(`${c.productSlug}:${c.variantSlug}`)
+    }
     let matched = 0
     for (const render of packet.renders) {
       if (render.clownAssetId) {
         matched += 1
         continue
       }
-      if (slugs.has(`${render.productSlug}:${render.variantSlug}`)) {
+      if (exactMatch.has(`${render.productSlug}:${render.variantSlug}`)) {
+        matched += 1
+        continue
+      }
+      if (productHasAny.has(render.productSlug)) {
         matched += 1
       }
     }

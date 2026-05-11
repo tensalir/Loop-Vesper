@@ -39,17 +39,22 @@ export function CmfImportPanel({ onPacketCreated }: CmfImportPanelProps) {
         cmfCode: cmfCode || undefined,
         createPacket: true,
       })
+      const packetCount = result.packets?.length ?? (result.packet ? 1 : 0)
+      const productSummary =
+        packetCount > 1
+          ? ` across ${packetCount} product ${packetCount === 1 ? 'packet' : 'packets'}`
+          : ''
       if (result.import.errors.length > 0) {
         setErrors(result.import.errors)
         toast({
           title: 'Import had warnings',
-          description: `${result.import.rowCount} rows imported, ${result.import.errors.length} rows skipped`,
+          description: `${result.import.rowCount} rows imported${productSummary}, ${result.import.errors.length} rows skipped`,
         })
       } else {
         setLastSuccess({ rows: result.import.rowCount })
         toast({
           title: 'Workbook imported',
-          description: `Created packet from ${result.import.rowCount} rows`,
+          description: `Created ${packetCount} ${packetCount === 1 ? 'packet' : 'packets'} from ${result.import.rowCount} rows`,
         })
       }
       if (result.packet?.id) {

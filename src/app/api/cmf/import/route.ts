@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  const { packet, renders } = await createPacketFromRows({
+  const { packets } = await createPacketFromRows({
     ownerId: auth.profile.userId,
     importId: importRecord.id,
     packetName,
@@ -148,18 +148,31 @@ export async function POST(request: NextRequest) {
     rows: normalised.rows,
   })
 
-  await logCmfActivity({
-    packetId: packet.id,
-    userId: auth.profile.userId,
-    action: 'imported_workbook',
-    targetId: importRecord.id,
-    metadata: {
-      fileName: file.name,
-      rows: normalised.rows.length,
-      errors: normalised.errors.length,
-      format: parsed.format,
-    },
-  })
+  // Log one workbook-import event per packet so the activity timeline on
+  // each product packet shows where its SKUs came from. We log on every
+  // packet (not just the primary) so a designer scrolling the Eclipse
+  // packet sees the import even when the Cocoon packet is "primary".
+  for (const { packet } of packets) {
+    await logCmfActivity({
+      packetId: packet.id,
+      userId: auth.profile.userId,
+      action: 'imported_workbook',
+      targetId: importRecord.id,
+      metadata: {
+        fileName: file.name,
+        rows: normalised.rows.length,
+        errors: normalised.errors.length,
+        format: parsed.format,
+      },
+    })
+  }
+
+  // Pick the largest packet as the "primary" one — that's almost always the
+  // one the designer wants to open first. Falls back to first-by-creation.
+  const primary = packets.reduce(
+    (best, current) => (current.renders.length > best.renders.length ? current : best),
+    packets[0]
+  )
 
   return NextResponse.json({
     import: {
@@ -170,17 +183,29 @@ export async function POST(request: NextRequest) {
       format: parsed.format,
       unmappedSheets: parsed.format === 'transposed' ? parsed.unmappedSheets : [],
     },
-    packet: {
+    /** All packets created by this import — one per product slug. */
+    packets: packets.map(({ packet, renders }) => ({
       id: packet.id,
       name: packet.name,
       cmfCode: packet.cmfCode,
       status: packet.status,
-      renders: renders.map((r) => ({
-        id: r.id,
-        label: r.label,
-        status: r.status,
-        productSlug: r.productSlug,
-      })),
-    },
+      productSlug: renders[0]?.productSlug ?? null,
+      renderCount: renders.length,
+    })),
+    /** Convenience: the packet the workspace should auto-open. */
+    packet: primary
+      ? {
+          id: primary.packet.id,
+          name: primary.packet.name,
+          cmfCode: primary.packet.cmfCode,
+          status: primary.packet.status,
+          renders: primary.renders.map((r) => ({
+            id: r.id,
+            label: r.label,
+            status: r.status,
+            productSlug: r.productSlug,
+          })),
+        }
+      : null,
   })
 }

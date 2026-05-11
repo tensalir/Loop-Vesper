@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { packet, renders } = await createPacketFromRows({
+  const { packets } = await createPacketFromRows({
     ownerId: auth.profile.userId,
     importId: parsed.data.importId ?? null,
     packetName: parsed.data.packetName,
@@ -75,17 +75,28 @@ export async function POST(request: NextRequest) {
   })
 
   return NextResponse.json({
-    packet: {
+    packets: packets.map(({ packet, renders }) => ({
       id: packet.id,
       name: packet.name,
       cmfCode: packet.cmfCode,
       status: packet.status,
-      renders: renders.map((r) => ({
-        id: r.id,
-        label: r.label,
-        status: r.status,
-        productSlug: r.productSlug,
-      })),
-    },
+      productSlug: renders[0]?.productSlug ?? null,
+      renderCount: renders.length,
+    })),
+    // Convenience for single-product callers — the primary (or only) packet.
+    packet: packets[0]
+      ? {
+          id: packets[0].packet.id,
+          name: packets[0].packet.name,
+          cmfCode: packets[0].packet.cmfCode,
+          status: packets[0].packet.status,
+          renders: packets[0].renders.map((r) => ({
+            id: r.id,
+            label: r.label,
+            status: r.status,
+            productSlug: r.productSlug,
+          })),
+        }
+      : null,
   })
 }

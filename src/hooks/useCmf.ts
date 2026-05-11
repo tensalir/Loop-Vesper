@@ -176,7 +176,19 @@ export interface CmfImportResponse {
     rowCount: number
     errors: Array<{ rowIndex: number; field?: string; message: string }>
     parsedRows?: unknown[]
+    format?: 'flat' | 'transposed'
+    unmappedSheets?: string[]
   }
+  /** One per product slug in the imported workbook. */
+  packets?: Array<{
+    id: string
+    name: string
+    cmfCode: string | null
+    status: string
+    productSlug: string | null
+    renderCount: number
+  }>
+  /** Convenience — the packet the workspace should auto-open. */
   packet?: CmfPacket
 }
 

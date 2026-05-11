@@ -62,6 +62,13 @@ interface Stage {
   icon: React.ComponentType<{ className?: string }>
   onClick: () => void
   disabled?: boolean
+  /**
+   * Optional label override for the `active` status badge. The default is
+   * "Working", which is correct when a job is running. Stages where the
+   * "active" state actually means "incomplete, waiting on input" override
+   * this to a clearer copy (e.g. "Incomplete" for partial clown coverage).
+   */
+  activeLabel?: string
 }
 
 function deriveStages(args: {
@@ -163,8 +170,11 @@ function deriveStages(args: {
         ? 'Awaiting workbook'
         : !clownCoverage
         ? 'Resolving clown coverage…'
-        : `${clownCoverage.matched}/${clownCoverage.total} matched`,
+        : clownCoverage.matched === clownCoverage.total
+        ? `${clownCoverage.matched}/${clownCoverage.total} matched`
+        : `${clownCoverage.matched}/${clownCoverage.total} matched · ${clownCoverage.total - clownCoverage.matched} need clowns`,
       status: referencesStatus,
+      activeLabel: 'Incomplete',
       icon: ImageIcon,
       onClick: args.onReferencesClick,
       disabled: !packet,
@@ -201,6 +211,7 @@ function deriveStages(args: {
             (readiness?.missing ?? 0) > 0 ? ` · ${readiness?.missing} missing` : ''
           }`,
       status: reviewStatus,
+      activeLabel: 'Reviewing',
       icon: CheckCircle2,
       onClick: args.onReviewClick,
       disabled: !packet || totalAttempts === 0,
@@ -218,6 +229,7 @@ function deriveStages(args: {
         ? `${reviewApproved} ready · ${reviewTotal - reviewApproved} pending`
         : 'Approve a SKU first',
       status: previewStatus,
+      activeLabel: 'Draft only',
       icon: LayoutTemplate,
       onClick: args.onPreviewClick,
       disabled: !packet || readyRenders === 0,
@@ -323,7 +335,7 @@ function StageCard({ stage, index }: { stage: Stage; index: number }) {
             <Icon className="h-3.5 w-3.5" />
           </span>
         </div>
-        <StatusDot status={stage.status} />
+        <StatusDot status={stage.status} activeLabel={stage.activeLabel} />
       </div>
 
       {/* Title + hint */}
@@ -361,7 +373,13 @@ function StageCard({ stage, index }: { stage: Stage; index: number }) {
   )
 }
 
-function StatusDot({ status }: { status: StageStatus }) {
+function StatusDot({
+  status,
+  activeLabel,
+}: {
+  status: StageStatus
+  activeLabel?: string
+}) {
   if (status === 'ready') {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-primary">
@@ -371,10 +389,20 @@ function StatusDot({ status }: { status: StageStatus }) {
     )
   }
   if (status === 'active') {
+    // Default to a spinner + "Working". When the active state actually
+    // represents "incomplete, waiting on input" the caller can override
+    // the label and we drop the spinner so the badge stops implying a
+    // background job is in flight.
+    const label = activeLabel ?? 'Working'
+    const isWorking = label === 'Working'
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-amber-600 dark:text-amber-300">
-        <Loader2 className="h-3 w-3 animate-spin" />
-        Working
+        {isWorking ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+        )}
+        {label}
       </span>
     )
   }

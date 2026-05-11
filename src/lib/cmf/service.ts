@@ -181,73 +181,122 @@ export async function requireRenderAccess(args: {
 interface CreatePacketArgs {
   ownerId: string
   importId?: string | null
+  /** Explicit packet name override. When omitted, the packet name is
+   * inferred per product from each row's `packetName` / `Collection`. */
   packetName?: string | null
   cmfCode?: string | null
   notes?: string | null
   rows: CmfSkuRow[]
 }
 
-export async function createPacketFromRows(args: CreatePacketArgs) {
-  const { ownerId, importId, rows } = args
+/**
+ * Materialise CMF packets from validated SKU rows.
+ *
+ * Rows are split by `productSlug` so each packet ends up containing one
+ * product family (e.g. all Switch 2 colourways in one packet, all Cocoon
+ * colourways in another). This matches how Operations reviews CMF files
+ * and keeps the PDF filename pattern honest: `{cmfCode}_{Product}_CMF_*`.
+ *
+ * Returns an array of `{ packet, renders }` pairs — one per product. The
+ * caller picks which one to surface (typically the largest or the first
+ * by import order). When `args.packetName` is set explicitly, every
+ * resulting packet uses that name suffixed with the product display name
+ * to keep them distinguishable.
+ */
+type CmfPacketRow = Awaited<ReturnType<typeof prisma.cmfPacket.create>>
+type CmfRenderRow = Awaited<ReturnType<typeof prisma.cmfRender.create>>
 
-  const inferredCmf =
-    args.cmfCode ?? rows.map((r) => r.cmfCode).find((c) => Boolean(c)) ?? null
+export interface CreatedPacket {
+  packet: CmfPacketRow
+  renders: CmfRenderRow[]
+}
 
-  const inferredName =
-    args.packetName ??
-    rows.map((r) => r.packetName).find((p) => Boolean(p)) ??
-    rows[0]?.label ??
-    'CMF Packet'
+export async function createPacketFromRows(
+  args: CreatePacketArgs
+): Promise<{ packets: CreatedPacket[] }> {
+  const { ownerId, importId } = args
+  if (args.rows.length === 0) return { packets: [] }
+
+  // Preserve workbook order while grouping by productSlug. Plain object keyed
+  // by slug + ordered array of slugs avoids needing Map iteration helpers.
+  const buckets: Record<string, CmfSkuRow[]> = {}
+  const order: string[] = []
+  for (const row of args.rows) {
+    if (!buckets[row.productSlug]) {
+      buckets[row.productSlug] = []
+      order.push(row.productSlug)
+    }
+    buckets[row.productSlug].push(row)
+  }
 
   return prisma.$transaction(async (tx) => {
-    const packet = await tx.cmfPacket.create({
-      data: {
-        ownerId,
-        importId: importId ?? null,
-        name: inferredName,
-        cmfCode: inferredCmf,
-        notes: args.notes ?? null,
-        status: 'draft',
-      },
-    })
+    const out: CreatedPacket[] = []
 
-    const renders = await Promise.all(
-      rows.map((row, index) => {
-        const product = getCmfProduct(row.productSlug)
-        return tx.cmfRender.create({
-          data: {
-            packetId: packet.id,
-            ownerId,
-            label: row.label,
-            productCode: row.productCode ?? null,
-            ean: row.ean ?? null,
-            productSlug: row.productSlug,
-            variantSlug: row.variantSlug ?? 'default',
-            colorwayName: row.colorwayName ?? null,
-            componentSpecs: row.components,
-            paletteSwatches: row.palette ?? [],
-            modelId: row.modelId ?? product?.defaultModelId ?? null,
-            sortOrder: index,
-            status: 'draft',
-          },
-        })
-      })
-    )
+    for (const productSlug of order) {
+      const rows = buckets[productSlug]
+      const product = getCmfProduct(productSlug)
+      const productName = product?.name ?? productSlug
+      const inferredCmf =
+        args.cmfCode ?? rows.map((r: CmfSkuRow) => r.cmfCode).find((c: string | undefined) => Boolean(c)) ?? null
+      // Prefer the workbook `Collection` (carried on each row as `packetName`)
+      // because it's how designers name a launch; fall back to the product
+      // display name. When the caller passed an explicit packetName, suffix it
+      // with the product name so multi-product imports stay distinguishable.
+      const collection = rows.map((r: CmfSkuRow) => r.packetName).find((p: string | undefined) => Boolean(p))
+      const name = args.packetName
+        ? `${args.packetName} · ${productName}`
+        : collection ?? productName
 
-    // Seed an activity row so the timeline starts from packet creation.
-    await tx.cmfActivity.create({
-      data: {
-        packetId: packet.id,
-        userId: ownerId,
-        action: 'created_packet',
-        metadata: {
-          rows: rows.length,
+      const packet = await tx.cmfPacket.create({
+        data: {
+          ownerId,
           importId: importId ?? null,
+          name,
+          cmfCode: inferredCmf,
+          notes: args.notes ?? null,
+          status: 'draft',
         },
-      },
-    })
+      })
 
-    return { packet, renders }
+      const renders = await Promise.all(
+        rows.map((row: CmfSkuRow, index: number) =>
+          tx.cmfRender.create({
+            data: {
+              packetId: packet.id,
+              ownerId,
+              label: row.label,
+              productCode: row.productCode ?? null,
+              ean: row.ean ?? null,
+              productSlug: row.productSlug,
+              variantSlug: row.variantSlug ?? 'default',
+              colorwayName: row.colorwayName ?? null,
+              componentSpecs: row.components,
+              paletteSwatches: row.palette ?? [],
+              modelId: row.modelId ?? product?.defaultModelId ?? null,
+              sortOrder: index,
+              status: 'draft',
+            },
+          })
+        )
+      )
+
+      await tx.cmfActivity.create({
+        data: {
+          packetId: packet.id,
+          userId: ownerId,
+          action: 'created_packet',
+          metadata: {
+            rows: rows.length,
+            productSlug,
+            importId: importId ?? null,
+          },
+        },
+      })
+
+      out.push({ packet, renders })
+    }
+
+    return { packets: out }
   })
 }
 
