@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -43,6 +43,14 @@ interface CmfClownLibraryDialogProps {
    * to reach into the shared library and pick a reference for one SKU.
    */
   onSelectAsset?: (asset: CmfClownAsset) => void
+  /**
+   * Optional: deep-link the dialog to a specific product. When set:
+   *   - the product chip filter selects this slug,
+   *   - the upload panel opens automatically with the single-PNG tab
+   *     pre-pointed at this product, so the designer can drop a missing
+   *     clown in two clicks from a blocked SKU row.
+   */
+  focusSlug?: string | null
 }
 
 /**
@@ -61,6 +69,7 @@ export function CmfClownLibraryDialog({
   open,
   onOpenChange,
   onSelectAsset,
+  focusSlug,
 }: CmfClownLibraryDialogProps) {
   const products = useMemo(() => listCmfProducts(), [])
   const { data: clowns, isLoading, isFetching } = useCmfClowns()
@@ -69,6 +78,17 @@ export function CmfClownLibraryDialog({
   const [search, setSearch] = useState('')
   const [productFilter, setProductFilter] = useState<string | null>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
+
+  // Honour focusSlug when the dialog opens (or when the slug changes while
+  // the dialog is already open). Resets on close so re-opening without a
+  // focusSlug starts from a clean slate.
+  useEffect(() => {
+    if (!open) return
+    if (focusSlug) {
+      setProductFilter(focusSlug)
+      setUploadOpen(true)
+    }
+  }, [open, focusSlug])
 
   // Group products into the rows the rest of the app already uses.
   const groupedProducts = useMemo(() => {
@@ -168,6 +188,10 @@ export function CmfClownLibraryDialog({
           <UploadPanel
             onDone={() => setUploadOpen(false)}
             onToast={toast}
+            initialProductSlug={focusSlug ?? undefined}
+            /* Force the single-PNG tab when we deep-linked from a blocked
+             * SKU row — bulk-zip is for the canonical pack, not one-offs. */
+            initialTab={focusSlug ? 'single' : 'bulk'}
           />
         )}
 
@@ -419,9 +443,13 @@ function EmptyHero({ onUpload }: { onUpload: () => void }) {
 function UploadPanel({
   onDone,
   onToast,
+  initialProductSlug,
+  initialTab = 'bulk',
 }: {
   onDone: () => void
   onToast: (args: { title: string; description?: string }) => void
+  initialProductSlug?: string
+  initialTab?: 'bulk' | 'single'
 }) {
   return (
     <div
@@ -431,7 +459,7 @@ function UploadPanel({
           'radial-gradient(50% 80% at 0% 0%, color-mix(in oklch, hsl(var(--primary)) 6%, transparent), transparent 70%)',
       }}
     >
-      <Tabs defaultValue="bulk" className="w-full">
+      <Tabs defaultValue={initialTab} className="w-full">
         <TabsList className="mb-3">
           <TabsTrigger value="bulk" className="gap-1.5 text-xs">
             <Archive className="h-3.5 w-3.5" />
@@ -446,7 +474,11 @@ function UploadPanel({
           <BulkUploadForm onDone={onDone} onToast={onToast} />
         </TabsContent>
         <TabsContent value="single">
-          <SingleUploadForm onDone={onDone} onToast={onToast} />
+          <SingleUploadForm
+            onDone={onDone}
+            onToast={onToast}
+            initialProductSlug={initialProductSlug}
+          />
         </TabsContent>
       </Tabs>
     </div>
@@ -593,17 +625,31 @@ function BulkReport({
 function SingleUploadForm({
   onDone,
   onToast,
+  initialProductSlug,
 }: {
   onDone: () => void
   onToast: (args: { title: string; description?: string }) => void
+  initialProductSlug?: string
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const products = listCmfProducts()
-  const [productSlug, setProductSlug] = useState(products[0]?.slug ?? 'switch2')
+  const [productSlug, setProductSlug] = useState(
+    initialProductSlug && products.find((p) => p.slug === initialProductSlug)
+      ? initialProductSlug
+      : products[0]?.slug ?? 'switch2'
+  )
   const [variantSlug, setVariantSlug] = useState('default')
   const [label, setLabel] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const upload = useUploadClown()
+
+  // Keep the product field in sync if the parent changes the focused slug
+  // (e.g. designer reopens the dialog from a different blocked SKU row).
+  useEffect(() => {
+    if (initialProductSlug && products.find((p) => p.slug === initialProductSlug)) {
+      setProductSlug(initialProductSlug)
+    }
+  }, [initialProductSlug, products])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

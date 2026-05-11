@@ -25,6 +25,7 @@ import {
   useGenerateCmfPdf,
   useBulkGenerateCmfPacket,
 } from '@/hooks/useCmf'
+import { clownCoverageForPacket } from '@/lib/cmf/coverage'
 import { Button } from '@/components/ui/button'
 import { CmfAttemptGallery } from './CmfAttemptGallery'
 import { CmfPipelineHeader } from './CmfPipelineHeader'
@@ -54,6 +55,7 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
   const [activePacketId, setActivePacketId] = useState<string | null>(initialPacketId)
   const [importOpen, setImportOpen] = useState(false)
   const [clownOpen, setClownOpen] = useState(false)
+  const [clownFocusSlug, setClownFocusSlug] = useState<string | null>(null)
   const [membersOpen, setMembersOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [bulkRunning, setBulkRunning] = useState(false)
@@ -75,35 +77,15 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
   )
 
   // Coverage mirrors the render service's three-tier fallback so the badge
-  // doesn't lie:
-  //   1. An explicit clownAssetId on the render row → counts.
-  //   2. An exact (productSlug, variantSlug) match in the library → counts.
-  //   3. Any clown for the product (regardless of variant) → counts, because
-  //      runCmfRender will pick that up automatically.
-  const clownCoverage = useMemo(() => {
-    if (!packet || !clowns) return undefined
-    const productHasAny = new Set<string>()
-    const exactMatch = new Set<string>()
-    for (const c of clowns) {
-      productHasAny.add(c.productSlug)
-      exactMatch.add(`${c.productSlug}:${c.variantSlug}`)
-    }
-    let matched = 0
-    for (const render of packet.renders) {
-      if (render.clownAssetId) {
-        matched += 1
-        continue
-      }
-      if (exactMatch.has(`${render.productSlug}:${render.variantSlug}`)) {
-        matched += 1
-        continue
-      }
-      if (productHasAny.has(render.productSlug)) {
-        matched += 1
-      }
-    }
-    return { matched, total: packet.renders.length }
-  }, [packet, clowns])
+  // doesn't lie. Implementation lives in `src/lib/cmf/coverage.ts` so the
+  // selector + workspace agree on what "ready" means.
+  const clownCoverageFull = useMemo(
+    () => clownCoverageForPacket(packet ?? null, clowns ?? null),
+    [packet, clowns]
+  )
+  const clownCoverage = packet && clowns
+    ? { matched: clownCoverageFull.matched, total: clownCoverageFull.total }
+    : undefined
 
   async function handleBulkGenerate(attemptsPerSku = 3) {
     if (!packet) return
@@ -153,7 +135,17 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
 
   // Stage handlers feed into the pipeline header.
   const handleSchemaClick = () => setImportOpen(true)
-  const handleReferencesClick = () => setClownOpen(true)
+  const handleReferencesClick = () => {
+    // If the active packet is blocked on missing clowns, open the library
+    // pre-focused on the first slug that needs one so the upload form is
+    // already pointing at the right product.
+    setClownFocusSlug(clownCoverageFull.missingSlugs[0] ?? null)
+    setClownOpen(true)
+  }
+  const handleUploadForSlug = (slug: string) => {
+    setClownFocusSlug(slug)
+    setClownOpen(true)
+  }
   const handleGenerateClick = () => {
     if (!packet) {
       setImportOpen(true)
@@ -287,21 +279,56 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
             </div>
           </div>
 
-          <section id="cmf-gallery" className="space-y-3">
-            {packet.renders.map((render) => (
-              <CmfAttemptGallery key={render.id} render={render} packetId={packet.id} />
-            ))}
-          </section>
-
-          {readiness.missing > 0 && (
-            <div className="flex items-start gap-2 rounded-xl border border-amber-400/40 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-200">
-              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-              <span className="leading-snug">
-                {readiness.missing} {readiness.missing === 1 ? 'SKU has' : 'SKUs have'} no
-                attempts yet. Run the bulk burst or generate an attempt per row.
-              </span>
+          {clownCoverageFull.blocked > 0 && (
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-amber-400/40 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-200">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <span className="leading-snug">
+                  {clownCoverageFull.blocked} of {clownCoverageFull.total}{' '}
+                  {clownCoverageFull.blocked === 1 ? 'SKU is' : 'SKUs are'} blocked: no
+                  clown for{' '}
+                  <span className="font-mono">
+                    {clownCoverageFull.missingSlugs.join(', ')}
+                  </span>
+                  . Upload a clown PNG to unblock.
+                </span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() =>
+                  handleUploadForSlug(clownCoverageFull.missingSlugs[0])
+                }
+              >
+                Upload clown
+              </Button>
             </div>
           )}
+
+          <section id="cmf-gallery" className="space-y-3">
+            {packet.renders.map((render) => {
+              const isBlocked = clownCoverageFull.missingSlugs.includes(
+                render.productSlug
+              )
+              return (
+                <CmfAttemptGallery
+                  key={render.id}
+                  render={render}
+                  packetId={packet.id}
+                  blockedReason={
+                    isBlocked
+                      ? {
+                          missingSlug: render.productSlug,
+                          onUploadClown: () =>
+                            handleUploadForSlug(render.productSlug),
+                        }
+                      : null
+                  }
+                />
+              )
+            })}
+          </section>
         </>
       )}
 
@@ -310,7 +337,14 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
         onOpenChange={setImportOpen}
         onPacketCreated={(id) => setActivePacketId(id)}
       />
-      <CmfClownLibraryDialog open={clownOpen} onOpenChange={setClownOpen} />
+      <CmfClownLibraryDialog
+        open={clownOpen}
+        onOpenChange={(next) => {
+          setClownOpen(next)
+          if (!next) setClownFocusSlug(null)
+        }}
+        focusSlug={clownFocusSlug}
+      />
       <CmfMembersDialog
         open={membersOpen}
         onOpenChange={setMembersOpen}

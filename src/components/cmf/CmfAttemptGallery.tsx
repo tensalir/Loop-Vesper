@@ -38,6 +38,7 @@ import {
   Plus,
   RotateCw,
   Sparkles,
+  Upload,
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -45,9 +46,17 @@ import { cn } from '@/lib/utils'
 interface CmfAttemptGalleryProps {
   render: CmfRender
   packetId: string
+  /** When set, the SKU has no resolvable clown reference. The gallery
+   * surfaces an "Upload clown" CTA instead of "Generate first attempt" so
+   * the designer can't kick off a job that will fail with category
+   * `reference` upstream. */
+  blockedReason?: {
+    missingSlug: string
+    onUploadClown: () => void
+  } | null
 }
 
-export function CmfAttemptGallery({ render, packetId }: CmfAttemptGalleryProps) {
+export function CmfAttemptGallery({ render, packetId, blockedReason }: CmfAttemptGalleryProps) {
   const attempts = useMemo(() => render.renderAttempts ?? [], [render.renderAttempts])
   const [inspectId, setInspectId] = useState<string | null>(null)
   const generateMutation = useGenerateCmfRender()
@@ -126,28 +135,55 @@ export function CmfAttemptGallery({ render, packetId }: CmfAttemptGalleryProps) 
         </div>
 
         <div className="flex items-center gap-2">
-          <ApprovalBadge approved={grouped.approved} pendingCount={grouped.visible.length} />
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={addAttempt}
-            disabled={isRendering}
-            className="h-7 gap-1.5 text-xs"
-          >
-            {isRendering ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Plus className="h-3 w-3" />
-            )}
-            {grouped.visible.length === 0 ? 'Generate first attempt' : 'New attempt'}
-          </Button>
+          {blockedReason ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-amber-700 dark:text-amber-200">
+              Needs clown
+            </span>
+          ) : (
+            <ApprovalBadge
+              approved={grouped.approved}
+              pendingCount={grouped.visible.length}
+            />
+          )}
+          {blockedReason ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={blockedReason.onUploadClown}
+              className="h-7 gap-1.5 text-xs"
+            >
+              <Upload className="h-3 w-3" />
+              Upload clown
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={addAttempt}
+              disabled={isRendering}
+              className="h-7 gap-1.5 text-xs"
+            >
+              {isRendering ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Plus className="h-3 w-3" />
+              )}
+              {grouped.visible.length === 0 ? 'Generate first attempt' : 'New attempt'}
+            </Button>
+          )}
         </div>
       </header>
 
       {/* Attempt strip */}
       <div className="overflow-x-auto px-4 pb-3">
         <div className="flex gap-3 min-w-0">
-          {grouped.visible.length === 0 && !isRendering && (
+          {blockedReason && grouped.visible.length === 0 && (
+            <BlockedAttemptCard
+              productSlug={blockedReason.missingSlug}
+              onUpload={blockedReason.onUploadClown}
+            />
+          )}
+          {!blockedReason && grouped.visible.length === 0 && !isRendering && (
             <EmptyAttemptCard onGenerate={addAttempt} />
           )}
           {isRendering && grouped.visible.every((a) => a.status === 'ready') && (
@@ -370,6 +406,27 @@ function EmptyAttemptCard({ onGenerate }: { onGenerate: () => void }) {
     >
       <Sparkles className="h-4 w-4" />
       <span>Generate first attempt</span>
+    </button>
+  )
+}
+
+function BlockedAttemptCard({
+  productSlug,
+  onUpload,
+}: {
+  productSlug: string
+  onUpload: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onUpload}
+      className="w-[200px] aspect-square flex-shrink-0 rounded-xl border border-dashed border-amber-400/50 bg-amber-500/5 flex flex-col items-center justify-center gap-2 px-4 text-center text-xs text-amber-700 dark:text-amber-200 hover:border-amber-400 transition-colors"
+    >
+      <Upload className="h-4 w-4" />
+      <span className="font-medium">No clown for this product</span>
+      <span className="text-[10px] font-mono opacity-80">{productSlug}</span>
+      <span className="text-[10px] underline underline-offset-2">Upload one →</span>
     </button>
   )
 }
