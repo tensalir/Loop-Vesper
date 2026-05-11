@@ -197,53 +197,57 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
   }
 
   return (
-    <div className="max-w-[1400px] mx-auto space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
-            Loop · Product · CMF
-          </p>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">CMF Studio</h1>
-          <p className="text-sm text-muted-foreground max-w-xl leading-relaxed">
-            Workbook in. Nano Banana bulk. Approve, preview, export. The
-            CMF skill carries the judgment; this surface carries the work.
-          </p>
-        </div>
+    <div className="max-w-[1400px] mx-auto">
+      {/* Sticky control bar — page header, pipeline spine, and action row
+          stack together at the top so they stay reachable while the SKU
+          gallery scrolls underneath. Negative margins pull the background
+          to the viewport edges (the parent `<main>` has px-4 / md:px-8),
+          a backdrop blur keeps the gallery legible through it, and z-30
+          sits below the floating Navbar pill (z-50). */}
+      <div className="sticky top-16 z-30 -mx-4 md:-mx-8 px-4 md:px-8 py-4 bg-background/85 backdrop-blur-md border-b border-border/40 space-y-4">
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+              Loop · Product · CMF
+            </p>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">CMF Studio</h1>
+            <p className="text-xs text-muted-foreground max-w-xl leading-relaxed">
+              Workbook in. Nano Banana bulk. Approve, preview, export.
+            </p>
+          </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <CmfPacketSelector activePacketId={activePacketId} onSelect={setActivePacketId} />
-          <CmfClownLibraryPill onClick={() => setClownOpen(true)} />
-          {activePacketId && (
-            <>
-              <CmfPresenceStack packetId={activePacketId} onClick={() => setMembersOpen(true)} />
-              <CmfActivityDrawer packetId={activePacketId} />
-            </>
-          )}
-        </div>
-      </header>
+          <div className="flex items-center gap-2 flex-wrap">
+            <CmfPacketSelector
+              activePacketId={activePacketId}
+              onSelect={setActivePacketId}
+            />
+            <CmfClownLibraryPill onClick={() => setClownOpen(true)} />
+            {activePacketId && (
+              <>
+                <CmfPresenceStack
+                  packetId={activePacketId}
+                  onClick={() => setMembersOpen(true)}
+                />
+                <CmfActivityDrawer packetId={activePacketId} />
+              </>
+            )}
+          </div>
+        </header>
 
-      <CmfPipelineHeader
-        packet={packet ?? null}
-        clownCoverage={clownCoverage}
-        importErrorCount={0}
-        readiness={readiness}
-        onSchemaClick={handleSchemaClick}
-        onReferencesClick={handleReferencesClick}
-        onGenerateClick={handleGenerateClick}
-        onReviewClick={handleReviewClick}
-        onPreviewClick={handlePreviewClick}
-        onExportClick={handleExportClick}
-      />
+        <CmfPipelineHeader
+          packet={packet ?? null}
+          clownCoverage={clownCoverage}
+          importErrorCount={0}
+          readiness={readiness}
+          onSchemaClick={handleSchemaClick}
+          onReferencesClick={handleReferencesClick}
+          onGenerateClick={handleGenerateClick}
+          onReviewClick={handleReviewClick}
+          onPreviewClick={handlePreviewClick}
+          onExportClick={handleExportClick}
+        />
 
-      {!activePacketId ? (
-        <EmptyState onImportClick={() => setImportOpen(true)} />
-      ) : isLoading || !packet ? (
-        <div className="rounded-2xl border border-border/50 bg-card/30 p-12 flex items-center justify-center text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-        </div>
-      ) : (
-        <>
-          {/* Action row */}
+        {packet && (
           <div className="flex flex-wrap items-center justify-between gap-3 px-1">
             <div className="text-sm text-muted-foreground">
               <span className="font-semibold text-foreground">
@@ -304,59 +308,74 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
               </Button>
             </div>
           </div>
+        )}
+      </div>
 
-          {clownCoverageFull.blocked > 0 && (
-            <div className="flex items-start justify-between gap-3 rounded-xl border border-amber-400/40 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-200">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-                <span className="leading-snug">
-                  {clownCoverageFull.blocked} of {clownCoverageFull.total}{' '}
-                  {clownCoverageFull.blocked === 1 ? 'SKU is' : 'SKUs are'} blocked: no
-                  clown for{' '}
-                  <span className="font-mono">
-                    {clownCoverageFull.missingSlugs.join(', ')}
+      {/* Scrolling body — sits below the sticky top, with breathing room
+          before the first card so the divider line and the gallery don't
+          collide visually. */}
+      <div className="pt-6 space-y-6 pb-12">
+        {!activePacketId ? (
+          <EmptyState onImportClick={() => setImportOpen(true)} />
+        ) : isLoading || !packet ? (
+          <div className="rounded-2xl border border-border/50 bg-card/30 p-12 flex items-center justify-center text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+          </div>
+        ) : (
+          <>
+            {clownCoverageFull.blocked > 0 && (
+              <div className="flex items-start justify-between gap-3 rounded-xl border border-amber-400/40 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-200">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                  <span className="leading-snug">
+                    {clownCoverageFull.blocked} of {clownCoverageFull.total}{' '}
+                    {clownCoverageFull.blocked === 1 ? 'SKU is' : 'SKUs are'} blocked: no
+                    clown for{' '}
+                    <span className="font-mono">
+                      {clownCoverageFull.missingSlugs.join(', ')}
+                    </span>
+                    . Upload a clown PNG to unblock.
                   </span>
-                  . Upload a clown PNG to unblock.
-                </span>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs"
-                onClick={() =>
-                  handleUploadForSlug(clownCoverageFull.missingSlugs[0])
-                }
-              >
-                Upload clown
-              </Button>
-            </div>
-          )}
-
-          <section id="cmf-gallery" className="space-y-3">
-            {packet.renders.map((render) => {
-              const isBlocked = clownCoverageFull.missingSlugs.includes(
-                render.productSlug
-              )
-              return (
-                <CmfAttemptGallery
-                  key={render.id}
-                  render={render}
-                  packetId={packet.id}
-                  blockedReason={
-                    isBlocked
-                      ? {
-                          missingSlug: render.productSlug,
-                          onUploadClown: () =>
-                            handleUploadForSlug(render.productSlug),
-                        }
-                      : null
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() =>
+                    handleUploadForSlug(clownCoverageFull.missingSlugs[0])
                   }
-                />
-              )
-            })}
-          </section>
-        </>
-      )}
+                >
+                  Upload clown
+                </Button>
+              </div>
+            )}
+
+            <section id="cmf-gallery" className="space-y-3">
+              {packet.renders.map((render) => {
+                const isBlocked = clownCoverageFull.missingSlugs.includes(
+                  render.productSlug
+                )
+                return (
+                  <CmfAttemptGallery
+                    key={render.id}
+                    render={render}
+                    packetId={packet.id}
+                    blockedReason={
+                      isBlocked
+                        ? {
+                            missingSlug: render.productSlug,
+                            onUploadClown: () =>
+                              handleUploadForSlug(render.productSlug),
+                          }
+                        : null
+                    }
+                  />
+                )
+              })}
+            </section>
+          </>
+        )}
+      </div>
 
       <CmfImportDialog
         open={importOpen}

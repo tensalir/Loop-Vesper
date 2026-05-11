@@ -151,7 +151,6 @@ export async function runCmfRender({ renderId, triggeredByUserId }: RenderArgs) 
     )
   }
 
-  const { basePrompt } = buildCmfPrompt(row)
   const modelId = ensureSupportedModel(render.modelId ?? product.defaultModelId ?? DEFAULT_MODEL_ID)
 
   // Allocate the next attempt number — monotonic per SKU so attempt 1 stays
@@ -162,6 +161,14 @@ export async function runCmfRender({ renderId, triggeredByUserId }: RenderArgs) 
     select: { attemptNumber: true },
   })
   const attemptNumber = (lastAttempt?.attemptNumber ?? 0) + 1
+
+  // Each attempt explores a different lighting/mood variant so a bulk
+  // burst produces a real fan of options. Variant 0 (Studio Classic) is
+  // Damien's gold-standard; subsequent attempts cycle through Warm,
+  // Clinical, Dramatic, then loop back.
+  const { basePrompt, variant } = buildCmfPrompt(row, {
+    variantIndex: attemptNumber - 1,
+  })
 
   const attempt = await prisma.cmfRenderAttempt.create({
     data: {
@@ -268,6 +275,8 @@ export async function runCmfRender({ renderId, triggeredByUserId }: RenderArgs) 
       },
     })
 
+    void variant // surfaced via the return value below
+
     // Mirror the latest attempt onto the parent SKU. Selection rule:
     //  - If the SKU already has an approved attempt, keep that as the
     //    selected/visible image (do not silently overwrite an approval).
@@ -293,7 +302,7 @@ export async function runCmfRender({ renderId, triggeredByUserId }: RenderArgs) 
       },
     })
 
-    return { render: updated, attempt: completedAttempt }
+    return { render: updated, attempt: completedAttempt, variant }
   } catch (err) {
     const category = err instanceof CmfRenderError ? err.category : 'model'
     const message = err instanceof Error ? err.message : 'Unknown render error'

@@ -106,16 +106,26 @@ Two strategies, picked by the builder based on what data is available:
 
 The deterministic builder picks (1) when the resolved clown asset's `components[]` carries `colorHex` entries for the regions in the row's spec, otherwise (2). Designers can always upload a clown PNG with colour metadata to upgrade a product family to (1) addressing.
 
-## Lighting + quality bar
+## Lighting variants
 
-Both are LOCK and the same across every SKU:
+A single recolour produces one image. A *good* CMF review needs three to five and the designer picks one. To keep that fan productive (not three near-identical renders), the lighting clause cycles through four named variants. Everything else — preserve clause, recolour spec, quality bar — stays LOCK across variants.
 
-- Soft large key light, upper left.
-- Subtle fill, lower right.
-- Gentle rim light separating product from background.
-- Realistic contact shadows + ambient occlusion at part interfaces.
-- Sharp focus across every unit.
-- Photorealistic 4K render quality with believable micro-surface detail.
+| # | Variant id | Mood | Lighting clause |
+|---|-----------|------|-----------------|
+| 1 | `classic` | Studio Classic | Soft large key light from upper left, subtle fill from lower right, gentle rim light. Realistic contact shadows + AO. Sharp focus across every unit. (Damien's gold-standard.) |
+| 2 | `warm` | Studio Warm | Warm large key light from upper right with a soft golden bias, cool blue fill from lower left for micro-contrast, soft rim light tracing each silhouette. |
+| 3 | `clinical` | Studio Clinical | Crisp neutral key light from directly above, even fill light minimising harsh shadows, faint rim light. Catalogue-photography precision over drama. |
+| 4 | `dramatic` | Studio Dramatic | Single hard key light from upper left with pronounced specular highlights on satin/metal, minimal fill so shadows hold density, strong rim light. |
+
+The render service maps `attempt.attemptNumber` to a variant via `(attemptNumber − 1) mod 4`, so attempt 1 is always Studio Classic, attempt 2 is Studio Warm, etc. The mapping is reproducible — re-running with the same attempt number lands the same variant. Variant identity is logged on every attempt's activity row (`variantId`, `variantName`) and surfaced in the inspect lightbox + attempt card footer.
+
+A 3-attempt burst therefore explores Classic / Warm / Clinical; a 5-attempt burst adds Dramatic and loops back to Classic. Adding more variants is a code change because each one is part of the brand-quality contract.
+
+## Quality bar
+
+LOCK. Lives at the very end of every prompt:
+
+- Photorealistic 4K product render quality with believable micro-surface detail.
 - "Output should look like a real photographed sample, not a CGI render."
 
 The last line is non-negotiable. Without it, Nano Banana tends to settle for a CGI-feel render.

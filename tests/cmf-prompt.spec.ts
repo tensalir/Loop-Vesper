@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test'
-import { buildCmfPrompt, buildPacketFileSlug } from '../src/lib/cmf/prompt'
+import {
+  buildCmfPrompt,
+  buildPacketFileSlug,
+  PROMPT_VARIANTS,
+  selectPromptVariant,
+} from '../src/lib/cmf/prompt'
 import type { CmfSkuRow } from '../src/lib/cmf/schema'
 
 /**
@@ -82,11 +87,48 @@ test('buildCmfPrompt protects untouched components by name', () => {
   expect(result.basePrompt).toContain('Artwork')
 })
 
-test('buildCmfPrompt includes the canonical lighting clause', () => {
+test('buildCmfPrompt defaults to Studio Classic when no variant index is passed', () => {
   const result = buildCmfPrompt(FIXTURE)
-  expect(result.basePrompt).toContain('clean studio product photography')
+  expect(result.variant.id).toBe('classic')
   expect(result.basePrompt).toContain('Soft large key light from upper left')
   expect(result.basePrompt).toContain('contact shadows and ambient occlusion')
+})
+
+test('buildCmfPrompt swaps the lighting clause when variantIndex changes', () => {
+  const classic = buildCmfPrompt(FIXTURE, { variantIndex: 0 })
+  const warm = buildCmfPrompt(FIXTURE, { variantIndex: 1 })
+  const clinical = buildCmfPrompt(FIXTURE, { variantIndex: 2 })
+  const dramatic = buildCmfPrompt(FIXTURE, { variantIndex: 3 })
+
+  expect(classic.variant.id).toBe('classic')
+  expect(warm.variant.id).toBe('warm')
+  expect(clinical.variant.id).toBe('clinical')
+  expect(dramatic.variant.id).toBe('dramatic')
+
+  // The lighting clauses should be meaningfully different — at minimum each
+  // one mentions wording the others don't.
+  expect(warm.basePrompt).toContain('warm bias')
+  expect(clinical.basePrompt).toContain('Crisp neutral key light from directly above')
+  expect(dramatic.basePrompt).toContain('Single hard key light')
+
+  // The preserve clause and quality bar stay LOCK across all variants.
+  for (const v of [classic, warm, clinical, dramatic]) {
+    expect(v.basePrompt).toContain('Preserve the geometry, design, angle, framing')
+    expect(v.basePrompt).toContain('Output should look like a real photographed sample')
+  }
+})
+
+test('selectPromptVariant cycles via modulo so any attempt number maps to a real variant', () => {
+  expect(PROMPT_VARIANTS.length).toBeGreaterThanOrEqual(3)
+  expect(selectPromptVariant(0).id).toBe('classic')
+  expect(selectPromptVariant(PROMPT_VARIANTS.length).id).toBe('classic')
+  expect(selectPromptVariant(PROMPT_VARIANTS.length + 1).id).toBe(
+    PROMPT_VARIANTS[1].id
+  )
+  // Negative indices fold back cleanly.
+  expect(selectPromptVariant(-1).id).toBe(
+    PROMPT_VARIANTS[PROMPT_VARIANTS.length - 1].id
+  )
 })
 
 test('buildCmfPrompt ends with the photographed-not-CGI quality bar', () => {

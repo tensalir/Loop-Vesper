@@ -30,6 +30,70 @@
 import type { CmfSkuRow, ComponentSpec } from './schema'
 import { getCmfProduct } from './products'
 
+/* ── Prompt variants ───────────────────────────────────────────────────── */
+
+/**
+ * A prompt variant tweaks the *lighting / mood* clause of the canonical
+ * prompt so each attempt in a bulk burst explores a meaningfully
+ * different studio setup instead of producing N near-identical outputs.
+ * The recolour spec, preserve clause, and quality bar stay LOCK across
+ * variants so brand consistency holds.
+ *
+ * Order matters: `runCmfRender` picks a variant by `(attemptNumber - 1) %
+ * PROMPT_VARIANTS.length`, so attempt 1 is always Studio Classic
+ * (Damien's gold-standard), attempt 2 is Warm, attempt 3 is Clinical, etc.
+ * This is intentionally reproducible — re-running with the same attempt
+ * number lands the same variant.
+ *
+ * Adding a variant is a code change because each variant is part of the
+ * brand-quality contract.
+ */
+export interface PromptVariant {
+  /** Short stable id used in activity log + UI ("classic" / "warm" / ...). */
+  id: string
+  /** Human-readable name for the inspect lightbox / activity timeline. */
+  name: string
+  /** Lighting clause inserted between the recolour block and the quality bar. */
+  lightingClause: string
+}
+
+export const PROMPT_VARIANTS: PromptVariant[] = [
+  {
+    id: 'classic',
+    name: 'Studio Classic',
+    lightingClause:
+      'Lighting: clean studio product photography. Soft large key light from upper left, subtle fill from lower right to reveal material texture, gentle rim light to separate the products from the background. Realistic contact shadows and ambient occlusion where parts meet. Sharp focus across every unit.',
+  },
+  {
+    id: 'warm',
+    name: 'Studio Warm',
+    lightingClause:
+      'Lighting: clean studio product photography with a warm bias. Soft large key light from upper right with a gentle golden tone, cool blue fill from lower left adding micro-contrast, soft rim light tracing each silhouette. Realistic contact shadows and ambient occlusion where parts meet. Sharp focus across every unit.',
+  },
+  {
+    id: 'clinical',
+    name: 'Studio Clinical',
+    lightingClause:
+      'Lighting: catalogue-grade product photography. Crisp neutral key light from directly above, even fill light minimising harsh shadows, faint rim light. Soft contact shadows, accurate ambient occlusion. Tack-sharp focus across every unit. Precision over drama.',
+  },
+  {
+    id: 'dramatic',
+    name: 'Studio Dramatic',
+    lightingClause:
+      'Lighting: editorial-grade product photography. Single hard key light from upper left producing pronounced specular highlights on satin and metal surfaces, minimal fill so shadows hold their density, strong rim light separating each unit from the background. Crisp contact shadows and ambient occlusion. Sharp focus across every unit.',
+  },
+]
+
+/**
+ * Resolve a variant from an arbitrary numeric index. Cycles via modulo so
+ * a 7-attempt burst still lands on real variants (1..4..1..4..1..4..1).
+ */
+export function selectPromptVariant(index: number): PromptVariant {
+  const n = PROMPT_VARIANTS.length
+  const i = ((index % n) + n) % n
+  return PROMPT_VARIANTS[i]
+}
+
 /* ── Rich material / finish vocabulary ─────────────────────────────────── */
 
 /**
@@ -164,17 +228,32 @@ function describeComponent(component: ComponentSpec): string {
 
 /* ── Public ─────────────────────────────────────────────────────────────── */
 
+export interface BuildCmfPromptOptions {
+  /**
+   * Which lighting/mood variant to use (cycled per-attempt by the render
+   * service). Defaults to attempt 1 (`Studio Classic`, Damien's gold
+   * standard) when omitted, so any caller that doesn't care about variants
+   * still produces the canonical prompt.
+   */
+  variantIndex?: number
+}
+
 export interface BuildCmfPromptResult {
   basePrompt: string
   componentLines: string[]
+  variant: PromptVariant
 }
 
 /**
- * Build the CMF recolour prompt. Returns both the prompt string and the
- * per-component lines so the PDF generator can show the same breakdown the
- * model saw.
+ * Build the CMF recolour prompt. Returns the prompt string, the
+ * per-component lines (so the PDF generator can echo the same breakdown
+ * the model saw), and the resolved variant (so the attempt row can record
+ * which mood produced it).
  */
-export function buildCmfPrompt(row: CmfSkuRow): BuildCmfPromptResult {
+export function buildCmfPrompt(
+  row: CmfSkuRow,
+  opts?: BuildCmfPromptOptions
+): BuildCmfPromptResult {
   const product = getCmfProduct(row.productSlug)
   if (!product) {
     throw new Error(`Unknown CMF product slug: ${row.productSlug}`)
@@ -188,6 +267,7 @@ export function buildCmfPrompt(row: CmfSkuRow): BuildCmfPromptResult {
 
   const productPhrase = product.promptDescriptor
   const colourwayLabel = row.colorwayName ?? row.label
+  const variant = selectPromptVariant(opts?.variantIndex ?? 0)
 
   const lines: string[] = [
     `Using the provided 3D clown CMF render of ${productPhrase}, convert it into a photorealistic studio product shot in the "${colourwayLabel}" colourway.`,
@@ -206,9 +286,7 @@ export function buildCmfPrompt(row: CmfSkuRow): BuildCmfPromptResult {
   }
 
   lines.push('')
-  lines.push(
-    `Lighting: clean studio product photography. Soft large key light from upper left, subtle fill from lower right to reveal material texture, gentle rim light to separate the products from the background. Realistic contact shadows and ambient occlusion where parts meet. Sharp focus across every unit.`
-  )
+  lines.push(variant.lightingClause)
 
   lines.push('')
   lines.push(
@@ -223,6 +301,7 @@ export function buildCmfPrompt(row: CmfSkuRow): BuildCmfPromptResult {
   return {
     basePrompt: lines.join('\n'),
     componentLines,
+    variant,
   }
 }
 

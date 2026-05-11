@@ -26,6 +26,7 @@ import {
   useCmfAttemptAction,
   useGenerateCmfRender,
 } from '@/hooks/useCmf'
+import { selectPromptVariant } from '@/lib/cmf/prompt'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
 import {
@@ -348,13 +349,21 @@ function AttemptCard({
         )}
       </button>
 
-      <div className="flex items-center justify-between gap-2 px-2.5 py-2 border-t border-border/40 text-[10px] text-muted-foreground">
-        <span className="font-mono">Attempt {attempt.attemptNumber}</span>
-        {attempt.completedAt ? (
-          <span>{formatDuration(attempt.startedAt, attempt.completedAt)}</span>
-        ) : (
-          <span className="text-amber-600 dark:text-amber-300">…</span>
-        )}
+      <div className="px-2.5 py-2 border-t border-border/40 space-y-0.5">
+        <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+          <span className="font-mono">Attempt {attempt.attemptNumber}</span>
+          {attempt.completedAt ? (
+            <span>{formatDuration(attempt.startedAt, attempt.completedAt)}</span>
+          ) : (
+            <span className="text-amber-600 dark:text-amber-300">…</span>
+          )}
+        </div>
+        <p
+          className="text-[9px] uppercase tracking-widest text-muted-foreground/70 truncate"
+          title="Lighting variant used for this attempt"
+        >
+          {selectPromptVariant(attempt.attemptNumber - 1).name}
+        </p>
       </div>
 
       {!isLoading && !isFailed && (
@@ -505,6 +514,10 @@ function InspectLightbox({
 
           <Section title="Metadata">
             <KeyVal k="Model" v={attempt.modelId ?? '—'} />
+            <KeyVal
+              k="Variant"
+              v={selectPromptVariant(attempt.attemptNumber - 1).name}
+            />
             <KeyVal
               k="Resolution"
               v={

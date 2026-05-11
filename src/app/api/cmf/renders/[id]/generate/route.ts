@@ -56,10 +56,16 @@ export async function POST(
         status: result.render.status,
         attemptId: result.attempt.id,
         attemptNumber: result.attempt.attemptNumber,
+        variantId: result.variant.id,
+        variantName: result.variant.name,
       },
     })
 
-    return NextResponse.json({ render: result.render, attempt: result.attempt })
+    return NextResponse.json({
+      render: result.render,
+      attempt: result.attempt,
+      variant: result.variant,
+    })
   } catch (err) {
     if (err instanceof CmfRenderError) {
       const status =
