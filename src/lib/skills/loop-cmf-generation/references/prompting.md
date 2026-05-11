@@ -1,101 +1,137 @@
 # Prompting (Nano Banana Recolour)
 
-The recolour prompt is the contract between a CMF spec and a generated render. It needs to be specific enough that Nano Banana respects geometry and material response, and free enough that it can render holographic / iridescent / pearlescent finishes that KeyShot struggles with.
+The recolour prompt is the contract between a CMF spec and a generated render. The canonical reference is the prompt Damien hand-tuned on Nano Banana / GPT-Image that consistently produces production-grade Switch 2 colourways. The deterministic prompt builder (`src/lib/cmf/prompt.ts`) mirrors its structure.
 
 ## Contents
 
-- Anatomy of a CMF prompt
-- Material phrasing
-- Holographic / iridescent / pearlescent finishes
-- Protected surfaces
-- Negative space (what to forbid)
-- Common failure modes and how to phrase around them
+- Canonical prompt (Damien, Switch 2 teal)
+- Universal structure
+- Material vocabulary (LOCK)
+- Per-surface region addressing
+- Lighting + quality bar
+- Common failure modes
 - When to deliberately diverge
 
-## Anatomy of a CMF prompt
+## Canonical prompt (Damien, Switch 2 teal)
+
+This is the gold standard. Every change to the deterministic prompt builder should be measured against this output.
 
 ```
-Using the attached image as a strict geometry reference, generate
-{product framing} in the "{colourway label}" colourway.
+Using the provided 3D clown CMF render of the Loop Switch 2 earplugs, convert it into a photorealistic studio product shot.
 
-Match the product silhouette, proportions, parting lines, lighting,
-camera angle and background of the reference exactly.
+Preserve the geometry, design, angle, framing, composition, and the relative positions of both earplug units exactly as in the source image. Do not alter the pose, perspective, scale, dial shape, ring shape, eartip shape, or any structural detail. Keep the "L" and "R" markings intact in the same location and orientation. Keep the pure black background unchanged.
 
-Apply the following CMF spec component-by-component:
-- {component label}: recolour to {pantone}, material {material}, {finish} finish
+Replace only the materials, colors, and lighting as follows:
+- Every BLUE surface (outer ring / dial bezel) → satin-finish teal metal. Brushed anisotropic highlights running along the ring, soft metallic sheen, fine satin grain, slightly cool deep teal tone reminiscent of anodized aluminum.
+- Every RED surface (main body / housing) → matte teal plastic in the same teal family. Diffuse low-sheen surface, no gloss, no specular hotspots, very subtle micro-texture. Slightly warmer/softer than the metal.
+- Every PINK surface (silicone eartips) → translucent milky teal silicone. Soft frosted appearance with gentle subsurface light scattering, smooth rubbery micro-surface, light visibly passes through the thinner edges, no hard reflections.
+
+Lighting: clean studio product photography. Soft large key light from upper left, subtle fill from lower right to reveal the satin grain on the metal and the translucency of the silicone, gentle rim light to separate the products from the black background. Realistic contact shadows and ambient occlusion where parts meet. Sharp focus across both earplugs.
+
+Photorealistic 4K product render quality with believable micro-surface detail. Output should look like a real photographed sample, not a CGI render.
+```
+
+Three things make this prompt good:
+
+1. **It addresses regions by their clown colour** ("Every BLUE surface", "Every RED surface", "Every PINK surface") rather than by component name. Nano Banana sees the clown's colours directly and needs no semantic mapping. This is the most reliable region-addressing strategy when the clown PNG is well-painted.
+2. **Material vocabulary is rich and specific** — anisotropic highlights, subsurface scattering, frosted appearance, contact shadows, ambient occlusion. The model reads these as steering signals, not decoration.
+3. **The quality bar lives at the end** — "real photographed sample, not a CGI render". Without this, Nano Banana defaults to a CGI feel.
+
+## Universal structure
+
+Every CMF prompt should follow this skeleton. The deterministic builder produces it for every SKU. Substitute the bracketed pieces from the workbook row.
+
+```
+Using the provided 3D clown CMF render of {productPhrase}, convert it into a
+photorealistic studio product shot in the "{colourwayLabel}" colourway.
+
+Preserve the geometry, design, angle, framing, composition, and the relative
+positions of every unit exactly as in the source image. Do not alter the pose,
+perspective, scale, silhouette, parting lines, or any structural detail. Keep
+any text, markings, or labels intact in the same location and orientation.
+Keep the source background unchanged.
+
+Replace only the materials, colors, and lighting as follows:
+- {component label}: recolour to {pantone} ({hex}) — {material vocabulary}, {finish vocabulary}, {technique if any}
 - ...
 
 Do NOT change: {protected surfaces}. Keep them visually identical to the reference image.
 
-Render at production quality: clean, crisp edges; correct material response.
+Lighting: clean studio product photography. Soft large key light from upper
+left, subtle fill from lower right, gentle rim light to separate the products
+from the background. Realistic contact shadows and ambient occlusion where
+parts meet. Sharp focus across every unit.
 
-Do NOT add logos, text, packaging, hands, models, props, lifestyle context,
-or background gradients. Single product on a clean neutral backdrop,
-suitable for a product CMF spec sheet.
+Photorealistic 4K product render quality with believable micro-surface detail.
+Output should look like a real photographed sample, not a CGI render.
 ```
 
-This shape is GUIDE-level. The recoloured component lines are the meaningful surface area for variation; everything else is LOCK.
+The preserve / lighting / quality clauses are LOCK. Only the recolour lines and the protected-surfaces list vary per SKU.
 
-## Material phrasing
+## Material vocabulary (LOCK)
 
-| Spec says | Prompt phrasing |
-|-----------|-----------------|
-| POM | "POM, matte" |
-| ABS, PC/ABS, polycarbonate | "ABS satin" (default) or "polycarbonate semi-gloss" when finish is "gloss" / "shiny" |
-| Silicone — opaque | "silicone, matte, opaque" |
-| Silicone — translucent (Dream) | "silicone with ~30% milky translucency, soft sheen, slight light transmission" |
-| Silicone — Shore 90 (Dream stem) | "firm silicone, semi-gloss" |
-| Aluminium AL6063 | "anodised aluminium, brushed satin" (or "polished mirror" for high-gloss specs) |
-| Fabric / microfiber | "woven fabric, matte, fibre direction visible" |
-| Velcro / loop face | "looped velcro fabric, matte, no specular highlights" |
-| Velcro / hook (TPU) | "hooked TPU velcro, matte, micro-scale grid texture" |
-| PU foam | "open-cell PU foam, matte, slightly fibrous edge" |
-| Pearlescent / iridescent paint | "pearlescent finish with subtle shift toward {hue} under highlight" |
+When the workbook says... use this wording in the prompt:
 
-When the workbook lists a coating like `NCVM`, `PVD`, or `UV high gloss`, drop the coating name into the prompt explicitly and trust Nano Banana to interpret it.
+| Workbook says | Wording |
+|---------------|---------|
+| POM | `POM with subtle matte finish, fine micro-texture, no specular hotspots` |
+| ABS / PC-ABS / polycarbonate (satin/NCVM/VDI 24 default) | `ABS with satin micro-texture, soft diffuse sheen, low specular response` |
+| ABS / PC-ABS with `gloss` / `highgloss` / `mirror` finish | `polycarbonate with high-gloss mirror polish, sharp specular highlights, deep reflections` |
+| ABS with `NCVM` coating | `NCVM-coated ABS, satin metal-like finish, brushed anisotropic highlights, fine satin grain reminiscent of anodized aluminum` |
+| Silicone, default | `opaque silicone with soft rubbery sheen, smooth micro-surface, gentle pliable appearance` |
+| Silicone, Shore 30 OR finish mentions `translucent` / `milky` / `see-through` | `translucent milky silicone with gentle subsurface light scattering, frosted appearance, smooth rubbery micro-surface, light visibly passes through the thinner edges, no hard reflections` |
+| Silicone, Shore 90 | `firm silicone with semi-gloss surface, slight specular response, smooth micro-texture` |
+| Aluminium AL6063 + brushed/satin finish | `anodised aluminium with brushed satin finish, fine anisotropic grain, soft metallic sheen` |
+| Aluminium AL6063 + mirror/polished finish | `polished aluminium with mirror finish, sharp specular highlights, deep reflections` |
+| PU foam | `open-cell PU foam, matte, slightly fibrous edge, soft diffuse surface` |
+| Fabric / microfiber / nylon (woven) | `woven fabric with matte surface, visible fibre direction, no specular highlights` |
+| Velcro loop / PA velcro | `looped velcro fabric, matte, no specular highlights, soft brushed appearance` |
+| Velcro hook / TPU | `hooked TPU velcro, matte, micro-scale grid texture` |
+| TPE | `TPE with soft matte surface, slight pliability, no specular hotspots` |
+| Anything `holographic`, `iridescent`, `pearlescent` | append `with holographic/iridescent/pearlescent shift, embedded in the material, not painted on top. No chromatic banding outside the intended region.` |
 
-## Holographic / iridescent / pearlescent finishes
+The workbook material wording is kept verbatim in addition to the rich vocabulary, so factory matching always has the source-of-truth string.
 
-KeyShot struggled with these. Nano Banana excels.
+## Per-surface region addressing
 
-- Use `holographic`, `iridescent`, or `pearlescent` explicitly. Do not paraphrase.
-- Add the directional hint: "shifts toward {colour} under raking light".
-- Add the negative: `no chromatic banding artefacts`, `no rainbow striping outside the holographic region`.
-- Two or three attempts will look different from each other; that is expected — pick the one with the cleanest shift.
+Two strategies, picked by the builder based on what data is available:
 
-## Protected surfaces
+1. **By clown colour** (preferred when the clown asset has per-region `colorHex`):
+   `Every {COLOR} surface ({component label}) → {recolour spec}`
+   This is what Damien's prompt does. The clown PNG paints each recolourable region in a stable colour (red, green, blue, yellow, plus pink as a fifth where needed), the prompt names that colour, and Nano Banana reads the clown directly. Most reliable.
 
-For every component the workbook did NOT spec, name it explicitly in the "Do NOT change" block. Nano Banana respects this much better when the surface has a name than when it sees "everything else stays the same."
+2. **By component label** (fallback when the clown has no colour map):
+   `{Component label}: {recolour spec}`
+   Less reliable because the model has to map the label to a region in the PNG, but acceptable when the clown is well-segmented and the label matches a single obvious surface.
 
-Pick names from the catalog labels (not snake-case region keys). Example for a Switch 2 SKU that only respecs the POM ring and cosmetic cap:
+The deterministic builder picks (1) when the resolved clown asset's `components[]` carries `colorHex` entries for the regions in the row's spec, otherwise (2). Designers can always upload a clown PNG with colour metadata to upgrade a product family to (1) addressing.
 
-```
-Do NOT change: Nozzle piece + retention ring, Eartip (hidden flange), Artwork.
-Keep them visually identical to the reference image.
-```
+## Lighting + quality bar
 
-## Negative space (what to forbid)
+Both are LOCK and the same across every SKU:
 
-The negatives are LOCK and should not change between SKUs:
+- Soft large key light, upper left.
+- Subtle fill, lower right.
+- Gentle rim light separating product from background.
+- Realistic contact shadows + ambient occlusion at part interfaces.
+- Sharp focus across every unit.
+- Photorealistic 4K render quality with believable micro-surface detail.
+- "Output should look like a real photographed sample, not a CGI render."
 
-- No logos (unless the spec asks for one — Loop logo on cases / artwork rows).
-- No text / labels / packaging copy.
-- No hands, models, ears, faces.
-- No lifestyle / contextual backgrounds.
-- No props (no smartphones, no bags, no headphones in frame).
-- No background gradients — keep the backdrop a flat neutral.
-- No depth-of-field blur outside the product silhouette.
+The last line is non-negotiable. Without it, Nano Banana tends to settle for a CGI-feel render.
 
-## Common failure modes and how to phrase around them
+## Common failure modes
 
-| Symptom | Cause | Phrase to add |
-|---------|-------|----------------|
-| Cap colour leaks onto the ring | Mask drifted | "Keep regions hard-edged; do not blend colours across parting lines." |
-| Eartip turned glossy when spec says matte | Material wording was generic | "Eartip silicone — matte, no specular reflection." |
-| Geometry slightly distorted | Prompt allowed creative reinterpretation | "Match silhouette exactly; do not stylise proportions." |
-| Background got a gradient | Background prompt forgotten | "Flat #fafafa neutral backdrop. No vignette." |
-| Holographic looks like a sticker | Material described too literally | Add "embedded in the material, not painted on top." |
-| Pantone too saturated | Nano Banana over-corrects | Reference the hex approximation in parentheses, e.g. "Pantone 7720C (≈ #2f8f70)" |
+| Symptom | Phrase to add |
+|---------|---------------|
+| Cap colour leaks onto the ring | Add to preserve clause: "Keep regions hard-edged; do not blend colours across parting lines." |
+| Eartip turned glossy when spec says matte | Already covered by silicone vocabulary above; double-check the matte rule is in the finish description. |
+| Geometry slightly distorted | The preserve clause already covers this; if it persists, add "Treat the silhouette as a strict mask." |
+| Background gradient appeared | The "keep the source background unchanged" line forbids this; if the clown PNG has a gradient backdrop, replace it with a black or neutral PNG first. |
+| Holographic looks like a sticker | Add: "embedded in the material, not painted on top." (Already in the iridescent vocabulary.) |
+| Pantone too saturated | Reference the hex approximation in parentheses, e.g. "Pantone 7720C (≈ #2f8f70) — a slightly cool deep teal". |
+| Output feels like CGI | Make sure the quality bar line is present verbatim. Bump model to Nano Banana Pro if it isn't already. |
+| L/R markings rotated or missing | The preserve clause already names "any text, markings, or labels"; if the model still drops them, add a product-specific call-out: "Keep the L and R laser-etched markings intact." |
 
 ## When to deliberately diverge
 
