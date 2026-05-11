@@ -58,6 +58,9 @@ export async function POST(
         attemptNumber: result.attempt.attemptNumber,
         variantId: result.variant.id,
         variantName: result.variant.name,
+        clownVariant: result.clown?.variantSlug ?? null,
+        clownLabel: result.clown?.label ?? null,
+        clownSource: result.clown?.source ?? null,
       },
     })
 
@@ -65,6 +68,7 @@ export async function POST(
       render: result.render,
       attempt: result.attempt,
       variant: result.variant,
+      clown: result.clown,
     })
   } catch (err) {
     if (err instanceof CmfRenderError) {

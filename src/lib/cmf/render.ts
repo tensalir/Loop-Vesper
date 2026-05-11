@@ -61,50 +61,108 @@ interface RenderArgs {
 interface ResolvedReferences {
   dataUrls: string[]
   primaryDataUrl: string | null
+  /** Which clown the resolver actually picked, for logging + UI surface. */
+  resolvedAsset: {
+    id: string
+    productSlug: string
+    variantSlug: string
+    label: string
+    source: 'explicit' | 'exact-variant' | 'product-fallback'
+    /** When `product-fallback`, how many variants the resolver was choosing among. */
+    poolSize: number
+  } | null
 }
 
 async function resolveRowReferences(args: {
   productSlug: string
   variantSlug: string
   clownAssetId: string | null
+  /**
+   * Monotonic per-SKU attempt counter (1-indexed). When the SKU has no
+   * explicit clown linked and the library has multiple clowns for the
+   * product, the resolver cycles through them via `(attemptNumber - 1) %
+   * pool.length` so every attempt explores a different angle / pose
+   * instead of every render landing on the same alphabetically-first
+   * variant.
+   */
+  attemptNumber: number
 }): Promise<ResolvedReferences> {
-  const dataUrls: string[] = []
-
+  // Tier 1: explicit clownAssetId on the render row.
   if (args.clownAssetId) {
     const asset = await prisma.cmfClownAsset.findUnique({
       where: { id: args.clownAssetId },
     })
     if (!asset) throw new CmfRenderError('reference', 'Linked clown asset is missing')
-    dataUrls.push(await downloadReferenceImageAsDataUrl(asset.imageUrl))
-  } else {
-    const fallback = await prisma.cmfClownAsset.findUnique({
-      where: {
-        productSlug_variantSlug: {
-          productSlug: args.productSlug,
-          variantSlug: args.variantSlug,
-        },
+    const dataUrl = await downloadReferenceImageAsDataUrl(asset.imageUrl)
+    return {
+      dataUrls: [dataUrl],
+      primaryDataUrl: dataUrl,
+      resolvedAsset: {
+        id: asset.id,
+        productSlug: asset.productSlug,
+        variantSlug: asset.variantSlug,
+        label: asset.label,
+        source: 'explicit',
+        poolSize: 1,
       },
-    })
-    if (fallback) {
-      dataUrls.push(await downloadReferenceImageAsDataUrl(fallback.imageUrl))
-    } else {
-      const productFallback = await prisma.cmfClownAsset.findFirst({
-        where: { productSlug: args.productSlug },
-        orderBy: { variantSlug: 'asc' },
-      })
-      if (productFallback) {
-        dataUrls.push(await downloadReferenceImageAsDataUrl(productFallback.imageUrl))
-      }
     }
   }
 
-  if (dataUrls.length === 0) {
-    throw new CmfRenderError(
-      'reference',
-      'No clown reference image is available. Upload a clown PNG for this product before rendering.'
-    )
+  // Tier 2: exact (productSlug, variantSlug) match.
+  const exact = await prisma.cmfClownAsset.findUnique({
+    where: {
+      productSlug_variantSlug: {
+        productSlug: args.productSlug,
+        variantSlug: args.variantSlug,
+      },
+    },
+  })
+  if (exact) {
+    const dataUrl = await downloadReferenceImageAsDataUrl(exact.imageUrl)
+    return {
+      dataUrls: [dataUrl],
+      primaryDataUrl: dataUrl,
+      resolvedAsset: {
+        id: exact.id,
+        productSlug: exact.productSlug,
+        variantSlug: exact.variantSlug,
+        label: exact.label,
+        source: 'exact-variant',
+        poolSize: 1,
+      },
+    }
   }
-  return { dataUrls, primaryDataUrl: dataUrls[0] ?? null }
+
+  // Tier 3: cycle through every clown for the product so a multi-angle
+  // library (e.g. Aphrodite Carry Case ships with 5 angles) produces a
+  // real fan instead of all attempts landing on the same alphabetically
+  // first variant. Pool ordering is stable so the cycling is reproducible.
+  const pool = await prisma.cmfClownAsset.findMany({
+    where: { productSlug: args.productSlug },
+    orderBy: [{ variantSlug: 'asc' }, { id: 'asc' }],
+  })
+  if (pool.length > 0) {
+    const idx = ((args.attemptNumber - 1) % pool.length + pool.length) % pool.length
+    const picked = pool[idx]
+    const dataUrl = await downloadReferenceImageAsDataUrl(picked.imageUrl)
+    return {
+      dataUrls: [dataUrl],
+      primaryDataUrl: dataUrl,
+      resolvedAsset: {
+        id: picked.id,
+        productSlug: picked.productSlug,
+        variantSlug: picked.variantSlug,
+        label: picked.label,
+        source: 'product-fallback',
+        poolSize: pool.length,
+      },
+    }
+  }
+
+  throw new CmfRenderError(
+    'reference',
+    'No clown reference image is available. Upload a clown PNG for this product before rendering.'
+  )
 }
 
 function ensureSupportedModel(modelId: string): string {
@@ -202,6 +260,7 @@ export async function runCmfRender({ renderId, triggeredByUserId }: RenderArgs) 
       productSlug: render.productSlug,
       variantSlug: render.variantSlug,
       clownAssetId: render.clownAssetId,
+      attemptNumber,
     })
 
     let enhancedPrompt = basePrompt
@@ -302,7 +361,12 @@ export async function runCmfRender({ renderId, triggeredByUserId }: RenderArgs) 
       },
     })
 
-    return { render: updated, attempt: completedAttempt, variant }
+    return {
+      render: updated,
+      attempt: completedAttempt,
+      variant,
+      clown: refs.resolvedAsset,
+    }
   } catch (err) {
     const category = err instanceof CmfRenderError ? err.category : 'model'
     const message = err instanceof Error ? err.message : 'Unknown render error'
