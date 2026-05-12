@@ -143,3 +143,79 @@ test('buildCmfPacketPdf stays portrait for every page even with many SKUs', asyn
     expect(height).toBeGreaterThan(width)
   }
 })
+
+/* ── Clown reference page (Damien's follow-up ask) ──────────────────── */
+
+// A minimal valid 1×1 PNG so the PDF builder can embed something without
+// touching the network. The bytes below are the standard png magic + a
+// single transparent pixel, base64-encoded for legibility.
+const TINY_PNG_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+
+test('buildCmfPacketPdf inserts a Clown reference page when a clown is provided', async () => {
+  const pdf = await buildCmfPacketPdf({
+    packetName: 'Switch 2 Emerald',
+    cmfCode: 'CMF-001234revA',
+    notes: null,
+    renders: [
+      {
+        ...SINGLE_RENDER,
+        clown: {
+          imageUrl: TINY_PNG_DATA_URL,
+          label: 'Switch 2 default clown',
+          components: [
+            { region: 'pom_ring', label: 'POM ring', colorHex: '#ff3344' },
+            { region: 'cosmetic_cap', label: 'Cosmetic cap', colorHex: '#3366ff' },
+          ],
+        },
+      } as any,
+    ],
+  })
+  const doc = await PDFDocument.load(pdf)
+  // CMF spec + Clown reference + Part breakdown = 3 pages.
+  expect(doc.getPageCount()).toBe(3)
+})
+
+test('buildCmfPacketPdf omits the Clown reference page when no clown is provided', async () => {
+  const pdf = await buildCmfPacketPdf({
+    packetName: 'Switch 2 Emerald',
+    cmfCode: 'CMF-001234revA',
+    notes: null,
+    renders: [SINGLE_RENDER as any],
+  })
+  const doc = await PDFDocument.load(pdf)
+  // No clown ⇒ still just the 2 base pages.
+  expect(doc.getPageCount()).toBe(2)
+})
+
+test('buildCmfPacketPdf supports per-SKU clown opt-in for multi-SKU packets', async () => {
+  const pdf = await buildCmfPacketPdf({
+    packetName: 'Switch 2 Spring 2026',
+    cmfCode: 'CMF-001234revA',
+    notes: null,
+    renders: [
+      {
+        ...SINGLE_RENDER,
+        clown: {
+          imageUrl: TINY_PNG_DATA_URL,
+          label: 'Switch 2 default clown',
+          components: [
+            { region: 'pom_ring', label: 'POM ring', colorHex: '#ff3344' },
+          ],
+        },
+      },
+      {
+        ...SINGLE_RENDER,
+        id: '00000000-0000-0000-0000-000000000002',
+        label: 'Switch 2 Gold',
+        colorwayName: 'Gold',
+        // No clown registered for this SKU — the deck should still build.
+      },
+    ] as any,
+  })
+  const doc = await PDFDocument.load(pdf)
+  // SKU 1: spec + clown + breakdown = 3
+  // SKU 2: spec + breakdown = 2 (no clown)
+  // Pack overview = 1
+  expect(doc.getPageCount()).toBe(6)
+})

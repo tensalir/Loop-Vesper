@@ -419,6 +419,17 @@ interface RenderProjection {
   renderUrl: string | null
   enhancedPrompt: string | null
   status: string
+  /** Resolved clown reference for this SKU, used to render the Clown
+   * reference page. Optional — when null, the clown page is skipped for
+   * that SKU and the rest of the deck still renders. */
+  clown?: ClownProjection | null
+}
+
+export interface ClownProjection {
+  imageUrl: string
+  label: string
+  /** Per-region colour metadata, used for the legend on the clown page. */
+  components: Array<{ region: string; label: string; colorHex?: string | null }>
 }
 
 async function drawProductRenderPage(args: SkuPageArgs) {
@@ -505,7 +516,151 @@ async function drawProductRenderPage(args: SkuPageArgs) {
   drawFooter({ page, fonts, pageIndex, totalPages, notes: packetNotes })
 }
 
-/* ── Page 2 (Part break down grid) ──────────────────────────────────────── */
+/* ── Page 2 (Clown reference) ──────────────────────────────────────────── */
+
+/**
+ * The clown reference is the multi-coloured CMF render used as the model's
+ * input. Designers asked for it to stay in the exported deck because the
+ * factory uses it to map each painted surface back to a component. We
+ * place it between the spec page and the breakdown so the flow reads
+ * spec → input → breakdown.
+ *
+ * When no clown is registered for the SKU (rare, but possible during
+ * bootstrap), the page is skipped entirely — see `buildCmfPacketPdf` for
+ * the gating.
+ */
+async function drawClownReferencePage(args: SkuPageArgs & { clown: ClownProjection }) {
+  const { pdf, fonts, meta, pageIndex, totalPages, packetNotes, isDraft, clown } = args
+  const page = pdf.addPage([PAGE_W, PAGE_H])
+
+  drawSourceHeader({
+    page,
+    fonts,
+    fields: meta,
+    pageLabel: 'Clown reference',
+    showDraftBadge: isDraft,
+  })
+
+  const sectionY = PAGE_H - HEADER_H - 20
+  page.drawText('Clown reference', {
+    x: MARGIN,
+    y: sectionY,
+    size: 11,
+    font: fonts.bold,
+    color: COLOURS.ink,
+  })
+  page.drawText(clown.label, {
+    x: MARGIN,
+    y: sectionY - 14,
+    size: 8,
+    font: fonts.mono,
+    color: COLOURS.muted,
+    maxWidth: PAGE_W - MARGIN * 2,
+  })
+
+  // Clown image plate (same proportions as the product render plate so the
+  // two pages feel like a matched pair).
+  const imageBoxX = MARGIN
+  const imageBoxW = PAGE_W - MARGIN * 2
+  const imageBoxH = (PAGE_H - HEADER_H - FOOTER_H) * 0.5
+  const imageBoxY = sectionY - 28 - imageBoxH
+
+  page.drawRectangle({
+    x: imageBoxX,
+    y: imageBoxY,
+    width: imageBoxW,
+    height: imageBoxH,
+    color: COLOURS.panelBg,
+    borderColor: COLOURS.faint,
+    borderWidth: 0.5,
+  })
+
+  const embedded = await embedRenderImage(pdf, clown.imageUrl)
+  if (embedded) {
+    const aspect = embedded.width / embedded.height
+    let drawW = imageBoxW - 16
+    let drawH = drawW / aspect
+    if (drawH > imageBoxH - 16) {
+      drawH = imageBoxH - 16
+      drawW = drawH * aspect
+    }
+    page.drawImage(embedded, {
+      x: imageBoxX + (imageBoxW - drawW) / 2,
+      y: imageBoxY + (imageBoxH - drawH) / 2,
+      width: drawW,
+      height: drawH,
+    })
+  } else {
+    const placeholder = 'Clown reference image not available'
+    const w = fonts.regular.widthOfTextAtSize(placeholder, 10)
+    page.drawText(placeholder, {
+      x: imageBoxX + (imageBoxW - w) / 2,
+      y: imageBoxY + imageBoxH / 2,
+      size: 10,
+      font: fonts.regular,
+      color: COLOURS.muted,
+    })
+  }
+
+  // Colour legend below the image: chips with the clown colour next to the
+  // component label. This is what links the painted region back to the
+  // spec line on Page 1.
+  const legendY = imageBoxY - 18
+  page.drawText('Colour legend', {
+    x: MARGIN,
+    y: legendY,
+    size: 8,
+    font: fonts.bold,
+    color: COLOURS.muted,
+  })
+
+  const entries = clown.components.filter((c) => c.colorHex)
+  if (entries.length === 0) {
+    page.drawText('No per-region colour metadata on this clown — match by visual reference.', {
+      x: MARGIN,
+      y: legendY - 14,
+      size: 9,
+      font: fonts.regular,
+      color: COLOURS.muted,
+    })
+  } else {
+    // 2-column legend so even a 6-region clown fits in one footer-clear band.
+    const cols = 2
+    const colW = (PAGE_W - MARGIN * 2 - 16 * (cols - 1)) / cols
+    const rowH = 16
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i]
+      const col = i % cols
+      const row = Math.floor(i / cols)
+      const x = MARGIN + col * (colW + 16)
+      const y = legendY - 14 - row * rowH
+      if (y - rowH < FOOTER_H + 8) break
+
+      const swatch = hexToRgb01(entry.colorHex ?? null)
+      page.drawRectangle({
+        x,
+        y: y - 9,
+        width: 12,
+        height: 12,
+        color: swatch ?? rgb(0.92, 0.92, 0.94),
+        borderColor: COLOURS.swatchBorder,
+        borderWidth: 0.5,
+      })
+      page.drawText(entry.label, {
+        x: x + 18,
+        y,
+        size: 9,
+        font: fonts.regular,
+        color: COLOURS.ink,
+        maxWidth: colW - 24,
+      })
+    }
+  }
+
+  drawFooter({ page, fonts, pageIndex, totalPages, notes: packetNotes })
+}
+
+/* ── Page 3 (Part break down grid) ──────────────────────────────────────── */
 
 async function drawPartBreakdownPage(args: SkuPageArgs) {
   const { pdf, fonts, render, meta, pageIndex, totalPages, packetNotes, isDraft } = args
@@ -763,19 +918,27 @@ interface BuildPdfArgs {
   /** When true, every page receives a DRAFT badge so the export is visibly
    * marked as a non-approved deliverable. */
   isDraft?: boolean
-  renders: Array<Pick<CmfRender,
-    'id' |
-    'label' |
-    'colorwayName' |
-    'productSlug' |
-    'productCode' |
-    'ean' |
-    'componentSpecs' |
-    'paletteSwatches' |
-    'renderUrl' |
-    'enhancedPrompt' |
-    'status'
-  >>
+  renders: Array<
+    Pick<
+      CmfRender,
+      | 'id'
+      | 'label'
+      | 'colorwayName'
+      | 'productSlug'
+      | 'productCode'
+      | 'ean'
+      | 'componentSpecs'
+      | 'paletteSwatches'
+      | 'renderUrl'
+      | 'enhancedPrompt'
+      | 'status'
+    > & {
+      /** Optional clown reference. When provided, a dedicated Clown
+       * reference page is appended between the CMF spec page and the part
+       * breakdown page for this SKU. */
+      clown?: ClownProjection | null
+    }
+  >
 }
 
 export async function buildCmfPacketPdf(args: BuildPdfArgs): Promise<Uint8Array> {
@@ -792,8 +955,12 @@ export async function buildCmfPacketPdf(args: BuildPdfArgs): Promise<Uint8Array>
   const fonts: PdfFontPair = { regular: helvetica, bold: helveticaBold, mono: courier }
 
   const includesOverview = args.renders.length > 1
-  // 2 pages per SKU + optional overview page when multi-SKU.
-  const totalPages = args.renders.length * 2 + (includesOverview ? 1 : 0)
+  // 2 base pages per SKU (CMF spec + Part breakdown) plus an optional
+  // clown reference page when the SKU has one resolved, plus an optional
+  // pack overview at the end for multi-SKU packets.
+  const totalPages =
+    args.renders.reduce((sum, r) => sum + (r.clown ? 3 : 2), 0) +
+    (includesOverview ? 1 : 0)
 
   let pageIndex = 1
   const baseMetaFor = (render: BuildPdfArgs['renders'][number]): MetaField[] => {
@@ -826,6 +993,7 @@ export async function buildCmfPacketPdf(args: BuildPdfArgs): Promise<Uint8Array>
       renderUrl: render.renderUrl,
       enhancedPrompt: render.enhancedPrompt,
       status: render.status,
+      clown: render.clown ?? null,
     }
 
     await drawProductRenderPage({
@@ -839,6 +1007,21 @@ export async function buildCmfPacketPdf(args: BuildPdfArgs): Promise<Uint8Array>
       isDraft: !!args.isDraft,
     })
     pageIndex += 1
+
+    if (render.clown) {
+      await drawClownReferencePage({
+        pdf,
+        fonts,
+        render: projection,
+        meta,
+        pageIndex,
+        totalPages,
+        packetNotes: args.notes,
+        isDraft: !!args.isDraft,
+        clown: render.clown,
+      })
+      pageIndex += 1
+    }
 
     await drawPartBreakdownPage({
       pdf,
@@ -869,6 +1052,7 @@ export async function buildCmfPacketPdf(args: BuildPdfArgs): Promise<Uint8Array>
         renderUrl: render.renderUrl,
         enhancedPrompt: render.enhancedPrompt,
         status: render.status,
+        clown: render.clown ?? null,
       })),
       baseMeta: baseMetaFor(args.renders[0]),
       pageIndex,

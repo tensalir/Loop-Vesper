@@ -196,29 +196,56 @@ async function resolveRowReferences(args: {
 }
 
 /**
- * Lightweight peek at the clown asset that *would* be picked for this SKU,
- * returning only the per-region colour metadata. Used to feed the prompt
- * builder so per-component recolour lines anchor on the actual clown colour
- * ("the orange surface on the reference (Cosmetic cap): …") instead of
- * labels only.
- *
- * Mirrors the resolution tiers used by `resolveRowReferences` but never
- * downloads the image — that work still happens inside the render try
- * block so storage errors are recorded against the attempt row.
+ * Public-facing metadata about the clown asset that *would* be picked for a
+ * given SKU, without downloading the image data URL. Used by the prompt
+ * builder (`buildCmfPrompt` clown legend) and the PDF generator (Clown
+ * reference page).
  */
-async function peekClownComponents(args: {
+export interface ResolvedClownMeta {
+  id: string
+  label: string
+  imageUrl: string
+  productSlug: string
+  variantSlug: string
+  components: Array<{ region: string; label: string; colorHex?: string | null }>
+  source: 'explicit' | 'exact-variant' | 'product-fallback'
+  /** When `product-fallback`, how many variants the resolver was choosing among. */
+  poolSize: number
+}
+
+/**
+ * Resolve which clown asset *would* be used for a SKU, mirroring the three
+ * tiers in `resolveRowReferences` but without downloading the image bytes.
+ * Returns null when no clown is registered for the product.
+ *
+ * Centralised here so the prompt builder, the PDF generator, and any future
+ * consumer always reason about the same asset selection rules.
+ */
+export async function resolveClownAssetForRender(args: {
   productSlug: string
   variantSlug: string
   clownAssetId: string | null
-  attemptNumber: number
-}): Promise<Array<{ region: string; label: string; colorHex?: string | null }>> {
+  /** Optional — only used by the product-fallback tier to pick a stable
+   * angle for this attempt. Defaults to 1 (no cycling). */
+  attemptNumber?: number
+}): Promise<ResolvedClownMeta | null> {
+  const attemptNumber = args.attemptNumber ?? 1
   try {
     if (args.clownAssetId) {
       const asset = await prisma.cmfClownAsset.findUnique({
         where: { id: args.clownAssetId },
-        select: { components: true },
       })
-      return readClownComponents(asset?.components)
+      if (!asset) return null
+      return {
+        id: asset.id,
+        label: asset.label,
+        imageUrl: asset.imageUrl,
+        productSlug: asset.productSlug,
+        variantSlug: asset.variantSlug,
+        components: readClownComponents(asset.components),
+        source: 'explicit',
+        poolSize: 1,
+      }
     }
 
     const exact = await prisma.cmfClownAsset.findUnique({
@@ -228,23 +255,56 @@ async function peekClownComponents(args: {
           variantSlug: args.variantSlug,
         },
       },
-      select: { components: true },
     })
-    if (exact) return readClownComponents(exact.components)
+    if (exact) {
+      return {
+        id: exact.id,
+        label: exact.label,
+        imageUrl: exact.imageUrl,
+        productSlug: exact.productSlug,
+        variantSlug: exact.variantSlug,
+        components: readClownComponents(exact.components),
+        source: 'exact-variant',
+        poolSize: 1,
+      }
+    }
 
     const pool = await prisma.cmfClownAsset.findMany({
       where: { productSlug: args.productSlug },
       orderBy: [{ variantSlug: 'asc' }, { id: 'asc' }],
-      select: { components: true },
     })
-    if (pool.length === 0) return []
-    const idx = ((args.attemptNumber - 1) % pool.length + pool.length) % pool.length
-    return readClownComponents(pool[idx].components)
+    if (pool.length === 0) return null
+    const idx = ((attemptNumber - 1) % pool.length + pool.length) % pool.length
+    const picked = pool[idx]
+    return {
+      id: picked.id,
+      label: picked.label,
+      imageUrl: picked.imageUrl,
+      productSlug: picked.productSlug,
+      variantSlug: picked.variantSlug,
+      components: readClownComponents(picked.components),
+      source: 'product-fallback',
+      poolSize: pool.length,
+    }
   } catch (err) {
     // Best-effort: a missing metadata row should never block the render.
-    console.warn('[cmf/render] clown metadata peek failed; falling back to label-only prompt', err)
-    return []
+    console.warn('[cmf/render] clown resolver failed; falling back to no clown context', err)
+    return null
   }
+}
+
+/**
+ * Backwards-compatible thin wrapper used by `runCmfRender` to keep the
+ * existing call site terse. Returns just the per-region colour metadata.
+ */
+async function peekClownComponents(args: {
+  productSlug: string
+  variantSlug: string
+  clownAssetId: string | null
+  attemptNumber: number
+}): Promise<Array<{ region: string; label: string; colorHex?: string | null }>> {
+  const resolved = await resolveClownAssetForRender(args)
+  return resolved?.components ?? []
 }
 
 function ensureSupportedModel(modelId: string): string {
