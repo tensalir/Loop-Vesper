@@ -1,77 +1,65 @@
 # Document Template
 
-Loop CMF documents have a recognisable shape: a banner, a hero render, a component spec table, a palette block, and identity metadata. Operations matches on these visible regions, so the template is LOCK and never changes per-product. SKU labels, ordering, and notes are editable in the HTML preview before export.
+Loop CMF documents have a recognisable shape: a top-of-page meta header (CMF number / Collection / Product name / Product code / EAN / Edit date / Drawn / Checked / Checked), a hero render with a vertical component spec list (Page 1), and a part breakdown grid (Page 2). The template mirrors Damien's source CMF deck so an exported PDF can drop straight into Loop's existing approval workflow without re-authoring.
 
 ## Contents
 
 - Page geometry
-- Banner
-- Hero region
-- Spec table
-- Footer (palette + identity)
-- Multi-SKU shared breakdown page
+- Meta header
+- Page 1 (Product render + spec list)
+- Page 2 (Part breakdown)
+- Optional pack overview page (multi-SKU)
 - HTML preview vs. PDF export
 - Editing posture (what is editable, what is not)
 - Approval gating
 
 ## Page geometry
 
-- Aspect ratio: 16:9. Width 1280, height 720 (PDF coordinates). Matches Damien's source deck.
-- Margins: 48px on all sides.
-- Banner height: 80px.
-- Footer height: 110px.
-- Hero region: left half, from below the banner to above the footer.
-- Spec table: right half, same vertical bounds.
+- Aspect ratio: A4 portrait. Width 595, height 842 (PDF coordinates).
+- Margins: 36pt on all sides.
+- Header height: 96pt (holds the 3×3 meta grid).
+- Footer height: 44pt (holds packet notes and the `-- N of M --` page marker).
 
-The PDF (`src/lib/cmf/pdf.ts`) implements these constants. The HTML preview must use the same constants so the preview cannot drift from the final PDF.
+The PDF (`src/lib/cmf/pdf.ts`) implements these constants and exports them as `CMF_PDF_GEOMETRY` for any consumer that needs to mirror the layout. The HTML preview is currently rendered at 16:9 (`CmfDocumentPreviewDialog.tsx`) so designers see roughly the same information density during draft; the PDF is the canonical surface for the designer-facing deliverable.
 
-## Banner
+## Meta header
 
-| Zone | Content |
-|------|---------|
-| Top-left | CMF code (bold), product family (muted, beneath) |
-| Top-centre | Colourway name (primary colour, uppercase) |
-| Top-right | Date (`YYYY-MM-DD`, mono), "Loop · CMF" (bold) |
+A 3×3 grid sits at the top of every page. Cells are LOCK; values change per SKU.
 
-The banner is sticky-feeling: every page in the packet uses the same banner with the SKU's colourway centred. The breakdown page uses "Pack breakdown" as the centre label.
+| Row 1 | Row 2 | Row 3 |
+|-------|-------|-------|
+| CMF number | Collection | Product name |
+| Product code | EAN code | Edit date |
+| Drawn | Checked | Checked |
 
-## Hero region
+Right of the grid: page label ("CMF Page 1" / "Part Break Down Page 2" / "Pack overview") in the primary colour, plus a DRAFT badge when `documentDraft.isDraft` is true.
 
-- Light grey backplate inside the hero rectangle.
-- The approved CMF render is centred and scaled to fit while preserving aspect ratio.
-- No drop shadow, no border around the render itself.
-- If no approved render exists, show a placeholder: "Render not generated yet" (muted, centred).
+## Page 1 (Product render + spec list)
 
-## Spec table
+- Section title: "Product render" (top-left, ink).
+- Hero plate: full-width panel beneath the title, ~45% of inner height. Light grey backplate; the approved render is aspect-preserving fit inside.
+- Component spec list: vertical stack below the hero plate. Each component has a labelled key/value block — Material, Finish, Colour, Artwork — that matches Damien's source template.
+- Placeholder copy when no approved render is bound: "Render not generated yet" (muted, centred).
 
-| Column | Width | Content |
-|--------|-------|---------|
-| Component | 22% | Swatch + label (label uses bold, swatch hex if known) |
-| Pantone / Hex | 22% | Pantone token preferred, hex fallback, "—" when missing |
-| Material | 18% | Material wording verbatim from workbook |
-| Finish | 18% | Finish wording verbatim from workbook |
-| Technique | 20% | Technique wording, muted colour |
+## Page 2 (Part breakdown)
 
-Header row uses uppercase, muted text. Body rows are 22px high. Truncate at column width — never wrap (Operations expects single-line entries). Notes go in the editable preview block, not the spec table.
+- Section title: "Part break down" (top-left, ink).
+- 2-column grid of cards, one per component. Each card shows the component label (primary colour), the swatch chip on the right, and a key/value column on the left with Pantone, Material, Finish, Technique.
+- Cards wrap to additional rows; cells stop drawing when the page footer would collide.
 
-## Footer (palette + identity)
+## Optional pack overview page
 
-Left half: palette swatches with Pantone token underneath each swatch. Auto-laid out 4 per row.
+When the packet has more than one SKU, a final overview page is appended:
 
-Right half (identity column):
+- Same meta header, page label "Pack overview".
+- "Pack breakdown" section title.
+- Grid of SKU cards (2 per row): colourway name (bold, primary), product slug + product code (mono), mini swatch row.
 
-- "Identity" header
-- `Product code  <code>` (mono)
-- `EAN  <ean>` (mono)
-- Packet notes (max width = right column), wrapped
+## Footer
 
-## Multi-SKU shared breakdown page
-
-Added automatically when the packet has more than one SKU. It is a single page summarising every SKU in the packet:
-
-- Banner with "Pack breakdown" centre label.
-- Grid of SKU cards (max 4 per row): colourway name (bold), product slug (mono), mini swatch row (up to 6 component swatches with labels).
-- Packet notes at the bottom, muted, wrapped to full width.
+- 1px hairline at the top of the footer band.
+- Packet notes (when set) wrap inside the left two thirds, muted.
+- Page marker `-- N of M --` on the right (mono), counting every page in the packet including the pack overview.
 
 ## HTML preview vs. PDF export
 
@@ -90,7 +78,7 @@ What this means in practice:
 | SKU ordering inside the packet | Component spec (material, finish, Pantone, technique) |
 | Colourway label override | Components present (add / remove) |
 | Packet notes / packet name | Approved render image (use approve flow instead) |
-| Palette overrides (additional swatches beyond components) | Banner template / layout / aspect ratio |
+| Palette overrides (additional swatches beyond components) | Meta header layout / page geometry |
 
 The editable subset goes through a packet-level `documentDraft` object (see `src/lib/cmf/document.ts`). Workbook edits require re-import.
 
@@ -99,4 +87,4 @@ The editable subset goes through a packet-level `documentDraft` object (see `src
 Final PDF export is gated on every SKU having an approved render attempt.
 
 - "Generate PDF" disabled until all SKUs have approvals.
-- If `documentDraft` opts a SKU into "draft override" (showing a chosen attempt without approving), the export shows a warning watermark with `DRAFT` ribbon and the export filename gains a `_DRAFT` suffix. Use sparingly — most CMF reviews want clean approval-gated PDFs.
+- If `documentDraft` opts a SKU into "draft override" (showing a chosen attempt without approving), the export draws a DRAFT badge next to each page label and the filename gains a `_DRAFT` suffix. Use sparingly — most CMF reviews want clean approval-gated PDFs.

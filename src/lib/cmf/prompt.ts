@@ -27,8 +27,85 @@
  * Vesper `enhancePrompt` service for Nano Banana–optimised polishing.
  */
 
-import type { CmfSkuRow, ComponentSpec } from './schema'
+import type { CmfSkuRow, ComponentSpec, PaletteSwatch } from './schema'
 import { getCmfProduct } from './products'
+
+/* ── Clown reference metadata ──────────────────────────────────────────── */
+
+/**
+ * The "clown" reference image is a multi-coloured render of the product
+ * where each recolourable surface is painted a distinct, easy-to-identify
+ * colour. When the resolved clown asset carries per-region colour metadata,
+ * we can tell the model which clown colour maps to which CMF component
+ * instead of relying on label-only addressing.
+ *
+ * Example: "the red surface on the reference (POM ring): recolour to
+ * Pantone 7720C …" gives Nano Banana an unambiguous region anchor and
+ * dramatically improves which surface actually gets the new material.
+ */
+export interface ClownComponentMeta {
+  region: string
+  label: string
+  colorHex?: string | null
+}
+
+/**
+ * Map an unbounded hex value to a short, model-friendly colour word. Hex
+ * itself is ambiguous to image models ("#ff3344 region" is hard to spot);
+ * named colours line up with how a designer points at the clown verbally.
+ */
+function describeClownHex(hex: string): string {
+  const normalised = hex.startsWith('#') ? hex.slice(1) : hex
+  if (normalised.length !== 6) return hex
+  const r = parseInt(normalised.slice(0, 2), 16)
+  const g = parseInt(normalised.slice(2, 4), 16)
+  const b = parseInt(normalised.slice(4, 6), 16)
+  // HSL conversion for an easy hue/saturation/lightness bucketing.
+  const rN = r / 255
+  const gN = g / 255
+  const bN = b / 255
+  const max = Math.max(rN, gN, bN)
+  const min = Math.min(rN, gN, bN)
+  const l = (max + min) / 2
+  const d = max - min
+  let h = 0
+  let s = 0
+  if (d !== 0) {
+    s = d / (1 - Math.abs(2 * l - 1))
+    switch (max) {
+      case rN:
+        h = ((gN - bN) / d) % 6
+        break
+      case gN:
+        h = (bN - rN) / d + 2
+        break
+      default:
+        h = (rN - gN) / d + 4
+    }
+    h = Math.round(h * 60)
+    if (h < 0) h += 360
+  }
+
+  // Very dark / very light → grayscale buckets, even when saturated.
+  if (l < 0.1) return 'near-black'
+  if (l > 0.92 && s < 0.2) return 'white'
+  if (s < 0.12) return l < 0.4 ? 'dark grey' : l > 0.7 ? 'light grey' : 'grey'
+
+  // Hue buckets tuned for the clown palettes designers tend to author.
+  if (h < 15 || h >= 345) return 'red'
+  if (h < 35) return 'orange'
+  if (h < 55) return 'yellow-orange'
+  if (h < 70) return 'yellow'
+  if (h < 95) return 'lime green'
+  if (h < 150) return 'green'
+  if (h < 175) return 'teal'
+  if (h < 200) return 'cyan'
+  if (h < 235) return 'blue'
+  if (h < 265) return 'indigo'
+  if (h < 290) return 'purple'
+  if (h < 320) return 'magenta'
+  return 'pink'
+}
 
 /* ── Prompt variants ───────────────────────────────────────────────────── */
 
@@ -110,38 +187,60 @@ function describeMaterial(component: ComponentSpec): string {
   const wantsGloss = /(gloss|highgloss|mirror|polished)/.test(finishLower)
   const wantsNcvm = /(ncvm)/.test(finishLower)
   const wantsBrushed = /(brushed|satin|anodised|anodized)/.test(finishLower)
-  const wantsMatte = /(matte|matt|vdi\s*2[0-9]|vdi\s*1[0-9])/.test(finishLower)
+  // VDI 21 / VDI 22 are explicit matte texture spec; treat them as the
+  // "deep matte" cue the factory sheet expects.
+  const wantsVdiMatte = /(vdi\s*2[0-9]|vdi\s*1[0-9])/.test(finishLower)
+  const wantsMatte = /(matte|matt)/.test(finishLower) || wantsVdiMatte
   const wantsTranslucent = /(translucent|milky|see.?through|shore\s*30)/.test(
     m + ' ' + finishLower
   )
 
-  // POM
+  // POM — matte spec from Damien's Switch 2 pack. Carry the verbatim "Matte"
+  // wording the workbook uses so the model never confuses POM with a glossy
+  // injection-moulded plastic.
   if (m.includes('pom')) {
-    return `${raw} (subtle matte finish, fine micro-texture, no specular hotspots)`
+    if (wantsGloss) {
+      return `${raw} (rare gloss POM, sharp specular highlights, smooth micro-texture)`
+    }
+    return `${raw} (deeply matte engineering plastic, fine micro-texture, completely diffuse with no specular hotspots, body colour visible through pigment not coating)`
   }
 
   // Polycarbonate / ABS family
   if (m.includes('pc/abs') || m.includes('pc abs') || m.includes('polycarbonate')) {
     if (wantsGloss) {
-      return `${raw} (high-gloss mirror polish, sharp specular highlights, deep reflections)`
+      return `${raw} (high-gloss mirror polish, sharp specular highlights, deep reflections, smooth glassy injection-moulded surface)`
     }
     if (wantsNcvm) {
-      return `${raw} (NCVM-coated, satin metal-like finish, brushed anisotropic highlights, fine satin grain reminiscent of anodised aluminium)`
+      return `${raw} (NCVM-coated, satin metal-like finish, brushed anisotropic highlights, fine satin grain reminiscent of anodised aluminium, subtle metallic sheen layered on top of the plastic)`
+    }
+    if (wantsVdiMatte) {
+      return `${raw} (${component.finish} texture: deep matte injection-mould grain, fine even sand-like micro-texture, fully diffuse, no specular hotspots)`
     }
     return `${raw} (satin micro-texture, soft diffuse sheen, low specular response)`
   }
   if (m.includes('abs')) {
     if (wantsNcvm) {
-      return `${raw} (NCVM-coated, satin metal-like finish, brushed anisotropic highlights, fine satin grain reminiscent of anodised aluminium)`
+      return `${raw} (NCVM-coated, satin metal-like finish, brushed anisotropic highlights, fine satin grain reminiscent of anodised aluminium, subtle metallic sheen layered on top of the plastic)`
     }
     if (wantsGloss) {
-      return `${raw} (high-gloss surface, sharp specular highlights, deep reflections)`
+      return `${raw} (high-gloss injection-moulded plastic, sharp specular highlights, deep reflections, smooth glassy surface — clearly a polished plastic, not a metallic coating)`
+    }
+    if (wantsVdiMatte) {
+      return `${raw} (${component.finish} texture: deep matte injection-mould grain, fine even sand-like micro-texture, fully diffuse, no specular hotspots)`
     }
     return `${raw} (satin micro-texture, soft diffuse sheen, low specular response)`
   }
 
   // Silicone
   if (m.includes('silicon')) {
+    // "Milky see through 30%" reads as: clearly translucent, but only
+    // 30% light passes — i.e. frosted, not glassy. Spell that out so the
+    // model doesn't default to either fully opaque or fully transparent.
+    const seeThroughMatch = /see.?through\s*(\d{1,3})/.exec(finishLower)
+    if (seeThroughMatch) {
+      const pct = Math.min(95, Math.max(5, Number(seeThroughMatch[1] ?? '30')))
+      return `${raw} (translucent milky silicone, roughly ${pct}% light transmission so colour is clearly tinted but not glassy, gentle subsurface light scattering, frosted appearance, smooth rubbery micro-surface, light visibly passes through the thinner edges, no hard specular reflections)`
+    }
     if (wantsTranslucent || m.includes('shore 30')) {
       return `${raw} (translucent milky silicone with gentle subsurface light scattering, frosted appearance, smooth rubbery micro-surface, light visibly passes through the thinner edges, no hard reflections)`
     }
@@ -191,6 +290,8 @@ function describeMaterial(component: ComponentSpec): string {
   }
 
   // Generic fallback: workbook material wins, hint only if finish gives one.
+  if (wantsBrushed) return `${raw} (brushed/satin micro-texture, soft anisotropic sheen, no harsh highlights)`
+  if (wantsNcvm) return `${raw} (NCVM-coated, satin metal-like finish, brushed anisotropic highlights)`
   if (wantsMatte) return `${raw} (matte, diffuse, no specular hotspots)`
   if (wantsGloss) return `${raw} (high-gloss, sharp specular highlights)`
   return raw
@@ -208,10 +309,24 @@ function describeFinish(component: ComponentSpec): string {
 
 /* ── Per-component recolour line ───────────────────────────────────────── */
 
-function describeComponent(component: ComponentSpec): string {
+function describeComponent(
+  component: ComponentSpec,
+  clownByRegion: Map<string, ClownComponentMeta> | null
+): string {
   const colour = component.pantone
     ? `${component.pantone}${component.colorHex ? ` (≈ ${component.colorHex})` : ''}`
     : component.colorHex ?? null
+
+  // Anchor the line on the clown reference colour when we have one. This is
+  // the single biggest reason the model misses a region: the label "Cosmetic
+  // cap" is ambiguous in the reference, but "the orange surface (Cosmetic
+  // cap)" is not.
+  const clownMatch = clownByRegion?.get(component.region) ?? null
+  const clownColourWord =
+    clownMatch?.colorHex ? describeClownHex(clownMatch.colorHex) : null
+  const lineHead = clownColourWord
+    ? `${component.label} (the ${clownColourWord} surface on the reference)`
+    : component.label
 
   const parts: string[] = []
   if (colour) parts.push(`recolour to ${colour}`)
@@ -221,9 +336,19 @@ function describeComponent(component: ComponentSpec): string {
   if (finish) parts.push(finish)
   if (component.technique) parts.push(`technique: ${component.technique}`)
   if (parts.length === 0) {
-    return `${component.label}: keep as in the reference`
+    return `${lineHead}: keep as in the reference`
   }
-  return `${component.label}: ${parts.join(', ')}`
+  return `${lineHead}: ${parts.join(', ')}`
+}
+
+/* ── Palette context ───────────────────────────────────────────────────── */
+
+function describePaletteSwatch(swatch: PaletteSwatch): string | null {
+  const colour = swatch.pantone
+    ? `${swatch.pantone}${swatch.colorHex ? ` (≈ ${swatch.colorHex})` : ''}`
+    : swatch.colorHex ?? null
+  if (!colour) return null
+  return `${swatch.label} → ${colour}`
 }
 
 /* ── Public ─────────────────────────────────────────────────────────────── */
@@ -236,6 +361,13 @@ export interface BuildCmfPromptOptions {
    * still produces the canonical prompt.
    */
   variantIndex?: number
+  /**
+   * Optional clown reference metadata. When provided, prompt lines use
+   * "the {colour} surface on the reference (Label)" addressing instead of
+   * label-only, which dramatically improves which surface the model
+   * recolours. Falls back silently when no metadata is available.
+   */
+  clownComponents?: ClownComponentMeta[] | null
 }
 
 export interface BuildCmfPromptResult {
@@ -259,7 +391,17 @@ export function buildCmfPrompt(
     throw new Error(`Unknown CMF product slug: ${row.productSlug}`)
   }
 
-  const componentLines = row.components.map(describeComponent)
+  // Build a region → clown metadata lookup once so per-component rendering
+  // stays O(1). Skip entries without a hex (they add noise without info).
+  const clownByRegion = (() => {
+    const entries = (opts?.clownComponents ?? []).filter((c) => c.colorHex)
+    if (entries.length === 0) return null
+    return new Map(entries.map((c) => [c.region, c]))
+  })()
+
+  const componentLines = row.components.map((c) =>
+    describeComponent(c, clownByRegion)
+  )
 
   const protectedSurfaces = product.components
     .filter((c) => !row.components.find((rc) => rc.region === c.region))
@@ -273,10 +415,32 @@ export function buildCmfPrompt(
     `Using the provided 3D clown CMF render of ${productPhrase}, convert it into a photorealistic studio product shot in the "${colourwayLabel}" colourway.`,
     '',
     `Preserve the geometry, design, angle, framing, composition, and the relative positions of every unit exactly as in the source image. Do not alter the pose, perspective, scale, silhouette, parting lines, or any structural detail. Keep any text, markings, or labels (e.g. "L"/"R", logos, etched artwork) intact in the same location and orientation. Keep the source background unchanged.`,
-    '',
-    `Replace only the materials, colors, and lighting as follows:`,
-    ...componentLines.map((l) => `- ${l}`),
   ]
+
+  // Insert the clown reference legend right after the preserve clause so the
+  // model knows which surface maps to which label before it reads the
+  // recolour instructions. We only emit the legend for components the SKU
+  // is actually touching — listing untouched regions here just dilutes
+  // attention.
+  if (clownByRegion) {
+    const legendEntries: string[] = []
+    for (const component of row.components) {
+      const meta = clownByRegion.get(component.region)
+      if (meta?.colorHex) {
+        legendEntries.push(`${describeClownHex(meta.colorHex)} → ${component.label}`)
+      }
+    }
+    if (legendEntries.length > 0) {
+      lines.push('')
+      lines.push(
+        `Clown reference legend (which solid colour on the reference maps to which surface): ${legendEntries.join('; ')}.`
+      )
+    }
+  }
+
+  lines.push('')
+  lines.push(`Replace only the materials, colors, and lighting as follows:`)
+  lines.push(...componentLines.map((l) => `- ${l}`))
 
   if (protectedSurfaces.length > 0) {
     lines.push('')
@@ -285,12 +449,26 @@ export function buildCmfPrompt(
     )
   }
 
+  // Palette context: the workbook often carries an overall CMF palette
+  // beyond the per-component swatches (collection accents, packaging cues,
+  // etc.). Surface it so the model keeps cross-part colour harmony rather
+  // than treating every component as a free variable.
+  const paletteLines = (row.palette ?? [])
+    .map(describePaletteSwatch)
+    .filter((s): s is string => Boolean(s))
+  if (paletteLines.length > 0) {
+    lines.push('')
+    lines.push(
+      `Overall CMF palette context (for colour harmony, not extra surfaces to recolour): ${paletteLines.join('; ')}.`
+    )
+  }
+
   lines.push('')
   lines.push(variant.lightingClause)
 
   lines.push('')
   lines.push(
-    `Photorealistic 4K product render quality with believable micro-surface detail. Output should look like a real photographed sample, not a CGI render.`
+    `Photorealistic 4K product render quality with believable micro-surface detail. Material fidelity is critical — finish (matte vs satin vs gloss, NCVM, VDI texture, milky translucent silicone, brushed metal) must read correctly even when the colour is matched. Output should look like a real photographed sample, not a CGI render.`
   )
 
   if (row.notes) {

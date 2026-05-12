@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
-import { buildCmfPacketPdf } from '../src/lib/cmf/pdf'
+import { PDFDocument } from 'pdf-lib'
+import { buildCmfPacketPdf, CMF_PDF_GEOMETRY } from '../src/lib/cmf/pdf'
 
 /**
  * Smoke test for the CMF PDF builder. We don't try to compare visual output —
@@ -71,4 +72,74 @@ test('buildCmfPacketPdf adds a breakdown page for multi-SKU packets', async () =
   })
   expect(pdf.length).toBeGreaterThan(500)
   expect(pdfHeader(pdf)).toBe('%PDF-')
+})
+
+/* ── Source-template structure (Damien's Loop CMF deck) ─────────────── */
+
+test('buildCmfPacketPdf renders A4 portrait pages, matching the source CMF deck', async () => {
+  const pdf = await buildCmfPacketPdf({
+    packetName: 'Switch 2 Emerald',
+    cmfCode: 'CMF-001234revA',
+    notes: null,
+    renders: [SINGLE_RENDER as any],
+  })
+  const doc = await PDFDocument.load(pdf)
+  const page = doc.getPage(0)
+  const size = page.getSize()
+  // A4 portrait: 595 × 842 pt — Damien's source template orientation.
+  expect(Math.round(size.width)).toBe(CMF_PDF_GEOMETRY.PAGE_W)
+  expect(Math.round(size.height)).toBe(CMF_PDF_GEOMETRY.PAGE_H)
+  expect(size.height).toBeGreaterThan(size.width)
+})
+
+test('buildCmfPacketPdf produces two pages per SKU (render + part breakdown)', async () => {
+  const pdf = await buildCmfPacketPdf({
+    packetName: 'Switch 2 Emerald',
+    cmfCode: 'CMF-001234revA',
+    notes: null,
+    renders: [SINGLE_RENDER as any],
+  })
+  const doc = await PDFDocument.load(pdf)
+  expect(doc.getPageCount()).toBe(2)
+})
+
+test('buildCmfPacketPdf appends a pack overview page for multi-SKU packets', async () => {
+  const renders = [
+    SINGLE_RENDER,
+    {
+      ...SINGLE_RENDER,
+      id: '00000000-0000-0000-0000-000000000002',
+      label: 'Switch 2 Gold',
+      colorwayName: 'Gold',
+    },
+  ]
+  const pdf = await buildCmfPacketPdf({
+    packetName: 'Switch 2 Spring 2026',
+    cmfCode: 'CMF-001234revA',
+    notes: null,
+    renders: renders as any,
+  })
+  const doc = await PDFDocument.load(pdf)
+  // 2 SKUs × 2 template pages + 1 pack overview = 5
+  expect(doc.getPageCount()).toBe(5)
+})
+
+test('buildCmfPacketPdf stays portrait for every page even with many SKUs', async () => {
+  const renders = Array.from({ length: 3 }).map((_, i) => ({
+    ...SINGLE_RENDER,
+    id: `00000000-0000-0000-0000-00000000000${i + 1}`,
+    label: `Switch 2 #${i + 1}`,
+    colorwayName: `Way ${i + 1}`,
+  }))
+  const pdf = await buildCmfPacketPdf({
+    packetName: 'Switch 2 Trio',
+    cmfCode: 'CMF-001234revA',
+    notes: null,
+    renders: renders as any,
+  })
+  const doc = await PDFDocument.load(pdf)
+  for (let i = 0; i < doc.getPageCount(); i++) {
+    const { width, height } = doc.getPage(i).getSize()
+    expect(height).toBeGreaterThan(width)
+  }
 })

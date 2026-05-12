@@ -145,3 +145,80 @@ test('normaliseParsedSheets produces validated CmfSkuRows', () => {
   expect(switch2Row.cmfCode).toBe('CMF-001234revA')
   expect(switch2Row.components.length).toBeGreaterThanOrEqual(2)
 })
+
+/* ── Multi-product (Damien's Switch 2 + Cocoon ask) ──────────────────── */
+
+/**
+ * Damien asked: "what if I filled the Switch 2 + Cocoon in my Excel for
+ * example? Because I have the feeling it's product per product the render
+ * generation". The data flow is intentionally product-per-packet — a
+ * single workbook with both tabs produces one packet per product, each
+ * scoped to that product's SKUs. This fixture pins that property at the
+ * parser/normaliser level so future changes don't quietly collapse the
+ * two products into one packet.
+ */
+function buildSwitch2PlusCocoonFixture(): Buffer {
+  const switch2 = [
+    ['', 'Common specs', 'SKU 1'],
+    ['BANNER', '', ''],
+    ['CMF number', '', 'CMF-001234revA'],
+    ['Collection', 'Switch 2', ''],
+    ['Product Name', '', 'Switch 2 Emerald'],
+    ['Product Code', '', 'en-sw-emb-02'],
+    ['POM RING', '', ''],
+    ['Material', 'POM', ''],
+    ['Finish', 'Matte', ''],
+    ['Colour', '', 'Pantone 7720C'],
+  ]
+  const cocoon = [
+    ['', 'Common specs', 'SKU 1'],
+    ['BANNER', '', ''],
+    ['CMF number', '', 'CMF-002000revA'],
+    ['Collection', 'Cocoon', ''],
+    ['Product Name', '', 'Cocoon Berry'],
+    ['Product Code', '', 'cc-ber-01'],
+    ['EAR CUSHION', '', ''],
+    ['Material', 'Fabric', ''],
+    ['Finish', 'Soft', ''],
+    ['Colour', '', 'Pantone 1777C'],
+    ['FOAM', '', ''],
+    ['Material', 'PU foam', ''],
+    ['Colour', '', 'Black'],
+  ]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(switch2), 'Switch 2')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cocoon), 'Cocoon')
+  const out = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+  return Buffer.isBuffer(out) ? out : Buffer.from(out)
+}
+
+test('a Switch 2 + Cocoon workbook produces one normalised row per product', () => {
+  const buffer = buildSwitch2PlusCocoonFixture()
+  const parsed = parseCmfWorkbook(buffer)
+  expect(parsed.format).toBe('transposed')
+  expect(parsed.sheets.map((s) => s.productSlug).sort()).toEqual(['cocoon', 'switch2'])
+
+  const result = normaliseParsedSheets(parsed.sheets)
+  expect(result.errors).toHaveLength(0)
+  // One row per product (one filled SKU column on each tab).
+  expect(result.rows).toHaveLength(2)
+  const slugs = result.rows.map((r) => r.productSlug).sort()
+  expect(slugs).toEqual(['cocoon', 'switch2'])
+})
+
+test('bucketing rows by productSlug preserves the multi-product split that createPacketFromRows relies on', () => {
+  // The packet creator groups by `productSlug` into one packet per product.
+  // Replicate that grouping here so the property stays explicitly tested
+  // without dragging Prisma into a unit test.
+  const buffer = buildSwitch2PlusCocoonFixture()
+  const parsed = parseCmfWorkbook(buffer)
+  const result = normaliseParsedSheets(parsed.sheets)
+
+  const buckets = new Map<string, number>()
+  for (const row of result.rows) {
+    buckets.set(row.productSlug, (buckets.get(row.productSlug) ?? 0) + 1)
+  }
+  expect(buckets.size).toBe(2)
+  expect(buckets.get('switch2')).toBe(1)
+  expect(buckets.get('cocoon')).toBe(1)
+})

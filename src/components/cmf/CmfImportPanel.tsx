@@ -6,10 +6,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useImportCmfWorkbook } from '@/hooks/useCmf'
 import { useToast } from '@/components/ui/use-toast'
-import { Upload, Download, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Upload, Download, Loader2, AlertTriangle, CheckCircle2, Package } from 'lucide-react'
 
 interface CmfImportPanelProps {
   onPacketCreated?: (packetId: string) => void
+}
+
+interface CreatedPacketSummary {
+  id: string
+  name: string
+  productSlug: string | null
+  productName: string | null
+  renderCount: number
 }
 
 export function CmfImportPanel({ onPacketCreated }: CmfImportPanelProps) {
@@ -20,7 +28,10 @@ export function CmfImportPanel({ onPacketCreated }: CmfImportPanelProps) {
   const [errors, setErrors] = useState<
     Array<{ rowIndex: number; field?: string; message: string }>
   >([])
-  const [lastSuccess, setLastSuccess] = useState<{ rows: number } | null>(null)
+  const [lastSuccess, setLastSuccess] = useState<{
+    rows: number
+    packets: CreatedPacketSummary[]
+  } | null>(null)
   const importMutation = useImportCmfWorkbook()
   const { toast } = useToast()
 
@@ -39,22 +50,38 @@ export function CmfImportPanel({ onPacketCreated }: CmfImportPanelProps) {
         cmfCode: cmfCode || undefined,
         createPacket: true,
       })
-      const packetCount = result.packets?.length ?? (result.packet ? 1 : 0)
+      const createdPackets: CreatedPacketSummary[] = (result.packets ?? []).map((p) => ({
+        id: p.id,
+        name: p.name,
+        productSlug: p.productSlug,
+        productName: p.productName,
+        renderCount: p.renderCount,
+      }))
+      const packetCount = createdPackets.length || (result.packet ? 1 : 0)
+      // Compact "Switch 2, Cocoon" summary; falls back to packet name when
+      // the catalog doesn't know the slug (so we never silently lose info).
+      const productListLabel = createdPackets
+        .map((p) => p.productName ?? p.name)
+        .join(', ')
       const productSummary =
         packetCount > 1
-          ? ` across ${packetCount} product ${packetCount === 1 ? 'packet' : 'packets'}`
+          ? ` across ${packetCount} product packets`
           : ''
       if (result.import.errors.length > 0) {
         setErrors(result.import.errors)
+        setLastSuccess(null)
         toast({
           title: 'Import had warnings',
           description: `${result.import.rowCount} rows imported${productSummary}, ${result.import.errors.length} rows skipped`,
         })
       } else {
-        setLastSuccess({ rows: result.import.rowCount })
+        setLastSuccess({ rows: result.import.rowCount, packets: createdPackets })
         toast({
           title: 'Workbook imported',
-          description: `Created ${packetCount} ${packetCount === 1 ? 'packet' : 'packets'} from ${result.import.rowCount} rows`,
+          description:
+            packetCount > 1 && productListLabel
+              ? `Created ${packetCount} product packets: ${productListLabel}`
+              : `Created ${packetCount} ${packetCount === 1 ? 'packet' : 'packets'} from ${result.import.rowCount} rows`,
         })
       }
       if (result.packet?.id) {
@@ -146,11 +173,40 @@ export function CmfImportPanel({ onPacketCreated }: CmfImportPanelProps) {
       </div>
 
       {lastSuccess && (
-        <div className="flex items-start gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-xs text-emerald-700 dark:text-emerald-200">
-          <CheckCircle2 className="h-4 w-4 flex-shrink-0 mt-0.5" />
-          <span>
-            Imported {lastSuccess.rows} {lastSuccess.rows === 1 ? 'row' : 'rows'} cleanly.
-          </span>
+        <div className="space-y-2 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-xs text-emerald-700 dark:text-emerald-200">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="h-4 w-4 flex-shrink-0 mt-0.5" />
+            <span>
+              Imported {lastSuccess.rows} {lastSuccess.rows === 1 ? 'row' : 'rows'} cleanly
+              {lastSuccess.packets.length > 1
+                ? ` into ${lastSuccess.packets.length} product packets.`
+                : '.'}
+            </span>
+          </div>
+          {lastSuccess.packets.length > 0 && (
+            <ul className="space-y-1 pl-6">
+              {lastSuccess.packets.map((p) => (
+                <li key={p.id} className="flex items-center gap-2">
+                  <Package className="h-3 w-3 flex-shrink-0 opacity-70" />
+                  <button
+                    type="button"
+                    onClick={() => onPacketCreated?.(p.id)}
+                    className="text-left underline-offset-2 hover:underline"
+                  >
+                    {p.productName ?? p.name}
+                  </button>
+                  <span className="text-emerald-700/70 dark:text-emerald-200/70">
+                    · {p.renderCount} {p.renderCount === 1 ? 'SKU' : 'SKUs'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {lastSuccess.packets.length > 1 && (
+            <p className="pl-6 text-[11px] italic text-emerald-700/70 dark:text-emerald-200/70">
+              Each product becomes its own packet — click any to open it.
+            </p>
+          )}
         </div>
       )}
 

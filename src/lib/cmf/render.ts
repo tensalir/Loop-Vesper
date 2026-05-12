@@ -70,7 +70,34 @@ interface ResolvedReferences {
     source: 'explicit' | 'exact-variant' | 'product-fallback'
     /** When `product-fallback`, how many variants the resolver was choosing among. */
     poolSize: number
+    /** Per-region colour metadata (when the clown was uploaded with one).
+     * Used by `buildCmfPrompt` to address surfaces by their clown colour. */
+    components: Array<{ region: string; label: string; colorHex?: string | null }>
   } | null
+}
+
+/** Best-effort parser for the `CmfClownAsset.components` JSON column. */
+function readClownComponents(
+  components: unknown
+): Array<{ region: string; label: string; colorHex?: string | null }> {
+  if (!Array.isArray(components)) return []
+  const out: Array<{ region: string; label: string; colorHex?: string | null }> = []
+  for (const entry of components) {
+    if (!entry || typeof entry !== 'object') continue
+    const region = (entry as { region?: unknown }).region
+    const label = (entry as { label?: unknown }).label
+    const colorHex =
+      (entry as { color_hex?: unknown }).color_hex ??
+      (entry as { colorHex?: unknown }).colorHex
+    if (typeof region !== 'string' || region.length === 0) continue
+    if (typeof label !== 'string' || label.length === 0) continue
+    out.push({
+      region,
+      label,
+      colorHex: typeof colorHex === 'string' ? colorHex : null,
+    })
+  }
+  return out
 }
 
 async function resolveRowReferences(args: {
@@ -104,6 +131,7 @@ async function resolveRowReferences(args: {
         label: asset.label,
         source: 'explicit',
         poolSize: 1,
+        components: readClownComponents(asset.components),
       },
     }
   }
@@ -129,6 +157,7 @@ async function resolveRowReferences(args: {
         label: exact.label,
         source: 'exact-variant',
         poolSize: 1,
+        components: readClownComponents(exact.components),
       },
     }
   }
@@ -155,6 +184,7 @@ async function resolveRowReferences(args: {
         label: picked.label,
         source: 'product-fallback',
         poolSize: pool.length,
+        components: readClownComponents(picked.components),
       },
     }
   }
@@ -163,6 +193,58 @@ async function resolveRowReferences(args: {
     'reference',
     'No clown reference image is available. Upload a clown PNG for this product before rendering.'
   )
+}
+
+/**
+ * Lightweight peek at the clown asset that *would* be picked for this SKU,
+ * returning only the per-region colour metadata. Used to feed the prompt
+ * builder so per-component recolour lines anchor on the actual clown colour
+ * ("the orange surface on the reference (Cosmetic cap): …") instead of
+ * labels only.
+ *
+ * Mirrors the resolution tiers used by `resolveRowReferences` but never
+ * downloads the image — that work still happens inside the render try
+ * block so storage errors are recorded against the attempt row.
+ */
+async function peekClownComponents(args: {
+  productSlug: string
+  variantSlug: string
+  clownAssetId: string | null
+  attemptNumber: number
+}): Promise<Array<{ region: string; label: string; colorHex?: string | null }>> {
+  try {
+    if (args.clownAssetId) {
+      const asset = await prisma.cmfClownAsset.findUnique({
+        where: { id: args.clownAssetId },
+        select: { components: true },
+      })
+      return readClownComponents(asset?.components)
+    }
+
+    const exact = await prisma.cmfClownAsset.findUnique({
+      where: {
+        productSlug_variantSlug: {
+          productSlug: args.productSlug,
+          variantSlug: args.variantSlug,
+        },
+      },
+      select: { components: true },
+    })
+    if (exact) return readClownComponents(exact.components)
+
+    const pool = await prisma.cmfClownAsset.findMany({
+      where: { productSlug: args.productSlug },
+      orderBy: [{ variantSlug: 'asc' }, { id: 'asc' }],
+      select: { components: true },
+    })
+    if (pool.length === 0) return []
+    const idx = ((args.attemptNumber - 1) % pool.length + pool.length) % pool.length
+    return readClownComponents(pool[idx].components)
+  } catch (err) {
+    // Best-effort: a missing metadata row should never block the render.
+    console.warn('[cmf/render] clown metadata peek failed; falling back to label-only prompt', err)
+    return []
+  }
 }
 
 function ensureSupportedModel(modelId: string): string {
@@ -224,8 +306,20 @@ export async function runCmfRender({ renderId, triggeredByUserId }: RenderArgs) 
   // burst produces a real fan of options. Variant 0 (Studio Classic) is
   // Damien's gold-standard; subsequent attempts cycle through Warm,
   // Clinical, Dramatic, then loop back.
+  //
+  // We also peek at which clown the reference resolver *would* pick so the
+  // prompt can address components by their clown colour ("the blue surface
+  // on the reference (Cosmetic cap): recolour to …"). Falls back silently
+  // when the resolved clown has no per-region colour metadata.
+  const clownComponents = await peekClownComponents({
+    productSlug: render.productSlug,
+    variantSlug: render.variantSlug,
+    clownAssetId: render.clownAssetId,
+    attemptNumber,
+  })
   const { basePrompt, variant } = buildCmfPrompt(row, {
     variantIndex: attemptNumber - 1,
+    clownComponents,
   })
 
   const attempt = await prisma.cmfRenderAttempt.create({

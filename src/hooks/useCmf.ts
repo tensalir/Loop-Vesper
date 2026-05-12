@@ -186,6 +186,9 @@ export interface CmfImportResponse {
     cmfCode: string | null
     status: string
     productSlug: string | null
+    /** Display name resolved from the CMF product catalog. Null when the
+     * slug is unknown to the catalog (rare; would mean a parser bug). */
+    productName: string | null
     renderCount: number
   }>
   /** Convenience — the packet the workspace should auto-open. */

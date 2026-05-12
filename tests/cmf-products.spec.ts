@@ -93,3 +93,28 @@ test('safeFileSlug strips path-traversal and special characters', () => {
   )
   expect(safeFileSlug('  spaces  ')).toBe('spaces')
 })
+
+/**
+ * Pins the property the import API relies on when it surfaces a multi-
+ * product import like Damien's Switch 2 + Cocoon workbook:
+ *
+ *   const productName = getCmfProduct(productSlug)?.name ?? null
+ *
+ * If a future catalog edit drops the `name` field for any product, the
+ * import UI silently regresses to slug-only labels. This test catches that
+ * before users do.
+ */
+test('every catalog product exposes a non-empty display name for the import summary', () => {
+  for (const product of listCmfProducts()) {
+    expect(typeof product.name).toBe('string')
+    expect(product.name.trim().length).toBeGreaterThan(0)
+    expect(getCmfProduct(product.slug)?.name).toBe(product.name)
+  }
+})
+
+test('getCmfProduct resolves the Switch 2 + Cocoon pair Damien exercised in the multi-product workbook', () => {
+  const switch2 = getCmfProduct('switch2')
+  const cocoon = getCmfProduct('cocoon')
+  expect(switch2?.name).toBe('Loop Switch 2')
+  expect(cocoon?.name).toBe('Loop Cocoon')
+})
