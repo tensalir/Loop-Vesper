@@ -107,10 +107,21 @@ export async function POST(request: NextRequest) {
 
   let mergedPackets = 0
   let mergedRenders = 0
+  let mergedRenderAttemptsMoved = 0
+  let droppedDuplicateRenders = 0
   let mergedComments = 0
   let mergedActivity = 0
   let mergedMembers = 0
   const adminId = result.user.id
+
+  // Same render-identity rule the smart-merge in `createPacketFromRows`
+  // uses: prefer productCode, fall back to a normalised label key.
+  function renderKey(r: { productCode: string | null; label: string }): string {
+    return (r.productCode ?? r.label ?? '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '')
+  }
 
   for (const [, list] of duplicateGroups) {
     const canonical = list[0]
@@ -118,24 +129,84 @@ export async function POST(request: NextRequest) {
 
     for (const dup of duplicates) {
       await prisma.$transaction(async (tx) => {
-        // Re-point renders → canonical, bumping sortOrder past the
-        // canonical's existing max so order stays deterministic.
-        const maxSortOrder = await tx.cmfRender.aggregate({
+        // Build a key→render index for the canonical so we can decide,
+        // per duplicate render, whether to MOVE it (new SKU) or
+        // CONSOLIDATE it (same SKU as one already on the canonical —
+        // its attempts move onto the canonical render and the
+        // duplicate render row is deleted).
+        const canonicalRenders = await tx.cmfRender.findMany({
           where: { packetId: canonical.id },
-          _max: { sortOrder: true },
+          orderBy: { sortOrder: 'asc' },
+          select: { id: true, productCode: true, label: true, sortOrder: true },
         })
-        let nextSort = (maxSortOrder._max.sortOrder ?? -1) + 1
+        const canonicalByKey = new Map<string, (typeof canonicalRenders)[number]>()
+        for (const r of canonicalRenders) {
+          const k = renderKey(r)
+          if (k && !canonicalByKey.has(k)) canonicalByKey.set(k, r)
+        }
+        let nextSort = canonicalRenders.reduce(
+          (m, r) => Math.max(m, r.sortOrder + 1),
+          0
+        )
+
         const dupRenders = await tx.cmfRender.findMany({
           where: { packetId: dup.id },
           orderBy: { sortOrder: 'asc' },
-          select: { id: true },
+          select: { id: true, productCode: true, label: true },
         })
         for (const r of dupRenders) {
-          await tx.cmfRender.update({
-            where: { id: r.id },
-            data: { packetId: canonical.id, sortOrder: nextSort++ },
-          })
-          mergedRenders++
+          const k = renderKey(r)
+          const sameSku = k ? canonicalByKey.get(k) : undefined
+          if (sameSku) {
+            // Same SKU already on the canonical — re-point this
+            // render's attempts onto the canonical render, then drop
+            // the duplicate render row. Comments + activity that
+            // pointed at the duplicate render get re-pointed too so
+            // discussion history survives.
+            const canonicalAttempts = await tx.cmfRenderAttempt.findMany({
+              where: { renderId: sameSku.id },
+              select: { attemptNumber: true },
+              orderBy: { attemptNumber: 'desc' },
+              take: 1,
+            })
+            let nextAttempt =
+              (canonicalAttempts[0]?.attemptNumber ?? 0) + 1
+            const dupAttempts = await tx.cmfRenderAttempt.findMany({
+              where: { renderId: r.id },
+              select: { id: true },
+              orderBy: { attemptNumber: 'asc' },
+            })
+            for (const a of dupAttempts) {
+              await tx.cmfRenderAttempt.update({
+                where: { id: a.id },
+                data: { renderId: sameSku.id, attemptNumber: nextAttempt++ },
+              })
+              mergedRenderAttemptsMoved++
+            }
+            await tx.cmfComment.updateMany({
+              where: { renderId: r.id },
+              data: { renderId: sameSku.id },
+            })
+            await tx.cmfActivity.updateMany({
+              where: { packetId: dup.id, targetId: r.id },
+              data: { targetId: sameSku.id },
+            })
+            await tx.cmfRender.delete({ where: { id: r.id } })
+            droppedDuplicateRenders++
+          } else {
+            // Net-new SKU — move it onto the canonical packet,
+            // appending past the existing sortOrder. Add to the index
+            // so a subsequent duplicate render with the same key
+            // consolidates onto THIS one rather than being moved
+            // again.
+            const moved = await tx.cmfRender.update({
+              where: { id: r.id },
+              data: { packetId: canonical.id, sortOrder: nextSort++ },
+              select: { id: true, productCode: true, label: true, sortOrder: true },
+            })
+            mergedRenders++
+            if (k) canonicalByKey.set(k, moved)
+          }
         }
 
         // Re-point comments + activity onto the canonical packet.
@@ -202,6 +273,8 @@ export async function POST(request: NextRequest) {
     dryRun: false,
     mergedPackets,
     mergedRenders,
+    mergedRenderAttemptsMoved,
+    droppedDuplicateRenders,
     mergedComments,
     mergedActivity,
     mergedMembers,
