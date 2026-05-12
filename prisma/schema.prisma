@@ -27,6 +27,12 @@ model Profile {
   // exists so admins can grant the page to specific non-admin users
   // (e.g. partners and integrators) without promoting them to admin.
   headlessAccess Boolean   @default(false) @map("headless_access")
+  // Per-user toggle that grants WRITE access to the CMF Studio
+  // (uploading workbooks, editing SKUs, generating renders/PDFs).
+  // Reads stay open to any authenticated profile so the workbook +
+  // render library acts as a single ground-truth visible to all
+  // teammates. Admins always have implicit write access regardless.
+  cmfAccess      Boolean   @default(false) @map("cmf_access")
   pausedAt       DateTime? @map("paused_at")
   deletedAt      DateTime? @map("deleted_at")
   createdAt      DateTime  @default(now()) @map("created_at")

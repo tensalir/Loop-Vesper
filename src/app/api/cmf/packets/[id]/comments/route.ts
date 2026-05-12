@@ -6,6 +6,7 @@ import {
   CmfNotFoundError,
   logCmfActivity,
   requireAuthenticatedProfile,
+  requireCmfWrite,
   requirePacketAccess,
 } from '@/lib/cmf/service'
 
@@ -78,25 +79,24 @@ export async function GET(
 /**
  * POST /api/cmf/packets/{id}/comments
  *
- * Add a comment. Anyone with access (viewer or higher) can comment so the
- * PM can drop notes even if they only have read access to the SKUs.
+ * Add a comment. Requires CMF write access — viewers can read every
+ * comment thread (the library is one ground-truth) but mutating it
+ * is reserved for the team that actually owns the workflow.
  */
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const auth = await requireAuthenticatedProfile()
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
-  try {
-    await requirePacketAccess({
-      packetId: params.id,
-      userId: auth.profile.userId,
-    })
-  } catch (err) {
-    const translated = translateAccessError(err)
-    if (translated) return translated
-    throw err
+  // Verify the packet exists so we 404 on bad IDs.
+  const packet = await prisma.cmfPacket.findUnique({
+    where: { id: params.id },
+    select: { id: true },
+  })
+  if (!packet) {
+    return NextResponse.json({ error: 'Packet not found' }, { status: 404 })
   }
 
   let body: unknown

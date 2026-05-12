@@ -169,6 +169,26 @@ export function useCmfClowns(productSlug?: string) {
   })
 }
 
+export interface CmfMergeSummary {
+  /** 'created' = brand-new packet; 'merged' = re-upload into existing
+   *  (productSlug, cmfCode) packet (no more duplicates in the dropdown). */
+  kind: 'created' | 'merged'
+  productSlug: string
+  packetId: string
+  packetName: string
+  cmfCode: string | null
+  added: number
+  updated: number
+  unchanged: number
+  changedRenderIds: string[]
+  changes: Array<{
+    renderId: string
+    label: string
+    changedRegions: string[]
+    paletteChanged: boolean
+  }>
+}
+
 export interface CmfImportResponse {
   import: {
     id: string
@@ -190,6 +210,9 @@ export interface CmfImportResponse {
      * slug is unknown to the catalog (rare; would mean a parser bug). */
     productName: string | null
     renderCount: number
+    /** Smart-import diff result — surfaces "merged into existing packet"
+     *  vs "created new" plus the per-SKU changed/added/unchanged counts. */
+    mergeSummary?: CmfMergeSummary
   }>
   /** Convenience — the packet the workspace should auto-open. */
   packet?: CmfPacket

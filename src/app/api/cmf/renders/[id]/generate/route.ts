@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
 import { runCmfRender, CmfRenderError } from '@/lib/cmf/render'
 import {
-  CmfForbiddenError,
-  CmfNotFoundError,
   logCmfActivity,
-  requireAuthenticatedProfile,
-  requireRenderAccess,
+  requireCmfWrite,
 } from '@/lib/cmf/service'
 import { createRateLimiter } from '@/lib/api/rate-limit'
 
@@ -17,28 +15,22 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const auth = await requireAuthenticatedProfile()
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
   const limited = cmfRenderLimiter.check(auth.profile.userId)
   if (limited) return limited
 
-  let access
-  try {
-    access = await requireRenderAccess({
-      renderId: params.id,
-      userId: auth.profile.userId,
-      minRole: 'editor',
-    })
-  } catch (err) {
-    if (err instanceof CmfNotFoundError) {
-      return NextResponse.json({ error: err.message }, { status: 404 })
-    }
-    if (err instanceof CmfForbiddenError) {
-      return NextResponse.json({ error: err.message }, { status: 403 })
-    }
-    throw err
+  // Resolve the parent packet for activity attribution. 404 if the
+  // render doesn't exist.
+  const renderRow = await prisma.cmfRender.findUnique({
+    where: { id: params.id },
+    select: { packetId: true },
+  })
+  if (!renderRow) {
+    return NextResponse.json({ error: 'Render not found' }, { status: 404 })
   }
+  const access = { packetId: renderRow.packetId }
 
   try {
     const result = await runCmfRender({

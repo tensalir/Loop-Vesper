@@ -4,6 +4,7 @@ import {
   createPacketFromRows,
   listAccessiblePackets,
   requireAuthenticatedProfile,
+  requireCmfWrite,
 } from '@/lib/cmf/service'
 import { CmfSkuRowSchema } from '@/lib/cmf/schema'
 
@@ -41,7 +42,9 @@ export async function GET(_request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAuthenticatedProfile()
+  // Mutating endpoint: require explicit CMF write permission (admin or
+  // `cmfAccess` flag). Reads stay open via requireAuthenticatedProfile.
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
   let body: unknown
@@ -75,13 +78,14 @@ export async function POST(request: NextRequest) {
   })
 
   return NextResponse.json({
-    packets: packets.map(({ packet, renders }) => ({
+    packets: packets.map(({ packet, renders, mergeSummary }) => ({
       id: packet.id,
       name: packet.name,
       cmfCode: packet.cmfCode,
       status: packet.status,
-      productSlug: renders[0]?.productSlug ?? null,
+      productSlug: renders[0]?.productSlug ?? mergeSummary.productSlug,
       renderCount: renders.length,
+      mergeSummary,
     })),
     // Convenience for single-product callers — the primary (or only) packet.
     packet: packets[0]

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import {
   logCmfActivity,
-  requireAuthenticatedProfile,
+  requireCmfWrite,
 } from '@/lib/cmf/service'
 
 export const dynamic = 'force-dynamic'
@@ -21,7 +21,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string; userId: string } }
 ) {
-  const auth = await requireAuthenticatedProfile()
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
   const packet = await prisma.cmfPacket.findUnique({
@@ -31,9 +31,9 @@ export async function PATCH(
   if (!packet) {
     return NextResponse.json({ error: 'Packet not found' }, { status: 404 })
   }
-  if (packet.ownerId !== auth.profile.userId) {
+  if (packet.ownerId !== auth.profile.userId && !auth.profile.isAdmin) {
     return NextResponse.json(
-      { error: 'Only the packet owner can change member roles' },
+      { error: 'Only the packet owner or an admin can change member roles' },
       { status: 403 }
     )
   }
@@ -91,7 +91,7 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string; userId: string } }
 ) {
-  const auth = await requireAuthenticatedProfile()
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
   const packet = await prisma.cmfPacket.findUnique({
@@ -103,9 +103,9 @@ export async function DELETE(
   }
   const isOwner = packet.ownerId === auth.profile.userId
   const isSelfRemoval = params.userId === auth.profile.userId
-  if (!isOwner && !isSelfRemoval) {
+  if (!isOwner && !isSelfRemoval && !auth.profile.isAdmin) {
     return NextResponse.json(
-      { error: 'Only the owner can remove other members' },
+      { error: 'Only the owner or an admin can remove other members' },
       { status: 403 }
     )
   }

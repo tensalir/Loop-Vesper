@@ -15,9 +15,12 @@ import {
   Activity,
   Database,
   FileText,
+  GitMerge,
   History,
   Loader2,
   MessageSquare,
+  Pencil,
+  Plus,
   ShieldCheck,
   UserPlus,
   Wand2,
@@ -182,6 +185,53 @@ const ACTION_MAP: Record<string, ActivityIconConfig> = {
       return meta?.selfRemoval ? 'left the packet' : 'removed a member'
     },
     tone: 'muted',
+  },
+  // Smart-import actions: emitted when a re-upload merges into an
+  // existing (productSlug, cmfCode) packet rather than creating a
+  // duplicate. The before/after metadata lets us render a precise
+  // "what changed" line per row.
+  sku_added: {
+    Icon: Plus,
+    copy: (item) => {
+      const meta = item.metadata as { label?: string } | null
+      return meta?.label ? `added SKU "${meta.label}" via re-import` : 'added a new SKU via re-import'
+    },
+    tone: 'primary',
+  },
+  sku_updated: {
+    Icon: Pencil,
+    copy: (item) => {
+      const meta = item.metadata as
+        | { label?: string; changedRegions?: string[]; paletteChanged?: boolean }
+        | null
+      const label = meta?.label ? `"${meta.label}"` : 'a SKU'
+      const regions = meta?.changedRegions ?? []
+      const palette = meta?.paletteChanged ? 'palette' : null
+      const detail = [...regions, palette].filter(Boolean).join(', ')
+      return detail
+        ? `updated ${label} via re-import · ${detail}`
+        : `updated ${label} via re-import`
+    },
+    tone: 'amber',
+  },
+  packet_merged: {
+    Icon: GitMerge,
+    copy: (item) => {
+      const meta = item.metadata as
+        | { added?: number; updated?: number; unchanged?: number }
+        | null
+      const a = meta?.added ?? 0
+      const u = meta?.updated ?? 0
+      const eq = meta?.unchanged ?? 0
+      const bits: string[] = []
+      if (a) bits.push(`${a} added`)
+      if (u) bits.push(`${u} changed`)
+      if (eq) bits.push(`${eq} unchanged`)
+      return bits.length > 0
+        ? `re-imported workbook · ${bits.join(' · ')}`
+        : 're-imported workbook'
+    },
+    tone: 'primary',
   },
 }
 

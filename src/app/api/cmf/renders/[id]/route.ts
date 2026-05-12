@@ -6,6 +6,7 @@ import {
   CmfNotFoundError,
   logCmfActivity,
   requireAuthenticatedProfile,
+  requireCmfWrite,
   requireRenderAccess,
 } from '@/lib/cmf/service'
 import { ComponentSpecSchema, PaletteSwatchSchema } from '@/lib/cmf/schema'
@@ -62,21 +63,19 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const auth = await requireAuthenticatedProfile()
+  // SKU edits require CMF write access. Resolve the parent packet so we
+  // can attribute the activity log entry.
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
-  let access
-  try {
-    access = await requireRenderAccess({
-      renderId: params.id,
-      userId: auth.profile.userId,
-      minRole: 'editor',
-    })
-  } catch (err) {
-    const translated = translateAccessError(err)
-    if (translated) return translated
-    throw err
+  const renderForAccess = await prisma.cmfRender.findUnique({
+    where: { id: params.id },
+    select: { packetId: true },
+  })
+  if (!renderForAccess) {
+    return NextResponse.json({ error: 'Render not found' }, { status: 404 })
   }
+  const access = { packetId: renderForAccess.packetId }
 
   let body: unknown
   try {
@@ -121,21 +120,18 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const auth = await requireAuthenticatedProfile()
+  // Removing a SKU row requires CMF write access. Same destructive
+  // posture as packet delete but unscoped to owner because SKU rows
+  // accumulate over multiple imports and aren't tied to a single owner.
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
-  try {
-    // Require approver-or-owner to delete a SKU row — same posture as
-    // packet delete, since removing a SKU is destructive for everyone.
-    await requireRenderAccess({
-      renderId: params.id,
-      userId: auth.profile.userId,
-      minRole: 'approver',
-    })
-  } catch (err) {
-    const translated = translateAccessError(err)
-    if (translated) return translated
-    throw err
+  const exists = await prisma.cmfRender.findUnique({
+    where: { id: params.id },
+    select: { id: true },
+  })
+  if (!exists) {
+    return NextResponse.json({ error: 'Render not found' }, { status: 404 })
   }
 
   await prisma.cmfRender.delete({ where: { id: params.id } })

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { uploadBase64ToStorage } from '@/lib/supabase/storage'
 import { CMF_STORAGE_BUCKET, clownStoragePath } from '@/lib/cmf/storage'
 import { clownAssetFromZipEntry } from '@/lib/cmf/clown-zip-mapping'
-import { requireAuthenticatedProfile } from '@/lib/cmf/service'
+import { requireCmfWrite } from '@/lib/cmf/service'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60 // bulk uploads can take a while; raise from default 10s
@@ -21,7 +21,7 @@ export const maxDuration = 60 // bulk uploads can take a while; raise from defau
  * which were skipped (unknown zip, duplicate variant, image read failure).
  */
 export async function POST(request: NextRequest) {
-  const auth = await requireAuthenticatedProfile()
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
   let formData: FormData

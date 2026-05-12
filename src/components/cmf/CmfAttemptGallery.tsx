@@ -26,6 +26,7 @@ import {
   useCmfAttemptAction,
   useGenerateCmfRender,
 } from '@/hooks/useCmf'
+import { useCmfPermissions } from '@/hooks/useCmfPermissions'
 import { selectPromptVariant } from '@/lib/cmf/prompt'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
@@ -36,6 +37,7 @@ import {
   CheckCircle2,
   ImageIcon,
   Loader2,
+  Lock,
   Plus,
   RotateCw,
   Sparkles,
@@ -63,6 +65,7 @@ export function CmfAttemptGallery({ render, packetId, blockedReason }: CmfAttemp
   const generateMutation = useGenerateCmfRender()
   const attemptAction = useCmfAttemptAction()
   const { toast } = useToast()
+  const { canWrite } = useCmfPermissions()
 
   const grouped = useMemo(() => {
     const visible = attempts.filter((a) => a.approvalStatus !== 'archived')
@@ -107,6 +110,7 @@ export function CmfAttemptGallery({ render, packetId, blockedReason }: CmfAttemp
 
   return (
     <article
+      id={`cmf-render-${render.id}`}
       className={cn(
         'rounded-2xl border bg-card/30 transition-colors',
         grouped.approved
@@ -146,7 +150,9 @@ export function CmfAttemptGallery({ render, packetId, blockedReason }: CmfAttemp
               pendingCount={grouped.visible.length}
             />
           )}
-          {blockedReason ? (
+          {!canWrite ? (
+            <ReadOnlyPill label="Read-only" />
+          ) : blockedReason ? (
             <Button
               size="sm"
               variant="outline"
@@ -198,6 +204,7 @@ export function CmfAttemptGallery({ render, packetId, blockedReason }: CmfAttemp
               onArchive={() => runAction(attempt.id, 'archive')}
               onInspect={() => setInspectId(attempt.id)}
               busy={attemptAction.isPending}
+              canWrite={canWrite}
             />
           ))}
         </div>
@@ -222,7 +229,14 @@ export function CmfAttemptGallery({ render, packetId, blockedReason }: CmfAttemp
                 key={attempt.id}
                 type="button"
                 onClick={() => runAction(attempt.id, 'restore')}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-background/60 px-2 py-1 text-[10px] hover:bg-background"
+                disabled={!canWrite}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-background/60 px-2 py-1 text-[10px]',
+                  canWrite
+                    ? 'hover:bg-background'
+                    : 'opacity-60 cursor-not-allowed'
+                )}
+                title={canWrite ? undefined : 'CMF write access required'}
               >
                 <RotateCw className="h-3 w-3" />
                 Restore attempt {attempt.attemptNumber}
@@ -239,6 +253,7 @@ export function CmfAttemptGallery({ render, packetId, blockedReason }: CmfAttemp
           onClose={() => setInspectId(null)}
           onApprove={() => runAction(inspectAttempt.id, 'approve')}
           onArchive={() => runAction(inspectAttempt.id, 'archive')}
+          canWrite={canWrite}
         />
       )}
     </article>
@@ -282,6 +297,7 @@ interface AttemptCardProps {
   onArchive: () => void
   onInspect: () => void
   busy: boolean
+  canWrite: boolean
 }
 
 function AttemptCard({
@@ -290,6 +306,7 @@ function AttemptCard({
   onArchive,
   onInspect,
   busy,
+  canWrite,
 }: AttemptCardProps) {
   const isApproved = attempt.approvalStatus === 'approved'
   const isLoading = attempt.status === 'rendering' || attempt.status === 'queued'
@@ -366,7 +383,7 @@ function AttemptCard({
         </p>
       </div>
 
-      {!isLoading && !isFailed && (
+      {!isLoading && !isFailed && canWrite && (
         <div className="flex items-center gap-1 px-2.5 pb-2.5">
           {!isApproved ? (
             <Button
@@ -394,6 +411,13 @@ function AttemptCard({
             <Archive className="h-3 w-3" />
             Archive
           </Button>
+        </div>
+      )}
+      {!isLoading && !isFailed && !canWrite && isApproved && (
+        <div className="px-2.5 pb-2.5">
+          <span className="text-[10px] text-emerald-700 dark:text-emerald-200 font-medium">
+            Used by document
+          </span>
         </div>
       )}
 
@@ -440,6 +464,23 @@ function BlockedAttemptCard({
   )
 }
 
+/**
+ * Inline pill rendered in place of write affordances when the caller
+ * doesn't have CMF write access. Concise enough to sit next to the
+ * approval badge without crowding the row.
+ */
+function ReadOnlyPill({ label }: { label: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-muted/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+      title="CMF write access is required to mutate the library. Ask an admin to grant it from User Management."
+    >
+      <Lock className="h-2.5 w-2.5" />
+      {label}
+    </span>
+  )
+}
+
 function ShimmerAttemptCard() {
   return (
     <div className="w-[200px] aspect-square flex-shrink-0 rounded-xl border border-amber-400/40 bg-background/40 cmf-rendering-shimmer flex flex-col items-center justify-center gap-2 text-xs text-primary">
@@ -455,12 +496,14 @@ function InspectLightbox({
   onClose,
   onApprove,
   onArchive,
+  canWrite,
 }: {
   attempt: CmfRenderAttempt
   render: CmfRender
   onClose: () => void
   onApprove: () => void
   onArchive: () => void
+  canWrite: boolean
 }) {
   const isApproved = attempt.approvalStatus === 'approved'
   return (
@@ -563,20 +606,30 @@ function InspectLightbox({
           )}
 
           <div className="flex items-center gap-2 pt-2 border-t border-border/40">
-            {!isApproved ? (
-              <Button onClick={onApprove} size="sm" className="gap-1.5">
-                <Check className="h-3.5 w-3.5" />
-                Approve attempt
-              </Button>
+            {!canWrite ? (
+              <ReadOnlyPill label="Read-only · request CMF write from admin" />
+            ) : !isApproved ? (
+              <>
+                <Button onClick={onApprove} size="sm" className="gap-1.5">
+                  <Check className="h-3.5 w-3.5" />
+                  Approve attempt
+                </Button>
+                <Button onClick={onArchive} size="sm" variant="ghost" className="gap-1.5">
+                  <Archive className="h-3.5 w-3.5" />
+                  Archive
+                </Button>
+              </>
             ) : (
-              <span className="text-xs text-muted-foreground">
-                This attempt is currently approved.
-              </span>
+              <>
+                <span className="text-xs text-muted-foreground">
+                  This attempt is currently approved.
+                </span>
+                <Button onClick={onArchive} size="sm" variant="ghost" className="gap-1.5">
+                  <Archive className="h-3.5 w-3.5" />
+                  Archive
+                </Button>
+              </>
             )}
-            <Button onClick={onArchive} size="sm" variant="ghost" className="gap-1.5">
-              <Archive className="h-3.5 w-3.5" />
-              Archive
-            </Button>
           </div>
         </div>
       </div>

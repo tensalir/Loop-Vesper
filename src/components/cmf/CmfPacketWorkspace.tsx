@@ -38,9 +38,11 @@ import { CmfMembersDialog } from './CmfMembersDialog'
 import { CmfPresenceStack } from './CmfPresenceStack'
 import { CmfActivityDrawer } from './CmfActivityDrawer'
 import { CmfDocumentPreviewDialog } from './CmfDocumentPreviewDialog'
+import { useCmfPermissions } from '@/hooks/useCmfPermissions'
 import { useToast } from '@/components/ui/use-toast'
 import {
   Loader2,
+  Lock,
   Wand2,
   ArrowUpRight,
   AlertTriangle,
@@ -85,6 +87,7 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
   const bulkGenerate = useBulkGenerateCmfPacket()
   const generatePdf = useGenerateCmfPdf()
   const { toast } = useToast()
+  const { canWrite } = useCmfPermissions()
 
   // Keep the workspace in sync with the URL when the user hits back/forward
   // or pastes a deep link. We compare against the current state to avoid an
@@ -220,6 +223,19 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
             <CmfPacketSelector
               activePacketId={activePacketId}
               onSelect={setActivePacketId}
+              onRenderFocus={(pid, renderId) => {
+                // Defer the scroll/pulse until after React has mounted
+                // the gallery for the (possibly newly active) packet.
+                setActivePacketId(pid)
+                requestAnimationFrame(() => {
+                  const node = document.getElementById(`cmf-render-${renderId}`)
+                  if (node) {
+                    node.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    node.classList.add('cmf-focus-pulse')
+                    setTimeout(() => node.classList.remove('cmf-focus-pulse'), 2400)
+                  }
+                })
+              }}
             />
             <CmfClownLibraryPill onClick={() => setClownOpen(true)} />
             {activePacketId && (
@@ -265,20 +281,31 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleBulkGenerate(3)}
-                disabled={bulkRunning || readiness.total === 0}
-                className="gap-1.5"
-              >
-                {bulkRunning ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Wand2 className="h-3.5 w-3.5" />
-                )}
-                Bulk · 3 attempts each
-              </Button>
+              {!canWrite && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-muted/40 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+                  title="CMF write access is required to import, generate, or approve. Ask an admin to grant it from User Management."
+                >
+                  <Lock className="h-3 w-3" />
+                  Read-only · request CMF write from admin
+                </span>
+              )}
+              {canWrite && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkGenerate(3)}
+                  disabled={bulkRunning || readiness.total === 0}
+                  className="gap-1.5"
+                >
+                  {bulkRunning ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-3.5 w-3.5" />
+                  )}
+                  Bulk · 3 attempts each
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
@@ -289,23 +316,38 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
                 <LayoutTemplate className="h-3.5 w-3.5" />
                 Preview
               </Button>
-              <Button
-                size="sm"
-                onClick={() => handleGeneratePdf(readiness.approved < readiness.total)}
-                disabled={generatePdf.isPending || readiness.approved === 0}
-                className="gap-1.5"
-              >
-                {generatePdf.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
+              {canWrite && (
+                <Button
+                  size="sm"
+                  onClick={() => handleGeneratePdf(readiness.approved < readiness.total)}
+                  disabled={generatePdf.isPending || readiness.approved === 0}
+                  className="gap-1.5"
+                >
+                  {generatePdf.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  )}
+                  {packet.pdfUrl
+                    ? 'Regenerate PDF'
+                    : readiness.approved < readiness.total
+                    ? 'Export DRAFT'
+                    : 'Generate PDF'}
+                </Button>
+              )}
+              {!canWrite && packet.pdfUrl && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    window.open(packet.pdfUrl!, '_blank', 'noopener,noreferrer')
+                  }
+                  className="gap-1.5"
+                >
                   <ArrowUpRight className="h-3.5 w-3.5" />
-                )}
-                {packet.pdfUrl
-                  ? 'Regenerate PDF'
-                  : readiness.approved < readiness.total
-                  ? 'Export DRAFT'
-                  : 'Generate PDF'}
-              </Button>
+                  Open PDF
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -381,6 +423,21 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
         open={importOpen}
         onOpenChange={setImportOpen}
         onPacketCreated={(id) => setActivePacketId(id)}
+        onRenderFocus={(pid, renderId) => {
+          // Switch to the packet that just got merged (no-op when it's
+          // already active) and scroll the row that changed into view.
+          // requestAnimationFrame gives React a tick to mount the
+          // gallery before we reach for the DOM node.
+          setActivePacketId(pid)
+          requestAnimationFrame(() => {
+            const node = document.getElementById(`cmf-render-${renderId}`)
+            if (node) {
+              node.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              node.classList.add('cmf-focus-pulse')
+              setTimeout(() => node.classList.remove('cmf-focus-pulse'), 2400)
+            }
+          })
+        }}
       />
       <CmfClownLibraryDialog
         open={clownOpen}

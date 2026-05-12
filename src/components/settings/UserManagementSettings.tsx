@@ -49,6 +49,7 @@ import {
   ChevronLeft,
   ChevronRight,
   KeyRound,
+  Palette,
 } from 'lucide-react'
 
 interface AdminUser {
@@ -61,6 +62,12 @@ interface AdminUser {
   // see /headless via their role, so this flag is only meaningful for
   // role: 'user' accounts (Loop teammates and external partners).
   headlessAccess: boolean
+  // Per-user grant for CMF Studio WRITE access (importing workbooks,
+  // editing SKUs, generating renders/PDFs, approving attempts). Reads
+  // are open to every authenticated profile so the library is one
+  // ground truth; only writes are gated. Admins always have implicit
+  // write access regardless.
+  cmfAccess: boolean
   pausedAt: string | null
   deletedAt: string | null
   createdAt: string
@@ -232,6 +239,28 @@ export function UserManagementSettings() {
     }
   }
 
+  const handleToggleCmfAccess = async (user: AdminUser) => {
+    setActionLoading(user.id)
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/cmf-access`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !user.cmfAccess }),
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        let message = 'Failed to update CMF access'
+        try { message = JSON.parse(text).error || message } catch { /* non-JSON */ }
+        throw new Error(message)
+      }
+      await fetchUsers()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update CMF access')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   const handleDelete = async () => {
     if (!deleteTarget) return
     setActionLoading(deleteTarget.id)
@@ -356,6 +385,15 @@ export function UserManagementSettings() {
                                   Headless
                                 </Badge>
                               )}
+                              {user.role !== 'admin' && user.cmfAccess && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] px-1.5 py-0 border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
+                                  title="This user can edit CMF Studio (import workbooks, generate renders, approve attempts)"
+                                >
+                                  CMF
+                                </Badge>
+                              )}
                               <span className="md:hidden">
                                 <StatusBadge status={status} />
                               </span>
@@ -405,6 +443,12 @@ export function UserManagementSettings() {
                                 {user.headlessAccess
                                   ? 'Revoke Headless Access'
                                   : 'Grant Headless Access'}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleToggleCmfAccess(user)}>
+                                <Palette className="h-4 w-4 mr-2" />
+                                {user.cmfAccess
+                                  ? 'Revoke CMF Write Access'
+                                  : 'Grant CMF Write Access'}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => setPauseTarget(user)}>
                                 {user.pausedAt ? (

@@ -11,7 +11,7 @@ import {
 import {
   createPacketFromRows,
   logCmfActivity,
-  requireAuthenticatedProfile,
+  requireCmfWrite,
 } from '@/lib/cmf/service'
 import { getCmfProduct } from '@/lib/cmf/products'
 import { createRateLimiter } from '@/lib/api/rate-limit'
@@ -33,7 +33,8 @@ const MAX_WORKBOOK_BYTES = 10 * 1024 * 1024 // 10 MB
  * SKUs) and the legacy flat template (single sheet, rows as SKUs).
  */
 export async function POST(request: NextRequest) {
-  const auth = await requireAuthenticatedProfile()
+  // Imports mutate the global library — gate on CMF write access.
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
   const limited = cmfImportLimiter.check(auth.profile.userId)
@@ -184,12 +185,13 @@ export async function POST(request: NextRequest) {
       format: parsed.format,
       unmappedSheets: parsed.format === 'transposed' ? parsed.unmappedSheets : [],
     },
-    /** All packets created by this import — one per product slug.
-     * Each packet carries `productName` so the UI can say
-     * "Created 2 product packets: Switch 2, Cocoon" without
-     * re-deriving the display name from the slug. */
-    packets: packets.map(({ packet, renders }) => {
-      const productSlug = renders[0]?.productSlug ?? null
+    /** All packets created or merged by this import — one per product
+     * slug. Each entry carries `productName` so the UI can say
+     * "Updated 2 product packets: Switch 2, Cocoon" without re-deriving
+     * the display name from the slug, and `mergeSummary` so the panel
+     * can show a "5 unchanged · 1 changed · 2 added" breakdown. */
+    packets: packets.map(({ packet, renders, mergeSummary }) => {
+      const productSlug = renders[0]?.productSlug ?? mergeSummary.productSlug
       const productName = productSlug ? getCmfProduct(productSlug)?.name ?? null : null
       return {
         id: packet.id,
@@ -199,6 +201,7 @@ export async function POST(request: NextRequest) {
         productSlug,
         productName,
         renderCount: renders.length,
+        mergeSummary,
       }
     }),
     /** Convenience: the packet the workspace should auto-open. */

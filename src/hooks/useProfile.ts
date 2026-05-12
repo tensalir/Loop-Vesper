@@ -6,6 +6,12 @@ export interface Profile {
   displayName: string | null
   avatarUrl: string | null
   role?: string
+  /** Per-user grant for the private /headless landing page. */
+  headlessAccess?: boolean
+  /** Per-user grant for CMF Studio writes (importing workbooks,
+   *  generating renders, approving attempts). Reads stay open to
+   *  every authenticated profile. */
+  cmfAccess?: boolean
 }
 
 async function fetchProfile(): Promise<Profile> {

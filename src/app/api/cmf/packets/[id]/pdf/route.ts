@@ -27,11 +27,8 @@ import {
   safeFileSlug,
 } from '@/lib/cmf/storage'
 import {
-  CmfForbiddenError,
-  CmfNotFoundError,
   logCmfActivity,
-  requireAuthenticatedProfile,
-  requirePacketAccess,
+  requireCmfWrite,
 } from '@/lib/cmf/service'
 import { createRateLimiter } from '@/lib/api/rate-limit'
 
@@ -47,25 +44,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const auth = await requireAuthenticatedProfile()
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
   const limited = cmfPdfLimiter.check(auth.profile.userId)
   if (limited) return limited
-
-  try {
-    await requirePacketAccess({
-      packetId: params.id,
-      userId: auth.profile.userId,
-      minRole: 'editor',
-    })
-  } catch (err) {
-    if (err instanceof CmfNotFoundError)
-      return NextResponse.json({ error: err.message }, { status: 404 })
-    if (err instanceof CmfForbiddenError)
-      return NextResponse.json({ error: err.message }, { status: 403 })
-    throw err
-  }
 
   let allowDraft = false
   try {

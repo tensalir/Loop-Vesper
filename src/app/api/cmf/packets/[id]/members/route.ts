@@ -6,6 +6,7 @@ import {
   CmfNotFoundError,
   logCmfActivity,
   requireAuthenticatedProfile,
+  requireCmfWrite,
   requirePacketAccess,
 } from '@/lib/cmf/service'
 
@@ -108,33 +109,23 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const auth = await requireAuthenticatedProfile()
+  // Membership is metadata only under the global-library model — we
+  // keep the endpoint so the owner can record collaborators for the
+  // activity drawer, but it's gated on CMF write access (admins or
+  // cmfAccess users) plus the owner / admin chokepoint below.
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
-  // Resolve role first so we can require owner explicitly.
-  try {
-    await requirePacketAccess({
-      packetId: params.id,
-      userId: auth.profile.userId,
-      // Owner is "owner"; we use approver as the floor here to avoid
-      // hard-coding 'owner' but in practice only owner has approver+
-      // privileges since inviting is an owner-only action. Re-check below.
-      minRole: 'approver',
-    })
-  } catch (err) {
-    const translated = translateAccessError(err)
-    if (translated) return translated
-    throw err
-  }
-
-  // Explicit owner check — sharing requires owner role specifically.
   const packet = await prisma.cmfPacket.findUnique({
     where: { id: params.id },
     select: { ownerId: true },
   })
-  if (!packet || packet.ownerId !== auth.profile.userId) {
+  if (!packet) {
+    return NextResponse.json({ error: 'Packet not found' }, { status: 404 })
+  }
+  if (packet.ownerId !== auth.profile.userId && !auth.profile.isAdmin) {
     return NextResponse.json(
-      { error: 'Only the packet owner can invite members' },
+      { error: 'Only the packet owner or an admin can record members' },
       { status: 403 }
     )
   }

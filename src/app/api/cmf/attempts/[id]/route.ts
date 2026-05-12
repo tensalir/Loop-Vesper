@@ -17,6 +17,7 @@ import {
   CmfNotFoundError,
   logCmfActivity,
   requireAuthenticatedProfile,
+  requireCmfWrite,
   requireRenderAccess,
 } from '@/lib/cmf/service'
 import {
@@ -68,14 +69,15 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const auth = await requireAuthenticatedProfile()
+  // Approve / archive / restore all mutate the attempt — gate on CMF
+  // write access. Per-packet member roles no longer apply under the
+  // global-library model.
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
   const attempt = await loadAttemptWithRender(params.id)
   if (!attempt) return NextResponse.json({ error: 'Attempt not found' }, { status: 404 })
 
-  // approver-or-higher is required for approval; editor is enough for archive/restore
-  // since those are reversible operations on review history.
   let body: unknown
   try {
     body = await request.json()
@@ -90,19 +92,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     )
   }
 
-  const minRole = parsed.data.action === 'approve' ? 'approver' : 'editor'
-  let access
-  try {
-    access = await requireRenderAccess({
-      renderId: attempt.renderId,
-      userId: auth.profile.userId,
-      minRole,
-    })
-  } catch (err) {
-    const translated = translate(err)
-    if (translated) return translated
-    throw err
-  }
+  const access = { packetId: attempt.render.packetId }
 
   try {
     if (parsed.data.action === 'approve') {

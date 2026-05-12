@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { uploadBase64ToStorage } from '@/lib/supabase/storage'
 import { CMF_STORAGE_BUCKET, clownStoragePath } from '@/lib/cmf/storage'
 import { getCmfProduct } from '@/lib/cmf/products'
-import { requireAuthenticatedProfile } from '@/lib/cmf/service'
+import { requireAuthenticatedProfile, requireCmfWrite } from '@/lib/cmf/service'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,7 +64,9 @@ export async function GET(request: NextRequest) {
  * `ownerId` purely for audit ("who last touched this asset").
  */
 export async function POST(request: NextRequest) {
-  const auth = await requireAuthenticatedProfile()
+  // Clown reference uploads mutate the global library — gate on CMF
+  // write access. The audit `ownerId` still records the contributor.
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
   let formData: FormData

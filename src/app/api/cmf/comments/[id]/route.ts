@@ -2,11 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import {
-  CmfForbiddenError,
-  CmfNotFoundError,
   logCmfActivity,
-  requireAuthenticatedProfile,
-  requirePacketAccess,
+  requireCmfWrite,
 } from '@/lib/cmf/service'
 
 export const dynamic = 'force-dynamic'
@@ -16,28 +13,20 @@ const UpdateCommentSchema = z.object({
   resolved: z.boolean().optional(),
 })
 
-function translateAccessError(err: unknown) {
-  if (err instanceof CmfNotFoundError) {
-    return NextResponse.json({ error: err.message }, { status: 404 })
-  }
-  if (err instanceof CmfForbiddenError) {
-    return NextResponse.json({ error: err.message }, { status: 403 })
-  }
-  return null
-}
-
 /**
  * PATCH /api/cmf/comments/{id}
  *
- * Edit body (only the author) or toggle resolution (any editor+). Resolving
- * a comment is treated as a separate verb — once resolved, it stays in the
- * thread but visually muted.
+ * Edit body (only the author) or toggle resolution (anyone with CMF
+ * write access). Resolving is treated as a separate verb — once
+ * resolved, the comment stays in the thread but visually muted.
  */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const auth = await requireAuthenticatedProfile()
+  // All comment mutations require CMF write access. Authorship is an
+  // additional check on body edits below.
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
   const comment = await prisma.cmfComment.findUnique({
@@ -63,39 +52,13 @@ export async function PATCH(
     )
   }
 
-  // Editing the body requires authorship; resolving requires editor+.
-  if (typeof parsed.data.body === 'string') {
-    if (comment.userId !== auth.profile.userId) {
-      return NextResponse.json(
-        { error: 'Only the author can edit a comment body' },
-        { status: 403 }
-      )
-    }
-  }
-  if (typeof parsed.data.resolved === 'boolean') {
-    try {
-      await requirePacketAccess({
-        packetId: comment.packetId,
-        userId: auth.profile.userId,
-        minRole: 'editor',
-      })
-    } catch (err) {
-      const translated = translateAccessError(err)
-      if (translated) return translated
-      throw err
-    }
-  } else {
-    // Pure body edit still requires packet access.
-    try {
-      await requirePacketAccess({
-        packetId: comment.packetId,
-        userId: auth.profile.userId,
-      })
-    } catch (err) {
-      const translated = translateAccessError(err)
-      if (translated) return translated
-      throw err
-    }
+  // Editing the body still requires authorship — write access doesn't
+  // mean the right to rewrite someone else's words.
+  if (typeof parsed.data.body === 'string' && comment.userId !== auth.profile.userId) {
+    return NextResponse.json(
+      { error: 'Only the author can edit a comment body' },
+      { status: 403 }
+    )
   }
 
   const now = new Date()
@@ -140,14 +103,14 @@ export async function PATCH(
 /**
  * DELETE /api/cmf/comments/{id}
  *
- * Author or owner can delete. Soft-delete-by-resolution is preferred but
- * we still allow hard delete for typos / mis-postings.
+ * Author, packet owner, or admin can delete. Soft-delete-by-resolution
+ * is preferred but we still allow hard delete for typos / mis-postings.
  */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const auth = await requireAuthenticatedProfile()
+  const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
   const comment = await prisma.cmfComment.findUnique({
@@ -164,9 +127,9 @@ export async function DELETE(
   })
   const isAuthor = comment.userId === auth.profile.userId
   const isOwner = packet?.ownerId === auth.profile.userId
-  if (!isAuthor && !isOwner) {
+  if (!isAuthor && !isOwner && !auth.profile.isAdmin) {
     return NextResponse.json(
-      { error: 'Only the author or packet owner can delete a comment' },
+      { error: 'Only the author, packet owner, or an admin can delete a comment' },
       { status: 403 }
     )
   }
