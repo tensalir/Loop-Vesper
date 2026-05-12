@@ -207,3 +207,154 @@ test('buildPacketFileSlug matches the requested CMF naming pattern', () => {
   })
   expect(slug).toBe('CMF-001234revA_LoopSwitch2_CMF_Sage')
 })
+
+/* ── Clown region addressing ──────────────────────────────────────────── */
+
+test('buildCmfPrompt anchors component lines on the clown reference colour when metadata is available', () => {
+  const result = buildCmfPrompt(FIXTURE, {
+    clownComponents: [
+      { region: 'pom_ring', label: 'POM ring', colorHex: '#ff3344' },
+      { region: 'cosmetic_cap', label: 'Cosmetic cap', colorHex: '#3366ff' },
+    ],
+  })
+
+  // POM ring is anchored to "red" (#ff3344) and Cosmetic cap to "blue" (#3366ff).
+  expect(result.componentLines[0]).toContain('POM ring (the red surface on the reference)')
+  expect(result.componentLines[1]).toContain('Cosmetic cap (the blue surface on the reference)')
+
+  // The reference legend appears once, with both entries.
+  expect(result.basePrompt).toContain('Clown reference legend')
+  expect(result.basePrompt).toContain('red → POM ring')
+  expect(result.basePrompt).toContain('blue → Cosmetic cap')
+})
+
+test('buildCmfPrompt falls back to label-only addressing when no clown metadata is given', () => {
+  const result = buildCmfPrompt(FIXTURE)
+  // No "on the reference" qualifier and no legend line.
+  expect(result.componentLines[0]).not.toContain('on the reference')
+  expect(result.basePrompt).not.toContain('Clown reference legend')
+})
+
+test('buildCmfPrompt skips clown legend entries without a colour hex', () => {
+  const result = buildCmfPrompt(FIXTURE, {
+    clownComponents: [
+      { region: 'pom_ring', label: 'POM ring', colorHex: null },
+      { region: 'cosmetic_cap', label: 'Cosmetic cap' },
+    ],
+  })
+  expect(result.basePrompt).not.toContain('Clown reference legend')
+  expect(result.componentLines[0]).not.toContain('surface on the reference')
+})
+
+/* ── Palette context ──────────────────────────────────────────────────── */
+
+test('buildCmfPrompt surfaces palette context when palette swatches are supplied', () => {
+  const result = buildCmfPrompt({
+    ...FIXTURE,
+    palette: [
+      { label: 'Accent', pantone: 'PANTONE 7720 C' },
+      { label: 'Lining', colorHex: '#3366ff' },
+    ],
+  })
+  expect(result.basePrompt).toContain('Overall CMF palette context')
+  expect(result.basePrompt).toContain('Accent → PANTONE 7720 C')
+  expect(result.basePrompt).toContain('Lining → #3366ff')
+  // Palette is context, not extra surfaces — make sure the prompt says so.
+  expect(result.basePrompt).toContain('not extra surfaces to recolour')
+})
+
+test('buildCmfPrompt omits palette block when no swatches are supplied', () => {
+  const result = buildCmfPrompt(FIXTURE)
+  expect(result.basePrompt).not.toContain('Overall CMF palette context')
+})
+
+/* ── Material / finish vocabulary for Damien's Switch 2 pack ──────────── */
+
+test('buildCmfPrompt promotes matte POM with the deep-matte engineering wording', () => {
+  const result = buildCmfPrompt({
+    ...FIXTURE,
+    components: [
+      {
+        region: 'pom_ring',
+        label: 'POM ring',
+        pantone: 'Pantone 7720C',
+        material: 'POM',
+        finish: 'Matte',
+      },
+    ],
+  })
+  expect(result.componentLines[0].toLowerCase()).toContain('deeply matte engineering plastic')
+  expect(result.componentLines[0].toLowerCase()).toContain('completely diffuse')
+})
+
+test('buildCmfPrompt distinguishes glossy ABS from NCVM metallic on ABS', () => {
+  const glossy = buildCmfPrompt({
+    ...FIXTURE,
+    components: [
+      {
+        region: 'cosmetic_cap',
+        label: 'Cosmetic cap',
+        pantone: 'Pantone 155C',
+        material: 'ABS',
+        finish: 'glossy',
+      },
+    ],
+  })
+  const ncvm = buildCmfPrompt({
+    ...FIXTURE,
+    components: [
+      {
+        region: 'cosmetic_cap',
+        label: 'Cosmetic cap',
+        pantone: 'Pantone 155C',
+        material: 'ABS',
+        finish: 'NCVM Satin',
+      },
+    ],
+  })
+  expect(glossy.componentLines[0].toLowerCase()).toContain('high-gloss')
+  expect(glossy.componentLines[0].toLowerCase()).toContain('clearly a polished plastic')
+  expect(ncvm.componentLines[0].toLowerCase()).toContain('ncvm-coated')
+  expect(ncvm.componentLines[0].toLowerCase()).toContain('anodised aluminium')
+})
+
+test('buildCmfPrompt expands VDI 21 into deep matte injection-mould vocabulary', () => {
+  const result = buildCmfPrompt({
+    ...FIXTURE,
+    components: [
+      {
+        region: 'nozzle_piece',
+        label: 'Nozzle piece + retention ring',
+        pantone: 'Pantone 726C',
+        material: 'ABS',
+        finish: 'VDI 21',
+      },
+    ],
+  })
+  expect(result.componentLines[0]).toContain('VDI 21')
+  expect(result.componentLines[0].toLowerCase()).toContain('deep matte')
+  expect(result.componentLines[0].toLowerCase()).toContain('injection-mould grain')
+})
+
+test('buildCmfPrompt translates "Milky see through 30%" into a calibrated translucent silicone clause', () => {
+  const result = buildCmfPrompt({
+    ...FIXTURE,
+    components: [
+      {
+        region: 'eartip',
+        label: 'Eartip (hidden flange)',
+        pantone: 'Pantone 7720C',
+        material: 'Silicone',
+        finish: 'Milky see through 30%',
+      },
+    ],
+  })
+  expect(result.componentLines[0].toLowerCase()).toContain('30% light transmission')
+  expect(result.componentLines[0].toLowerCase()).toContain('frosted appearance')
+  expect(result.componentLines[0].toLowerCase()).not.toContain('roughly 100% light transmission')
+})
+
+test('buildCmfPrompt ends with a material-fidelity quality bar so finish stays first-class', () => {
+  const result = buildCmfPrompt(FIXTURE)
+  expect(result.basePrompt).toContain('Material fidelity is critical')
+})

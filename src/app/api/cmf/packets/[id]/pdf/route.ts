@@ -160,6 +160,8 @@ export async function POST(
       cmfCode: document.cmfCode,
       notes: document.notes,
       renders: renderProjections,
+      drawnBy: auth.profile.email ?? null,
+      isDraft: document.isDraft,
     })
 
     const firstPage = document.pages[0]

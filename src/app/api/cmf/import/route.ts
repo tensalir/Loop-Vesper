@@ -13,6 +13,7 @@ import {
   logCmfActivity,
   requireAuthenticatedProfile,
 } from '@/lib/cmf/service'
+import { getCmfProduct } from '@/lib/cmf/products'
 import { createRateLimiter } from '@/lib/api/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -183,15 +184,23 @@ export async function POST(request: NextRequest) {
       format: parsed.format,
       unmappedSheets: parsed.format === 'transposed' ? parsed.unmappedSheets : [],
     },
-    /** All packets created by this import — one per product slug. */
-    packets: packets.map(({ packet, renders }) => ({
-      id: packet.id,
-      name: packet.name,
-      cmfCode: packet.cmfCode,
-      status: packet.status,
-      productSlug: renders[0]?.productSlug ?? null,
-      renderCount: renders.length,
-    })),
+    /** All packets created by this import — one per product slug.
+     * Each packet carries `productName` so the UI can say
+     * "Created 2 product packets: Switch 2, Cocoon" without
+     * re-deriving the display name from the slug. */
+    packets: packets.map(({ packet, renders }) => {
+      const productSlug = renders[0]?.productSlug ?? null
+      const productName = productSlug ? getCmfProduct(productSlug)?.name ?? null : null
+      return {
+        id: packet.id,
+        name: packet.name,
+        cmfCode: packet.cmfCode,
+        status: packet.status,
+        productSlug,
+        productName,
+        renderCount: renders.length,
+      }
+    }),
     /** Convenience: the packet the workspace should auto-open. */
     packet: primary
       ? {
