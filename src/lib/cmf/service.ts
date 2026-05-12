@@ -424,6 +424,37 @@ function normaliseLabelKey(label: string): string {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, '')
 }
 
+/**
+ * Stable signature for a packet's "row identity" — the sorted set of its
+ * SKU keys, where each key prefers `productCode` (most stable) and falls
+ * back to a normalised label. Used as the merge key when a workbook is
+ * re-uploaded WITHOUT a `cmfCode` so we still avoid duplicating the
+ * exact same set of SKUs.
+ *
+ * This is intentionally specific:
+ *   - Same SKUs in any order   → same signature → merge.
+ *   - Even one SKU added/removed/renamed → different signature → new packet.
+ * That's the right conservatism for null-cmfCode rows: we'd rather
+ * occasionally fail to merge a renamed-SKU re-upload than collapse two
+ * actually-distinct launches.
+ */
+export function packetRowSignature(
+  rows: Array<{ productCode?: string | null; label?: string | null }>
+): string {
+  const keys = rows
+    .map((r) => (r.productCode ?? r.label ?? '').toLowerCase().trim())
+    .filter(Boolean)
+    .map(normaliseLabelKey)
+    .sort()
+  return keys.join('|')
+}
+
+function rendersToSignature(
+  rows: Array<{ productCode: string | null; label: string }>
+): string {
+  return packetRowSignature(rows)
+}
+
 export async function createPacketFromRows(
   args: CreatePacketArgs
 ): Promise<{ packets: CreatedPacket[] }> {
@@ -460,23 +491,80 @@ export async function createPacketFromRows(
         ? `${args.packetName} · ${productName}`
         : collection ?? productName
 
-      // Smart-merge lookup: an earlier import for the SAME product +
-      // SAME CMF code → re-use that packet so the dropdown stops
-      // showing duplicates. We pick the OLDEST matching packet so
-      // edits + comments stay anchored to the canonical record.
-      const existingPacket = await tx.cmfPacket.findFirst({
-        where: {
-          cmfCode: inferredCmf,
-          // CMF code alone could collide across products (e.g. someone
-          // manually entering 'CMF-001' for two unrelated launches), so
-          // we additionally require at least one render to share the
-          // productSlug. This is cheap because most packets carry a
-          // single product.
-          renders: { some: { productSlug } },
-        },
-        orderBy: { createdAt: 'asc' },
-        include: { renders: { orderBy: { sortOrder: 'asc' } } },
-      })
+      // Smart-merge lookup. We try two key strategies in priority order:
+      //
+      //   1. (productSlug, cmfCode) — the precise key for real launches
+      //      that carry a CMF code. This is what production workbooks
+      //      will trigger going forward.
+      //
+      //   2. SKU signature — when the workbook has no CMF code (typical
+      //      for the test/dev iteration loop), match against any
+      //      existing packet for the same product whose set of SKU
+      //      identifiers (`productCode` preferred, normalised label as
+      //      fallback) matches the incoming rows. Same SKUs in any
+      //      order → same signature → merge. Anything different → new
+      //      packet. This is what kept the test workbook duplicating
+      //      itself before today's rollout.
+      //
+      // Either way we pick the OLDEST matching packet so edits +
+      // comments + activity stay anchored to the canonical record. The
+      // initial findFirst (cmfCode strategy) seeds TypeScript with the
+      // right `(CmfPacket & { renders: CmfRender[] }) | null` shape;
+      // the signature fallback assigns into the same binding.
+      let existingPacket = inferredCmf
+        ? await tx.cmfPacket.findFirst({
+            where: {
+              cmfCode: inferredCmf,
+              // CMF code alone could collide across products (e.g.
+              // someone manually entering 'CMF-001' for two unrelated
+              // launches), so we additionally require at least one
+              // render to share the productSlug.
+              renders: { some: { productSlug } },
+            },
+            orderBy: { createdAt: 'asc' },
+            include: { renders: { orderBy: { sortOrder: 'asc' } } },
+          })
+        : await tx.cmfPacket.findFirst({
+            // Type-only seed: this where clause matches nothing (we
+            // ALWAYS create a fresh packet via the signature fallback
+            // below when cmfCode is null and signature comes back
+            // empty) so the binding inherits the correct shape.
+            where: { id: '00000000-0000-0000-0000-000000000000' },
+            include: { renders: { orderBy: { sortOrder: 'asc' } } },
+          })
+
+      if (!existingPacket && !inferredCmf) {
+        // Fallback: signature match across every null-cmfCode packet
+        // for this product. We intentionally span owners — under the
+        // global-library model anyone re-uploading the same workbook
+        // should land on the canonical record. Cardinality is small
+        // (a few dozen packets per product at most), so loading +
+        // signature-comparing in JS is cheaper than building a
+        // generated-column index for the same purpose.
+        const incomingSig = packetRowSignature(rows)
+        if (incomingSig) {
+          const candidates = await tx.cmfPacket.findMany({
+            where: {
+              cmfCode: null,
+              renders: { some: { productSlug } },
+            },
+            orderBy: { createdAt: 'asc' },
+            include: { renders: { orderBy: { sortOrder: 'asc' } } },
+          })
+          for (const candidate of candidates) {
+            const sig = rendersToSignature(
+              candidate.renders.map((r) => ({
+                productCode: r.productCode,
+                label: r.label,
+              }))
+            )
+            if (sig === incomingSig) {
+              existingPacket = candidate
+              break
+            }
+          }
+        }
+      }
 
       if (existingPacket) {
         // ─── MERGE PATH ─────────────────────────────────────────────

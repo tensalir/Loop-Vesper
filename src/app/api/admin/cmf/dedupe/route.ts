@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/api/auth'
 import { prisma } from '@/lib/prisma'
+import { packetRowSignature } from '@/lib/cmf/service'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,9 +17,14 @@ export const dynamic = 'force-dynamic'
  * change merges by `(productSlug, cmfCode)` going forward; this endpoint
  * cleans up any pre-existing duplicates by:
  *
- *   1. Grouping packets by `(cmfCode, primary productSlug)`. Packets
- *      with no cmfCode are excluded — they're too ambiguous to merge
- *      automatically and should be reviewed by hand.
+ *   1. Grouping packets two ways:
+ *      a) By `(cmfCode, primary productSlug)` for packets that carry a
+ *         CMF code — the precise key used by smart-merge going forward.
+ *      b) By `(productSlug, SKU signature)` for null-cmfCode packets,
+ *         where the signature is the sorted set of `productCode` (or
+ *         normalised label) keys across the packet's renders. This
+ *         catches the "designer iterates on the test workbook 8 times"
+ *         pattern that has no CMF code to anchor on.
  *   2. Within each group, picking the OLDEST packet as the canonical
  *      record. Comments + members + activity already hang off that one
  *      so we minimise re-pointing churn.
@@ -39,28 +45,39 @@ export async function POST(request: NextRequest) {
 
   const apply = new URL(request.url).searchParams.get('apply') === '1'
 
-  // We rely on the FIRST render's productSlug as the de-facto product
-  // for a packet. Pull every packet with at least one render alongside
-  // a tiny per-render projection so we can group accurately.
+  // Pull every packet with at least one render alongside a tiny
+  // per-render projection so we can build both grouping keys. We need
+  // ALL renders (not just the first) for the null-cmfCode signature
+  // pass, hence no `take: 1` here.
   const packets = await prisma.cmfPacket.findMany({
-    where: { cmfCode: { not: null } },
     orderBy: { createdAt: 'asc' },
     include: {
       renders: {
-        select: { id: true, productSlug: true, sortOrder: true },
+        select: { id: true, productSlug: true, productCode: true, label: true, sortOrder: true },
         orderBy: { sortOrder: 'asc' },
-        take: 1,
       },
     },
   })
 
-  // Group: `${cmfCode}::${productSlug}` → packets[]  (oldest first via the orderBy above)
+  // Group two ways depending on whether the packet has a CMF code.
+  // Bucket key embeds the strategy ("code::" vs "sig::") so dry-run
+  // reports make it obvious which heuristic caught a given group.
   const groups = new Map<string, typeof packets>()
   for (const p of packets) {
-    if (!p.cmfCode) continue
     const productSlug = p.renders[0]?.productSlug
     if (!productSlug) continue
-    const key = `${p.cmfCode.toLowerCase()}::${productSlug.toLowerCase()}`
+    let key: string
+    if (p.cmfCode) {
+      key = `code::${productSlug.toLowerCase()}::${p.cmfCode.toLowerCase()}`
+    } else {
+      const sig = packetRowSignature(
+        p.renders.map((r) => ({ productCode: r.productCode, label: r.label }))
+      )
+      // Empty-signature packets (no labelled renders at all) are too
+      // ambiguous to fold automatically; skip them.
+      if (!sig) continue
+      key = `sig::${productSlug.toLowerCase()}::${sig}`
+    }
     const bucket = groups.get(key) ?? []
     bucket.push(p)
     groups.set(key, bucket)
@@ -76,8 +93,10 @@ export async function POST(request: NextRequest) {
       groupsFound: duplicateGroups.length,
       groups: duplicateGroups.map(([key, list]) => ({
         key,
+        strategy: key.startsWith('code::') ? 'cmfCode' : 'skuSignature',
         canonicalId: list[0].id,
         canonicalName: list[0].name,
+        canonicalCmfCode: list[0].cmfCode,
         canonicalCreatedAt: list[0].createdAt,
         duplicateIds: list.slice(1).map((p) => p.id),
         duplicateNames: list.slice(1).map((p) => p.name),

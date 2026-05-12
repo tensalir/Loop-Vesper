@@ -50,6 +50,17 @@ export interface CmfProductSpec {
   defaultModelId: string
   /** Short prompt fragment describing the product so the model gets framing right. */
   promptDescriptor: string
+  /**
+   * Slug of the "parent" product this entry belongs to. Used to nest
+   * carry cases / pouches as a subsection under their corresponding
+   * earplug or sensewear product in the CMF Studio dropdown — a case
+   * always belongs to a product, never the other way around.
+   *
+   * Convention: `case-<product>` and `pouch-<product>` slugs declare
+   * `parentSlug: '<product>'`. Top-level products (and the generic
+   * `case` slug retained for legacy data) leave this undefined.
+   */
+  parentSlug?: string
 }
 
 const NANO_BANANA_PRO = 'gemini-nano-banana-pro'
@@ -219,6 +230,7 @@ export const CMF_PRODUCT_CATALOG: CmfProductSpec[] = [
     slug: 'case-switch2',
     name: 'Loop Switch 2 Carry Case',
     category: 'case',
+    parentSlug: 'switch2',
     sheetAliases: ['Switch 2 CC', 'Switch 2 Carry Case'],
     defaultModelId: NANO_BANANA_PRO,
     promptDescriptor:
@@ -235,6 +247,7 @@ export const CMF_PRODUCT_CATALOG: CmfProductSpec[] = [
     slug: 'case-engage2',
     name: 'Loop Engage 2 Carry Case',
     category: 'case',
+    parentSlug: 'engage2',
     sheetAliases: ['Engage 2 CC', 'Engage 2 Carry Case'],
     defaultModelId: NANO_BANANA_PRO,
     promptDescriptor:
@@ -250,6 +263,7 @@ export const CMF_PRODUCT_CATALOG: CmfProductSpec[] = [
     slug: 'case-experience2',
     name: 'Loop Experience 2 Carry Case',
     category: 'case',
+    parentSlug: 'experience2',
     sheetAliases: ['Experience 2 CC', 'Experience 2 Carry Case'],
     defaultModelId: NANO_BANANA_PRO,
     promptDescriptor:
@@ -265,6 +279,7 @@ export const CMF_PRODUCT_CATALOG: CmfProductSpec[] = [
     slug: 'case-quiet2',
     name: 'Loop Quiet 2 Carry Case',
     category: 'case',
+    parentSlug: 'quiet2',
     sheetAliases: ['Quiet 2 CC', 'Quiet 2 Carry Case'],
     defaultModelId: NANO_BANANA_PRO,
     promptDescriptor:
@@ -280,6 +295,7 @@ export const CMF_PRODUCT_CATALOG: CmfProductSpec[] = [
     slug: 'case-dream',
     name: 'Loop Dream Carry Case',
     category: 'case',
+    parentSlug: 'dream',
     sheetAliases: ['Dream CC', 'Dream Carry Case'],
     defaultModelId: NANO_BANANA_PRO,
     promptDescriptor:
@@ -295,6 +311,7 @@ export const CMF_PRODUCT_CATALOG: CmfProductSpec[] = [
     slug: 'case-aphrodite',
     name: 'Loop Aphrodite Carry Case',
     category: 'case',
+    parentSlug: 'aphrodite',
     sheetAliases: ['Aphrodite CC', 'Aphrodite Carry Case'],
     defaultModelId: NANO_BANANA_PRO,
     promptDescriptor:
@@ -314,6 +331,7 @@ export const CMF_PRODUCT_CATALOG: CmfProductSpec[] = [
     slug: 'pouch-link',
     name: 'Loop Link Pouch',
     category: 'case',
+    parentSlug: 'link',
     sheetAliases: ['Link Pouch'],
     defaultModelId: NANO_BANANA_PRO,
     promptDescriptor:
@@ -359,6 +377,17 @@ export function getCmfProductBySheet(sheetName: string): CmfProductSpec | null {
 
 export function listCmfProducts(): CmfProductSpec[] {
   return CMF_PRODUCT_CATALOG
+}
+
+/**
+ * Return every product whose `parentSlug` points at the given product —
+ * typically zero or one entry (the carry case / pouch). Used by the
+ * CMF Studio dropdown to nest case packets as a subsection under the
+ * parent earplug or sensewear product.
+ */
+export function listCmfChildProducts(parentSlug: string): CmfProductSpec[] {
+  const key = parentSlug.toLowerCase()
+  return CMF_PRODUCT_CATALOG.filter((p) => p.parentSlug?.toLowerCase() === key)
 }
 
 /** Resolve a region key to its display label for a given product. */

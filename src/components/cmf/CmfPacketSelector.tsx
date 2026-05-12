@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/popover'
 import {
   AlertTriangle,
+  Briefcase,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -81,6 +82,11 @@ interface ProductNode {
   displayName: string
   category: 'earplug' | 'sensewear' | 'case' | 'other'
   packets: CmfPacket[]
+  /** Cases / pouches that declare this product as their `parentSlug`.
+   *  Rendered as a "Carry case" subsection inside the product's
+   *  expansion so designers see the case packets right next to the
+   *  parent product they belong to. */
+  cases: ProductNode[]
 }
 
 const CATEGORY_ORDER: Record<ProductNode['category'], number> = {
@@ -130,6 +136,13 @@ export function CmfPacketSelector({
   // (even with zero packets) so the dropdown reads as a product
   // catalog, not a packet list. Slugs not in the catalog get an
   // "Uncatalogued" group at the bottom so legacy data stays reachable.
+  //
+  // Cases / pouches that declare a `parentSlug` are NOT promoted to
+  // top-tier nodes — instead they're attached to the parent product's
+  // `cases[]` and rendered as a subsection inside the parent's
+  // expansion. The generic `case` slug (no parent) and any case slug
+  // whose parent is missing from the catalog stay top-level so legacy
+  // data is never hidden.
   const productNodes: ProductNode[] = useMemo(() => {
     const catalog = listCmfProducts()
     const bySlug = new Map<string, ProductNode>()
@@ -141,6 +154,7 @@ export function CmfPacketSelector({
         displayName: product.name,
         category: product.category,
         packets: [],
+        cases: [],
       })
     }
 
@@ -154,14 +168,41 @@ export function CmfPacketSelector({
           displayName: slug === '(unknown)' ? 'Uncatalogued' : slug,
           category: 'other',
           packets: [],
+          cases: [],
         }
         bySlug.set(slug, node)
       }
       node.packets.push(packet)
     }
 
-    return Array.from(bySlug.values())
-      .filter((n) => n.product || n.packets.length > 0)
+    // Wire each case/pouch product into its parent's `cases[]`. We do
+    // this AFTER the packets pass so case packets are already on the
+    // case node before it gets nested.
+    const allNodes = Array.from(bySlug.values())
+    const childSlugs = new Set<string>()
+    for (const node of allNodes) {
+      if (!node.product?.parentSlug) continue
+      const parentNode = bySlug.get(node.product.parentSlug)
+      if (!parentNode) continue
+      parentNode.cases.push(node)
+      childSlugs.add(node.product.slug)
+    }
+    // Sort the child cases for deterministic UI ordering.
+    for (const node of allNodes) {
+      if (node.cases.length > 1) {
+        node.cases.sort((a, b) => a.displayName.localeCompare(b.displayName))
+      }
+    }
+
+    return allNodes
+      .filter((n) => {
+        // Hide nodes that have been re-parented into another product.
+        if (n.product && childSlugs.has(n.product.slug)) return false
+        // Hide catalog products with zero packets unless they're a
+        // top-tier "primary" product. Cases without a parent stay
+        // visible so legacy `case` slug rows are still reachable.
+        return n.product || n.packets.length > 0
+      })
       .sort((a, b) => {
         const cat = CATEGORY_ORDER[a.category] - CATEGORY_ORDER[b.category]
         if (cat !== 0) return cat
@@ -171,16 +212,26 @@ export function CmfPacketSelector({
 
   // Auto-expand the product (and packet) that contains the active
   // selection so opening the dropdown reveals the current SKU set
-  // without an extra click. Runs every time `activePacketId` shifts.
+  // without an extra click. When the active packet belongs to a case
+  // sub-product (e.g. `case-aphrodite`), we ALSO expand the parent
+  // product (`aphrodite`) since the case is rendered nested inside
+  // it. Runs every time `activePacketId` shifts.
   useEffect(() => {
     if (!active) return
     const slug = active.renders?.[0]?.productSlug
     if (slug) {
       setExpandedProducts((prev) => {
-        if (prev.has(slug)) return prev
         const next = new Set(prev)
         next.add(slug)
-        return next
+        // If this slug is a case with a parent in the catalog, expand
+        // the parent too so the case subsection becomes visible.
+        const node = productNodes.find(
+          (n) =>
+            n.product?.slug === slug ||
+            n.cases.some((c) => c.product?.slug === slug)
+        )
+        if (node?.product?.slug) next.add(node.product.slug)
+        return prev.size === next.size ? prev : next
       })
     }
     setExpandedPackets((prev) => {
@@ -189,15 +240,26 @@ export function CmfPacketSelector({
       next.add(active.id)
       return next
     })
-  }, [active])
+  }, [active, productNodes])
 
   const activeTone: ReadinessTone | null = active ? packetTone(active, clowns) : null
   const activeProductSlug = active?.renders?.[0]?.productSlug ?? null
-  const activeProductName = activeProductSlug
-    ? productNodes.find(
-        (n) => n.product?.slug === activeProductSlug || n.fallbackSlug === activeProductSlug
-      )?.displayName ?? null
-    : null
+  // Resolve the active product label, looking inside parent.cases[] too
+  // so a selected carry-case packet shows up as "Loop Aphrodite · Carry
+  // case" rather than the bare slug.
+  const activeProductLabel: string | null = (() => {
+    if (!activeProductSlug) return null
+    for (const n of productNodes) {
+      if (n.product?.slug === activeProductSlug || n.fallbackSlug === activeProductSlug) {
+        return n.displayName
+      }
+      const child = n.cases.find(
+        (c) => c.product?.slug === activeProductSlug
+      )
+      if (child) return `${n.displayName} · ${child.displayName.replace(/^Loop\s+/, '')}`
+    }
+    return activeProductSlug
+  })()
 
   function toggleProduct(key: string) {
     setExpandedProducts((prev) => {
@@ -245,8 +307,8 @@ export function CmfPacketSelector({
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground/70">
-              {activeProductName ? activeProductName : 'Product'}
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground/70 truncate">
+              {activeProductLabel ?? 'Product'}
             </p>
             <p className="text-sm font-semibold tracking-tight truncate leading-tight">
               {isLoading
@@ -313,13 +375,20 @@ export function CmfPacketSelector({
         )}
 
         {/* The 3-tier tree: products grouped by category, packets per
-            product, SKUs per packet. */}
+            product, SKUs per packet. Cases / pouches that declare a
+            parentSlug appear inside their parent's expansion as a
+            "Carry case" subsection so a case always reads as belonging
+            to its parent product. */}
         <ul className="space-y-1.5">
           {productNodes.map((node, idx) => {
             const key = node.product?.slug ?? node.fallbackSlug ?? `product-${idx}`
             const expanded = expandedProducts.has(key)
-            const tone = productTone(node.packets, clowns)
-            const skuCount = node.packets.reduce(
+            // Aggregate tone + counts across the parent and its child
+            // case nodes so the collapsed product row reflects the
+            // whole subtree, not just the parent's own packets.
+            const allPackets = [...node.packets, ...node.cases.flatMap((c) => c.packets)]
+            const tone = productTone(allPackets, clowns)
+            const skuCount = allPackets.reduce(
               (s, p) => s + (p.renders?.length ?? 0),
               0
             )
@@ -360,151 +429,219 @@ export function CmfPacketSelector({
                   <Package className="h-3.5 w-3.5 text-muted-foreground/70 flex-shrink-0" />
                   <span className="flex-1 truncate text-sm font-medium">
                     {node.displayName}
+                    {node.cases.length > 0 && node.cases.some((c) => c.packets.length > 0) && (
+                      <span className="ml-1.5 text-[9px] uppercase tracking-wider text-muted-foreground/60 font-normal">
+                        + case
+                      </span>
+                    )}
                   </span>
                   <span className="text-[10px] text-muted-foreground/70 flex-shrink-0">
-                    {node.packets.length === 0
+                    {allPackets.length === 0
                       ? 'no packets yet'
-                      : node.packets.length === 1
+                      : allPackets.length === 1
                       ? `1 packet · ${skuCount} ${skuCount === 1 ? 'SKU' : 'SKUs'}`
-                      : `${node.packets.length} packets · ${skuCount} SKUs`}
+                      : `${allPackets.length} packets · ${skuCount} SKUs`}
                   </span>
                 </button>
 
-                {expanded && node.packets.length === 0 && (
+                {expanded && allPackets.length === 0 && (
                   <p className="ml-9 mb-1 text-[11px] italic text-muted-foreground/60">
                     No packets imported for this product yet.
                   </p>
                 )}
 
                 {expanded && node.packets.length > 0 && (
-                  <ul className="ml-3 border-l border-border/40 pl-1 space-y-0.5">
-                    {node.packets.map((packet) => {
-                      const isActive = packet.id === activePacketId
-                      const packetExpanded = expandedPackets.has(packet.id)
-                      const renderCount = packet.renders?.length ?? 0
-                      const coverage = clownCoverageForPacket(packet, clowns ?? null)
-                      const ptone = packetTone(packet, clowns)
-                      return (
-                        <li key={packet.id}>
-                          <div
-                            className={cn(
-                              'group flex items-start gap-1.5 rounded-md px-2 py-1.5 transition-colors',
-                              isActive ? 'bg-primary/10' : 'hover:bg-muted/40'
-                            )}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => togglePacket(packet.id)}
-                              className="mt-1 flex-shrink-0 rounded p-0.5 hover:bg-muted/60"
-                              aria-label={packetExpanded ? 'Collapse SKUs' : 'Expand SKUs'}
-                            >
-                              <ChevronRight
-                                className={cn(
-                                  'h-3 w-3 text-muted-foreground/60 transition-transform',
-                                  packetExpanded && 'rotate-90'
-                                )}
-                              />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onSelect(packet.id)
-                                setOpen(false)
-                              }}
-                              className="min-w-0 flex-1 text-left"
-                            >
-                              <div className="flex items-center gap-1.5">
-                                <span
-                                  aria-hidden
-                                  className={cn(
-                                    'h-1.5 w-1.5 rounded-full flex-shrink-0',
-                                    ptone === 'ready' && 'bg-emerald-500',
-                                    ptone === 'partial' && 'bg-amber-500',
-                                    ptone === 'blocked' && 'bg-rose-500',
-                                    ptone === 'empty' && 'bg-muted-foreground/30'
-                                  )}
-                                />
-                                <p className="text-[12px] font-medium truncate">
-                                  {packet.cmfCode || packet.name}
-                                </p>
-                                {isActive && (
-                                  <Check className="h-3 w-3 text-primary flex-shrink-0" />
-                                )}
-                                <span
-                                  className={cn(
-                                    'ml-auto text-[9px] font-medium uppercase tracking-wider rounded-full px-1.5 py-0.5 flex-shrink-0',
-                                    packet.status === 'ready'
-                                      ? 'bg-primary/15 text-primary'
-                                      : packet.status === 'rendering'
-                                      ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200'
-                                      : packet.status === 'failed'
-                                      ? 'bg-destructive/15 text-destructive'
-                                      : 'bg-muted text-muted-foreground'
-                                  )}
-                                >
-                                  {STATUS_LABEL[packet.status] ?? packet.status}
-                                </span>
-                              </div>
-                              <p className="text-[10px] text-muted-foreground/70 mt-0.5 truncate">
-                                {packet.cmfCode ? packet.name : '—'}
-                                {' · '}
-                                {renderCount} {renderCount === 1 ? 'SKU' : 'SKUs'}
-                                {ptone === 'blocked' &&
-                                  coverage.missingSlugs.length > 0 && (
-                                    <span className="text-rose-700 dark:text-rose-300">
-                                      {' · needs clown'}
-                                    </span>
-                                  )}
-                              </p>
-                            </button>
-                          </div>
-
-                          {packetExpanded && renderCount > 0 && (
-                            <ul className="ml-6 mb-1 mt-0.5 space-y-0.5 border-l border-border/30 pl-2">
-                              {packet.renders.map((render) => (
-                                <li key={render.id}>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      onSelect(packet.id)
-                                      onRenderFocus?.(packet.id, render.id)
-                                      setOpen(false)
-                                    }}
-                                    className="w-full flex items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
-                                  >
-                                    <Tag className="h-2.5 w-2.5 flex-shrink-0 opacity-60" />
-                                    <span className="truncate">
-                                      {render.colorwayName ?? render.label}
-                                    </span>
-                                    <span
-                                      className={cn(
-                                        'ml-auto h-1.5 w-1.5 rounded-full flex-shrink-0',
-                                        render.status === 'ready' &&
-                                          'bg-emerald-500',
-                                        render.status === 'rendering' &&
-                                          'bg-amber-500 animate-pulse',
-                                        render.status === 'failed' &&
-                                          'bg-destructive',
-                                        (render.status === 'draft' ||
-                                          render.status === 'queued') &&
-                                          'bg-muted-foreground/30'
-                                      )}
-                                    />
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </li>
-                      )
-                    })}
-                  </ul>
+                  <PacketList
+                    packets={node.packets}
+                    activePacketId={activePacketId}
+                    expandedPackets={expandedPackets}
+                    togglePacket={togglePacket}
+                    clowns={clowns}
+                    onSelect={onSelect}
+                    onRenderFocus={onRenderFocus}
+                    setOpen={setOpen}
+                  />
                 )}
+
+                {expanded &&
+                  node.cases.map((caseNode) => (
+                    <div key={caseNode.product?.slug ?? caseNode.fallbackSlug} className="ml-3 mt-1">
+                      <p className="flex items-center gap-1.5 px-1 py-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
+                        <Briefcase className="h-3 w-3 opacity-70" />
+                        {caseNode.displayName.replace(/^Loop\s+/, '')}
+                        <span className="ml-auto normal-case tracking-normal text-muted-foreground/50">
+                          {caseNode.packets.length === 0
+                            ? 'no packets yet'
+                            : `${caseNode.packets.length} packet${
+                                caseNode.packets.length === 1 ? '' : 's'
+                              }`}
+                        </span>
+                      </p>
+                      {caseNode.packets.length > 0 && (
+                        <PacketList
+                          packets={caseNode.packets}
+                          activePacketId={activePacketId}
+                          expandedPackets={expandedPackets}
+                          togglePacket={togglePacket}
+                          clowns={clowns}
+                          onSelect={onSelect}
+                          onRenderFocus={onRenderFocus}
+                          setOpen={setOpen}
+                        />
+                      )}
+                    </div>
+                  ))}
               </li>
             )
           })}
         </ul>
       </PopoverContent>
     </Popover>
+  )
+}
+
+/* ── Packet list (shared by parent product + each case subsection) ───── */
+
+interface PacketListProps {
+  packets: CmfPacket[]
+  activePacketId: string | null
+  expandedPackets: Set<string>
+  togglePacket: (id: string) => void
+  clowns: ReturnType<typeof useCmfClowns>['data']
+  onSelect: (id: string) => void
+  onRenderFocus?: (packetId: string, renderId: string) => void
+  setOpen: (open: boolean) => void
+}
+
+function PacketList({
+  packets,
+  activePacketId,
+  expandedPackets,
+  togglePacket,
+  clowns,
+  onSelect,
+  onRenderFocus,
+  setOpen,
+}: PacketListProps) {
+  return (
+    <ul className="ml-3 border-l border-border/40 pl-1 space-y-0.5">
+      {packets.map((packet) => {
+        const isActive = packet.id === activePacketId
+        const packetExpanded = expandedPackets.has(packet.id)
+        const renderCount = packet.renders?.length ?? 0
+        const coverage = clownCoverageForPacket(packet, clowns ?? null)
+        const ptone = packetTone(packet, clowns)
+        return (
+          <li key={packet.id}>
+            <div
+              className={cn(
+                'group flex items-start gap-1.5 rounded-md px-2 py-1.5 transition-colors',
+                isActive ? 'bg-primary/10' : 'hover:bg-muted/40'
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => togglePacket(packet.id)}
+                className="mt-1 flex-shrink-0 rounded p-0.5 hover:bg-muted/60"
+                aria-label={packetExpanded ? 'Collapse SKUs' : 'Expand SKUs'}
+              >
+                <ChevronRight
+                  className={cn(
+                    'h-3 w-3 text-muted-foreground/60 transition-transform',
+                    packetExpanded && 'rotate-90'
+                  )}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onSelect(packet.id)
+                  setOpen(false)
+                }}
+                className="min-w-0 flex-1 text-left"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'h-1.5 w-1.5 rounded-full flex-shrink-0',
+                      ptone === 'ready' && 'bg-emerald-500',
+                      ptone === 'partial' && 'bg-amber-500',
+                      ptone === 'blocked' && 'bg-rose-500',
+                      ptone === 'empty' && 'bg-muted-foreground/30'
+                    )}
+                  />
+                  <p className="text-[12px] font-medium truncate">
+                    {packet.cmfCode || packet.name}
+                  </p>
+                  {isActive && (
+                    <Check className="h-3 w-3 text-primary flex-shrink-0" />
+                  )}
+                  <span
+                    className={cn(
+                      'ml-auto text-[9px] font-medium uppercase tracking-wider rounded-full px-1.5 py-0.5 flex-shrink-0',
+                      packet.status === 'ready'
+                        ? 'bg-primary/15 text-primary'
+                        : packet.status === 'rendering'
+                        ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200'
+                        : packet.status === 'failed'
+                        ? 'bg-destructive/15 text-destructive'
+                        : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {STATUS_LABEL[packet.status] ?? packet.status}
+                  </span>
+                </div>
+                <p className="text-[10px] text-muted-foreground/70 mt-0.5 truncate">
+                  {packet.cmfCode ? packet.name : '—'}
+                  {' · '}
+                  {renderCount} {renderCount === 1 ? 'SKU' : 'SKUs'}
+                  {ptone === 'blocked' && coverage.missingSlugs.length > 0 && (
+                    <span className="text-rose-700 dark:text-rose-300">
+                      {' · needs clown'}
+                    </span>
+                  )}
+                </p>
+              </button>
+            </div>
+
+            {packetExpanded && renderCount > 0 && (
+              <ul className="ml-6 mb-1 mt-0.5 space-y-0.5 border-l border-border/30 pl-2">
+                {packet.renders.map((render) => (
+                  <li key={render.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelect(packet.id)
+                        onRenderFocus?.(packet.id, render.id)
+                        setOpen(false)
+                      }}
+                      className="w-full flex items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
+                    >
+                      <Tag className="h-2.5 w-2.5 flex-shrink-0 opacity-60" />
+                      <span className="truncate">
+                        {render.colorwayName ?? render.label}
+                      </span>
+                      <span
+                        className={cn(
+                          'ml-auto h-1.5 w-1.5 rounded-full flex-shrink-0',
+                          render.status === 'ready' && 'bg-emerald-500',
+                          render.status === 'rendering' &&
+                            'bg-amber-500 animate-pulse',
+                          render.status === 'failed' && 'bg-destructive',
+                          (render.status === 'draft' ||
+                            render.status === 'queued') &&
+                            'bg-muted-foreground/30'
+                        )}
+                      />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        )
+      })}
+    </ul>
   )
 }
