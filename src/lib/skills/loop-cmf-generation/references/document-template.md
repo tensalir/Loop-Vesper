@@ -1,13 +1,14 @@
 # Document Template
 
-Loop CMF documents have a recognisable shape: a top-of-page meta header (CMF number / Collection / Product name / Product code / EAN / Edit date / Drawn / Checked / Checked), a hero render with a vertical component spec list (Page 1), and a part breakdown grid (Page 2). The template mirrors Damien's source CMF deck so an exported PDF can drop straight into Loop's existing approval workflow without re-authoring.
+Loop CMF documents have a recognisable shape: a top-of-page meta header (CMF number / Collection / Product name / Product code / EAN / Edit date / Drawn / Checked / Checked), a hero render with a vertical component spec list (Page 1), an optional clown reference page that anchors the model input back to the factory (Page 2), and a part breakdown grid (Page 3). The template mirrors Damien's source CMF deck so an exported PDF can drop straight into Loop's existing approval workflow without re-authoring.
 
 ## Contents
 
 - Page geometry
 - Meta header
 - Page 1 (Product render + spec list)
-- Page 2 (Part breakdown)
+- Page 2 (Clown reference)
+- Page 3 (Part breakdown)
 - Optional pack overview page (multi-SKU)
 - HTML preview vs. PDF export
 - Editing posture (what is editable, what is not)
@@ -32,7 +33,7 @@ A 3×3 grid sits at the top of every page. Cells are LOCK; values change per SKU
 | Product code | EAN code | Edit date |
 | Drawn | Checked | Checked |
 
-Right of the grid: page label ("CMF Page 1" / "Part Break Down Page 2" / "Pack overview") in the primary colour, plus a DRAFT badge when `documentDraft.isDraft` is true.
+Right of the grid: page label ("CMF Page 1" / "Clown reference" / "Part Break Down Page 2" / "Pack overview") in the primary colour, plus a DRAFT badge when `documentDraft.isDraft` is true.
 
 ## Page 1 (Product render + spec list)
 
@@ -41,7 +42,17 @@ Right of the grid: page label ("CMF Page 1" / "Part Break Down Page 2" / "Pack o
 - Component spec list: vertical stack below the hero plate. Each component has a labelled key/value block — Material, Finish, Colour, Artwork — that matches Damien's source template.
 - Placeholder copy when no approved render is bound: "Render not generated yet" (muted, centred).
 
-## Page 2 (Part breakdown)
+## Page 2 (Clown reference)
+
+When a clown asset is registered for the SKU (the normal case), a dedicated reference page sits between the spec page and the breakdown. Designers asked for this so factories can map each painted region on the clown image back to its component without leaving the deck.
+
+- Section title: "Clown reference" (top-left, ink) + the clown label in mono below.
+- Hero plate: same proportions as the Page 1 render plate — light grey backplate with the clown image aspect-fit inside.
+- Colour legend: a 2-column list under the image. Each row is a swatch chip (the clown region colour) next to the component label (e.g. "POM ring", "Cosmetic cap"). Components without `colorHex` are skipped silently; if no metadata is present at all, the page falls back to a short note ("No per-region colour metadata on this clown — match by visual reference.").
+
+The clown asset is resolved with the same three-tier rule the renderer uses (explicit `clownAssetId` → exact variant → product-fallback pool), via `resolveClownAssetForRender` in `src/lib/cmf/render.ts`. If no clown is registered for the product at all, the clown page is skipped for that SKU and the deck continues with Page 1 → Page 3.
+
+## Page 3 (Part breakdown)
 
 - Section title: "Part break down" (top-left, ink).
 - 2-column grid of cards, one per component. Each card shows the component label (primary colour), the swatch chip on the right, and a key/value column on the left with Pantone, Material, Finish, Technique.

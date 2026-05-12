@@ -15,6 +15,7 @@ import { prisma } from '@/lib/prisma'
 import { uploadBase64ToStorage } from '@/lib/supabase/storage'
 import { buildCmfPacketPdf } from '@/lib/cmf/pdf'
 import { buildPacketFileSlug } from '@/lib/cmf/prompt'
+import { resolveClownAssetForRender } from '@/lib/cmf/render'
 import {
   isDocumentReadyForExport,
   resolveCmfDocument,
@@ -135,11 +136,28 @@ export async function POST(
   })
 
   try {
+    // Resolve which clown the render service *would* pick for each SKU so
+    // we can include a Clown reference page per SKU. The same resolver is
+    // used at generation time, so the page always shows the exact image
+    // the model saw.
+    const clownByRender = new Map<string, Awaited<ReturnType<typeof resolveClownAssetForRender>>>()
+    await Promise.all(
+      packet.renders.map(async (render) => {
+        const clown = await resolveClownAssetForRender({
+          productSlug: render.productSlug,
+          variantSlug: render.variantSlug,
+          clownAssetId: render.clownAssetId,
+        })
+        clownByRender.set(render.id, clown)
+      })
+    )
+
     // Map the resolved document back to the shape buildCmfPacketPdf expects.
     // The PDF builder reads renders[].renderUrl / componentSpecs / etc., which
     // align with what we've already mirrored onto the cmf_renders row.
     const renderProjections = document.pages.map((page) => {
       const render = packet.renders.find((r) => r.id === page.renderId)!
+      const clown = clownByRender.get(render.id) ?? null
       return {
         id: render.id,
         label: render.label,
@@ -152,6 +170,13 @@ export async function POST(
         renderUrl: page.imageUrl,
         enhancedPrompt: render.enhancedPrompt,
         status: render.status,
+        clown: clown
+          ? {
+              imageUrl: clown.imageUrl,
+              label: clown.label,
+              components: clown.components,
+            }
+          : null,
       }
     })
 
