@@ -17,6 +17,7 @@
 
 import { z } from 'zod'
 import { getCmfProduct, type CmfProductComponent } from './products'
+import { enrichComponentColour, hasUnresolvedPantone } from './pantone'
 import type { ParsedComponent, ParsedSheet, ParsedSkuRow } from './xlsx'
 
 export const ComponentSpecSchema = z.object({
@@ -179,6 +180,23 @@ export function normaliseParsedSheets(
       rows.push(parsed.data)
     }
   }
+
+  // Surface unresolved Pantone codes once per import. Workflow: when a new
+  // collection's workbook lands and we see this warning, vendor the codes
+  // into `src/lib/cmf/pantone.ts:TCX_HEX` and the next run produces
+  // colour-anchored prompts.
+  const unresolved = new Set<string>()
+  for (const row of rows) {
+    for (const c of row.components) {
+      if (hasUnresolvedPantone(c) && c.pantone) unresolved.add(c.pantone)
+    }
+  }
+  if (unresolved.size > 0) {
+    console.warn(
+      `[cmf/schema] Pantone → hex lookup missed ${unresolved.size} code(s); vendor them into pantone.ts for better colour fidelity: ${Array.from(unresolved).join(', ')}`
+    )
+  }
+
   return { rows, errors }
 }
 
@@ -206,7 +224,16 @@ function mergeWithCatalog(
   if (parsed.technique) candidate.technique = parsed.technique.slice(0, 200)
   if (parsed.notes) candidate.notes = parsed.notes.slice(0, 800)
 
-  const result = ComponentSpecSchema.safeParse(candidate)
+  // Resolve Pantone → hex *before* validation so the enriched value lives
+  // on `cmf_renders.componentSpecs` and propagates to the prompt, PDF
+  // swatches, and HTML preview without further plumbing. Lookup misses
+  // are silent — `hasUnresolvedPantone` surfaces them via a warning at
+  // the end of normalisation so the team can vendor missing codes.
+  const enriched = enrichComponentColour(
+    candidate as Record<string, unknown> & { pantone?: string | null; colorHex?: string | null }
+  )
+
+  const result = ComponentSpecSchema.safeParse(enriched)
   return result.success ? result.data : null
 }
 
@@ -342,7 +369,7 @@ function buildComponents(
       partial.finish === known?.defaultFinish
     if (onlyDefaults) continue
 
-    const candidate = {
+    const candidate = enrichComponentColour({
       region: partial.region,
       label: partial.label ?? humanise(partial.region),
       pantone: partial.pantone,
@@ -351,7 +378,7 @@ function buildComponents(
       finish: partial.finish,
       technique: partial.technique,
       notes: partial.notes,
-    }
+    })
     const result = ComponentSpecSchema.safeParse(candidate)
     if (result.success) filtered.push(result.data)
   }

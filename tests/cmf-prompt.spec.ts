@@ -358,3 +358,84 @@ test('buildCmfPrompt ends with a material-fidelity quality bar so finish stays f
   const result = buildCmfPrompt(FIXTURE)
   expect(result.basePrompt).toContain('Material fidelity is critical')
 })
+
+/* ── Colour fidelity (Damien's "colors are off" feedback) ─────────────── */
+
+test('buildCmfPrompt opens with a disclaimer that the clown reference colours are LABELS, not targets', () => {
+  const result = buildCmfPrompt(FIXTURE)
+  // The disclaimer should sit early in the prompt — before the recolour
+  // block — so the model has the negative constraint primed before
+  // committing to a colour intent.
+  expect(result.basePrompt).toContain('LABELS, not the target palette')
+  expect(result.basePrompt).toContain(
+    'none of the clown\'s identifier colours may appear on the final product'
+  )
+  // Position check: the disclaimer must precede the per-component recolour block.
+  const disclaimerAt = result.basePrompt.indexOf('LABELS, not the target palette')
+  const recolourAt = result.basePrompt.indexOf('Replace only the materials')
+  expect(disclaimerAt).toBeGreaterThan(0)
+  expect(recolourAt).toBeGreaterThan(disclaimerAt)
+})
+
+test('buildCmfPrompt leads each component line with the hex value before the Pantone code', () => {
+  // When both hex and Pantone are present, the hex must come first inside
+  // the TARGET COLOUR clause — VLMs parse hex literally; Pantone is
+  // opaque text for them. Keeping both means the factory still has the
+  // canonical Pantone reference.
+  const result = buildCmfPrompt(FIXTURE)
+  // POM ring fixture: pantone "PANTONE 17-5641 TCX", colorHex "#7ba47a".
+  expect(result.componentLines[0]).toContain('TARGET COLOUR #7ba47a (PANTONE 17-5641 TCX)')
+})
+
+test('buildCmfPrompt falls back to Pantone-only when colorHex is missing', () => {
+  const result = buildCmfPrompt({
+    ...FIXTURE,
+    components: [
+      {
+        region: 'pom_ring',
+        label: 'POM ring',
+        pantone: 'PANTONE 17-5641 TCX',
+        material: 'POM',
+        finish: 'Matte',
+      },
+    ],
+  })
+  expect(result.componentLines[0]).toContain('TARGET COLOUR PANTONE 17-5641 TCX')
+  expect(result.componentLines[0]).not.toContain('TARGET COLOUR #')
+})
+
+test('buildCmfPrompt emits a Final colour palette recap with every per-component target', () => {
+  const result = buildCmfPrompt(FIXTURE)
+  expect(result.basePrompt).toContain('Final colour palette')
+  expect(result.basePrompt).toContain(
+    'these are the ONLY colours that may appear on the recoloured surfaces'
+  )
+  // Both components show up in the recap, in order.
+  const recapStart = result.basePrompt.indexOf('Final colour palette')
+  const pomAt = result.basePrompt.indexOf('POM ring →', recapStart)
+  const capAt = result.basePrompt.indexOf('Cosmetic cap →', recapStart)
+  expect(pomAt).toBeGreaterThan(recapStart)
+  expect(capAt).toBeGreaterThan(pomAt)
+})
+
+test('buildCmfPrompt places the Final colour palette recap right before the lighting clause', () => {
+  // Sequence ordering pins how the prompt reads top-to-bottom: recolour
+  // block → palette context → final recap → lighting → quality bar. The
+  // recap belongs late so it stays in attention when the model commits.
+  const result = buildCmfPrompt(FIXTURE)
+  const recapAt = result.basePrompt.indexOf('Final colour palette')
+  const lightingAt = result.basePrompt.indexOf('Lighting:')
+  expect(recapAt).toBeGreaterThan(0)
+  expect(lightingAt).toBeGreaterThan(recapAt)
+})
+
+test('buildCmfPrompt closes with a colour-fidelity quality bar alongside the material-fidelity one', () => {
+  const result = buildCmfPrompt(FIXTURE)
+  expect(result.basePrompt).toContain('Colour fidelity is equally critical')
+  expect(result.basePrompt).toContain(
+    'must read as its specified hex/Pantone target'
+  )
+  expect(result.basePrompt).toContain(
+    'NOT as the saturated identifier colour from the clown reference'
+  )
+})

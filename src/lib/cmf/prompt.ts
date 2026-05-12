@@ -309,13 +309,28 @@ function describeFinish(component: ComponentSpec): string {
 
 /* ── Per-component recolour line ───────────────────────────────────────── */
 
+/**
+ * Format the target colour for a component. We lead with the hex value
+ * because vision-language models parse hex literally and use it as a
+ * direct sRGB target, whereas they treat Pantone codes as opaque text
+ * tokens and approximate the colour from context (which lets the clown
+ * reference colours bleed in). The Pantone code follows in parentheses so
+ * the factory still has the canonical reference.
+ */
+function describeComponentColour(component: ComponentSpec): string | null {
+  if (component.colorHex && component.pantone) {
+    return `${component.colorHex} (${component.pantone})`
+  }
+  if (component.colorHex) return component.colorHex
+  if (component.pantone) return component.pantone
+  return null
+}
+
 function describeComponent(
   component: ComponentSpec,
   clownByRegion: Map<string, ClownComponentMeta> | null
 ): string {
-  const colour = component.pantone
-    ? `${component.pantone}${component.colorHex ? ` (≈ ${component.colorHex})` : ''}`
-    : component.colorHex ?? null
+  const colour = describeComponentColour(component)
 
   // Anchor the line on the clown reference colour when we have one. This is
   // the single biggest reason the model misses a region: the label "Cosmetic
@@ -329,7 +344,7 @@ function describeComponent(
     : component.label
 
   const parts: string[] = []
-  if (colour) parts.push(`recolour to ${colour}`)
+  if (colour) parts.push(`TARGET COLOUR ${colour}`)
   const material = describeMaterial(component)
   if (material) parts.push(material)
   const finish = describeFinish(component)
@@ -414,6 +429,14 @@ export function buildCmfPrompt(
   const lines: string[] = [
     `Using the provided 3D clown CMF render of ${productPhrase}, convert it into a photorealistic studio product shot in the "${colourwayLabel}" colourway.`,
     '',
+    // The single biggest failure mode in this pipeline is the model
+    // borrowing saturated identifier colours straight from the clown
+    // reference (magenta, lime, electric blue, etc.). Spell out — at the
+    // top of the prompt, before the model has any colour intent —
+    // that the clown's surface colours are PURELY for region
+    // identification and MUST NOT appear in the output.
+    `IMPORTANT — the reference image is a multi-coloured "clown" render where each surface has been painted a distinct primary colour purely to identify its region. The clown's painted colours (magenta, lime green, electric blue, orange, etc.) are LABELS, not the target palette. The output MUST use exclusively the per-component target colours listed below; none of the clown's identifier colours may appear on the final product.`,
+    '',
     `Preserve the geometry, design, angle, framing, composition, and the relative positions of every unit exactly as in the source image. Do not alter the pose, perspective, scale, silhouette, parting lines, or any structural detail. Keep any text, markings, or labels (e.g. "L"/"R", logos, etched artwork) intact in the same location and orientation. Keep the source background unchanged.`,
   ]
 
@@ -463,12 +486,31 @@ export function buildCmfPrompt(
     )
   }
 
+  // Final colour palette recap. We deliberately repeat the per-component
+  // target colours one more time as a flat, easy-to-scan list right
+  // before the quality bar. Models that fall back to the dominant
+  // colours in the reference image when the prompt gets long benefit
+  // hugely from a second pass at the intended palette — and it's the
+  // place to put the negative constraint about clown colours again so
+  // it's still in attention when the model commits to its output.
+  const finalPaletteLines: string[] = []
+  for (const component of row.components) {
+    const colour = describeComponentColour(component)
+    if (colour) finalPaletteLines.push(`${component.label} → ${colour}`)
+  }
+  if (finalPaletteLines.length > 0) {
+    lines.push('')
+    lines.push(
+      `Final colour palette (these are the ONLY colours that may appear on the recoloured surfaces; do not borrow any colour from the clown reference): ${finalPaletteLines.join('; ')}.`
+    )
+  }
+
   lines.push('')
   lines.push(variant.lightingClause)
 
   lines.push('')
   lines.push(
-    `Photorealistic 4K product render quality with believable micro-surface detail. Material fidelity is critical — finish (matte vs satin vs gloss, NCVM, VDI texture, milky translucent silicone, brushed metal) must read correctly even when the colour is matched. Output should look like a real photographed sample, not a CGI render.`
+    `Photorealistic 4K product render quality with believable micro-surface detail. Material fidelity is critical — finish (matte vs satin vs gloss, NCVM, VDI texture, milky translucent silicone, brushed metal) must read correctly even when the colour is matched. Colour fidelity is equally critical — every recoloured surface must read as its specified hex/Pantone target, NOT as the saturated identifier colour from the clown reference. Output should look like a real photographed sample, not a CGI render.`
   )
 
   if (row.notes) {
