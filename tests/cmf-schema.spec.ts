@@ -45,6 +45,50 @@ test.describe('normaliseRawRows', () => {
     expect(pom?.pantone).toBe('PANTONE 17-5641 TCX')
     expect(pom?.material).toBe('POM')
     expect(pom?.finish).toBe('Matte')
+    // The parser should have enriched colorHex from the Pantone code so
+    // the downstream prompt has a numeric colour anchor without further
+    // plumbing. PANTONE 17-5641 TCX → #009969 in our extensions table.
+    expect(pom?.colorHex?.toLowerCase()).toBe('#009969')
+  })
+
+  test('enriches colorHex from a known Pantone code when the workbook leaves it blank', () => {
+    // Workbooks usually carry the Pantone code but no hex column. The
+    // parser is the right place to fill that gap so the enriched value
+    // propagates to the DB, the prompt, and the PDF swatches with no
+    // further plumbing.
+    const result = normaliseRawRows([
+      {
+        label: 'Switch 2 Emerald',
+        product_slug: 'switch2',
+        colorway_name: 'Emerald',
+        pom_ring_pantone: 'Pantone 7720 C',
+        pom_ring_material: 'POM',
+        pom_ring_finish: 'Matte',
+      },
+    ])
+    expect(result.errors).toEqual([])
+    const pom = result.rows[0].components.find((c) => c.region === 'pom_ring')
+    expect(pom?.colorHex?.toLowerCase()).toBe('#247b5e')
+  })
+
+  test('respects an explicit hex value over the Pantone-derived one', () => {
+    // When the workbook does carry a hex, it wins — designers may have
+    // calibrated values per-batch that differ from the generic Pantone
+    // approximation.
+    const result = normaliseRawRows([
+      {
+        label: 'Switch 2 Emerald',
+        product_slug: 'switch2',
+        colorway_name: 'Emerald',
+        pom_ring_pantone: 'Pantone 7720 C',
+        pom_ring_color_hex: '#aabbcc',
+        pom_ring_material: 'POM',
+        pom_ring_finish: 'Matte',
+      },
+    ])
+    expect(result.errors).toEqual([])
+    const pom = result.rows[0].components.find((c) => c.region === 'pom_ring')
+    expect(pom?.colorHex?.toLowerCase()).toBe('#aabbcc')
   })
 
   test('accepts case-insensitive headers and trims whitespace', () => {
