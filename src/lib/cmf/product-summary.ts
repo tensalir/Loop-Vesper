@@ -39,6 +39,15 @@ interface SummaryRender {
   colorwayName?: string | null
   renderUrl?: string | null
   status?: string
+  // Workbook-tab fields. The Products dialog needs the parsed Excel
+  // content (componentSpecs / paletteSwatches) and the SKU
+  // identifiers (productCode / ean) to render the per-SKU specs
+  // alongside the approved render thumbnail. Optional because
+  // smaller call sites (coverage math) don't carry them.
+  productCode?: string | null
+  ean?: string | null
+  componentSpecs?: unknown
+  paletteSwatches?: unknown
 }
 
 interface SummaryPacket {
@@ -49,6 +58,11 @@ interface SummaryPacket {
   updatedAt: string
   createdAt: string
   renders: SummaryRender[]
+  // PDF tab fields — present when the packet has been exported. The
+  // helper itself doesn't consume them; the dialog reads them off
+  // the SummaryPacket via ProductSummary.packets[].
+  pdfUrl?: string | null
+  generatedAt?: string | null
 }
 
 interface SummaryClown {

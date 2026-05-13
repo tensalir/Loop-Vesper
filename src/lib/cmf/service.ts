@@ -850,6 +850,14 @@ export async function listAccessiblePackets(userId: string) {
       orderBy: { createdAt: 'desc' },
       include: {
         renders: {
+          // Wider per-render projection than the original "global
+          // library list" needed because the Products dialog now
+          // shows per-SKU specs in the Workbook tab. The extra
+          // JSONB fields (componentSpecs, paletteSwatches) add
+          // ~200KB across the full catalog at current size — fine
+          // since react-query caches the response for 15s and the
+          // alternative was N+1 packet detail fetches when the
+          // dialog opens.
           select: {
             id: true,
             label: true,
@@ -857,6 +865,11 @@ export async function listAccessiblePackets(userId: string) {
             renderUrl: true,
             colorwayName: true,
             productSlug: true,
+            variantSlug: true,
+            productCode: true,
+            ean: true,
+            componentSpecs: true,
+            paletteSwatches: true,
           },
           orderBy: { sortOrder: 'asc' },
         },
