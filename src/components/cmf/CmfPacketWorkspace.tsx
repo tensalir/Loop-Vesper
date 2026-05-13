@@ -451,6 +451,21 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
         packets={allPackets}
         clowns={clowns}
         onSelectPacket={(id) => setActivePacketId(id)}
+        onImport={() => {
+          // The dialog has already closed itself before calling
+          // this; we just open the import dialog so the designer
+          // lands directly on the upload form without losing
+          // context.
+          setImportOpen(true)
+        }}
+        onUpdateReferences={(productSlug) => {
+          // Same close-then-open pattern as onImport, but routes to
+          // the standalone clown library dialog with the upload
+          // form pre-pointed at this product. Re-uses the existing
+          // handleUploadForSlug path used by the inline "Upload
+          // clown" CTA on blocked SKU rows.
+          handleUploadForSlug(productSlug)
+        }}
       />
     </div>
   )

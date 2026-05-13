@@ -47,6 +47,7 @@ import {
   FileText,
   ImageOff,
   Library,
+  Upload,
 } from 'lucide-react'
 
 interface CmfProductsDialogProps {
@@ -57,6 +58,16 @@ interface CmfProductsDialogProps {
   /** When the user picks a packet from the right-pane list, the
    *  workspace switches to it and the dialog closes. */
   onSelectPacket: (packetId: string) => void
+  /** Open the unified import dialog. Called from the Workbook tab's
+   *  "Update workbook" affordance — closes this dialog and opens
+   *  the import dialog so the designer never loses context. */
+  onImport: () => void
+  /** Open the standalone clown library dialog focused on a specific
+   *  product's references. Called from the References tab's "Update
+   *  references" affordance — closes this dialog and opens the
+   *  clown library with the upload form already pointing at the
+   *  selected product. */
+  onUpdateReferences: (productSlug: string) => void
 }
 
 const CATEGORY_LABEL: Record<ProductSummary['category'], string> = {
@@ -96,6 +107,8 @@ export function CmfProductsDialog({
   packets,
   clowns,
   onSelectPacket,
+  onImport,
+  onUpdateReferences,
 }: CmfProductsDialogProps) {
   const rollup = useMemo(
     () => summariseProductLibrary({ packets, clowns }),
@@ -260,6 +273,14 @@ export function CmfProductsDialog({
                   onSelectPacket(id)
                   onOpenChange(false)
                 }}
+                onImport={() => {
+                  onOpenChange(false)
+                  onImport()
+                }}
+                onUpdateReferences={() => {
+                  onOpenChange(false)
+                  onUpdateReferences(selected.productSlug)
+                }}
               />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -280,10 +301,14 @@ function ProductOverview({
   summary,
   allClowns,
   onSelectPacket,
+  onImport,
+  onUpdateReferences,
 }: {
   summary: ProductSummary
   allClowns: CmfClownAsset[]
   onSelectPacket: (packetId: string) => void
+  onImport: () => void
+  onUpdateReferences: () => void
 }) {
   const tone = productTone(summary)
   const productClowns = useMemo(
@@ -440,11 +465,18 @@ function ProductOverview({
         </TabsList>
 
         <TabsContent value="workbook" className="mt-4">
-          <WorkbookTab summary={summary} onSelectPacket={onSelectPacket} />
+          <WorkbookTab
+            summary={summary}
+            onSelectPacket={onSelectPacket}
+            onImport={onImport}
+          />
         </TabsContent>
 
         <TabsContent value="references" className="mt-4">
-          <ReferencesTab clowns={productClowns} />
+          <ReferencesTab
+            clowns={productClowns}
+            onUpdateReferences={onUpdateReferences}
+          />
         </TabsContent>
 
         <TabsContent value="pdf" className="mt-4">
@@ -472,9 +504,11 @@ function ProductOverview({
 function WorkbookTab({
   summary,
   onSelectPacket,
+  onImport,
 }: {
   summary: ProductSummary
   onSelectPacket: (packetId: string) => void
+  onImport: () => void
 }) {
   const sortedPackets = useMemo(
     () =>
@@ -486,18 +520,48 @@ function WorkbookTab({
 
   if (sortedPackets.length === 0) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-dashed border-border/40 bg-card/20 p-5 text-xs text-muted-foreground">
-        <Database className="h-4 w-4 opacity-60" />
-        <span>
-          No packets imported for this product yet. Use the
-          {' "+"'} button on the pipeline to import a workbook.
-        </span>
+      <div className="rounded-lg border border-dashed border-border/40 bg-card/20 p-5 space-y-3">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Database className="h-4 w-4 opacity-60" />
+          <span>
+            No packets imported for this product yet. Drop the
+            workbook to start.
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onImport}
+          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15 transition-colors"
+        >
+          <Upload className="h-3.5 w-3.5" />
+          Import workbook
+        </button>
       </div>
     )
   }
 
   return (
     <div className="space-y-5">
+      {/* Slim updater strip — re-uploading an updated workbook auto-
+          merges into the matching packet (by cmfCode, or by SKU
+          signature when no code), so the action is non-destructive
+          and idempotent. The copy makes that promise explicit so a
+          designer doesn't worry about creating duplicates. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/40 bg-card/20 px-3 py-2">
+        <p className="text-[11px] text-muted-foreground">
+          Re-uploading auto-merges by CMF code or SKU set. Existing
+          rows update in place; new rows append.
+        </p>
+        <button
+          type="button"
+          onClick={onImport}
+          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15 transition-colors"
+        >
+          <Upload className="h-3 w-3" />
+          Update workbook
+        </button>
+      </div>
+
       {sortedPackets.map((packet) => (
         <article
           key={packet.id}
@@ -712,41 +776,80 @@ function SkuCard({
 
 /* ── References tab ─────────────────────────────────────────────────────── */
 
-function ReferencesTab({ clowns }: { clowns: CmfClownAsset[] }) {
+function ReferencesTab({
+  clowns,
+  onUpdateReferences,
+}: {
+  clowns: CmfClownAsset[]
+  onUpdateReferences: () => void
+}) {
   if (clowns.length === 0) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-dashed border-border/40 bg-card/20 p-5 text-xs text-muted-foreground">
-        <AlertTriangle className="h-4 w-4 text-amber-500/70" />
-        <span>
-          No clown references yet. Drop a reference zip in the import
-          dialog and the variants will appear here.
-        </span>
+      <div className="rounded-lg border border-dashed border-border/40 bg-card/20 p-5 space-y-3">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <AlertTriangle className="h-4 w-4 text-amber-500/70" />
+          <span>
+            No clown references for this product yet. Drop a zip
+            (server maps the filename to the product) or upload one
+            PNG at a time.
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onUpdateReferences}
+          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15 transition-colors"
+        >
+          <Upload className="h-3.5 w-3.5" />
+          Upload references
+        </button>
       </div>
     )
   }
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-      {clowns.map((clown) => (
-        <figure
-          key={clown.id}
-          className="rounded-lg border border-border/40 bg-card/30 overflow-hidden"
+    <div className="space-y-3">
+      {/* Slim updater strip — opens the standalone clown library
+          dialog pre-focused on this product. Same idempotent
+          posture as the workbook updater: re-uploading a clown
+          with the same (productSlug, variantSlug) replaces the
+          prior asset rather than duplicating. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/40 bg-card/20 px-3 py-2">
+        <p className="text-[11px] text-muted-foreground">
+          Re-uploading a variant replaces the prior asset. New
+          variants append.
+        </p>
+        <button
+          type="button"
+          onClick={onUpdateReferences}
+          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15 transition-colors"
         >
-          <div className="aspect-square bg-background/40 flex items-center justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={clown.imageUrl}
-              alt={clown.label}
-              className="h-full w-full object-contain p-3"
-            />
-          </div>
-          <figcaption className="px-2 py-1.5 text-[10px] text-muted-foreground">
-            <span className="block truncate font-medium text-foreground">
-              {clown.label}
-            </span>
-            <span className="font-mono">{clown.variantSlug}</span>
-          </figcaption>
-        </figure>
-      ))}
+          <Upload className="h-3 w-3" />
+          Update references
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+        {clowns.map((clown) => (
+          <figure
+            key={clown.id}
+            className="rounded-lg border border-border/40 bg-card/30 overflow-hidden"
+          >
+            <div className="aspect-square bg-background/40 flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={clown.imageUrl}
+                alt={clown.label}
+                className="h-full w-full object-contain p-3"
+              />
+            </div>
+            <figcaption className="px-2 py-1.5 text-[10px] text-muted-foreground">
+              <span className="block truncate font-medium text-foreground">
+                {clown.label}
+              </span>
+              <span className="font-mono">{clown.variantSlug}</span>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
     </div>
   )
 }
