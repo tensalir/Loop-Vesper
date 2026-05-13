@@ -17,7 +17,7 @@
  * header carries flow context, the rows do the work.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   CmfPacket,
@@ -28,6 +28,7 @@ import {
   useBulkGenerateCmfPacket,
 } from '@/hooks/useCmf'
 import { clownCoverageForPacket } from '@/lib/cmf/coverage'
+import { listCmfProducts } from '@/lib/cmf/products'
 import { Button } from '@/components/ui/button'
 import { CmfAttemptGallery } from './CmfAttemptGallery'
 import { CmfPipelineHeader } from './CmfPipelineHeader'
@@ -46,8 +47,10 @@ import {
   Wand2,
   ArrowUpRight,
   AlertTriangle,
+  ChevronDown,
   Database,
   LayoutTemplate,
+  Package,
 } from 'lucide-react'
 
 interface CmfPacketWorkspaceProps {
@@ -109,6 +112,58 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
     () => packet?.renders.reduce((s, r) => s + (r.renderAttempts?.length ?? 0), 0) ?? 0,
     [packet]
   )
+
+  // Resolve the active product's display name. The pipeline header has
+  // the same logic — duplicating it here so the identity strip doesn't
+  // depend on the pipeline rendering and can read directly off
+  // `packet.renders[0].productSlug`. Strip the "Loop " marketing prefix
+  // so the strip reads "Switch 2" instead of "Loop Switch 2 · Switch 2"
+  // alongside the packet name.
+  const activeProductName = useMemo(() => {
+    const slug = packet?.renders?.[0]?.productSlug ?? null
+    if (!slug) return null
+    const product = listCmfProducts().find((p) => p.slug === slug)
+    return product?.name?.replace(/^Loop\s+/, '') ?? slug
+  }, [packet])
+
+  // Gallery pulse on packet switch. Re-applies the existing
+  // `cmf-focus-pulse` keyframes to the whole gallery section whenever
+  // `activePacketId` changes to a non-null id, so designers see "the
+  // page just changed to a new packet" instead of being silently
+  // dropped onto a different gallery.
+  //
+  // We skip the initial mount (the first time the effect runs after
+  // the page loads) because that's the URL-driven landing, not a
+  // user-initiated switch — pulsing on first render would feel like
+  // background noise. A ref tracks "have we mounted yet?" so a refresh
+  // that lands on a packet doesn't pulse, but every subsequent change
+  // does.
+  const hasMountedRef = useRef(false)
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true
+      return
+    }
+    if (!activePacketId) return
+    // requestAnimationFrame so we run after the gallery section has
+    // re-rendered with the new packet's content — otherwise the pulse
+    // fires on the OLD DOM node and is visually invisible.
+    const raf = requestAnimationFrame(() => {
+      const node = document.getElementById('cmf-gallery')
+      if (!node) return
+      // Re-trigger by removing first; otherwise re-applying the same
+      // class while it's already present doesn't restart the
+      // animation in browsers that aggressively cache animation state.
+      node.classList.remove('cmf-focus-pulse')
+      void node.offsetWidth
+      node.classList.add('cmf-focus-pulse')
+      const t = window.setTimeout(() => {
+        node.classList.remove('cmf-focus-pulse')
+      }, 2400)
+      return () => window.clearTimeout(t)
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [activePacketId])
 
   // Coverage mirrors the render service's three-tier fallback so the badge
   // doesn't lie. Implementation lives in `src/lib/cmf/coverage.ts` so the
@@ -248,6 +303,50 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
           onPreviewClick={handlePreviewClick}
           onExportClick={handleExportClick}
         />
+
+        {/* Active-packet identity strip. Sits between the pipeline and
+            the readiness counts so a designer always sees WHICH packet
+            they're viewing — packet name + CMF code as the visual
+            anchor, product name as a quiet eyebrow. The "Switch packet"
+            link opens the Products dialog, which is the only path
+            (besides re-importing) for swapping packets, so we surface
+            it at the same level as the identity itself. */}
+        {packet && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/40 bg-muted/20 px-3 py-2.5">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <Package className="h-4 w-4 flex-shrink-0 text-primary/80" />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span className="text-sm font-semibold text-foreground truncate">
+                    {packet.name}
+                  </span>
+                  {packet.cmfCode && (
+                    <span className="font-mono text-[11px] text-muted-foreground tracking-wider">
+                      {packet.cmfCode}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {activeProductName ?? 'Active packet'}
+                  {packet.updatedAt && (
+                    <>
+                      <span className="mx-1.5 text-muted-foreground/40">·</span>
+                      edited {timeAgo(packet.updatedAt)}
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setProductsOpen(true)}
+              className="inline-flex flex-shrink-0 items-center gap-1 rounded-md border border-border/50 bg-background/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:border-border hover:text-foreground transition-colors"
+            >
+              Switch packet
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          </div>
+        )}
 
         {packet && (
           <div className="flex flex-wrap items-center justify-between gap-3 px-1">
@@ -482,6 +581,28 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
 }
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
+
+/**
+ * Compact relative-time string for the identity strip's "edited 2m ago"
+ * line. Mirrors the equivalent helper in `CmfProductsDialog.tsx` —
+ * intentionally not extracted to a shared module yet because the rules
+ * (rounding, thresholds) are still iterating; if we add a third caller
+ * we'll consolidate then.
+ */
+function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const ms = Date.now() - new Date(iso).getTime()
+  if (!Number.isFinite(ms) || ms < 0) return ''
+  const mins = Math.round(ms / 60_000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.round(hrs / 24)
+  if (days < 30) return `${days}d ago`
+  const months = Math.round(days / 30)
+  return `${months}mo ago`
+}
 
 function summarisePacketReadiness(packet: CmfPacket | null | undefined) {
   if (!packet) return { total: 0, approved: 0, draftOnly: 0, missing: 0 }

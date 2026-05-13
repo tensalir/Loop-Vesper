@@ -137,6 +137,14 @@ export async function POST(request: NextRequest) {
         parsedRows: normalised.rows,
         format: parsed.format,
         unmappedSheets: parsed.format === 'transposed' ? parsed.unmappedSheets : [],
+        // Diagnostics from the parser. Only populated for the transposed
+        // format — the flat fallback has no concept of multi-tab layouts
+        // or per-SKU column drops, so we send empty arrays for shape
+        // compatibility on the client.
+        unrecognisedSheets:
+          parsed.format === 'transposed' ? parsed.unrecognisedSheets : [],
+        droppedSkuColumns:
+          parsed.format === 'transposed' ? parsed.droppedSkuColumns : [],
       },
     })
   }
@@ -184,6 +192,14 @@ export async function POST(request: NextRequest) {
       rowCount: importRecord.rowCount,
       format: parsed.format,
       unmappedSheets: parsed.format === 'transposed' ? parsed.unmappedSheets : [],
+      // Same diagnostics as the early-return branch above. We send them
+      // even on a successful import because partial successes (some
+      // tabs imported, some silently dropped) used to leave designers
+      // wondering why the result didn't match the workbook.
+      unrecognisedSheets:
+        parsed.format === 'transposed' ? parsed.unrecognisedSheets : [],
+      droppedSkuColumns:
+        parsed.format === 'transposed' ? parsed.droppedSkuColumns : [],
     },
     /** All packets created or merged by this import — one per product
      * slug. Each entry carries `productName` so the UI can say

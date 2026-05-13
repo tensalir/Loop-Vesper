@@ -380,6 +380,47 @@ export function listCmfProducts(): CmfProductSpec[] {
 }
 
 /**
+ * Surface every sheet name the workbook parser will accept, grouped by
+ * the parent product so the UI can render a "Recognised tabs: ..." hint
+ * next to the file picker.
+ *
+ * For each top-tier product (no `parentSlug`) we expose:
+ *   - a primary tab name — the first `sheetAliases` entry, or the
+ *     marketing name if the catalog declares no alias
+ *   - the carry case / pouch under that product, when present, with the
+ *     same primary-name treatment
+ *
+ * The shape is intentionally flat-ish (top-level entries with optional
+ * `case` siblings) rather than a deep tree so the dialog can show a
+ * compact comma-separated list without recursive rendering.
+ */
+export interface CmfExpectedSheetEntry {
+  /** Display label for the primary tab (e.g. "Switch 2"). */
+  primary: string
+  /** Display label for the carry case / pouch tab if the catalog has one
+   *  ("Switch 2 CC"). Null when the product has no nested case. */
+  case: string | null
+  /** Top-tier product slug — used as a stable React key. */
+  productSlug: string
+}
+
+export function listExpectedSheetNames(): CmfExpectedSheetEntry[] {
+  const tops = CMF_PRODUCT_CATALOG.filter((p) => !p.parentSlug)
+  const entries: CmfExpectedSheetEntry[] = []
+  for (const top of tops) {
+    const child = CMF_PRODUCT_CATALOG.find(
+      (p) => p.parentSlug?.toLowerCase() === top.slug.toLowerCase()
+    )
+    entries.push({
+      productSlug: top.slug,
+      primary: top.sheetAliases[0] ?? top.name,
+      case: child ? child.sheetAliases[0] ?? child.name : null,
+    })
+  }
+  return entries
+}
+
+/**
  * Return every product whose `parentSlug` points at the given product —
  * typically zero or one entry (the carry case / pouch). Used by the
  * CMF Studio dropdown to nest case packets as a subsection under the

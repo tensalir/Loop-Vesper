@@ -201,6 +201,25 @@ export interface CmfMergeSummary {
   }>
 }
 
+export interface CmfImportUnrecognisedSheet {
+  /** Tab name as it appears in the workbook. */
+  name: string
+  /** Why we couldn't place the tab — surfaced verbatim to the import dialog. */
+  reason: string
+}
+
+export interface CmfImportDroppedSkuColumn {
+  /** Tab the column lived on. */
+  sheetName: string
+  /** Resolved product slug (which packet this column would have joined). */
+  productSlug: string
+  /** SKU column header text — usually "SKU 1", "SKU 2", or a colourway label. */
+  skuLabel: string
+  /** `placeholder` = the column had values but they all looked like
+   *  drafts (xxxxx); `empty` = the column existed but carried no values. */
+  reason: 'placeholder' | 'empty'
+}
+
 export interface CmfImportResponse {
   import: {
     id: string
@@ -209,7 +228,16 @@ export interface CmfImportResponse {
     errors: Array<{ rowIndex: number; field?: string; message: string }>
     parsedRows?: unknown[]
     format?: 'flat' | 'transposed'
+    /** Sheets that look transposed but whose name doesn't map to any
+     *  product in the catalog. Already returned, now surfaced in the UI. */
     unmappedSheets?: string[]
+    /** Sheets the parser couldn't structurally identify (didn't pass
+     *  `looksTransposed`, weren't a known meta sheet, and the
+     *  try-anyway pass didn't produce SKUs). Used to vanish silently. */
+    unrecognisedSheets?: CmfImportUnrecognisedSheet[]
+    /** SKU columns dropped by the parser because they looked like
+     *  placeholders or were empty. */
+    droppedSkuColumns?: CmfImportDroppedSkuColumn[]
   }
   /** One per product slug in the imported workbook. */
   packets?: Array<{

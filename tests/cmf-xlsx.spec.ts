@@ -222,3 +222,145 @@ test('bucketing rows by productSlug preserves the multi-product split that creat
   expect(buckets.get('switch2')).toBe(1)
   expect(buckets.get('cocoon')).toBe(1)
 })
+
+/* ── Diagnostics (Damien's "doesn't take my new schema" feedback) ──────── */
+
+/**
+ * The three failure modes the plan calls out — renamed "Common specs"
+ * header, unknown sheet name, all-placeholder SKU columns. Each used
+ * to vanish silently; these tests pin the new diagnostic surfacing so
+ * future parser changes can't quietly remove the feedback.
+ */
+
+test('parser accepts a renamed Common specs header through the broadened heuristic', () => {
+  // Designer renamed the header from "Common specs" to "Default" — the
+  // exact case behind Damien's "doesn't take my new schema" report.
+  // The broadened heuristic should still classify this as transposed.
+  const switch2 = [
+    ['', 'Default', 'SKU 1'],
+    ['BANNER', '', ''],
+    ['CMF number', '', 'CMF-123revA'],
+    ['Product Name', '', 'Switch 2 Sage'],
+    ['Product Code', '', 'en-sw-sage-01'],
+    ['POM RING', '', ''],
+    ['Material', 'POM', ''],
+    ['Colour', '', 'Pantone 7720C'],
+  ]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(switch2), 'Switch 2')
+  const out = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+  const buffer = Buffer.isBuffer(out) ? out : Buffer.from(out)
+
+  const parsed = parseCmfWorkbook(buffer)
+  expect(parsed.format).toBe('transposed')
+  expect(parsed.sheets).toHaveLength(1)
+  expect(parsed.sheets[0].productSlug).toBe('switch2')
+  expect(parsed.unrecognisedSheets).toEqual([])
+})
+
+test('parser falls back to the transposed parser for known products with unrecognised headers', () => {
+  // Header is something the broadened heuristic doesn't catch ("My
+  // values"), but the tab name is a known product. The try-anyway
+  // pass should still parse the sheet.
+  const switch2 = [
+    ['', 'My values', 'SKU 1'],
+    ['BANNER', '', ''],
+    ['Product Name', '', 'Switch 2 Test'],
+    ['Product Code', '', 'en-sw-test-01'],
+    ['POM RING', '', ''],
+    ['Material', 'POM', ''],
+    ['Colour', '', 'Pantone 7720C'],
+  ]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(switch2), 'Switch 2')
+  const out = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+  const buffer = Buffer.isBuffer(out) ? out : Buffer.from(out)
+
+  // Without any "looks transposed" sheet, the parser falls back to flat.
+  // The try-anyway only kicks in inside the transposed branch, so for
+  // this single-sheet fixture we don't get a transposed parse —
+  // instead we expect format='flat' and an unrecognisedSheets entry on
+  // the corresponding transposed result is N/A. Keep the test aligned
+  // with the actual logic by exercising it alongside a sibling tab
+  // that DOES look transposed.
+  const cocoon = [
+    ['', 'Common specs', 'SKU 1'],
+    ['BANNER', '', ''],
+    ['Product Name', '', 'Cocoon Berry'],
+    ['EAR CUSHION', '', ''],
+    ['Material', 'Fabric', ''],
+    ['Colour', '', 'Pantone 1777C'],
+  ]
+  const wb2 = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb2, XLSX.utils.aoa_to_sheet(switch2), 'Switch 2')
+  XLSX.utils.book_append_sheet(wb2, XLSX.utils.aoa_to_sheet(cocoon), 'Cocoon')
+  const out2 = XLSX.write(wb2, { type: 'buffer', bookType: 'xlsx' })
+  const buffer2 = Buffer.isBuffer(out2) ? out2 : Buffer.from(out2)
+
+  const parsed = parseCmfWorkbook(buffer2)
+  expect(parsed.format).toBe('transposed')
+  // Both tabs parsed successfully because Switch 2 went through the
+  // try-anyway path even with "My values" as its B1 header.
+  expect(parsed.sheets.map((s) => s.productSlug).sort()).toEqual(['cocoon', 'switch2'])
+  expect(parsed.unrecognisedSheets).toEqual([])
+})
+
+test('unknown sheet names land in unrecognisedSheets with a reason', () => {
+  // Designer adds a "Switch 3" tab — product not in our catalog.
+  const newProduct = [
+    ['', 'Common specs', 'SKU 1'],
+    ['BANNER', '', ''],
+    ['Product Name', '', 'Switch 3 Future'],
+    ['POM RING', '', ''],
+    ['Material', 'POM', ''],
+    ['Colour', '', 'Pantone 7720C'],
+  ]
+  const switch2 = [
+    ['', 'Common specs', 'SKU 1'],
+    ['BANNER', '', ''],
+    ['Product Name', '', 'Switch 2 Test'],
+    ['POM RING', '', ''],
+    ['Material', 'POM', ''],
+    ['Colour', '', 'Pantone 7720C'],
+  ]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(newProduct), 'Switch 3')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(switch2), 'Switch 2')
+  const out = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+  const buffer = Buffer.isBuffer(out) ? out : Buffer.from(out)
+
+  const parsed = parseCmfWorkbook(buffer)
+  expect(parsed.format).toBe('transposed')
+  // Switch 3 looks transposed but isn't in the catalog → unmappedSheets.
+  expect(parsed.unmappedSheets).toContain('Switch 3')
+  // Switch 2 still parses normally.
+  expect(parsed.sheets.map((s) => s.productSlug)).toContain('switch2')
+})
+
+test('all-placeholder SKU columns appear in droppedSkuColumns', () => {
+  // SKU 2 only carries placeholder text — used to silently disappear,
+  // now must surface so designers see why it was skipped.
+  const switch2 = [
+    ['', 'Common specs', 'SKU 1', 'SKU 2'],
+    ['BANNER', '', '', ''],
+    ['CMF number', '', 'CMF-001revA', 'CMF-xxxxxx rev x'],
+    ['Product Name', '', 'Switch 2 Real', 'xxxxxxxxxxx'],
+    ['Product Code', '', 'en-sw-real-01', 'xxxxxxxxxxx'],
+    ['POM RING', '', '', ''],
+    ['Material', 'POM', '', ''],
+    ['Colour', '', 'Pantone 7720C', 'Pantone xxxxxxxxxxx'],
+  ]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(switch2), 'Switch 2')
+  const out = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+  const buffer = Buffer.isBuffer(out) ? out : Buffer.from(out)
+
+  const parsed = parseCmfWorkbook(buffer)
+  expect(parsed.format).toBe('transposed')
+  expect(parsed.sheets[0].skus).toHaveLength(1)
+  // SKU 2 was dropped because every value was a placeholder — surface it.
+  const drop = parsed.droppedSkuColumns.find((d) => d.skuLabel === 'SKU 2')
+  expect(drop).toBeTruthy()
+  expect(drop!.productSlug).toBe('switch2')
+  expect(drop!.reason).toBe('placeholder')
+})

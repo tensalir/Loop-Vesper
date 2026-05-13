@@ -29,8 +29,42 @@ export interface XlsxParseResult {
   format: 'flat' | 'transposed'
   /** Per-sheet parse outcome; the transposed format yields multiple. */
   sheets: ParsedSheet[]
-  /** Sheets we recognised but could not map to a product. */
+  /** Sheets that LOOK like the transposed schema (passed `looksTransposed`)
+   *  but whose name does not match any product's `sheetAliases`. The
+   *  designer probably renamed the tab or added a new product we don't
+   *  know about yet. */
   unmappedSheets: string[]
+  /** Sheets we couldn't structurally identify at all — they didn't pass
+   *  `looksTransposed`, weren't a known meta sheet, and the
+   *  try-anyway-then-fallback didn't yield any SKUs. Without this bucket
+   *  these vanished silently and a designer renaming the "Common specs"
+   *  header lost the entire tab without a trace. */
+  unrecognisedSheets: UnrecognisedSheet[]
+  /** Per-product, columns the parser dropped because `isSkuFilled`
+   *  returned false. Surfaces the "we found SKU 3 but everything looked
+   *  like a placeholder" case so designers can see WHY a column was
+   *  ignored and what we tried to parse. */
+  droppedSkuColumns: DroppedSkuColumn[]
+}
+
+export interface UnrecognisedSheet {
+  /** Original tab name. */
+  name: string
+  /** Why we couldn't place this sheet. Human-readable, surfaced to the UI. */
+  reason: string
+}
+
+export interface DroppedSkuColumn {
+  /** Tab the column lived on. */
+  sheetName: string
+  /** Resolved product slug for that tab. */
+  productSlug: string
+  /** SKU column header text (e.g. "SKU 2", "Emerald"). */
+  skuLabel: string
+  /** `placeholder` = banner/component cells were all "xxxxxxxxxxx"-style
+   *  drafts; `empty` = the column existed but had no values worth
+   *  parsing. */
+  reason: 'placeholder' | 'empty'
 }
 
 export interface ParsedSheet {
@@ -106,37 +140,121 @@ export function parseCmfWorkbook(buffer: Buffer): XlsxParseResult {
   }
 
   // Heuristic: if any sheet maps to a known product AND looks like the
-  // transposed schema (row[0] has "Common specs" in column B), we use the
-  // transposed parser for all product tabs. Otherwise we fall back to the
-  // single-sheet flat parser so legacy templates still work.
+  // transposed schema (row[0] has a "Common specs"-style header in column
+  // B), we use the transposed parser for all product tabs. Otherwise we
+  // fall back to the single-sheet flat parser so legacy templates still
+  // work.
+  //
+  // Diagnostics ride along the result so the UI can explain WHY a sheet
+  // was skipped — silent drops here used to leave designers with no
+  // feedback when they renamed the "Common specs" header or added a
+  // product we don't recognise.
   const transposedSheets: ParsedSheet[] = []
   const unmappedSheets: string[] = []
+  const unrecognisedSheets: UnrecognisedSheet[] = []
+  const droppedSkuColumns: DroppedSkuColumn[] = []
   let sawTransposedShape = false
 
+  // Two-pass: first sniff which sheets pass the looksTransposed
+  // heuristic so we can decide on workbook format (transposed vs flat).
+  // Then in the second pass we apply the try-anyway-then-fallback rule
+  // for known products so a renamed "Common specs" header doesn't silently
+  // erase the tab.
+  type SheetPlan = {
+    name: string
+    aoa: unknown[][]
+    looksTransposed: boolean
+    knownProduct: ReturnType<typeof getCmfProductBySheet>
+  }
+  const plans: SheetPlan[] = []
   for (const name of workbook.SheetNames) {
     if (isMetaSheet(name)) continue
     const sheet = workbook.Sheets[name]
     if (!sheet) continue
     const aoa = sheetToAoa(sheet)
-    if (looksTransposed(aoa)) {
-      sawTransposedShape = true
-      const product = getCmfProductBySheet(name)
-      if (!product) {
-        unmappedSheets.push(name)
-        continue
-      }
-      const parsed = parseTransposedSheet(name, aoa, product)
-      if (parsed.skus.length > 0) transposedSheets.push(parsed)
-    }
+    const isTransposed = looksTransposed(aoa)
+    const knownProduct = getCmfProductBySheet(name)
+    if (isTransposed) sawTransposedShape = true
+    plans.push({ name, aoa, looksTransposed: isTransposed, knownProduct })
   }
 
   if (sawTransposedShape) {
-    return { format: 'transposed', sheets: transposedSheets, unmappedSheets }
+    for (const plan of plans) {
+      // Path A: header looks transposed. Standard route.
+      if (plan.looksTransposed) {
+        if (!plan.knownProduct) {
+          unmappedSheets.push(plan.name)
+          continue
+        }
+        const result = parseTransposedSheetWithDiagnostics(
+          plan.name,
+          plan.aoa,
+          plan.knownProduct
+        )
+        if (result.parsed.skus.length > 0) {
+          transposedSheets.push(result.parsed)
+        } else {
+          unrecognisedSheets.push({
+            name: plan.name,
+            reason: 'matched the transposed shape but no SKU columns had real content',
+          })
+        }
+        droppedSkuColumns.push(...result.droppedColumns)
+        continue
+      }
+
+      // Path B: header DOESN'T look transposed but the tab name maps to
+      // a known product — try the transposed parser anyway. This catches
+      // the common "designer renamed Common specs to something else"
+      // case that used to silently lose the entire tab.
+      if (plan.knownProduct) {
+        const result = parseTransposedSheetWithDiagnostics(
+          plan.name,
+          plan.aoa,
+          plan.knownProduct
+        )
+        if (result.parsed.skus.length > 0) {
+          transposedSheets.push(result.parsed)
+          droppedSkuColumns.push(...result.droppedColumns)
+        } else {
+          unrecognisedSheets.push({
+            name: plan.name,
+            reason:
+              'tab name is a known product but the layout did not match the expected schema (try using the downloadable template)',
+          })
+        }
+        continue
+      }
+
+      // Path C: header isn't transposed AND the tab name isn't in the
+      // catalog. Almost certainly a freeform tab the designer added —
+      // could be a new product. Surface so they know we saw it but
+      // didn't import it.
+      unrecognisedSheets.push({
+        name: plan.name,
+        reason:
+          'we did not recognise this tab — rename it to one of the supported product names or remove it',
+      })
+    }
+
+    return {
+      format: 'transposed',
+      sheets: transposedSheets,
+      unmappedSheets,
+      unrecognisedSheets,
+      droppedSkuColumns,
+    }
   }
 
   // Flat fallback — single product/sheet, header row drives column names.
   const flatSheets = parseFlatWorkbook(workbook)
-  return { format: 'flat', sheets: flatSheets, unmappedSheets: [] }
+  return {
+    format: 'flat',
+    sheets: flatSheets,
+    unmappedSheets: [],
+    unrecognisedSheets: [],
+    droppedSkuColumns: [],
+  }
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -203,7 +321,14 @@ function parseTransposedSheet(
   sheetName: string,
   aoa: unknown[][],
   product: CmfProductSpec
-): ParsedSheet {
+): {
+  parsed: ParsedSheet
+  /** SKU columns that ran but produced no real content. The wrapper
+   *  re-shapes these into `DroppedSkuColumn` entries on the workbook
+   *  result so the import dialog can show a "we saw SKU 3 but everything
+   *  was placeholder" line. */
+  dropped: Array<{ skuLabel: string; reason: 'placeholder' | 'empty' }>
+} {
   // Find the column count from row 0 (the SKU header row).
   const headerRow = aoa[0] ?? []
   const lastCol = Math.max(...aoa.map((r) => r.length), headerRow.length)
@@ -347,10 +472,25 @@ function parseTransposedSheet(
   // by default and a designer often fills only one. Empty = no banner
   // values look real AND no component attributes were captured.
   const skus: ParsedSkuRow[] = []
+  const dropped: Array<{ skuLabel: string; reason: 'placeholder' | 'empty' }> = []
   for (const col of skuColumns) {
     const b = banner[col.index]
     const c = components[col.index] ?? []
-    if (!isSkuFilled(b, c)) continue
+    if (!isSkuFilled(b, c)) {
+      // Distinguish "the column had values but they all looked like
+      // placeholders (xxxxxxx)" from "the column was actually empty".
+      // Both end up dropped, but the placeholder case usually means
+      // the designer hasn't filled that SKU yet, while the empty case
+      // can suggest a layout drift the parser missed.
+      const sawAnyValue =
+        Boolean(b.cmfNumber || b.productName || b.productCode || b.ean) ||
+        c.length > 0
+      dropped.push({
+        skuLabel: col.label,
+        reason: sawAnyValue ? 'placeholder' : 'empty',
+      })
+      continue
+    }
     skus.push({
       columnIndex: col.index,
       skuLabel: col.label,
@@ -360,12 +500,39 @@ function parseTransposedSheet(
   }
 
   return {
-    sheetName,
-    productSlug: product.slug,
-    productName: product.name,
-    collection,
-    groups,
-    skus,
+    parsed: {
+      sheetName,
+      productSlug: product.slug,
+      productName: product.name,
+      collection,
+      groups,
+      skus,
+    },
+    dropped,
+  }
+}
+
+/**
+ * Wrapper that runs `parseTransposedSheet` and re-shapes its dropped-
+ * column report into the workbook-level `DroppedSkuColumn` shape that
+ * rides on `XlsxParseResult`. Splitting this out keeps the per-sheet
+ * function signature clean while the caller still gets a flat list it
+ * can show in the import dialog.
+ */
+function parseTransposedSheetWithDiagnostics(
+  sheetName: string,
+  aoa: unknown[][],
+  product: CmfProductSpec
+): { parsed: ParsedSheet; droppedColumns: DroppedSkuColumn[] } {
+  const out = parseTransposedSheet(sheetName, aoa, product)
+  return {
+    parsed: out.parsed,
+    droppedColumns: out.dropped.map((d) => ({
+      sheetName,
+      productSlug: product.slug,
+      skuLabel: d.skuLabel,
+      reason: d.reason,
+    })),
   }
 }
 
@@ -469,9 +636,32 @@ function slugifyRegion(label: string): string {
     .slice(0, 60) || 'component'
 }
 
+/**
+ * Header tokens that mark column B (row 0) as the "shared values across
+ * all SKUs" column. Matched as case-insensitive substrings so partial
+ * renames still register (e.g. "Common specs (default)" still passes).
+ *
+ * Designers occasionally rename this header on new templates. Any sheet
+ * whose B1 contains one of these is treated as the transposed shape;
+ * sheets that don't match still get a try-anyway pass when the tab name
+ * resolves to a known product so single-rename mistakes don't lose the
+ * entire tab.
+ */
+const TRANSPOSED_HEADER_TOKENS = [
+  'common spec',
+  'common',
+  'shared spec',
+  'shared',
+  'default',
+  'all skus',
+  'all sku',
+] as const
+
 function looksTransposed(aoa: unknown[][]): boolean {
   const head = aoa[0] ?? []
-  return cellString(head[1]).toLowerCase().includes('common spec')
+  const cell = cellString(head[1]).toLowerCase()
+  if (!cell) return false
+  return TRANSPOSED_HEADER_TOKENS.some((token) => cell.includes(token))
 }
 
 function isMetaSheet(name: string): boolean {
