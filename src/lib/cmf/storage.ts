@@ -50,6 +50,61 @@ export function packetPdfStoragePath(ownerId: string, packetId: string, fileSlug
   return `cmf/${ownerId}/packets/${packetId}/${fileSlug}.pdf`
 }
 
+/**
+ * Storage path for an image dropped as a refinement reference.
+ *
+ * Uploads happen BEFORE the attempt exists (the upload route fires
+ * when the designer drops a file in the refine panel; the attempt
+ * is only created when they click "Generate refined attempt"). So
+ * the path is keyed on a `batchId` generated server-side by the
+ * upload route — every file uploaded in one HTTP request lands in
+ * the same batch folder. Once the attempt is created, the paths
+ * are stored verbatim on the attempt row; no rename / copy step is
+ * needed.
+ *
+ * Path layout:
+ *   cmf/{ownerId}/packets/{packetId}/refinements/{batchId}/{filename}
+ *
+ * `filename` should already be passed through `safeFileSlug` by the
+ * upload route so we never write user-controlled characters to
+ * storage. Orphaned uploads (where the user dropped files but
+ * never submitted) live in storage indefinitely; flagged in the
+ * plan as a quarterly cleanup TODO, not a launch blocker.
+ */
+export function refinementReferenceStoragePath(args: {
+  ownerId: string
+  packetId: string
+  batchId: string
+  filename: string
+}): string {
+  return `cmf/${args.ownerId}/packets/${args.packetId}/refinements/${args.batchId}/${args.filename}`
+}
+
+/**
+ * Derive a public URL for a path inside the CMF storage bucket.
+ *
+ * The bucket is fronted by Supabase's public storage endpoint
+ * (`{SUPABASE_URL}/storage/v1/object/public/{bucket}/{path}`), so
+ * we can compose the URL without going through the supabase client
+ * — handy on the server side of the render pipeline where we already
+ * hold the path and just need bytes.
+ *
+ * Used by the render service to resolve refinement-reference paths
+ * stored on `CmfRenderAttempt.referenceImagePaths` back into
+ * downloadable URLs. Strict — throws if the env isn't configured so
+ * an upstream caller can fail fast instead of silently passing the
+ * model an empty string.
+ */
+export function publicUrlForCmfStoragePath(path: string): string {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) {
+    throw new Error(
+      'NEXT_PUBLIC_SUPABASE_URL is not set; cannot resolve CMF storage path to a public URL.'
+    )
+  }
+  return `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/${CMF_STORAGE_BUCKET}/${path}`
+}
+
 export function safeFileSlug(input: string): string {
   return input
     .replace(/\.+/g, '.')

@@ -917,6 +917,12 @@ export type CmfActivityAction =
   | 'sku_added'
   | 'sku_updated'
   | 'packet_merged'
+  // Iterative refinement (added 2026-05-13). Distinguishes a
+  // designer-driven correction ("make black more holographic" →
+  // new attempt) from a fresh dice-roll attempt. The metadata
+  // carries `parentAttemptId` + a truncated `refinementPrompt`
+  // so the timeline reads as a conversation.
+  | 'attempt_refined'
 
 /**
  * Append an activity row. Designed to be best-effort — never block the

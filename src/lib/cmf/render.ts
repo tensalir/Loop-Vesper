@@ -28,6 +28,7 @@ import {
 } from '@/lib/supabase/storage'
 import {
   CMF_STORAGE_BUCKET,
+  publicUrlForCmfStoragePath,
   renderStoragePath,
 } from './storage'
 import { buildCmfPrompt } from './prompt'
@@ -56,6 +57,30 @@ export class CmfRenderError extends Error {
 interface RenderArgs {
   renderId: string
   triggeredByUserId?: string
+  /** Iterative refinement: freeform "what to change" instruction.
+   *  When set, gets appended to the spec-derived base prompt as a
+   *  structured `REFINEMENT INSTRUCTIONS:` section so the model
+   *  treats it as overriding guidance rather than a new spec. The
+   *  prompt is grounded in the workbook spec either way — chains
+   *  don't drift after multiple hops because each refinement
+   *  re-derives from the spec, not from the parent's prompt. */
+  refinementPrompt?: string
+  /** Iterative refinement: id of the attempt this one is refining.
+   *  Captured for lineage display ("refines #3 → make it more
+   *  holographic") and used to reuse the parent's lighting variant
+   *  so a refinement doesn't change two things at once (colour AND
+   *  lighting). When omitted with `refinementPrompt` set, we treat
+   *  it as a fresh-spec refinement (no anchor) — still valid, the
+   *  model just gets the spec + the correction. */
+  parentAttemptId?: string
+  /** Phase 2 of iterative refinement: storage paths (NOT URLs) of
+   *  reference images the designer dropped alongside the refinement
+   *  prompt. Resolved to data URLs and passed to the model alongside
+   *  the clown reference, with a "REFERENCE IMAGES:" section in the
+   *  prompt naming each ref's role. Capped at 4 by the upload route
+   *  — we still defensively slice() here so a bad client can't blow
+   *  the prompt. */
+  referenceImagePaths?: string[]
 }
 
 interface ResolvedReferences {
@@ -324,7 +349,86 @@ function ensureSupportedModel(modelId: string): string {
  *
  * The caller is responsible for access checks before invoking this.
  */
-export async function runCmfRender({ renderId, triggeredByUserId }: RenderArgs) {
+/**
+ * Pure helper: append the refinement instructions to a spec-derived
+ * base prompt. Lives outside `runCmfRender` so the test suite can
+ * pin its behaviour without spinning up Prisma or the model adapter.
+ *
+ *   - `refinementPrompt` blank/null → return the base prompt unchanged
+ *     so the bulk-burst path keeps producing the original prompt.
+ *   - Otherwise append a `REFINEMENT INSTRUCTIONS:` section that
+ *     names the correction explicitly and reminds the model to
+ *     preserve every other spec detail.
+ *   - When `referenceImageCount` > 0, append a `REFERENCE IMAGES:`
+ *     section telling the model that the additional images sent
+ *     alongside the clown are refinement guidance (not spec). This
+ *     keeps the model from confusing them with the canonical
+ *     product reference.
+ */
+export function applyRefinementToPrompt(
+  basePrompt: string,
+  refinementPrompt?: string | null,
+  referenceImageCount = 0
+): string {
+  const correction = refinementPrompt?.trim()
+  let out = basePrompt
+  if (correction) {
+    out = `${out}\n\nREFINEMENT INSTRUCTIONS:\nThe previous render did not fully capture: ${correction}\nApply this correction while preserving every other spec detail above.`
+  }
+  if (referenceImageCount > 0) {
+    const lines: string[] = []
+    lines.push('')
+    lines.push('REFERENCE IMAGES:')
+    lines.push(
+      `The designer attached ${referenceImageCount} reference image${
+        referenceImageCount === 1 ? '' : 's'
+      } alongside the canonical product reference. Treat ${
+        referenceImageCount === 1 ? 'it' : 'them'
+      } as guidance for the refinement above (e.g. how a finish, surface, or accent should read), not as a replacement for the product geometry.`
+    )
+    for (let i = 0; i < referenceImageCount; i++) {
+      lines.push(`  Reference ${i + 1}: refinement guidance.`)
+    }
+    out = `${out}${lines.join('\n')}`
+  }
+  return out
+}
+
+/**
+ * Pure helper: pick the lighting variant index for a new attempt.
+ * When refining, reuse the parent's variant index so the refinement
+ * doesn't accidentally change two things at once (colour AND
+ * lighting). When not refining, fall back to the default
+ * `attemptNumber - 1` rotation that the bulk burst relies on.
+ */
+export function pickVariantIndex(args: {
+  attemptNumber: number
+  parentAttemptNumber?: number | null
+  isRefinement: boolean
+}): number {
+  if (args.isRefinement && typeof args.parentAttemptNumber === 'number') {
+    return args.parentAttemptNumber - 1
+  }
+  return args.attemptNumber - 1
+}
+
+/**
+ * Refinement-reference safety cap.
+ *
+ * The upload route already enforces 4 max, but we re-cap here so a
+ * direct service caller (CLI, future bulk path) can't sneak in
+ * dozens of refs and blow either the prompt size or the model
+ * adapter's image-array budget.
+ */
+const MAX_REFINEMENT_REFERENCES = 4
+
+export async function runCmfRender({
+  renderId,
+  triggeredByUserId,
+  refinementPrompt,
+  parentAttemptId,
+  referenceImagePaths,
+}: RenderArgs) {
   const render = await prisma.cmfRender.findUnique({ where: { id: renderId } })
   if (!render) throw new CmfRenderError('validation', 'Render not found')
   const ownerId = render.ownerId
@@ -352,6 +456,12 @@ export async function runCmfRender({ renderId, triggeredByUserId }: RenderArgs) 
   }
 
   const modelId = ensureSupportedModel(render.modelId ?? product.defaultModelId ?? DEFAULT_MODEL_ID)
+  // Pre-compute multi-image capability so we can decide *before*
+  // building the prompt whether refinement references will actually
+  // be sent to the model. This keeps the prompt honest: a model
+  // that can't accept multiple images shouldn't see a `REFERENCE
+  // IMAGES:` section either.
+  const modelSupportsMultiImage = !!getModelConfig(modelId)?.capabilities?.multiImageEditing
 
   // Allocate the next attempt number — monotonic per SKU so attempt 1 stays
   // attempt 1 even after archiving / restoring.
@@ -362,25 +472,57 @@ export async function runCmfRender({ renderId, triggeredByUserId }: RenderArgs) 
   })
   const attemptNumber = (lastAttempt?.attemptNumber ?? 0) + 1
 
+  // Iterative refinement: when the caller passed a parent attempt id,
+  // resolve the parent's attemptNumber so we can reuse its lighting
+  // variant. Reusing the variant means the refinement only changes
+  // ONE thing (the colour/material correction) instead of two
+  // (colour AND lighting), which makes model behaviour much easier
+  // to reason about.
+  const parentAttempt = parentAttemptId
+    ? await prisma.cmfRenderAttempt.findUnique({
+        where: { id: parentAttemptId },
+        select: { attemptNumber: true, renderId: true },
+      })
+    : null
+
   // Each attempt explores a different lighting/mood variant so a bulk
   // burst produces a real fan of options. Variant 0 (Studio Classic) is
   // Damien's gold-standard; subsequent attempts cycle through Warm,
-  // Clinical, Dramatic, then loop back.
+  // Clinical, Dramatic, then loop back. Refinements override this and
+  // reuse the parent's variant.
   //
   // We also peek at which clown the reference resolver *would* pick so the
   // prompt can address components by their clown colour ("the blue surface
   // on the reference (Cosmetic cap): recolour to …"). Falls back silently
   // when the resolved clown has no per-region colour metadata.
+  const variantIndex = pickVariantIndex({
+    attemptNumber,
+    parentAttemptNumber: parentAttempt?.attemptNumber ?? null,
+    isRefinement: Boolean(refinementPrompt?.trim()),
+  })
   const clownComponents = await peekClownComponents({
     productSlug: render.productSlug,
     variantSlug: render.variantSlug,
     clownAssetId: render.clownAssetId,
-    attemptNumber,
+    attemptNumber: variantIndex + 1,
   })
-  const { basePrompt, variant } = buildCmfPrompt(row, {
-    variantIndex: attemptNumber - 1,
+  const { basePrompt: specPrompt, variant } = buildCmfPrompt(row, {
+    variantIndex,
     clownComponents,
   })
+  // Defensive cap + dedupe of refinement-reference paths. Empty
+  // strings filtered out so a sloppy client can't smuggle in a
+  // request for an empty download (which would 200 with 0 bytes
+  // and then explode in the model adapter).
+  const refinementRefPaths = Array.from(
+    new Set((referenceImagePaths ?? []).map((p) => p.trim()).filter(Boolean))
+  ).slice(0, MAX_REFINEMENT_REFERENCES)
+  // Only advertise the references in the prompt if the model can
+  // actually accept multiple images. Otherwise we'd be telling the
+  // model "look at the 2 reference images attached" while sending
+  // it a single image — confusing and wasteful.
+  const promptRefCount = modelSupportsMultiImage ? refinementRefPaths.length : 0
+  const basePrompt = applyRefinementToPrompt(specPrompt, refinementPrompt, promptRefCount)
 
   const attempt = await prisma.cmfRenderAttempt.create({
     data: {
@@ -392,6 +534,9 @@ export async function runCmfRender({ renderId, triggeredByUserId }: RenderArgs) 
       modelId,
       triggeredBy: triggeredByUserId ?? null,
       startedAt: new Date(),
+      refinementPrompt: refinementPrompt?.trim() || null,
+      parentAttemptId: parentAttempt ? parentAttemptId : null,
+      referenceImagePaths: refinementRefPaths,
     },
   })
 
@@ -417,6 +562,36 @@ export async function runCmfRender({ renderId, triggeredByUserId }: RenderArgs) 
       attemptNumber,
     })
 
+    // Resolve the refinement references (uploaded by the designer in
+    // the Refine panel) to data URLs. We download them in parallel
+    // and tolerate individual failures: a busted CDN response should
+    // not silently kill the whole render. If everything fails we
+    // surface that as a `reference` error so the caller sees a clear
+    // message in the attempt row.
+    let refinementRefDataUrls: string[] = []
+    if (refinementRefPaths.length > 0) {
+      const settled = await Promise.allSettled(
+        refinementRefPaths.map((p) =>
+          downloadReferenceImageAsDataUrl(publicUrlForCmfStoragePath(p))
+        )
+      )
+      refinementRefDataUrls = settled
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+        .map((r) => r.value)
+      const failed = settled.length - refinementRefDataUrls.length
+      if (failed > 0 && refinementRefDataUrls.length === 0) {
+        throw new CmfRenderError(
+          'reference',
+          `All ${failed} refinement reference image(s) failed to download. Please re-upload.`
+        )
+      }
+      if (failed > 0) {
+        console.warn(
+          `[cmf/render] ${failed}/${settled.length} refinement references failed to download; continuing with the rest`
+        )
+      }
+    }
+
     let enhancedPrompt = basePrompt
     try {
       const enhancement = await enhancePrompt({
@@ -433,16 +608,39 @@ export async function runCmfRender({ renderId, triggeredByUserId }: RenderArgs) 
     if (!adapter) throw new CmfRenderError('model', `Unknown model ${modelId}`)
 
     const config = getModelConfig(modelId)
-    const supportsMulti = !!config?.capabilities?.multiImageEditing
+    const supportsMulti = modelSupportsMultiImage
+
+    // Combine the canonical product reference (clown / fallback)
+    // with the optional refinement references. Order matters: the
+    // canonical reference comes FIRST so models that treat the
+    // first image as the primary subject keep doing so. The
+    // refinement refs slot in after as guidance.
+    //
+    // For models without multi-image support we silently drop the
+    // refinement refs rather than swap them in for the clown — the
+    // clown is non-negotiable spec, the refinement refs are nice
+    // -to-have. The prompt's `REFERENCE IMAGES:` section is also
+    // omitted in that case so we don't tell the model about images
+    // we never sent.
+    const canSendRefinementRefs = supportsMulti && refinementRefDataUrls.length > 0
+    const combinedRefs: string[] = canSendRefinementRefs
+      ? [...refs.dataUrls, ...refinementRefDataUrls]
+      : refs.dataUrls
+
+    if (refinementRefDataUrls.length > 0 && !supportsMulti) {
+      console.warn(
+        `[cmf/render] model ${modelId} does not support multi-image editing; dropping ${refinementRefDataUrls.length} refinement reference(s)`
+      )
+    }
 
     const generation = await Promise.race([
       adapter.generate({
         prompt: enhancedPrompt,
         numOutputs: 1,
-        ...(refs.dataUrls.length > 1 && supportsMulti
-          ? { referenceImages: refs.dataUrls }
-          : refs.dataUrls.length >= 1
-          ? { referenceImage: refs.dataUrls[0] }
+        ...(combinedRefs.length > 1 && supportsMulti
+          ? { referenceImages: combinedRefs }
+          : combinedRefs.length >= 1
+          ? { referenceImage: combinedRefs[0] }
           : {}),
       }),
       new Promise<never>((_, reject) =>

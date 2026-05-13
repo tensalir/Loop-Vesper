@@ -975,6 +975,28 @@ model CmfRenderAttempt {
   approvedAt     DateTime? @map("approved_at")
   archivedAt     DateTime? @map("archived_at")
 
+  /// Iterative refinement (added 2026-05-13).
+  /// When set, this attempt was generated as a correction to a prior
+  /// attempt — `parentAttemptId` points at what was being refined,
+  /// `refinementPrompt` carries the freeform "what to change" copy
+  /// the designer typed (e.g. "make the black more holographic").
+  /// The render service appends this to the spec-derived prompt with
+  /// an explicit REFINEMENT INSTRUCTIONS section so the model treats
+  /// it as overriding guidance. Each refinement is grounded in the
+  /// workbook spec, not in the parent's prompt, so chains don't
+  /// drift after multiple hops.
+  refinementPrompt    String?  @map("refinement_prompt") @db.Text
+  parentAttemptId     String?  @map("parent_attempt_id") @db.Uuid
+  parentAttempt       CmfRenderAttempt?  @relation("CmfRenderAttempt_lineage", fields: [parentAttemptId], references: [id], onDelete: SetNull)
+  childAttempts       CmfRenderAttempt[] @relation("CmfRenderAttempt_lineage")
+  /// Phase 2 of iterative refinement: storage paths of reference
+  /// images uploaded alongside this attempt's refinement prompt.
+  /// The render service resolves each path to a data URL and passes
+  /// it to the model alongside the clown reference, with an explicit
+  /// REFERENCE IMAGES section in the prompt naming each ref's role.
+  /// Capped at 4 in the upload route.
+  referenceImagePaths String[] @default([]) @map("reference_image_paths")
+
   startedAt      DateTime? @map("started_at")
   completedAt    DateTime? @map("completed_at")
   createdAt      DateTime  @default(now()) @map("created_at")
@@ -987,6 +1009,7 @@ model CmfRenderAttempt {
   @@index([renderId])
   @@index([renderId, approvalStatus])
   @@index([renderId, createdAt(sort: Desc)])
+  @@index([parentAttemptId])
   @@map("cmf_render_attempts")
 }
 

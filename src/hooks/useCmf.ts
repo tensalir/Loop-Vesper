@@ -42,6 +42,18 @@ export interface CmfRenderAttempt {
   completedAt: string | null
   createdAt: string
   updatedAt: string
+  /** Iterative refinement: the freeform "what to change" copy that
+   *  was applied to the spec prompt. Null on dice-roll attempts. */
+  refinementPrompt: string | null
+  /** Iterative refinement: id of the attempt this one is refining.
+   *  Null on dice-roll attempts (top of the chain). */
+  parentAttemptId: string | null
+  /** Iterative refinement (Phase 2): storage paths of the
+   *  designer-supplied reference images that were sent alongside
+   *  the canonical clown reference. Used to display "+N refs" on
+   *  the attempt card and to surface thumbnails in the lightbox so
+   *  the chain stays auditable. Empty array on dice-roll attempts. */
+  referenceImagePaths: string[]
 }
 
 export interface CmfRender {
@@ -369,15 +381,85 @@ export function useUpdateCmfRender() {
   })
 }
 
+/**
+ * Phase 2 of iterative refinement: upload refinement-reference
+ * images for a single render. Returns the stored paths + public URLs
+ * so the UI can show thumbnails immediately, and so the caller can
+ * pass `paths` straight into `useGenerateCmfRender`.
+ *
+ * Why this is a separate hook (rather than folded into the generate
+ * mutation):
+ *   - The upload route accepts multipart, the generate route accepts
+ *     JSON. Splitting keeps each mutation simple.
+ *   - Designers can drop refs progressively and see thumbnails before
+ *     committing to "Generate refined attempt".
+ *   - Failed uploads can be retried independently of the generate
+ *     call.
+ */
+export interface CmfRefinementReference {
+  path: string
+  url: string
+  filename: string
+}
+
+export function useUploadRefinementReferences() {
+  return useMutation({
+    mutationFn: async (args: {
+      renderId: string
+      files: File[]
+    }): Promise<{ batchId: string; references: CmfRefinementReference[] }> => {
+      if (args.files.length === 0) {
+        throw new Error('No files to upload')
+      }
+      const formData = new FormData()
+      for (const file of args.files) formData.append('files', file)
+      const res = await fetch(
+        `/api/cmf/renders/${args.renderId}/refinement-references`,
+        { method: 'POST', body: formData }
+      )
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        throw new Error(error.error || 'Reference upload failed')
+      }
+      return res.json()
+    },
+  })
+}
+
 export function useGenerateCmfRender() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (args: {
       renderId: string
       packetId: string
+      /** Optional iterative-refinement payload — when set, the new
+       *  attempt is generated as a correction layered on top of the
+       *  workbook spec. Both fields go into the POST body; the API
+       *  treats their absence as the bulk-burst "fresh attempt"
+       *  path. */
+      refinementPrompt?: string
+      parentAttemptId?: string
+      /** Storage paths returned by `useUploadRefinementReferences`.
+       *  Up to 4. The API caps to 4 again server-side. */
+      referenceImagePaths?: string[]
     }): Promise<CmfRender> => {
+      const refPaths = (args.referenceImagePaths ?? []).filter(Boolean).slice(0, 4)
+      const hasRefinement =
+        Boolean(args.refinementPrompt?.trim()) ||
+        Boolean(args.parentAttemptId) ||
+        refPaths.length > 0
       const res = await fetch(`/api/cmf/renders/${args.renderId}/generate`, {
         method: 'POST',
+        headers: hasRefinement
+          ? { 'Content-Type': 'application/json' }
+          : undefined,
+        body: hasRefinement
+          ? JSON.stringify({
+              refinementPrompt: args.refinementPrompt?.trim() || undefined,
+              parentAttemptId: args.parentAttemptId || undefined,
+              referenceImagePaths: refPaths.length > 0 ? refPaths : undefined,
+            })
+          : undefined,
       })
       if (!res.ok) {
         const error = await res.json().catch(() => ({}))
