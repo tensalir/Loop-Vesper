@@ -29,7 +29,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/prisma'
-import { requireCmfWrite } from '@/lib/cmf/service'
+import { logCmfActivity, requireCmfWrite } from '@/lib/cmf/service'
+import { cmfError } from '@/lib/cmf/api'
 import { createRateLimiter } from '@/lib/api/rate-limit'
 import { uploadBase64ToStorage } from '@/lib/supabase/storage'
 import {
@@ -73,7 +74,7 @@ export async function POST(
     select: { id: true, packetId: true, ownerId: true },
   })
   if (!render) {
-    return NextResponse.json({ error: 'Render not found' }, { status: 404 })
+    return cmfError('Render not found', { status: 404 })
   }
 
   // Parse multipart. FormData-aware to keep the route self-contained
@@ -83,41 +84,28 @@ export async function POST(
   try {
     formData = await request.formData()
   } catch {
-    return NextResponse.json(
-      { error: 'Invalid multipart body' },
-      { status: 400 }
-    )
+    return cmfError('Invalid multipart body')
   }
   const rawFiles = formData.getAll('files').filter((v): v is File => v instanceof File)
   if (rawFiles.length === 0) {
-    return NextResponse.json(
-      { error: 'No files provided. Use the "files" field (repeated) with image uploads.' },
-      { status: 400 }
+    return cmfError(
+      'No files provided. Use the "files" field (repeated) with image uploads.'
     )
   }
   if (rawFiles.length > MAX_FILES_PER_REQUEST) {
-    return NextResponse.json(
-      {
-        error: `Too many files: ${rawFiles.length}. Cap is ${MAX_FILES_PER_REQUEST} per request — drop the rest later if needed.`,
-      },
-      { status: 400 }
+    return cmfError(
+      `Too many files: ${rawFiles.length}. Cap is ${MAX_FILES_PER_REQUEST} per request — drop the rest later if needed.`
     )
   }
   for (const file of rawFiles) {
     if (file.size > MAX_BYTES_PER_FILE) {
-      return NextResponse.json(
-        {
-          error: `File "${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)}MB; max is ${MAX_BYTES_PER_FILE / 1024 / 1024}MB.`,
-        },
-        { status: 400 }
+      return cmfError(
+        `File "${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)}MB; max is ${MAX_BYTES_PER_FILE / 1024 / 1024}MB.`
       )
     }
     if (!ALLOWED_MIME_TYPES.has(file.type)) {
-      return NextResponse.json(
-        {
-          error: `File "${file.name}" has unsupported type "${file.type}". Use PNG, JPEG, or WebP.`,
-        },
-        { status: 400 }
+      return cmfError(
+        `File "${file.name}" has unsupported type "${file.type}". Use PNG, JPEG, or WebP.`
       )
     }
   }
@@ -155,15 +143,15 @@ export async function POST(
     } catch (err) {
       // Best-effort error surface. Partial uploads on prior files
       // are intentionally NOT rolled back — they're cheap to leave
-      // behind and the client can retry the failed file.
+      // behind and the client can retry the failed file. The
+      // already-uploaded paths ride on the response under `uploaded`
+      // so the client can show "3 of 4 succeeded" without losing
+      // the work.
       const message = err instanceof Error ? err.message : 'Upload failed'
-      return NextResponse.json(
-        {
-          error: `Upload failed for "${file.name}": ${message}`,
-          uploaded,
-        },
-        { status: 500 }
-      )
+      return cmfError(`Upload failed for "${file.name}": ${message}`, {
+        status: 500,
+        extra: { uploaded },
+      })
     }
 
     uploaded.push({
@@ -172,6 +160,18 @@ export async function POST(
       filename: safeName,
     })
   }
+
+  // Activity log so the timeline shows "Damien attached 3 reference
+  // images to a SKU" alongside the resulting refined attempt. Logged
+  // AFTER all uploads succeed so a failed batch doesn't leave a stale
+  // breadcrumb.
+  await logCmfActivity({
+    packetId: render.packetId,
+    userId: auth.profile.userId,
+    action: 'uploaded_references',
+    targetId: render.id,
+    metadata: { count: uploaded.length, batchId },
+  })
 
   return NextResponse.json({
     batchId,

@@ -5,6 +5,7 @@ import { uploadBase64ToStorage } from '@/lib/supabase/storage'
 import { CMF_STORAGE_BUCKET, clownStoragePath } from '@/lib/cmf/storage'
 import { getCmfProduct } from '@/lib/cmf/products'
 import { requireAuthenticatedProfile, requireCmfWrite } from '@/lib/cmf/service'
+import { cmfError } from '@/lib/cmf/api'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,15 @@ export const dynamic = 'force-dynamic'
  */
 
 const SLUG_REGEX = /^[a-z0-9][a-z0-9-]*$/
+
+/**
+ * Per-image cap. Loop's clown PNGs are typically 1-3 MB; 5 MB leaves
+ * headroom for occasional 4K reference shots without inviting "I just
+ * uploaded my entire desktop wallpaper folder" mistakes. Mirrors the
+ * 8 MB / 10 MB ceilings on the refinement-references and import
+ * routes — same scale of "single artefact upload".
+ */
+const MAX_CLOWN_IMAGE_BYTES = 5 * 1024 * 1024
 
 const ComponentSchema = z.object({
   region: z.string().min(1).max(80),
@@ -73,7 +83,7 @@ export async function POST(request: NextRequest) {
   try {
     formData = await request.formData()
   } catch {
-    return NextResponse.json({ error: 'Invalid multipart body' }, { status: 400 })
+    return cmfError('Invalid multipart body')
   }
 
   const file = formData.get('file') as File | null
@@ -88,28 +98,28 @@ export async function POST(request: NextRequest) {
   const componentsRaw = formData.get('components') as string | null
 
   if (!file) {
-    return NextResponse.json({ error: 'file is required' }, { status: 400 })
+    return cmfError('file is required')
   }
   if (!file.type.startsWith('image/')) {
-    return NextResponse.json({ error: 'file must be an image' }, { status: 400 })
+    return cmfError('file must be an image')
+  }
+  if (file.size > MAX_CLOWN_IMAGE_BYTES) {
+    return cmfError(
+      `Image too large: ${(file.size / 1024 / 1024).toFixed(1)} MB. Max is ${MAX_CLOWN_IMAGE_BYTES / 1024 / 1024} MB.`,
+      { status: 413 }
+    )
   }
   if (!productSlug) {
-    return NextResponse.json({ error: 'productSlug is required' }, { status: 400 })
+    return cmfError('productSlug is required')
   }
   if (!getCmfProduct(productSlug)) {
-    return NextResponse.json(
-      { error: `unknown productSlug "${productSlug}"` },
-      { status: 400 }
-    )
+    return cmfError(`unknown productSlug "${productSlug}"`)
   }
   if (!SLUG_REGEX.test(variantSlug)) {
-    return NextResponse.json(
-      { error: 'variantSlug must be lowercase letters, digits, or dashes' },
-      { status: 400 }
-    )
+    return cmfError('variantSlug must be lowercase letters, digits, or dashes')
   }
   if (!label) {
-    return NextResponse.json({ error: 'label is required' }, { status: 400 })
+    return cmfError('label is required')
   }
 
   let components: Array<z.infer<typeof ComponentSchema>> = []
@@ -118,14 +128,16 @@ export async function POST(request: NextRequest) {
       const parsed = JSON.parse(componentsRaw)
       const result = z.array(ComponentSchema).safeParse(parsed)
       if (!result.success) {
-        return NextResponse.json(
-          { error: 'Invalid components', details: result.error.issues },
-          { status: 400 }
-        )
+        return cmfError('Invalid components', {
+          details: result.error.issues.map((i) => ({
+            path: i.path.join('.'),
+            message: i.message,
+          })),
+        })
       }
       components = result.data
     } catch {
-      return NextResponse.json({ error: 'components must be valid JSON' }, { status: 400 })
+      return cmfError('components must be valid JSON')
     }
   }
 

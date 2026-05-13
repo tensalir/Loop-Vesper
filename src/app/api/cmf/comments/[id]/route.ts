@@ -5,6 +5,7 @@ import {
   logCmfActivity,
   requireCmfWrite,
 } from '@/lib/cmf/service'
+import { cmfError } from '@/lib/cmf/api'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,31 +35,30 @@ export async function PATCH(
     select: { id: true, packetId: true, userId: true, resolvedAt: true, renderId: true },
   })
   if (!comment) {
-    return NextResponse.json({ error: 'Comment not found' }, { status: 404 })
+    return cmfError('Comment not found', { status: 404 })
   }
 
   let body: unknown
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    return cmfError('Invalid JSON body')
   }
 
   const parsed = UpdateCommentSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Invalid request body', details: parsed.error.issues },
-      { status: 400 }
-    )
+    return cmfError('Invalid request body', {
+      details: parsed.error.issues.map((i) => ({
+        path: i.path.join('.'),
+        message: i.message,
+      })),
+    })
   }
 
   // Editing the body still requires authorship — write access doesn't
   // mean the right to rewrite someone else's words.
   if (typeof parsed.data.body === 'string' && comment.userId !== auth.profile.userId) {
-    return NextResponse.json(
-      { error: 'Only the author can edit a comment body' },
-      { status: 403 }
-    )
+    return cmfError('Only the author can edit a comment body', { status: 403 })
   }
 
   const now = new Date()
@@ -95,6 +95,16 @@ export async function PATCH(
       targetId: comment.id,
       metadata: { renderId: comment.renderId },
     })
+  } else if (typeof parsed.data.body === 'string') {
+    // Body-edit case — surface so the timeline records "Damien edited a
+    // comment 2m ago" instead of silently mutating history.
+    await logCmfActivity({
+      packetId: comment.packetId,
+      userId: auth.profile.userId,
+      action: 'comment_edited',
+      targetId: comment.id,
+      metadata: { renderId: comment.renderId },
+    })
   }
 
   return NextResponse.json({ comment: updated })
@@ -115,10 +125,10 @@ export async function DELETE(
 
   const comment = await prisma.cmfComment.findUnique({
     where: { id: params.id },
-    select: { id: true, userId: true, packetId: true },
+    select: { id: true, userId: true, packetId: true, renderId: true },
   })
   if (!comment) {
-    return NextResponse.json({ error: 'Comment not found' }, { status: 404 })
+    return cmfError('Comment not found', { status: 404 })
   }
 
   const packet = await prisma.cmfPacket.findUnique({
@@ -128,13 +138,23 @@ export async function DELETE(
   const isAuthor = comment.userId === auth.profile.userId
   const isOwner = packet?.ownerId === auth.profile.userId
   if (!isAuthor && !isOwner && !auth.profile.isAdmin) {
-    return NextResponse.json(
-      { error: 'Only the author, packet owner, or an admin can delete a comment' },
+    return cmfError(
+      'Only the author, packet owner, or an admin can delete a comment',
       { status: 403 }
     )
   }
 
   await prisma.cmfComment.delete({ where: { id: params.id } })
+
+  // Log the deletion so the timeline doesn't lose the breadcrumb.
+  // Comment row is gone but the packet (and its activity rows) survive.
+  await logCmfActivity({
+    packetId: comment.packetId,
+    userId: auth.profile.userId,
+    action: 'deleted_comment',
+    targetId: comment.id,
+    metadata: { renderId: comment.renderId },
+  })
 
   return NextResponse.json({ ok: true })
 }

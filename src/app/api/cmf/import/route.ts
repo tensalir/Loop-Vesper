@@ -13,6 +13,7 @@ import {
   logCmfActivity,
   requireCmfWrite,
 } from '@/lib/cmf/service'
+import { cmfError } from '@/lib/cmf/api'
 import { getCmfProduct } from '@/lib/cmf/products'
 import { createRateLimiter } from '@/lib/api/rate-limit'
 
@@ -53,15 +54,15 @@ export async function POST(request: NextRequest) {
     notes = (formData.get('notes') as string | null) || undefined
     createPacket = (formData.get('createPacket') as string | null) === 'true'
   } catch {
-    return NextResponse.json({ error: 'Invalid multipart body' }, { status: 400 })
+    return cmfError('Invalid multipart body')
   }
 
   if (!file) {
-    return NextResponse.json({ error: 'file is required' }, { status: 400 })
+    return cmfError('file is required')
   }
   if (file.size > MAX_WORKBOOK_BYTES) {
-    return NextResponse.json(
-      { error: `Workbook too large (max ${MAX_WORKBOOK_BYTES / (1024 * 1024)} MB)` },
+    return cmfError(
+      `Workbook too large (max ${MAX_WORKBOOK_BYTES / (1024 * 1024)} MB)`,
       { status: 413 }
     )
   }
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     parsed = parseCmfWorkbook(buffer)
   } catch (err) {
     if (err instanceof XlsxParseError) {
-      return NextResponse.json({ error: err.message }, { status: 400 })
+      return cmfError(err.message)
     }
     throw err
   }

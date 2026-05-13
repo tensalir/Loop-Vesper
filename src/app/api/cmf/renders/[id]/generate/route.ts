@@ -6,6 +6,7 @@ import {
   logCmfActivity,
   requireCmfWrite,
 } from '@/lib/cmf/service'
+import { cmfError } from '@/lib/cmf/api'
 import { createRateLimiter } from '@/lib/api/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -50,7 +51,7 @@ export async function POST(
     select: { packetId: true },
   })
   if (!renderRow) {
-    return NextResponse.json({ error: 'Render not found' }, { status: 404 })
+    return cmfError('Render not found', { status: 404 })
   }
   const access = { packetId: renderRow.packetId }
 
@@ -63,10 +64,12 @@ export async function POST(
     if (raw !== undefined) {
       const parsed = RefineSchema.safeParse(raw)
       if (!parsed.success) {
-        return NextResponse.json(
-          { error: 'Invalid refinement payload', details: parsed.error.issues },
-          { status: 400 }
-        )
+        return cmfError('Invalid refinement payload', {
+          details: parsed.error.issues.map((i) => ({
+            path: i.path.join('.'),
+            message: i.message,
+          })),
+        })
       }
       refineBody = parsed.data
     }
@@ -85,12 +88,8 @@ export async function POST(
       select: { renderId: true },
     })
     if (!parent || parent.renderId !== params.id) {
-      return NextResponse.json(
-        {
-          error:
-            'parentAttemptId does not belong to this render — refinements are scoped to a single SKU.',
-        },
-        { status: 400 }
+      return cmfError(
+        'parentAttemptId does not belong to this render — refinements are scoped to a single SKU.'
       )
     }
   }
@@ -157,10 +156,7 @@ export async function POST(
         targetId: params.id,
         metadata: { category: err.category, message: err.message },
       })
-      return NextResponse.json(
-        { error: err.message, category: err.category },
-        { status }
-      )
+      return cmfError(err.message, { status, category: err.category })
     }
     const message = err instanceof Error ? err.message : 'Render failed'
     console.error('[cmf/renders/generate] render failed', err)
@@ -171,6 +167,6 @@ export async function POST(
       targetId: params.id,
       metadata: { message },
     })
-    return NextResponse.json({ error: message }, { status: 500 })
+    return cmfError(message, { status: 500 })
   }
 }

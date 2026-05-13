@@ -6,6 +6,7 @@ import {
   requireAuthenticatedProfile,
   requireCmfWrite,
 } from '@/lib/cmf/service'
+import { cmfError } from '@/lib/cmf/api'
 import { CmfSkuRowSchema } from '@/lib/cmf/schema'
 
 export const dynamic = 'force-dynamic'
@@ -51,21 +52,17 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    return cmfError('Invalid JSON body')
   }
 
   const parsed = CreatePacketSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      {
-        error: 'Invalid request body',
-        details: parsed.error.issues.map((i) => ({
-          path: i.path.join('.'),
-          message: i.message,
-        })),
-      },
-      { status: 400 }
-    )
+    return cmfError('Invalid request body', {
+      details: parsed.error.issues.map((i) => ({
+        path: i.path.join('.'),
+        message: i.message,
+      })),
+    })
   }
 
   const { packets } = await createPacketFromRows({
@@ -76,6 +73,9 @@ export async function POST(request: NextRequest) {
     notes: parsed.data.notes,
     rows: parsed.data.rows,
   })
+
+  // No additional `logCmfActivity` here: `createPacketFromRows` already
+  // writes a `created_packet` row per packet inside its transaction.
 
   return NextResponse.json({
     packets: packets.map(({ packet, renders, mergeSummary }) => ({

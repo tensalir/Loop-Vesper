@@ -30,6 +30,7 @@ import {
   logCmfActivity,
   requireCmfWrite,
 } from '@/lib/cmf/service'
+import { cmfError } from '@/lib/cmf/api'
 import { createRateLimiter } from '@/lib/api/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -72,14 +73,11 @@ export async function POST(
   })
 
   if (!packet) {
-    return NextResponse.json({ error: 'Packet not found' }, { status: 404 })
+    return cmfError('Packet not found', { status: 404 })
   }
 
   if (packet.renders.length === 0) {
-    return NextResponse.json(
-      { error: 'Packet has no SKU rows to export' },
-      { status: 422 }
-    )
+    return cmfError('Packet has no SKU rows to export', { status: 422 })
   }
 
   const document = resolveCmfDocument({
@@ -103,13 +101,9 @@ export async function POST(
   })
 
   if (!isDocumentReadyForExport(document) && !allowDraft) {
-    return NextResponse.json(
-      {
-        error:
-          'PDF export is gated on every SKU having an approved render. Approve a render per SKU or pass allowDraft: true to ship a DRAFT.',
-        readiness,
-      },
-      { status: 422 }
+    return cmfError(
+      'PDF export is gated on every SKU having an approved render. Approve a render per SKU or pass allowDraft: true to ship a DRAFT.',
+      { status: 422, extra: { readiness } }
     )
   }
 
@@ -226,6 +220,6 @@ export async function POST(
       action: 'pdf_failed',
       metadata: { message },
     })
-    return NextResponse.json({ error: message }, { status: 500 })
+    return cmfError(message, { status: 500 })
   }
 }

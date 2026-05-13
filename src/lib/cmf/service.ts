@@ -994,6 +994,16 @@ export type CmfActivityAction =
   // carries `parentAttemptId` + a truncated `refinementPrompt`
   // so the timeline reads as a conversation.
   | 'attempt_refined'
+  // Destructive / additive operations that previously slipped past
+  // the activity timeline. Packet deletion is intentionally NOT in
+  // this list — the activity rows cascade-delete with the packet,
+  // so a "deleted_packet" event would vanish the moment it landed.
+  // Clown uploads are also out: the clown library is a global
+  // surface with no parent packet to anchor the activity row to.
+  | 'deleted_render'
+  | 'deleted_comment'
+  | 'comment_edited'
+  | 'uploaded_references'
 
 /**
  * Append an activity row. Designed to be best-effort — never block the

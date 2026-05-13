@@ -19,6 +19,7 @@ import {
   logCmfActivity,
   requireCmfWrite,
 } from '@/lib/cmf/service'
+import { cmfError } from '@/lib/cmf/api'
 import { CmfRenderError, runCmfRender } from '@/lib/cmf/render'
 import { createRateLimiter } from '@/lib/api/rate-limit'
 import pLimit from 'p-limit'
@@ -50,10 +51,12 @@ export async function POST(
   }
   const parsed = BodySchema.safeParse(body ?? {})
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Invalid request body', details: parsed.error.issues },
-      { status: 400 }
-    )
+    return cmfError('Invalid request body', {
+      details: parsed.error.issues.map((i) => ({
+        path: i.path.join('.'),
+        message: i.message,
+      })),
+    })
   }
   const attemptsPerSku = parsed.data.attemptsPerSku ?? 3
 
@@ -61,7 +64,7 @@ export async function POST(
     where: { id: params.id },
     include: { renders: { orderBy: { sortOrder: 'asc' } } },
   })
-  if (!packet) return NextResponse.json({ error: 'Packet not found' }, { status: 404 })
+  if (!packet) return cmfError('Packet not found', { status: 404 })
 
   const targetRenders = parsed.data.renderIds
     ? packet.renders.filter((r) => parsed.data.renderIds!.includes(r.id))

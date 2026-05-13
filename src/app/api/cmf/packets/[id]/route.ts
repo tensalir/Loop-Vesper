@@ -3,13 +3,13 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import {
   CmfNotFoundError,
-  CmfForbiddenError,
   findAccessiblePacket,
   logCmfActivity,
   requireAuthenticatedProfile,
   requireCmfWrite,
   requirePacketAccess,
 } from '@/lib/cmf/service'
+import { cmfError, translateAccessError } from '@/lib/cmf/api'
 import { CmfDocumentDraftSchema } from '@/lib/cmf/document'
 
 export const dynamic = 'force-dynamic'
@@ -38,12 +38,8 @@ export async function GET(
     if (!packet) throw new CmfNotFoundError()
     return NextResponse.json({ packet })
   } catch (err) {
-    if (err instanceof CmfNotFoundError) {
-      return NextResponse.json({ error: err.message }, { status: 404 })
-    }
-    if (err instanceof CmfForbiddenError) {
-      return NextResponse.json({ error: err.message }, { status: 403 })
-    }
+    const translated = translateAccessError(err)
+    if (translated) return translated
     throw err
   }
 }
@@ -63,22 +59,24 @@ export async function PATCH(
     select: { id: true },
   })
   if (!exists) {
-    return NextResponse.json({ error: 'Packet not found' }, { status: 404 })
+    return cmfError('Packet not found', { status: 404 })
   }
 
   let body: unknown
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    return cmfError('Invalid JSON body')
   }
 
   const parsed = UpdatePacketSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Invalid request body', details: parsed.error.issues },
-      { status: 400 }
-    )
+    return cmfError('Invalid request body', {
+      details: parsed.error.issues.map((i) => ({
+        path: i.path.join('.'),
+        message: i.message,
+      })),
+    })
   }
 
   const dataForUpdate: Record<string, unknown> = { ...parsed.data }
@@ -120,16 +118,19 @@ export async function DELETE(
     select: { id: true, ownerId: true },
   })
   if (!packet) {
-    return NextResponse.json({ error: 'Packet not found' }, { status: 404 })
+    return cmfError('Packet not found', { status: 404 })
   }
 
   if (!auth.profile.isAdmin && packet.ownerId !== auth.profile.userId) {
-    return NextResponse.json(
-      { error: 'Only the packet owner or an admin may delete a packet.' },
+    return cmfError(
+      'Only the packet owner or an admin may delete a packet.',
       { status: 403 }
     )
   }
 
+  // No `deleted_packet` activity entry — the cmf_activity rows
+  // cascade-delete with the packet, so an event would vanish the
+  // moment it landed. Documented in the activity-action union.
   await prisma.cmfPacket.delete({ where: { id: params.id } })
 
   return NextResponse.json({ ok: true })

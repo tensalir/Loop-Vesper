@@ -5,9 +5,23 @@ import { uploadBase64ToStorage } from '@/lib/supabase/storage'
 import { CMF_STORAGE_BUCKET, clownStoragePath } from '@/lib/cmf/storage'
 import { clownAssetFromZipEntry } from '@/lib/cmf/clown-zip-mapping'
 import { requireCmfWrite } from '@/lib/cmf/service'
+import { cmfError } from '@/lib/cmf/api'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60 // bulk uploads can take a while; raise from default 10s
+
+/**
+ * Total payload cap across all uploaded zips per request. The full
+ * Loop "Clown Renders" pack is well under this; the cap exists to
+ * stop a designer from accidentally dropping a multi-product archive
+ * that fans the function out to gigabytes of memory pressure.
+ */
+const MAX_TOTAL_ZIP_BYTES = 100 * 1024 * 1024
+/**
+ * Per-zip cap. Same intent as the total cap — refuses obviously-wrong
+ * uploads early so we don't waste work in JSZip.loadAsync.
+ */
+const MAX_ZIP_BYTES = 50 * 1024 * 1024
 
 /**
  * POST /api/cmf/clowns/bulk (multipart)
@@ -28,15 +42,34 @@ export async function POST(request: NextRequest) {
   try {
     formData = await request.formData()
   } catch {
-    return NextResponse.json({ error: 'Invalid multipart body' }, { status: 400 })
+    return cmfError('Invalid multipart body')
   }
 
   const files = formData.getAll('files').filter((f): f is File => f instanceof File)
   if (files.length === 0) {
-    return NextResponse.json(
-      { error: 'No files provided. Use the "files" field (repeated) with .zip uploads.' },
-      { status: 400 }
+    return cmfError(
+      'No files provided. Use the "files" field (repeated) with .zip uploads.'
     )
+  }
+
+  // Reject the upload before any work happens if the total or any single
+  // zip exceeds the cap. We surface 413 (Payload Too Large) so the
+  // client can show a "your bundle is too big" hint without parsing
+  // the message.
+  const totalBytes = files.reduce((acc, f) => acc + f.size, 0)
+  if (totalBytes > MAX_TOTAL_ZIP_BYTES) {
+    return cmfError(
+      `Total upload is ${(totalBytes / 1024 / 1024).toFixed(1)} MB; cap is ${MAX_TOTAL_ZIP_BYTES / 1024 / 1024} MB across all zips in one request.`,
+      { status: 413 }
+    )
+  }
+  for (const f of files) {
+    if (f.size > MAX_ZIP_BYTES) {
+      return cmfError(
+        `Zip "${f.name}" is ${(f.size / 1024 / 1024).toFixed(1)} MB; cap is ${MAX_ZIP_BYTES / 1024 / 1024} MB per file.`,
+        { status: 413 }
+      )
+    }
   }
 
   type EntryResult = {

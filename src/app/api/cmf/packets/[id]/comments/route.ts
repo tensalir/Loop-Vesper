@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import {
-  CmfForbiddenError,
-  CmfNotFoundError,
   logCmfActivity,
   requireAuthenticatedProfile,
   requireCmfWrite,
   requirePacketAccess,
 } from '@/lib/cmf/service'
+import { cmfError, translateAccessError } from '@/lib/cmf/api'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,16 +16,6 @@ const CreateCommentSchema = z.object({
   /** When set, the comment is pinned to a single SKU row. */
   renderId: z.string().uuid().optional(),
 })
-
-function translateAccessError(err: unknown) {
-  if (err instanceof CmfNotFoundError) {
-    return NextResponse.json({ error: err.message }, { status: 404 })
-  }
-  if (err instanceof CmfForbiddenError) {
-    return NextResponse.json({ error: err.message }, { status: 403 })
-  }
-  return null
-}
 
 /**
  * GET /api/cmf/packets/{id}/comments?renderId=
@@ -96,22 +85,24 @@ export async function POST(
     select: { id: true },
   })
   if (!packet) {
-    return NextResponse.json({ error: 'Packet not found' }, { status: 404 })
+    return cmfError('Packet not found', { status: 404 })
   }
 
   let body: unknown
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    return cmfError('Invalid JSON body')
   }
 
   const parsed = CreateCommentSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Invalid request body', details: parsed.error.issues },
-      { status: 400 }
-    )
+    return cmfError('Invalid request body', {
+      details: parsed.error.issues.map((i) => ({
+        path: i.path.join('.'),
+        message: i.message,
+      })),
+    })
   }
 
   if (parsed.data.renderId) {
@@ -120,10 +111,7 @@ export async function POST(
       select: { packetId: true },
     })
     if (!render || render.packetId !== params.id) {
-      return NextResponse.json(
-        { error: 'Render does not belong to this packet' },
-        { status: 400 }
-      )
+      return cmfError('Render does not belong to this packet')
     }
   }
 

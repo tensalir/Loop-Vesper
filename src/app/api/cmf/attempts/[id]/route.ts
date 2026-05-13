@@ -13,13 +13,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import {
-  CmfForbiddenError,
-  CmfNotFoundError,
   logCmfActivity,
   requireAuthenticatedProfile,
   requireCmfWrite,
   requireRenderAccess,
 } from '@/lib/cmf/service'
+import { cmfError, translateAccessError } from '@/lib/cmf/api'
 import {
   approveCmfAttempt,
   archiveCmfAttempt,
@@ -33,12 +32,18 @@ const ActionSchema = z.object({
   action: z.enum(['approve', 'archive', 'restore']),
 })
 
-function translate(err: unknown) {
-  if (err instanceof CmfNotFoundError) return NextResponse.json({ error: err.message }, { status: 404 })
-  if (err instanceof CmfForbiddenError) return NextResponse.json({ error: err.message }, { status: 403 })
+/**
+ * Local error translator that adds CmfAttemptError on top of the
+ * shared `translateAccessError`. The attempt-specific case carries
+ * a `category` that the UI uses to pick a recovery hint, so we ride
+ * it on the standard envelope's `category` field.
+ */
+function translate(err: unknown): NextResponse | null {
+  const access = translateAccessError(err)
+  if (access) return access
   if (err instanceof CmfAttemptError) {
     const status = err.category === 'forbidden' ? 403 : 400
-    return NextResponse.json({ error: err.message, category: err.category }, { status })
+    return cmfError(err.message, { status, category: err.category })
   }
   return null
 }
@@ -55,7 +60,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   if (!auth.profile) return auth.response
 
   const attempt = await loadAttemptWithRender(params.id)
-  if (!attempt) return NextResponse.json({ error: 'Attempt not found' }, { status: 404 })
+  if (!attempt) return cmfError('Attempt not found', { status: 404 })
 
   try {
     await requireRenderAccess({ renderId: attempt.renderId, userId: auth.profile.userId })
@@ -76,20 +81,22 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (!auth.profile) return auth.response
 
   const attempt = await loadAttemptWithRender(params.id)
-  if (!attempt) return NextResponse.json({ error: 'Attempt not found' }, { status: 404 })
+  if (!attempt) return cmfError('Attempt not found', { status: 404 })
 
   let body: unknown
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    return cmfError('Invalid JSON body')
   }
   const parsed = ActionSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Invalid request body', details: parsed.error.issues },
-      { status: 400 }
-    )
+    return cmfError('Invalid request body', {
+      details: parsed.error.issues.map((i) => ({
+        path: i.path.join('.'),
+        message: i.message,
+      })),
+    })
   }
 
   const access = { packetId: attempt.render.packetId }

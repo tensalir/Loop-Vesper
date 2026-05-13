@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import {
-  CmfForbiddenError,
-  CmfNotFoundError,
   logCmfActivity,
   requireAuthenticatedProfile,
   requireCmfWrite,
   requirePacketAccess,
 } from '@/lib/cmf/service'
+import { cmfError, translateAccessError } from '@/lib/cmf/api'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,16 +20,6 @@ const InviteMemberSchema = z.object({
   username: z.string().trim().min(1).max(100).optional(),
   role: z.enum(['viewer', 'editor', 'approver']).default('editor'),
 })
-
-function translateAccessError(err: unknown) {
-  if (err instanceof CmfNotFoundError) {
-    return NextResponse.json({ error: err.message }, { status: 404 })
-  }
-  if (err instanceof CmfForbiddenError) {
-    return NextResponse.json({ error: err.message }, { status: 403 })
-  }
-  return null
-}
 
 /**
  * GET /api/cmf/packets/{id}/members
@@ -83,7 +72,7 @@ export async function GET(
   })
 
   if (!packet) {
-    return NextResponse.json({ error: 'Packet not found' }, { status: 404 })
+    return cmfError('Packet not found', { status: 404 })
   }
 
   return NextResponse.json({
@@ -121,11 +110,11 @@ export async function POST(
     select: { ownerId: true },
   })
   if (!packet) {
-    return NextResponse.json({ error: 'Packet not found' }, { status: 404 })
+    return cmfError('Packet not found', { status: 404 })
   }
   if (packet.ownerId !== auth.profile.userId && !auth.profile.isAdmin) {
-    return NextResponse.json(
-      { error: 'Only the packet owner or an admin can record members' },
+    return cmfError(
+      'Only the packet owner or an admin can record members',
       { status: 403 }
     )
   }
@@ -134,21 +123,20 @@ export async function POST(
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    return cmfError('Invalid JSON body')
   }
 
   const parsed = InviteMemberSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Invalid request body', details: parsed.error.issues },
-      { status: 400 }
-    )
+    return cmfError('Invalid request body', {
+      details: parsed.error.issues.map((i) => ({
+        path: i.path.join('.'),
+        message: i.message,
+      })),
+    })
   }
   if (!parsed.data.userId && !parsed.data.username) {
-    return NextResponse.json(
-      { error: 'Either userId or username is required' },
-      { status: 400 }
-    )
+    return cmfError('Either userId or username is required')
   }
 
   // Resolve the invitee profile.
@@ -163,17 +151,11 @@ export async function POST(
       })
 
   if (!invitee || invitee.deletedAt) {
-    return NextResponse.json(
-      { error: 'User not found. Ask them to sign up first.' },
-      { status: 404 }
-    )
+    return cmfError('User not found. Ask them to sign up first.', { status: 404 })
   }
 
   if (invitee.id === auth.profile.userId) {
-    return NextResponse.json(
-      { error: 'You already own this packet — no need to invite yourself.' },
-      { status: 400 }
-    )
+    return cmfError('You already own this packet — no need to invite yourself.')
   }
 
   const member = await prisma.cmfPacketMember.upsert({

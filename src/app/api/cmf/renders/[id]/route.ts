@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import {
-  CmfForbiddenError,
-  CmfNotFoundError,
   logCmfActivity,
   requireAuthenticatedProfile,
   requireCmfWrite,
   requireRenderAccess,
 } from '@/lib/cmf/service'
+import { cmfError, translateAccessError } from '@/lib/cmf/api'
 import { ComponentSpecSchema, PaletteSwatchSchema } from '@/lib/cmf/schema'
 
 export const dynamic = 'force-dynamic'
@@ -23,16 +22,6 @@ const UpdateRenderSchema = z.object({
   componentSpecs: z.array(ComponentSpecSchema).optional(),
   paletteSwatches: z.array(PaletteSwatchSchema).optional(),
 })
-
-function translateAccessError(err: unknown) {
-  if (err instanceof CmfNotFoundError) {
-    return NextResponse.json({ error: err.message }, { status: 404 })
-  }
-  if (err instanceof CmfForbiddenError) {
-    return NextResponse.json({ error: err.message }, { status: 403 })
-  }
-  return null
-}
 
 export async function GET(
   _request: NextRequest,
@@ -54,7 +43,7 @@ export async function GET(
 
   const render = await prisma.cmfRender.findUnique({ where: { id: params.id } })
   if (!render) {
-    return NextResponse.json({ error: 'Render not found' }, { status: 404 })
+    return cmfError('Render not found', { status: 404 })
   }
   return NextResponse.json({ render })
 }
@@ -73,7 +62,7 @@ export async function PATCH(
     select: { packetId: true },
   })
   if (!renderForAccess) {
-    return NextResponse.json({ error: 'Render not found' }, { status: 404 })
+    return cmfError('Render not found', { status: 404 })
   }
   const access = { packetId: renderForAccess.packetId }
 
@@ -81,15 +70,17 @@ export async function PATCH(
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    return cmfError('Invalid JSON body')
   }
 
   const parsed = UpdateRenderSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Invalid request body', details: parsed.error.issues },
-      { status: 400 }
-    )
+    return cmfError('Invalid request body', {
+      details: parsed.error.issues.map((i) => ({
+        path: i.path.join('.'),
+        message: i.message,
+      })),
+    })
   }
 
   const data: Record<string, unknown> = {}
@@ -126,14 +117,29 @@ export async function DELETE(
   const auth = await requireCmfWrite()
   if (!auth.profile) return auth.response
 
-  const exists = await prisma.cmfRender.findUnique({
+  // Read packetId + label BEFORE delete so the activity row has the
+  // context it needs (label is the human-readable identifier the
+  // timeline shows; packetId is required for logCmfActivity).
+  const existing = await prisma.cmfRender.findUnique({
     where: { id: params.id },
-    select: { id: true },
+    select: { id: true, packetId: true, label: true, productCode: true },
   })
-  if (!exists) {
-    return NextResponse.json({ error: 'Render not found' }, { status: 404 })
+  if (!existing) {
+    return cmfError('Render not found', { status: 404 })
   }
 
   await prisma.cmfRender.delete({ where: { id: params.id } })
+
+  // Activity log emitted AFTER the delete so a failed delete doesn't
+  // produce a misleading "deleted SKU X" event. The render row is
+  // gone but the packet (and its activity rows) survive.
+  await logCmfActivity({
+    packetId: existing.packetId,
+    userId: auth.profile.userId,
+    action: 'deleted_render',
+    targetId: existing.id,
+    metadata: { label: existing.label, productCode: existing.productCode },
+  })
+
   return NextResponse.json({ ok: true })
 }

@@ -233,6 +233,41 @@ const ACTION_MAP: Record<string, ActivityIconConfig> = {
     },
     tone: 'primary',
   },
+  // Destructive / additive actions previously absent from the
+  // timeline. Packet deletion still isn't here — it cascade-deletes
+  // its own activity rows. Clown library uploads aren't here either —
+  // they're packet-less by design (global library).
+  deleted_render: {
+    Icon: AlertTriangle,
+    copy: (item) => {
+      const meta = item.metadata as { label?: string } | null
+      return meta?.label
+        ? `deleted SKU "${meta.label}"`
+        : 'deleted a SKU'
+    },
+    tone: 'destructive',
+  },
+  deleted_comment: {
+    Icon: AlertTriangle,
+    copy: () => 'deleted a comment',
+    tone: 'destructive',
+  },
+  comment_edited: {
+    Icon: Pencil,
+    copy: () => 'edited a comment',
+    tone: 'muted',
+  },
+  uploaded_references: {
+    Icon: Plus,
+    copy: (item) => {
+      const meta = item.metadata as { count?: number } | null
+      const n = meta?.count ?? 0
+      return n > 0
+        ? `attached ${n} reference ${n === 1 ? 'image' : 'images'} to a SKU`
+        : 'attached reference images to a SKU'
+    },
+    tone: 'muted',
+  },
 }
 
 const FALLBACK: ActivityIconConfig = {

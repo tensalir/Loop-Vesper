@@ -5,6 +5,7 @@ import {
   logCmfActivity,
   requireCmfWrite,
 } from '@/lib/cmf/service'
+import { cmfError } from '@/lib/cmf/api'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,11 +30,11 @@ export async function PATCH(
     select: { ownerId: true },
   })
   if (!packet) {
-    return NextResponse.json({ error: 'Packet not found' }, { status: 404 })
+    return cmfError('Packet not found', { status: 404 })
   }
   if (packet.ownerId !== auth.profile.userId && !auth.profile.isAdmin) {
-    return NextResponse.json(
-      { error: 'Only the packet owner or an admin can change member roles' },
+    return cmfError(
+      'Only the packet owner or an admin can change member roles',
       { status: 403 }
     )
   }
@@ -42,22 +43,24 @@ export async function PATCH(
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    return cmfError('Invalid JSON body')
   }
 
   const parsed = UpdateMemberSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Invalid request body', details: parsed.error.issues },
-      { status: 400 }
-    )
+    return cmfError('Invalid request body', {
+      details: parsed.error.issues.map((i) => ({
+        path: i.path.join('.'),
+        message: i.message,
+      })),
+    })
   }
 
   const member = await prisma.cmfPacketMember.findUnique({
     where: { packetId_userId: { packetId: params.id, userId: params.userId } },
   })
   if (!member) {
-    return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+    return cmfError('Member not found', { status: 404 })
   }
 
   const updated = await prisma.cmfPacketMember.update({
@@ -99,13 +102,13 @@ export async function DELETE(
     select: { ownerId: true },
   })
   if (!packet) {
-    return NextResponse.json({ error: 'Packet not found' }, { status: 404 })
+    return cmfError('Packet not found', { status: 404 })
   }
   const isOwner = packet.ownerId === auth.profile.userId
   const isSelfRemoval = params.userId === auth.profile.userId
   if (!isOwner && !isSelfRemoval && !auth.profile.isAdmin) {
-    return NextResponse.json(
-      { error: 'Only the owner or an admin can remove other members' },
+    return cmfError(
+      'Only the owner or an admin can remove other members',
       { status: 403 }
     )
   }
@@ -114,7 +117,7 @@ export async function DELETE(
     where: { packetId_userId: { packetId: params.id, userId: params.userId } },
   })
   if (!member) {
-    return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+    return cmfError('Member not found', { status: 404 })
   }
 
   await prisma.cmfPacketMember.delete({

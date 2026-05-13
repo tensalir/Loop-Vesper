@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import {
-  CmfForbiddenError,
-  CmfNotFoundError,
   requireAuthenticatedProfile,
   requirePacketAccess,
 } from '@/lib/cmf/service'
+import { translateAccessError } from '@/lib/cmf/api'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,12 +30,8 @@ export async function GET(
       userId: auth.profile.userId,
     })
   } catch (err) {
-    if (err instanceof CmfNotFoundError) {
-      return NextResponse.json({ error: err.message }, { status: 404 })
-    }
-    if (err instanceof CmfForbiddenError) {
-      return NextResponse.json({ error: err.message }, { status: 403 })
-    }
+    const translated = translateAccessError(err)
+    if (translated) return translated
     throw err
   }
 
