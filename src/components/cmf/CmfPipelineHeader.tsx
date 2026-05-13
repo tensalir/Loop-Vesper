@@ -5,15 +5,17 @@ import { cn } from '@/lib/utils'
 import type { CmfPacket } from '@/hooks/useCmf'
 import {
   Check,
+  ChevronDown,
   Loader2,
-  Database,
-  Image as ImageIcon,
   Wand2,
   FileText,
   AlertTriangle,
   CheckCircle2,
   LayoutTemplate,
+  Library,
+  Plus,
 } from 'lucide-react'
+import { listCmfProducts } from '@/lib/cmf/products'
 
 /**
  * Horizontal CMF pipeline header.
@@ -29,8 +31,8 @@ import {
  */
 
 export type StageKey =
-  | 'schema'
-  | 'references'
+  | 'import'
+  | 'products'
   | 'generate'
   | 'review'
   | 'preview'
@@ -39,13 +41,17 @@ export type StageStatus = 'pending' | 'active' | 'ready' | 'failed'
 
 interface CmfPipelineHeaderProps {
   packet: CmfPacket | null
-  /** Counts derived elsewhere (clowns / pending-rows etc.) */
-  clownCoverage?: { matched: number; total: number }
-  importErrorCount?: number
   /** Aggregate review readiness — approved / draft-only / missing per SKU. */
   readiness?: { total: number; approved: number; draftOnly: number; missing: number }
-  onSchemaClick: () => void
-  onReferencesClick: () => void
+  /** Opens the unified import dialog (workbook + clown references in
+   *  one place). Renders as a compact "+" button to the LEFT of the
+   *  Products card — schema and references used to be separate stages
+   *  but they're really the same preflight act. */
+  onImportClick: () => void
+  /** Opens the products library dialog — the "Products" stage at the
+   *  start of the pipeline is the gate that decides which product
+   *  you're working on. */
+  onProductsClick: () => void
   onGenerateClick: () => void
   onReviewClick: () => void
   onPreviewClick: () => void
@@ -69,21 +75,20 @@ interface Stage {
    * this to a clearer copy (e.g. "Incomplete" for partial clown coverage).
    */
   activeLabel?: string
+  /** When true, the stage card renders a small chevron-down indicator
+   *  in the top-right corner instead of a status badge to communicate
+   *  "this opens a picker, not an inline action". Used by the
+   *  products gate. */
+  isPicker?: boolean
+  /** When true, the stage renders as a compact icon-only button
+   *  instead of a full card. Used by the import "+" affordance to
+   *  the left of the Products card so it sits visually as an action,
+   *  not a step. */
+  compact?: boolean
 }
 
-function deriveStages(args: {
-  packet: CmfPacket | null
-  clownCoverage?: { matched: number; total: number }
-  importErrorCount?: number
-  readiness?: { total: number; approved: number; draftOnly: number; missing: number }
-  onSchemaClick: () => void
-  onReferencesClick: () => void
-  onGenerateClick: () => void
-  onReviewClick: () => void
-  onPreviewClick: () => void
-  onExportClick: () => void
-}): Stage[] {
-  const { packet, clownCoverage, importErrorCount = 0, readiness } = args
+function deriveStages(args: CmfPipelineHeaderProps): Stage[] {
+  const { packet, readiness } = args
   const renderCount = packet?.renders.length ?? 0
   const readyRenders = packet?.renders.filter((r) => r.status === 'ready').length ?? 0
   const renderingRenders =
@@ -91,20 +96,6 @@ function deriveStages(args: {
   const failedRenders = packet?.renders.filter((r) => r.status === 'failed').length ?? 0
   const totalAttempts =
     packet?.renders.reduce((sum, r) => sum + (r.renderAttempts?.length ?? 0), 0) ?? 0
-
-  const schemaStatus: StageStatus = !packet
-    ? 'pending'
-    : importErrorCount > 0
-    ? 'failed'
-    : 'ready'
-
-  const referencesStatus: StageStatus = !packet
-    ? 'pending'
-    : !clownCoverage || clownCoverage.total === 0
-    ? 'pending'
-    : clownCoverage.matched === clownCoverage.total
-    ? 'ready'
-    : 'active'
 
   const generateStatus: StageStatus = !packet
     ? 'pending'
@@ -146,52 +137,58 @@ function deriveStages(args: {
     ? 'active'
     : 'pending'
 
+  // Products gate. Conceptually the entry: pick which product you're
+  // working on. Resolves the active product's display name so the
+  // meta line doubles as a breadcrumb.
+  const activeSlug = packet?.renders?.[0]?.productSlug ?? null
+  const activeProductName = activeSlug
+    ? listCmfProducts().find((p) => p.slug === activeSlug)?.name?.replace(/^Loop\s+/, '') ?? activeSlug
+    : null
+  const productPacketCount = packet ? 1 : 0
+  const productsStatus: StageStatus = packet ? 'ready' : 'pending'
+  const productsMeta = packet
+    ? `${activeProductName ?? 'Active product'} · ${productPacketCount} packet`
+    : 'Pick a product to start'
+
   return [
     {
-      key: 'schema',
-      number: '01',
-      title: 'Schema',
-      hint: 'Workbook in',
-      meta: !packet
-        ? 'No workbook imported yet'
-        : importErrorCount > 0
-        ? `${renderCount} rows · ${importErrorCount} errors`
-        : `${renderCount} ${renderCount === 1 ? 'SKU' : 'SKUs'} parsed`,
-      status: schemaStatus,
-      icon: Database,
-      onClick: args.onSchemaClick,
+      key: 'import',
+      number: '',
+      title: 'Add',
+      hint: '',
+      meta: 'Drop a workbook (.xlsx) and the clown reference zips',
+      // Always "ready" so the + button doesn't pretend to be a step
+      // gated on prior progress — it's an action you can take any
+      // time. The status colors only matter for full cards anyway.
+      status: 'ready',
+      icon: Plus,
+      onClick: args.onImportClick,
+      compact: true,
     },
     {
-      key: 'references',
-      number: '02',
-      title: 'References',
-      hint: 'Clown library',
-      meta: !packet
-        ? 'Awaiting workbook'
-        : !clownCoverage
-        ? 'Resolving clown coverage…'
-        : clownCoverage.matched === clownCoverage.total
-        ? `${clownCoverage.matched}/${clownCoverage.total} matched`
-        : `${clownCoverage.matched}/${clownCoverage.total} matched · ${clownCoverage.total - clownCoverage.matched} need clowns`,
-      status: referencesStatus,
-      activeLabel: 'Incomplete',
-      icon: ImageIcon,
-      onClick: args.onReferencesClick,
-      disabled: !packet,
+      key: 'products',
+      number: '',
+      title: 'Product',
+      hint: '',
+      meta: productsMeta,
+      status: productsStatus,
+      icon: Library,
+      onClick: args.onProductsClick,
+      isPicker: true,
     },
     {
       key: 'generate',
-      number: '03',
+      number: '',
       title: 'Generate',
-      hint: 'Nano Banana bulk',
+      hint: '',
       meta: !packet
-        ? 'Awaiting workbook'
+        ? 'Awaiting product'
         : failedRenders > 0
         ? `${totalAttempts} attempts · ${failedRenders} failed`
         : renderingRenders > 0
         ? `${totalAttempts} attempts · ${renderingRenders} running`
         : totalAttempts === 0
-        ? 'Run a burst across all SKUs'
+        ? 'Run a bulk burst'
         : `${totalAttempts} ${totalAttempts === 1 ? 'attempt' : 'attempts'}`,
       status: generateStatus,
       icon: Wand2,
@@ -200,16 +197,14 @@ function deriveStages(args: {
     },
     {
       key: 'review',
-      number: '04',
+      number: '',
       title: 'Review',
-      hint: 'Approve / archive',
+      hint: '',
       meta: !packet
         ? 'Awaiting attempts'
         : reviewTotal === 0
         ? '—'
-        : `${reviewApproved}/${reviewTotal} approved${
-            (readiness?.missing ?? 0) > 0 ? ` · ${readiness?.missing} missing` : ''
-          }`,
+        : `${reviewApproved}/${reviewTotal} approved`,
       status: reviewStatus,
       activeLabel: 'Reviewing',
       icon: CheckCircle2,
@@ -218,15 +213,15 @@ function deriveStages(args: {
     },
     {
       key: 'preview',
-      number: '05',
+      number: '',
       title: 'Preview',
-      hint: 'HTML layout',
+      hint: '',
       meta: !packet
         ? 'Awaiting approvals'
         : reviewApproved === reviewTotal && reviewTotal > 0
-        ? 'Layout ready · click to open'
+        ? 'Layout ready'
         : reviewApproved > 0
-        ? `${reviewApproved} ready · ${reviewTotal - reviewApproved} pending`
+        ? `${reviewApproved} of ${reviewTotal} ready`
         : 'Approve a SKU first',
       status: previewStatus,
       activeLabel: 'Draft only',
@@ -236,13 +231,13 @@ function deriveStages(args: {
     },
     {
       key: 'export',
-      number: '06',
+      number: '',
       title: 'Export',
-      hint: 'Packet PDF',
+      hint: '',
       meta: !packet
         ? 'Awaiting renders'
         : packet.pdfUrl
-        ? 'PDF ready · click to open'
+        ? 'PDF ready'
         : packet.pdfError
         ? 'Export failed'
         : packet.status === 'rendering'
@@ -250,7 +245,7 @@ function deriveStages(args: {
         : reviewApproved === 0
         ? 'Approve a SKU first'
         : reviewApproved < reviewTotal
-        ? `${reviewApproved}/${reviewTotal} approved · DRAFT export available`
+        ? `${reviewApproved}/${reviewTotal} approved · draft`
         : 'Ready to export',
       status: exportStatus,
       icon: FileText,
@@ -260,7 +255,13 @@ function deriveStages(args: {
   ]
 }
 
-/* ─── Single stage card ─────────────────────────────────────────────────── */
+/* ─── Single stage card ─────────────────────────────────────────────────
+ *
+ * Larger format: number + icon header, title + hint, meta line, and
+ * a status badge in the corner. Tighter than the very first version
+ * (smaller padding, smaller icon block) but still readable at a glance
+ * — the slim one-line chips lost too much information density.
+ */
 
 function StageCard({ stage, index }: { stage: Stage; index: number }) {
   const Icon = stage.icon
@@ -269,106 +270,118 @@ function StageCard({ stage, index }: { stage: Stage; index: number }) {
   const isFailed = stage.status === 'failed'
   const isPending = stage.status === 'pending'
 
+  // Compact "+" affordance — sits to the LEFT of the Product card as
+  // the import action. Square button, icon only, dashed border so it
+  // reads as "an entry door" rather than a step. Tooltip carries
+  // the title + description.
+  if (stage.compact) {
+    return (
+      <button
+        type="button"
+        onClick={stage.onClick}
+        disabled={stage.disabled}
+        title={`${stage.title} — ${stage.meta}`}
+        className={cn(
+          'group flex flex-shrink-0 items-center justify-center self-stretch',
+          'aspect-square w-14 rounded-xl border border-dashed border-border/50',
+          'bg-card/10 text-muted-foreground transition-colors duration-200',
+          'hover:border-emerald-500/50 hover:bg-emerald-500/5 hover:text-emerald-700 dark:hover:text-emerald-300',
+          stage.disabled && 'cursor-not-allowed opacity-50 hover:border-border/50 hover:bg-card/10'
+        )}
+        data-stage={stage.key}
+        aria-label={stage.title}
+      >
+        <Icon className="h-5 w-5" />
+      </button>
+    )
+  }
+
+  // Picker (Product) is the gate that determines everything
+  // downstream — give it a distinct, always-on emerald treatment so
+  // it doesn't read as just another step. A leading vertical bar
+  // makes it visually heavier without making it taller.
   return (
     <button
       type="button"
       onClick={stage.onClick}
       disabled={stage.disabled}
-      style={{
-        animationDelay: `${index * 70}ms`,
-        ...(isReady || isActive
-          ? {
-              backgroundColor:
-                'color-mix(in oklch, hsl(var(--primary)) 6%, hsl(var(--card) / 0.4))',
-              borderColor:
-                'color-mix(in oklch, hsl(var(--primary)) 30%, hsl(var(--border) / 0.5))',
-            }
-          : isFailed
-          ? {
-              backgroundColor:
-                'color-mix(in oklch, hsl(var(--destructive)) 6%, hsl(var(--card) / 0.4))',
-              borderColor:
-                'color-mix(in oklch, hsl(var(--destructive)) 30%, hsl(var(--border) / 0.5))',
-            }
-          : {}),
-      }}
+      style={{ animationDelay: `${index * 70}ms` }}
       className={cn(
-        'group relative flex-1 min-w-[200px] text-left',
-        'rounded-xl border p-4 md:p-5',
-        'transition-all duration-300 ease-out',
-        'border-border/50 bg-card/30',
-        'hover:bg-card/60 hover:border-border/80',
-        stage.disabled && 'cursor-not-allowed opacity-60 hover:bg-card/30 hover:border-border/50',
+        'group relative flex-1 min-w-[170px] text-left overflow-hidden',
+        'rounded-xl border p-4',
+        'transition-colors duration-200',
+        // Picker has its own dedicated visual key (Loop emerald,
+        // always on) so it reads as the "you start here" gate.
+        stage.isPicker
+          ? 'border-emerald-500/40 bg-gradient-to-br from-emerald-500/[0.08] to-emerald-500/[0.02] hover:border-emerald-500/60 hover:from-emerald-500/[0.12]'
+          : [
+              isReady && 'border-emerald-500/25 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.08]',
+              isActive && 'border-amber-500/30 bg-amber-500/[0.05] hover:bg-amber-500/[0.09]',
+              isFailed && 'border-destructive/30 bg-destructive/[0.05] hover:bg-destructive/[0.09]',
+              isPending && 'border-border/40 bg-card/20 hover:border-border/70 hover:bg-card/40',
+            ],
+        stage.disabled && 'cursor-not-allowed opacity-50 hover:bg-card/20 hover:border-border/40',
         'cmf-stage-enter'
       )}
       data-stage={stage.key}
       data-status={stage.status}
     >
-      {/* Top row: number + icon + status pulse */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2.5">
-          <span className="font-mono text-[10px] font-medium tracking-widest text-muted-foreground/60">
-            {stage.number}
+      {/* Picker gets a leading vertical accent bar — adds visual
+          weight without making the card taller than its peers. */}
+      {stage.isPicker && (
+        <div
+          aria-hidden
+          className="absolute inset-y-0 left-0 w-0.5 bg-emerald-500/70"
+        />
+      )}
+
+      {/* Top row: icon + tone dot. No number, no eyebrow, no badge. */}
+      <div className="flex items-center gap-1.5">
+        <Icon
+          className={cn(
+            'h-4 w-4 flex-shrink-0',
+            stage.isPicker
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : isReady
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : isActive
+              ? 'text-amber-600 dark:text-amber-400'
+              : isFailed
+              ? 'text-destructive'
+              : 'text-muted-foreground/60'
+          )}
+        />
+        {isActive && !stage.isPicker && (
+          <Loader2 className="h-3 w-3 animate-spin text-amber-600 dark:text-amber-400" />
+        )}
+        {/* Picker eyebrow that names this card as the start of the
+            flow. Tiny, all-caps; doesn't compete with the title. */}
+        {stage.isPicker && (
+          <span className="ml-auto text-[9px] font-medium uppercase tracking-[0.18em] text-emerald-700/70 dark:text-emerald-400/70">
+            Start here
           </span>
-          <span
-            className={cn(
-              'inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors',
-              isReady && 'text-primary',
-              isActive && 'text-primary',
-              isFailed && 'text-destructive',
-              isPending && 'text-muted-foreground/70'
-            )}
-            style={
-              isReady || isActive
-                ? {
-                    backgroundColor:
-                      'color-mix(in oklch, hsl(var(--primary)) 14%, transparent)',
-                  }
-                : isFailed
-                ? {
-                    backgroundColor:
-                      'color-mix(in oklch, hsl(var(--destructive)) 14%, transparent)',
-                  }
-                : undefined
-            }
-          >
-            <Icon className="h-3.5 w-3.5" />
-          </span>
-        </div>
-        <StatusDot status={stage.status} activeLabel={stage.activeLabel} />
+        )}
       </div>
 
-      {/* Title + hint */}
-      <div className="mt-3 space-y-0.5">
-        <h3 className="text-base font-semibold tracking-tight leading-tight">
-          {stage.title}
-        </h3>
-        <p className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
-          {stage.hint}
-        </p>
-      </div>
+      {/* Title — picker chevron tucked next to it for the Product card. */}
+      <h3 className="mt-3 text-sm font-semibold tracking-tight leading-tight inline-flex items-center gap-1">
+        {stage.title}
+        {stage.isPicker && (
+          <ChevronDown className="h-3 w-3 opacity-60 transition-transform group-hover:translate-y-0.5" />
+        )}
+      </h3>
 
-      {/* Meta line: small but informative */}
+      {/* Meta — the single piece of state-bearing copy on the card. */}
       <p
         className={cn(
-          'mt-3 text-[12px] leading-snug',
-          isReady && 'text-primary/90',
-          isActive && 'text-amber-600 dark:text-amber-300',
-          isFailed && 'text-destructive',
-          isPending && 'text-muted-foreground/70'
+          'mt-1.5 text-[11px] leading-snug',
+          stage.isPicker
+            ? 'text-emerald-700/80 dark:text-emerald-300/80'
+            : 'text-muted-foreground'
         )}
       >
         {stage.meta}
       </p>
-
-      {/* Bottom hairline that lights up on hover */}
-      <div
-        aria-hidden
-        className={cn(
-          'absolute inset-x-4 bottom-3 h-px transition-colors',
-          isReady ? 'bg-primary/40' : isActive ? 'bg-amber-400/40' : 'bg-border/30'
-        )}
-      />
     </button>
   )
 }
@@ -389,10 +402,6 @@ function StatusDot({
     )
   }
   if (status === 'active') {
-    // Default to a spinner + "Working". When the active state actually
-    // represents "incomplete, waiting on input" the caller can override
-    // the label and we drop the spinner so the badge stops implying a
-    // background job is in flight.
     const label = activeLabel ?? 'Working'
     const isWorking = label === 'Working'
     return (
@@ -425,59 +434,31 @@ function StatusDot({
 /* ─── Connector between stages ──────────────────────────────────────────── */
 
 function StageConnector({ from, to }: { from: StageStatus; to: StageStatus }) {
-  // The connector "lights up" when the upstream stage is ready and the
-  // downstream is at least active. This gives a subtle data-flow cue.
+  // The connector "lights up" when the upstream stage is ready and
+  // the downstream has work going. Slim and quiet — the cards do
+  // most of the talking.
   const lit = (from === 'ready' || from === 'active') && to !== 'pending'
 
   return (
-    <div className="hidden md:flex flex-shrink-0 items-center px-1" aria-hidden>
-      <svg width="44" height="36" viewBox="0 0 44 36" className="overflow-visible">
-        <defs>
-          <linearGradient id="cmfConnectorLit" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.6" />
-            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.15" />
-          </linearGradient>
-          <linearGradient id="cmfConnectorIdle" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="hsl(var(--border))" stopOpacity="0.6" />
-            <stop offset="100%" stopColor="hsl(var(--border))" stopOpacity="0.2" />
-          </linearGradient>
-        </defs>
-        {/* Dotted base line — always present */}
+    <div
+      className="hidden md:flex flex-shrink-0 items-center -mx-1"
+      aria-hidden
+    >
+      <svg width="20" height="32" viewBox="0 0 20 32" className="overflow-visible">
         <line
           x1="2"
-          y1="18"
-          x2="42"
-          y2="18"
-          stroke={lit ? 'url(#cmfConnectorLit)' : 'url(#cmfConnectorIdle)'}
-          strokeWidth="1.25"
+          y1="16"
+          x2="18"
+          y2="16"
+          stroke={
+            lit
+              ? 'color-mix(in oklch, hsl(var(--primary)) 55%, transparent)'
+              : 'color-mix(in oklch, hsl(var(--border)) 55%, transparent)'
+          }
+          strokeWidth="1"
           strokeDasharray={lit ? '0' : '2 3'}
           strokeLinecap="round"
         />
-        {/* Direction caret */}
-        <path
-          d={`M 36 14 L 42 18 L 36 22`}
-          fill="none"
-          stroke={lit ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
-          strokeWidth="1.25"
-          strokeLinecap="round"
-          strokeOpacity={lit ? '0.7' : '0.5'}
-        />
-        {/* Animated traveler dot when the connector is lit */}
-        {lit && (
-          <circle r="1.5" fill="hsl(var(--primary))">
-            <animateMotion
-              dur="2.4s"
-              repeatCount="indefinite"
-              path="M 4 18 L 40 18"
-            />
-            <animate
-              attributeName="opacity"
-              values="0;1;1;0"
-              dur="2.4s"
-              repeatCount="indefinite"
-            />
-          </circle>
-        )}
       </svg>
     </div>
   )
@@ -491,21 +472,38 @@ export function CmfPipelineHeader(props: CmfPipelineHeaderProps) {
   return (
     <section
       aria-label="CMF pipeline"
-      className="rounded-2xl border border-border/50 bg-card/30 backdrop-blur-sm p-4 md:p-5"
-      style={{
-        backgroundImage:
-          'radial-gradient(60% 90% at 0% 0%, color-mix(in oklch, hsl(var(--primary)) 8%, transparent), transparent 60%)',
-      }}
+      // Outer wrapper kept intentionally light: no border, no bg,
+      // no radial wash. The cards already carry their own borders;
+      // wrapping them in another bordered box was double-chroming.
+      // Spacing does the grouping work instead.
+      className="-mx-1 px-1"
     >
-      <div className="flex items-stretch gap-2 overflow-x-auto md:overflow-visible -mx-1 px-1 pb-1">
-        {stages.map((stage, idx) => (
-          <div key={stage.key} className="flex items-stretch min-w-0">
-            <StageCard stage={stage} index={idx} />
-            {idx < stages.length - 1 && (
-              <StageConnector from={stage.status} to={stages[idx + 1].status} />
-            )}
-          </div>
-        ))}
+      <div className="flex items-stretch gap-3 md:gap-4 overflow-x-auto md:overflow-visible">
+        {stages.map((stage, idx) => {
+          const next = stages[idx + 1]
+          // No connector after the compact "+" button (it's an
+          // action, not a step in the flow), and we want extra
+          // breathing room between the + and the Product card so
+          // they don't read as crammed.
+          const showConnector = next && !stage.compact
+          return (
+            <div
+              key={stage.key}
+              className={cn(
+                'flex items-stretch min-w-0',
+                // Push the next card away when this one is the
+                // compact "+" — gives the action button room to
+                // breathe without inheriting the step rhythm.
+                stage.compact && 'mr-1'
+              )}
+            >
+              <StageCard stage={stage} index={idx} />
+              {showConnector && (
+                <StageConnector from={stage.status} to={next.status} />
+              )}
+            </div>
+          )
+        })}
       </div>
     </section>
   )

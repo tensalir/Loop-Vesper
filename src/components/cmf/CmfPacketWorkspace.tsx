@@ -23,6 +23,7 @@ import {
   CmfPacket,
   useCmfClowns,
   useCmfPacket,
+  useCmfPackets,
   useGenerateCmfPdf,
   useBulkGenerateCmfPacket,
 } from '@/hooks/useCmf'
@@ -30,10 +31,9 @@ import { clownCoverageForPacket } from '@/lib/cmf/coverage'
 import { Button } from '@/components/ui/button'
 import { CmfAttemptGallery } from './CmfAttemptGallery'
 import { CmfPipelineHeader } from './CmfPipelineHeader'
-import { CmfPacketSelector } from './CmfPacketSelector'
+import { CmfProductsDialog } from './CmfProductsDialog'
 import { CmfImportDialog } from './CmfImportDialog'
 import { CmfClownLibraryDialog } from './CmfClownLibraryDialog'
-import { CmfClownLibraryPill } from './CmfClownLibraryPill'
 import { CmfMembersDialog } from './CmfMembersDialog'
 import { CmfPresenceStack } from './CmfPresenceStack'
 import { CmfActivityDrawer } from './CmfActivityDrawer'
@@ -80,10 +80,15 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
   const [clownFocusSlug, setClownFocusSlug] = useState<string | null>(null)
   const [membersOpen, setMembersOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [productsOpen, setProductsOpen] = useState(false)
   const [bulkRunning, setBulkRunning] = useState(false)
 
   const { data: packet, isLoading } = useCmfPacket(activePacketId)
   const { data: clowns } = useCmfClowns()
+  // The product strip + library both consume the full packet list.
+  // Loaded once at the workspace level so the strip never re-fetches
+  // when you swap between packets within the same product.
+  const { data: allPackets } = useCmfPackets()
   const bulkGenerate = useBulkGenerateCmfPacket()
   const generatePdf = useGenerateCmfPdf()
   const { toast } = useToast()
@@ -112,9 +117,6 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
     () => clownCoverageForPacket(packet ?? null, clowns ?? null),
     [packet, clowns]
   )
-  const clownCoverage = packet && clowns
-    ? { matched: clownCoverageFull.matched, total: clownCoverageFull.total }
-    : undefined
 
   async function handleBulkGenerate(attemptsPerSku = 3) {
     if (!packet) return
@@ -163,14 +165,6 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
   }
 
   // Stage handlers feed into the pipeline header.
-  const handleSchemaClick = () => setImportOpen(true)
-  const handleReferencesClick = () => {
-    // If the active packet is blocked on missing clowns, open the library
-    // pre-focused on the first slug that needs one so the upload form is
-    // already pointing at the right product.
-    setClownFocusSlug(clownCoverageFull.missingSlugs[0] ?? null)
-    setClownOpen(true)
-  }
   const handleUploadForSlug = (slug: string) => {
     setClownFocusSlug(slug)
     setClownOpen(true)
@@ -207,56 +201,48 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
           to the viewport edges (the parent `<main>` has px-4 / md:px-8),
           a backdrop blur keeps the gallery legible through it, and z-30
           sits below the floating Navbar pill (z-50). */}
-      <div className="sticky top-16 z-30 -mx-4 md:-mx-8 px-4 md:px-8 py-4 bg-background/85 backdrop-blur-md border-b border-border/40 space-y-4">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
-              Loop · Product · CMF
-            </p>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">CMF Studio</h1>
-            <p className="text-xs text-muted-foreground max-w-xl leading-relaxed">
-              Workbook in. Nano Banana bulk. Approve, preview, export.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <CmfPacketSelector
-              activePacketId={activePacketId}
-              onSelect={setActivePacketId}
-              onRenderFocus={(pid, renderId) => {
-                // Defer the scroll/pulse until after React has mounted
-                // the gallery for the (possibly newly active) packet.
-                setActivePacketId(pid)
-                requestAnimationFrame(() => {
-                  const node = document.getElementById(`cmf-render-${renderId}`)
-                  if (node) {
-                    node.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                    node.classList.add('cmf-focus-pulse')
-                    setTimeout(() => node.classList.remove('cmf-focus-pulse'), 2400)
-                  }
-                })
-              }}
-            />
-            <CmfClownLibraryPill onClick={() => setClownOpen(true)} />
-            {activePacketId && (
-              <>
-                <CmfPresenceStack
-                  packetId={activePacketId}
-                  onClick={() => setMembersOpen(true)}
-                />
-                <CmfActivityDrawer packetId={activePacketId} />
-              </>
-            )}
-          </div>
+      {/* Sticky control bar.
+          - `top-0` + `-mt-24 pt-20` makes the bar extend from the
+            viewport top down. Without this, the floating Navbar's
+            64-96px reserved area was transparent and SKU thumbs ghosted
+            through it as the gallery scrolled.
+          - Solid `bg-background` (no alpha, no backdrop-blur) — the
+            gallery is too visually busy for a frosted-glass treatment
+            to read cleanly.
+          - The floating Navbar pill (z-50) and top-right utility
+            buttons (z-40) still draw on top because their z-index is
+            higher than this bar's z-30. */}
+      <div className="sticky top-0 z-30 -mx-4 md:-mx-8 -mt-24 px-4 md:px-8 pt-20 pb-4 bg-background border-b border-border/40 space-y-4 shadow-[0_8px_16px_-12px_rgba(0,0,0,0.25)]">
+        {/* Header row — single line.
+            Eyebrow on the left, packet-scoped utilities (members,
+            history) on the right. The Products entry now lives at
+            the start of the pipeline as stage 00, so we don't
+            duplicate it up here. */}
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+            Loop · Product · CMF
+          </p>
+          {activePacketId && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <CmfPresenceStack
+                packetId={activePacketId}
+                onClick={() => setMembersOpen(true)}
+              />
+              <CmfActivityDrawer packetId={activePacketId} />
+            </div>
+          )}
         </header>
 
+        {/* Pipeline — always visible so the "+" import affordance
+            and the Products gate are reachable even before a packet
+            is selected. The remaining stages (Generate / Review /
+            Preview / Export) render in their pending state until a
+            product → packet is picked. */}
         <CmfPipelineHeader
           packet={packet ?? null}
-          clownCoverage={clownCoverage}
-          importErrorCount={0}
           readiness={readiness}
-          onSchemaClick={handleSchemaClick}
-          onReferencesClick={handleReferencesClick}
+          onImportClick={() => setImportOpen(true)}
+          onProductsClick={() => setProductsOpen(true)}
           onGenerateClick={handleGenerateClick}
           onReviewClick={handleReviewClick}
           onPreviewClick={handlePreviewClick}
@@ -358,7 +344,7 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
           collide visually. */}
       <div className="pt-6 space-y-6 pb-12">
         {!activePacketId ? (
-          <EmptyState onImportClick={() => setImportOpen(true)} />
+          <EmptyState onImportClick={() => setImportOpen(true)} canWrite={canWrite} />
         ) : isLoading || !packet ? (
           <div className="rounded-2xl border border-border/50 bg-card/30 p-12 flex items-center justify-center text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -459,6 +445,13 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
         onExport={(allowDraft) => handleGeneratePdf(allowDraft)}
         exporting={generatePdf.isPending}
       />
+      <CmfProductsDialog
+        open={productsOpen}
+        onOpenChange={setProductsOpen}
+        packets={allPackets}
+        clowns={clowns}
+        onSelectPacket={(id) => setActivePacketId(id)}
+      />
     </div>
   )
 }
@@ -487,7 +480,19 @@ function summarisePacketReadiness(packet: CmfPacket | null | undefined) {
   return { total: packet.renders.length, approved, draftOnly, missing }
 }
 
-function EmptyState({ onImportClick }: { onImportClick: () => void }) {
+/**
+ * Empty state shown when no packet is active. Intentionally minimal:
+ * the product strip above already lists every product, so the body is
+ * just a quiet prompt to import. We pass `canWrite` so the CTA gracefully
+ * downgrades to a read-only line when the caller can't import.
+ */
+function EmptyState({
+  onImportClick,
+  canWrite,
+}: {
+  onImportClick: () => void
+  canWrite: boolean
+}) {
   return (
     <div
       className="relative overflow-hidden rounded-2xl border border-dashed border-border/50 bg-card/20 p-10 md:p-14"
@@ -498,22 +503,28 @@ function EmptyState({ onImportClick }: { onImportClick: () => void }) {
     >
       <div className="max-w-2xl mx-auto text-center space-y-6">
         <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground/70">
-          Start a packet
+          Pick a product above, or start a packet
         </p>
         <h2 className="text-2xl md:text-3xl font-semibold tracking-tight">
           A workbook in. A packet PDF out.
         </h2>
         <p className="text-sm text-muted-foreground leading-relaxed max-w-md mx-auto">
           Drop your CMF schema and Vesper takes it from there: bulk
-          recolour per SKU, approve the best attempts, preview the layout,
-          export the packet.
+          recolour per SKU, approve the best attempts, preview the
+          layout, export the packet.
         </p>
-        <div className="flex items-center justify-center gap-2 pt-2">
-          <Button onClick={onImportClick} className="gap-2">
-            <Database className="h-4 w-4" />
-            Import workbook
-          </Button>
-        </div>
+        {canWrite ? (
+          <div className="flex items-center justify-center gap-2 pt-2">
+            <Button onClick={onImportClick} className="gap-2">
+              <Database className="h-4 w-4" />
+              Import workbook
+            </Button>
+          </div>
+        ) : (
+          <p className="text-xs italic text-muted-foreground/70">
+            Read-only — ask an admin for CMF write access to import a workbook.
+          </p>
+        )}
       </div>
     </div>
   )
