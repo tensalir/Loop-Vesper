@@ -81,7 +81,10 @@ export function refinementReferenceStoragePath(args: {
 }
 
 /**
- * Derive a public URL for a path inside the CMF storage bucket.
+ * Derive a public URL for a path inside the CMF storage bucket — lenient
+ * variant. Returns `''` when `NEXT_PUBLIC_SUPABASE_URL` isn't set so
+ * client-side render paths can degrade gracefully (no broken `<img>`
+ * `src=""` warnings; callers branch on truthiness instead).
  *
  * The bucket is fronted by Supabase's public storage endpoint
  * (`{SUPABASE_URL}/storage/v1/object/public/{bucket}/{path}`), so
@@ -89,20 +92,33 @@ export function refinementReferenceStoragePath(args: {
  * — handy on the server side of the render pipeline where we already
  * hold the path and just need bytes.
  *
- * Used by the render service to resolve refinement-reference paths
- * stored on `CmfRenderAttempt.referenceImagePaths` back into
- * downloadable URLs. Strict — throws if the env isn't configured so
- * an upstream caller can fail fast instead of silently passing the
- * model an empty string.
+ * Use the strict `publicUrlForCmfStoragePath` below when you want a
+ * fail-fast contract (server pipelines, anything that would silently
+ * 404 with an empty URL). Use this version when a missing env is
+ * recoverable (the gallery's reference thumbnails — they degrade to
+ * placeholder when the URL can't be built).
+ */
+export function publicUrlForCmfStoragePathOrEmpty(path: string): string {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) return ''
+  return `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/${CMF_STORAGE_BUCKET}/${path}`
+}
+
+/**
+ * Strict variant — throws if the env isn't configured so an upstream
+ * caller can fail fast instead of silently passing the model an empty
+ * string. Used by the render service to resolve refinement-reference
+ * paths stored on `CmfRenderAttempt.referenceImagePaths` back into
+ * downloadable URLs.
  */
 export function publicUrlForCmfStoragePath(path: string): string {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!supabaseUrl) {
+  const url = publicUrlForCmfStoragePathOrEmpty(path)
+  if (!url) {
     throw new Error(
       'NEXT_PUBLIC_SUPABASE_URL is not set; cannot resolve CMF storage path to a public URL.'
     )
   }
-  return `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/${CMF_STORAGE_BUCKET}/${path}`
+  return url
 }
 
 export function safeFileSlug(input: string): string {

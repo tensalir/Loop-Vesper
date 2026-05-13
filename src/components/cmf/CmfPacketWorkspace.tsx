@@ -28,6 +28,7 @@ import {
   useBulkGenerateCmfPacket,
 } from '@/hooks/useCmf'
 import { clownCoverageForPacket } from '@/lib/cmf/coverage'
+import { timeAgo } from '@/lib/cmf/format'
 import { listCmfProducts } from '@/lib/cmf/products'
 import { Button } from '@/components/ui/button'
 import { CmfAttemptGallery } from './CmfAttemptGallery'
@@ -581,28 +582,6 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
 }
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
-
-/**
- * Compact relative-time string for the identity strip's "edited 2m ago"
- * line. Mirrors the equivalent helper in `CmfProductsDialog.tsx` —
- * intentionally not extracted to a shared module yet because the rules
- * (rounding, thresholds) are still iterating; if we add a third caller
- * we'll consolidate then.
- */
-function timeAgo(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const ms = Date.now() - new Date(iso).getTime()
-  if (!Number.isFinite(ms) || ms < 0) return ''
-  const mins = Math.round(ms / 60_000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.round(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.round(hrs / 24)
-  if (days < 30) return `${days}d ago`
-  const months = Math.round(days / 30)
-  return `${months}mo ago`
-}
 
 function summarisePacketReadiness(packet: CmfPacket | null | undefined) {
   if (!packet) return { total: 0, approved: 0, draftOnly: 0, missing: 0 }

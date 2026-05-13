@@ -30,6 +30,7 @@ import {
 } from '@/hooks/useCmf'
 import { useCmfPermissions } from '@/hooks/useCmfPermissions'
 import { selectPromptVariant } from '@/lib/cmf/prompt'
+import { publicUrlForCmfStoragePathOrEmpty } from '@/lib/cmf/storage'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
 import {
@@ -52,16 +53,6 @@ import { cn } from '@/lib/utils'
 /** Phase 2 cap mirrored from the upload route. Drives both the drop
  *  zone "X / 4" counter and the disabled state when the limit is hit. */
 const MAX_REFINEMENT_REFERENCES = 4
-/** Storage path → public URL helper used by the lightbox to render
- *  refinement references on attempts that already have paths
- *  persisted (vs. the live drop-zone state that already holds urls).
- *  Mirrors `publicUrlForCmfStoragePath` on the server: same bucket
- *  name, same path layout, no signing because the bucket is public. */
-function publicUrlForCmfPath(path: string): string {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!supabaseUrl) return ''
-  return `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/generated-images/${path}`
-}
 
 interface CmfAttemptGalleryProps {
   render: CmfRender
@@ -1090,7 +1081,7 @@ function InspectLightbox({
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {attempt.referenceImagePaths.map((path, i) => {
-                      const url = publicUrlForCmfPath(path)
+                      const url = publicUrlForCmfStoragePathOrEmpty(path)
                       return (
                         <a
                           key={path}

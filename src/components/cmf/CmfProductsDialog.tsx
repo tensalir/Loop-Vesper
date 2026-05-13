@@ -48,8 +48,14 @@ import { useDeleteCmfPacket, type CmfClownAsset, type CmfPacket } from '@/hooks/
 import { useToast } from '@/components/ui/use-toast'
 import { useCmfPermissions } from '@/hooks/useCmfPermissions'
 import { getComponentLabel } from '@/lib/cmf/products'
+import { timeAgo } from '@/lib/cmf/format'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import {
+  CmfStatusBadge,
+  CmfStatusDot,
+  type CmfStatusTone,
+} from './CmfStatusBadge'
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -95,28 +101,39 @@ const CATEGORY_LABEL: Record<ProductSummary['category'], string> = {
   other: 'Uncatalogued',
 }
 
-type Tone = 'ready' | 'partial' | 'blocked' | 'empty'
-
-function productTone(summary: ProductSummary): Tone {
+/**
+ * Coverage-driven tone for a product summary. Drives both the rail dot
+ * and the per-product status badge in the right pane. Maps directly to
+ * the `CmfStatusTone` vocabulary so the badge primitive can render it
+ * without an additional translation layer.
+ */
+function productTone(summary: ProductSummary): CmfStatusTone {
   if (summary.coverage.total === 0) return 'empty'
   if (summary.coverage.blocked === 0) return 'ready'
   if (summary.coverage.matched > 0) return 'partial'
   return 'blocked'
 }
 
-function timeAgo(iso: string | null): string | null {
-  if (!iso) return null
-  const ms = Date.now() - new Date(iso).getTime()
-  if (!Number.isFinite(ms) || ms < 0) return null
-  const mins = Math.round(ms / 60_000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.round(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.round(hrs / 24)
-  if (days < 30) return `${days}d ago`
-  const months = Math.round(days / 30)
-  return `${months}mo ago`
+const PRODUCT_TONE_LABEL: Record<CmfStatusTone, string> = {
+  ready: 'Ready',
+  partial: 'Partial',
+  blocked: 'Needs clowns',
+  empty: 'Empty',
+  rendering: 'Rendering',
+  failed: 'Failed',
+  draft: 'Draft',
+}
+
+/**
+ * Map a `CmfPacket.status` string ("draft" | "rendering" | "ready" |
+ * "failed") to the shared tone vocabulary. Centralised so the per-packet
+ * badge in the workbook tab and any future status surface stay aligned.
+ */
+function packetStatusTone(status: string): CmfStatusTone {
+  if (status === 'ready') return 'ready'
+  if (status === 'rendering') return 'rendering'
+  if (status === 'failed') return 'failed'
+  return 'draft'
 }
 
 export function CmfProductsDialog({
@@ -260,16 +277,7 @@ export function CmfProductsDialog({
                           : 'hover:bg-muted/40 text-foreground'
                       )}
                     >
-                      <span
-                        aria-hidden
-                        className={cn(
-                          'h-2 w-2 rounded-full flex-shrink-0',
-                          tone === 'ready' && 'bg-emerald-500',
-                          tone === 'partial' && 'bg-amber-500',
-                          tone === 'blocked' && 'bg-rose-500',
-                          tone === 'empty' && 'bg-muted-foreground/30'
-                        )}
-                      />
+                      <CmfStatusDot tone={tone} />
                       {isCase && (
                         <Briefcase className="h-3 w-3 flex-shrink-0 opacity-60" />
                       )}
@@ -465,29 +473,11 @@ function ProductOverview({
             <h2 className="text-xl font-semibold tracking-tight">
               {summary.displayName}
             </h2>
-            <span
-              className={cn(
-                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider',
-                tone === 'ready' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-                tone === 'partial' && 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-                tone === 'blocked' && 'bg-rose-500/15 text-rose-700 dark:text-rose-300',
-                tone === 'empty' && 'bg-muted/30 text-muted-foreground'
-              )}
-            >
-              <span
-                className={cn(
-                  'h-1.5 w-1.5 rounded-full',
-                  tone === 'ready' && 'bg-emerald-500',
-                  tone === 'partial' && 'bg-amber-500',
-                  tone === 'blocked' && 'bg-rose-500',
-                  tone === 'empty' && 'bg-muted-foreground/40'
-                )}
-              />
-              {tone === 'ready' && 'Ready'}
-              {tone === 'partial' && 'Partial'}
-              {tone === 'blocked' && 'Needs clowns'}
-              {tone === 'empty' && 'Empty'}
-            </span>
+            <CmfStatusBadge
+              tone={tone}
+              label={PRODUCT_TONE_LABEL[tone]}
+              className="text-[10px] px-2 py-0.5"
+            />
           </div>
         </div>
         {summary.mostRecentPacketId && (
@@ -707,20 +697,11 @@ function WorkbookTab({
                   <span className="truncate text-sm font-semibold">
                     {packet.cmfCode || packet.name}
                   </span>
-                  <span
-                    className={cn(
-                      'inline-flex items-center rounded-full px-1.5 py-0 text-[9px] font-medium uppercase tracking-wider',
-                      packet.status === 'ready'
-                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                        : packet.status === 'rendering'
-                        ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200'
-                        : packet.status === 'failed'
-                        ? 'bg-destructive/15 text-destructive'
-                        : 'bg-muted text-muted-foreground'
-                    )}
-                  >
-                    {packet.status}
-                  </span>
+                  <CmfStatusBadge
+                    tone={packetStatusTone(packet.status)}
+                    label={packet.status}
+                    className="px-1.5 py-0"
+                  />
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
                   {packet.cmfCode ? packet.name : '—'}
