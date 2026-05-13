@@ -69,9 +69,23 @@ export function CmfImportDialog({
             subtitle="CMF schema (.xlsx) — required to create or merge a packet"
           >
             <CmfImportPanel
-              onPacketCreated={(id) => {
+              // Two distinct hand-off paths:
+              //
+              //   - `auto`: fired right after a successful import so the
+              //     workspace silently swaps to the new primary packet.
+              //     We do NOT close the dialog here — the designer needs
+              //     to see the "where did it go?" summary, and the
+              //     auto-switch only sets up the destination so closing
+              //     manually lands them on the right packet without an
+              //     extra navigation step.
+              //
+              //   - `explicit`: fired when the designer clicks a packet
+              //     name or the "Open packet" CTA inside the success
+              //     summary. That's a deliberate handoff, so we close
+              //     the dialog so they can see the gallery underneath.
+              onPacketCreated={(id, source) => {
                 onPacketCreated?.(id)
-                onOpenChange(false)
+                if (source === 'explicit') onOpenChange(false)
               }}
               onRenderFocus={(packetId, renderId) => {
                 onRenderFocus?.(packetId, renderId)

@@ -29,12 +29,24 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   summariseProductLibrary,
   type ProductSummary,
 } from '@/lib/cmf/product-summary'
-import type { CmfClownAsset, CmfPacket } from '@/hooks/useCmf'
+import { useDeleteCmfPacket, type CmfClownAsset, type CmfPacket } from '@/hooks/useCmf'
+import { useToast } from '@/components/ui/use-toast'
+import { useCmfPermissions } from '@/hooks/useCmfPermissions'
 import { getComponentLabel } from '@/lib/cmf/products'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -47,6 +59,8 @@ import {
   FileText,
   ImageOff,
   Library,
+  Loader2,
+  Trash2,
   Upload,
 } from 'lucide-react'
 
@@ -68,6 +82,10 @@ interface CmfProductsDialogProps {
    *  clown library with the upload form already pointing at the
    *  selected product. */
   onUpdateReferences: (productSlug: string) => void
+  /** Fired after the user confirms deletion of a packet. The
+   *  workspace uses this to clear `activePacketId` if the deleted
+   *  packet was the one currently open. */
+  onPacketDeleted?: (packetId: string) => void
 }
 
 const CATEGORY_LABEL: Record<ProductSummary['category'], string> = {
@@ -109,12 +127,26 @@ export function CmfProductsDialog({
   onSelectPacket,
   onImport,
   onUpdateReferences,
+  onPacketDeleted,
 }: CmfProductsDialogProps) {
   const rollup = useMemo(
     () => summariseProductLibrary({ packets, clowns }),
     [packets, clowns]
   )
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
+  // Pending delete target — when set, the AlertDialog renders the
+  // confirmation prompt against this packet. Tracked at the dialog
+  // level (not the WorkbookTab) so the prompt overlays the products
+  // dialog cleanly and survives re-renders of the inner tab.
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string
+    name: string
+    cmfCode: string | null
+    skuCount: number
+  } | null>(null)
+  const deleteMutation = useDeleteCmfPacket()
+  const { toast } = useToast()
+  const { canWrite } = useCmfPermissions()
 
   // Default selection: first product with packets so the dialog opens
   // on something worth reading. Re-derive when the dialog is reopened.
@@ -269,6 +301,7 @@ export function CmfProductsDialog({
               <ProductOverview
                 summary={selected}
                 allClowns={clowns ?? []}
+                canWrite={canWrite}
                 onSelectPacket={(id) => {
                   onSelectPacket(id)
                   onOpenChange(false)
@@ -281,6 +314,14 @@ export function CmfProductsDialog({
                   onOpenChange(false)
                   onUpdateReferences(selected.productSlug)
                 }}
+                onRequestDelete={(packet) =>
+                  setDeleteTarget({
+                    id: packet.id,
+                    name: packet.cmfCode || packet.name,
+                    cmfCode: packet.cmfCode,
+                    skuCount: packet.renders.length,
+                  })
+                }
               />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -291,6 +332,77 @@ export function CmfProductsDialog({
         </div>
 
       </DialogContent>
+
+      {/* Confirmation prompt — destructive operations should require
+          a deliberate "yes". The copy spells out exactly what will
+          be lost (SKU count, attempts, renders) so a designer
+          doesn't nuke a packet they meant to keep. */}
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(next) => {
+          if (!next && !deleteMutation.isPending) setDeleteTarget(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-4 w-4 text-destructive" />
+              Delete packet?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                <span className="font-semibold text-foreground">
+                  {deleteTarget?.name ?? ''}
+                </span>{' '}
+                — {deleteTarget?.skuCount ?? 0}{' '}
+                {deleteTarget?.skuCount === 1 ? 'SKU' : 'SKUs'} and every
+                attempt, approval, and exported PDF tied to this packet.
+              </span>
+              <span className="block text-destructive">
+                This cannot be undone.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteMutation.isPending}
+              onClick={async (event) => {
+                // Stop Radix from auto-closing — we need the prompt to
+                // stay up while the network call runs so the spinner
+                // is visible and the user can't double-fire.
+                event.preventDefault()
+                if (!deleteTarget) return
+                try {
+                  await deleteMutation.mutateAsync({
+                    packetId: deleteTarget.id,
+                  })
+                  toast({
+                    title: 'Packet deleted',
+                    description: `${deleteTarget.name} removed from the library.`,
+                  })
+                  onPacketDeleted?.(deleteTarget.id)
+                  setDeleteTarget(null)
+                } catch (err) {
+                  const message =
+                    err instanceof Error ? err.message : 'Delete failed'
+                  toast({ title: 'Delete failed', description: message })
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Delete packet
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }
@@ -300,15 +412,19 @@ export function CmfProductsDialog({
 function ProductOverview({
   summary,
   allClowns,
+  canWrite,
   onSelectPacket,
   onImport,
   onUpdateReferences,
+  onRequestDelete,
 }: {
   summary: ProductSummary
   allClowns: CmfClownAsset[]
+  canWrite: boolean
   onSelectPacket: (packetId: string) => void
   onImport: () => void
   onUpdateReferences: () => void
+  onRequestDelete: (packet: ProductSummary['packets'][number]) => void
 }) {
   const tone = productTone(summary)
   const productClowns = useMemo(
@@ -467,8 +583,10 @@ function ProductOverview({
         <TabsContent value="workbook" className="mt-4">
           <WorkbookTab
             summary={summary}
+            canWrite={canWrite}
             onSelectPacket={onSelectPacket}
             onImport={onImport}
+            onRequestDelete={onRequestDelete}
           />
         </TabsContent>
 
@@ -503,12 +621,16 @@ function ProductOverview({
  */
 function WorkbookTab({
   summary,
+  canWrite,
   onSelectPacket,
   onImport,
+  onRequestDelete,
 }: {
   summary: ProductSummary
+  canWrite: boolean
   onSelectPacket: (packetId: string) => void
   onImport: () => void
+  onRequestDelete: (packet: ProductSummary['packets'][number]) => void
 }) {
   const sortedPackets = useMemo(
     () =>
@@ -567,52 +689,72 @@ function WorkbookTab({
           key={packet.id}
           className="rounded-xl border border-border/40 bg-card/20 overflow-hidden"
         >
-          {/* Packet header — same click semantics as the old per-row
-              button: clicking opens this specific packet in the
-              workspace and closes the dialog. */}
-          <button
-            type="button"
-            onClick={() => onSelectPacket(packet.id)}
-            className="group flex w-full items-center justify-between gap-3 border-b border-border/40 bg-muted/10 px-4 py-3 text-left hover:bg-muted/20 transition-colors"
-          >
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="truncate text-sm font-semibold">
-                  {packet.cmfCode || packet.name}
-                </span>
-                <span
-                  className={cn(
-                    'inline-flex items-center rounded-full px-1.5 py-0 text-[9px] font-medium uppercase tracking-wider',
-                    packet.status === 'ready'
-                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                      : packet.status === 'rendering'
-                      ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200'
-                      : packet.status === 'failed'
-                      ? 'bg-destructive/15 text-destructive'
-                      : 'bg-muted text-muted-foreground'
+          {/* Packet header — split into a primary "open" click region
+              and a discrete delete control on the right. The delete
+              button can't be nested inside the open button (HTML
+              forbids button-in-button), so we render them as
+              siblings inside a flex row instead. The header still
+              reads as "click anywhere to open" because the open
+              region fills the available space. */}
+          <header className="group flex items-center gap-1 border-b border-border/40 bg-muted/10 transition-colors hover:bg-muted/20">
+            <button
+              type="button"
+              onClick={() => onSelectPacket(packet.id)}
+              className="flex flex-1 min-w-0 items-center justify-between gap-3 px-4 py-3 text-left"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="truncate text-sm font-semibold">
+                    {packet.cmfCode || packet.name}
+                  </span>
+                  <span
+                    className={cn(
+                      'inline-flex items-center rounded-full px-1.5 py-0 text-[9px] font-medium uppercase tracking-wider',
+                      packet.status === 'ready'
+                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                        : packet.status === 'rendering'
+                        ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200'
+                        : packet.status === 'failed'
+                        ? 'bg-destructive/15 text-destructive'
+                        : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {packet.status}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {packet.cmfCode ? packet.name : '—'}
+                  <span className="mx-1.5 text-muted-foreground/40">·</span>
+                  {packet.renders.length}{' '}
+                  {packet.renders.length === 1 ? 'SKU' : 'SKUs'}
+                  {packet.updatedAt && (
+                    <>
+                      <span className="mx-1.5 text-muted-foreground/40">·</span>
+                      edited {timeAgo(packet.updatedAt)}
+                    </>
                   )}
-                >
-                  {packet.status}
-                </span>
+                </p>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                {packet.cmfCode ? packet.name : '—'}
-                <span className="mx-1.5 text-muted-foreground/40">·</span>
-                {packet.renders.length}{' '}
-                {packet.renders.length === 1 ? 'SKU' : 'SKUs'}
-                {packet.updatedAt && (
-                  <>
-                    <span className="mx-1.5 text-muted-foreground/40">·</span>
-                    edited {timeAgo(packet.updatedAt)}
-                  </>
-                )}
-              </p>
-            </div>
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground/60 group-hover:text-primary transition-colors">
-              Open
-              <ArrowUpRight className="h-3 w-3" />
-            </span>
-          </button>
+              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground/60 group-hover:text-primary transition-colors flex-shrink-0">
+                Open
+                <ArrowUpRight className="h-3 w-3" />
+              </span>
+            </button>
+            {canWrite && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRequestDelete(packet)
+                }}
+                aria-label={`Delete packet ${packet.cmfCode || packet.name}`}
+                title="Delete packet"
+                className="mr-2 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive transition-colors"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </header>
 
           {/* SKU rows — one card per render. The components grid is
               the actual parsed Excel content; the thumbnail is the

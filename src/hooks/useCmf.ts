@@ -547,6 +547,33 @@ export function useCmfAttemptAction() {
   })
 }
 
+/**
+ * Delete a packet permanently. The server scopes deletion to admins
+ * and the original owner; non-owners get a 403 toast surfaced to the
+ * caller. On success we invalidate both the per-packet and the
+ * packet-list queries so the Products dialog and the workspace strip
+ * both drop the row immediately.
+ */
+export function useDeleteCmfPacket() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: { packetId: string }): Promise<{ ok: true }> => {
+      const res = await fetch(`/api/cmf/packets/${args.packetId}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        throw new Error(error.error || 'Delete failed')
+      }
+      return res.json()
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['cmf', 'packets'] })
+      queryClient.removeQueries({ queryKey: ['cmf', 'packet', variables.packetId] })
+    },
+  })
+}
+
 export function useUpdateCmfDocumentDraft() {
   const queryClient = useQueryClient()
   return useMutation({

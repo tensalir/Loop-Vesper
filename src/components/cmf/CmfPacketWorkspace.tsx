@@ -466,6 +466,16 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
           // clown" CTA on blocked SKU rows.
           handleUploadForSlug(productSlug)
         }}
+        onPacketDeleted={(deletedId) => {
+          // If the designer just deleted the packet they had open,
+          // drop back to the empty state so the workspace doesn't
+          // try to render a stale packet. The Products dialog
+          // remains open so they can pick the next one (or import
+          // a fresh workbook) without an extra navigation step.
+          if (deletedId === activePacketId) {
+            setActivePacketId(null)
+          }
+        }}
       />
     </div>
   )
