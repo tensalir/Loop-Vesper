@@ -455,355 +455,426 @@ function rendersToSignature(
   return packetRowSignature(rows)
 }
 
-export async function createPacketFromRows(
-  args: CreatePacketArgs
-): Promise<{ packets: CreatedPacket[] }> {
-  const { ownerId, importId } = args
-  if (args.rows.length === 0) return { packets: [] }
-
-  // Preserve workbook order while grouping by productSlug. Plain object keyed
-  // by slug + ordered array of slugs avoids needing Map iteration helpers.
+/**
+ * Bucket validated SKU rows by their `productSlug`, preserving workbook
+ * order in the returned array. Pure (no DB, no I/O) so tests can
+ * exercise it directly. The shape — `Array<{ productSlug, rows }>`
+ * instead of a `Map` — matches what the orchestrator iterates over
+ * without forcing a `Map` iteration target.
+ */
+export function groupRowsByProductSlug(
+  rows: CmfSkuRow[]
+): Array<{ productSlug: string; rows: CmfSkuRow[] }> {
   const buckets: Record<string, CmfSkuRow[]> = {}
   const order: string[] = []
-  for (const row of args.rows) {
+  for (const row of rows) {
     if (!buckets[row.productSlug]) {
       buckets[row.productSlug] = []
       order.push(row.productSlug)
     }
     buckets[row.productSlug].push(row)
   }
+  return order.map((slug) => ({ productSlug: slug, rows: buckets[slug] }))
+}
 
-  return prisma.$transaction(async (tx) => {
-    const out: CreatedPacket[] = []
+/**
+ * Transaction-scoped Prisma client passed into the merge/create
+ * helpers. Defined inline (instead of `Prisma.TransactionClient`) so
+ * we don't pull the heavy generated namespace into modules that only
+ * need the call signature; the orchestrator passes `tx` straight from
+ * `prisma.$transaction` and TypeScript infers the rest.
+ */
+type CmfTransactionClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
 
-    for (const productSlug of order) {
-      const rows = buckets[productSlug]
-      const product = getCmfProduct(productSlug)
-      const productName = product?.name ?? productSlug
-      const inferredCmf =
-        args.cmfCode ?? rows.map((r: CmfSkuRow) => r.cmfCode).find((c: string | undefined) => Boolean(c)) ?? null
-      // Prefer the workbook `Collection` (carried on each row as `packetName`)
-      // because it's how designers name a launch; fall back to the product
-      // display name. When the caller passed an explicit packetName, suffix it
-      // with the product name so multi-product imports stay distinguishable.
-      const collection = rows.map((r: CmfSkuRow) => r.packetName).find((p: string | undefined) => Boolean(p))
-      const name = args.packetName
-        ? `${args.packetName} · ${productName}`
-        : collection ?? productName
+/**
+ * Smart-merge lookup. Returns the existing packet to merge into, or
+ * `null` when the rows should produce a fresh packet. Two strategies:
+ *
+ *   1. `(productSlug, cmfCode)` exact match — for production workbooks
+ *      that carry a CMF code. Cmf code alone could collide across
+ *      products so we additionally require at least one render to
+ *      share the productSlug.
+ *
+ *   2. SKU signature match — for null-cmfCode packets (typical for
+ *      the dev iteration loop). The first packet whose SKU set
+ *      (productCode preferred, normalised label as fallback) matches
+ *      the incoming rows wins.
+ *
+ * In both cases we prefer the OLDEST matching packet so edits,
+ * comments, and activity stay anchored to the canonical record.
+ */
+async function findExistingPacketForMerge(
+  tx: CmfTransactionClient,
+  productSlug: string,
+  inferredCmf: string | null,
+  rows: CmfSkuRow[]
+) {
+  if (inferredCmf) {
+    const byCode = await tx.cmfPacket.findFirst({
+      where: {
+        cmfCode: inferredCmf,
+        renders: { some: { productSlug } },
+      },
+      orderBy: { createdAt: 'asc' },
+      include: { renders: { orderBy: { sortOrder: 'asc' } } },
+    })
+    if (byCode) return byCode
+  }
+  // Signature fallback. We intentionally span owners — under the
+  // global-library model anyone re-uploading the same workbook should
+  // land on the canonical record. Cardinality is small (tens of
+  // packets per product at most), so loading + signature-comparing in
+  // JS is cheaper than building a generated-column index.
+  if (!inferredCmf) {
+    const incomingSig = packetRowSignature(rows)
+    if (!incomingSig) return null
+    const candidates = await tx.cmfPacket.findMany({
+      where: {
+        cmfCode: null,
+        renders: { some: { productSlug } },
+      },
+      orderBy: { createdAt: 'asc' },
+      include: { renders: { orderBy: { sortOrder: 'asc' } } },
+    })
+    for (const candidate of candidates) {
+      const sig = rendersToSignature(
+        candidate.renders.map((r) => ({
+          productCode: r.productCode,
+          label: r.label,
+        }))
+      )
+      if (sig === incomingSig) return candidate
+    }
+  }
+  return null
+}
 
-      // Smart-merge lookup. We try two key strategies in priority order:
-      //
-      //   1. (productSlug, cmfCode) — the precise key for real launches
-      //      that carry a CMF code. This is what production workbooks
-      //      will trigger going forward.
-      //
-      //   2. SKU signature — when the workbook has no CMF code (typical
-      //      for the test/dev iteration loop), match against any
-      //      existing packet for the same product whose set of SKU
-      //      identifiers (`productCode` preferred, normalised label as
-      //      fallback) matches the incoming rows. Same SKUs in any
-      //      order → same signature → merge. Anything different → new
-      //      packet. This is what kept the test workbook duplicating
-      //      itself before today's rollout.
-      //
-      // Either way we pick the OLDEST matching packet so edits +
-      // comments + activity stay anchored to the canonical record. The
-      // initial findFirst (cmfCode strategy) seeds TypeScript with the
-      // right `(CmfPacket & { renders: CmfRender[] }) | null` shape;
-      // the signature fallback assigns into the same binding.
-      let existingPacket = inferredCmf
-        ? await tx.cmfPacket.findFirst({
-            where: {
-              cmfCode: inferredCmf,
-              // CMF code alone could collide across products (e.g.
-              // someone manually entering 'CMF-001' for two unrelated
-              // launches), so we additionally require at least one
-              // render to share the productSlug.
-              renders: { some: { productSlug } },
-            },
-            orderBy: { createdAt: 'asc' },
-            include: { renders: { orderBy: { sortOrder: 'asc' } } },
-          })
-        : await tx.cmfPacket.findFirst({
-            // Type-only seed: this where clause matches nothing (we
-            // ALWAYS create a fresh packet via the signature fallback
-            // below when cmfCode is null and signature comes back
-            // empty) so the binding inherits the correct shape.
-            where: { id: '00000000-0000-0000-0000-000000000000' },
-            include: { renders: { orderBy: { sortOrder: 'asc' } } },
-          })
+interface PacketWriteContext {
+  ownerId: string
+  importId: string | null
+  productSlug: string
+  inferredCmf: string | null
+  /** Catalog spec (defaultModelId etc.). May be null for uncatalogued slugs. */
+  product: ReturnType<typeof getCmfProduct>
+}
 
-      if (!existingPacket && !inferredCmf) {
-        // Fallback: signature match across every null-cmfCode packet
-        // for this product. We intentionally span owners — under the
-        // global-library model anyone re-uploading the same workbook
-        // should land on the canonical record. Cardinality is small
-        // (a few dozen packets per product at most), so loading +
-        // signature-comparing in JS is cheaper than building a
-        // generated-column index for the same purpose.
-        const incomingSig = packetRowSignature(rows)
-        if (incomingSig) {
-          const candidates = await tx.cmfPacket.findMany({
-            where: {
-              cmfCode: null,
-              renders: { some: { productSlug } },
-            },
-            orderBy: { createdAt: 'asc' },
-            include: { renders: { orderBy: { sortOrder: 'asc' } } },
-          })
-          for (const candidate of candidates) {
-            const sig = rendersToSignature(
-              candidate.renders.map((r) => ({
-                productCode: r.productCode,
-                label: r.label,
-              }))
-            )
-            if (sig === incomingSig) {
-              existingPacket = candidate
-              break
-            }
-          }
-        }
-      }
+/**
+ * Merge incoming rows into an existing packet. Per row we try to find
+ * a matching render by `productCode` (preferred) or normalised label;
+ * matched renders are diffed and either updated or marked unchanged;
+ * unmatched rows are appended. Activity rows are emitted for each
+ * `sku_added` / `sku_updated` plus one `packet_merged` umbrella event.
+ *
+ * Caller is responsible for ensuring `existingPacket` is one of the
+ * packets returned by `findExistingPacketForMerge` so the type matches
+ * (it includes `renders`).
+ */
+async function mergeRowsIntoPacket(
+  tx: CmfTransactionClient,
+  existingPacket: NonNullable<Awaited<ReturnType<typeof findExistingPacketForMerge>>>,
+  rows: CmfSkuRow[],
+  ctx: PacketWriteContext
+): Promise<CreatedPacket> {
+  const { ownerId, importId, productSlug, inferredCmf, product } = ctx
+  const renderRows: CmfRenderRow[] = []
+  const changes: CmfMergeSummary['changes'] = []
+  const changedRenderIds: string[] = []
+  let added = 0
+  let updated = 0
+  let unchanged = 0
 
-      if (existingPacket) {
-        // ─── MERGE PATH ─────────────────────────────────────────────
-        const renderRows: CmfRenderRow[] = []
-        const changes: CmfMergeSummary['changes'] = []
-        const changedRenderIds: string[] = []
-        let added = 0
-        let updated = 0
-        let unchanged = 0
+  // Index existing renders by productCode (preferred) and by normalised
+  // label so we can match incoming rows even when one identifier is
+  // missing.
+  const byProductCode = new Map<string, (typeof existingPacket.renders)[number]>()
+  const byLabel = new Map<string, (typeof existingPacket.renders)[number]>()
+  for (const r of existingPacket.renders) {
+    if (r.productCode) byProductCode.set(r.productCode.toLowerCase(), r)
+    byLabel.set(normaliseLabelKey(r.label), r)
+  }
 
-        // Index existing renders by productCode (preferred) and by
-        // normalised label so we can match incoming rows even when one
-        // identifier is missing.
-        const byProductCode = new Map<string, (typeof existingPacket.renders)[number]>()
-        const byLabel = new Map<string, (typeof existingPacket.renders)[number]>()
-        for (const r of existingPacket.renders) {
-          if (r.productCode) byProductCode.set(r.productCode.toLowerCase(), r)
-          byLabel.set(normaliseLabelKey(r.label), r)
-        }
+  let nextSortOrder = existingPacket.renders.reduce(
+    (m, r) => Math.max(m, r.sortOrder + 1),
+    0
+  )
 
-        let nextSortOrder = existingPacket.renders.reduce(
-          (m, r) => Math.max(m, r.sortOrder + 1),
-          0
-        )
+  for (const row of rows) {
+    const match =
+      (row.productCode && byProductCode.get(row.productCode.toLowerCase())) ||
+      byLabel.get(normaliseLabelKey(row.label))
 
-        for (const row of rows) {
-          const match =
-            (row.productCode && byProductCode.get(row.productCode.toLowerCase())) ||
-            byLabel.get(normaliseLabelKey(row.label))
+    if (match) {
+      const componentDiff = componentsDiffer(match.componentSpecs, row.components)
+      const paletteChanged = palettesDiffer(match.paletteSwatches, row.palette ?? [])
+      if (componentDiff.changed || paletteChanged) {
+        const updatedRender = await tx.cmfRender.update({
+          where: { id: match.id },
+          data: {
+            // Refresh the human-readable fields too so workbook
+            // renames flow through to the gallery.
+            label: row.label,
+            productCode: row.productCode ?? match.productCode,
+            ean: row.ean ?? match.ean,
+            variantSlug: row.variantSlug ?? match.variantSlug,
+            colorwayName: row.colorwayName ?? match.colorwayName,
+            componentSpecs: row.components,
+            paletteSwatches: row.palette ?? [],
+            modelId: row.modelId ?? match.modelId,
+          },
+        })
+        renderRows.push(updatedRender)
+        updated++
+        changedRenderIds.push(updatedRender.id)
+        changes.push({
+          renderId: updatedRender.id,
+          label: updatedRender.label,
+          changedRegions: componentDiff.changedRegions,
+          paletteChanged,
+        })
 
-          if (match) {
-            const componentDiff = componentsDiffer(match.componentSpecs, row.components)
-            const paletteChanged = palettesDiffer(match.paletteSwatches, row.palette ?? [])
-            if (componentDiff.changed || paletteChanged) {
-              const updatedRender = await tx.cmfRender.update({
-                where: { id: match.id },
-                data: {
-                  // Refresh the human-readable fields too so workbook
-                  // renames flow through to the gallery.
-                  label: row.label,
-                  productCode: row.productCode ?? match.productCode,
-                  ean: row.ean ?? match.ean,
-                  variantSlug: row.variantSlug ?? match.variantSlug,
-                  colorwayName: row.colorwayName ?? match.colorwayName,
-                  componentSpecs: row.components,
-                  paletteSwatches: row.palette ?? [],
-                  modelId: row.modelId ?? match.modelId,
-                },
-              })
-              renderRows.push(updatedRender)
-              updated++
-              changedRenderIds.push(updatedRender.id)
-              changes.push({
-                renderId: updatedRender.id,
-                label: updatedRender.label,
-                changedRegions: componentDiff.changedRegions,
-                paletteChanged,
-              })
-
-              await tx.cmfActivity.create({
-                data: {
-                  packetId: existingPacket.id,
-                  userId: ownerId,
-                  action: 'sku_updated',
-                  targetId: updatedRender.id,
-                  metadata: {
-                    label: updatedRender.label,
-                    productCode: updatedRender.productCode,
-                    changedRegions: componentDiff.changedRegions,
-                    paletteChanged,
-                    importId: importId ?? null,
-                    before: {
-                      componentSpecs: match.componentSpecs,
-                      paletteSwatches: match.paletteSwatches,
-                    },
-                    after: {
-                      componentSpecs: row.components,
-                      paletteSwatches: row.palette ?? [],
-                    },
-                  },
-                },
-              })
-            } else {
-              renderRows.push(match)
-              unchanged++
-            }
-          } else {
-            // Brand-new SKU for this packet — append.
-            const created = await tx.cmfRender.create({
-              data: {
-                packetId: existingPacket.id,
-                ownerId,
-                label: row.label,
-                productCode: row.productCode ?? null,
-                ean: row.ean ?? null,
-                productSlug: row.productSlug,
-                variantSlug: row.variantSlug ?? 'default',
-                colorwayName: row.colorwayName ?? null,
-                componentSpecs: row.components,
-                paletteSwatches: row.palette ?? [],
-                modelId: row.modelId ?? product?.defaultModelId ?? null,
-                sortOrder: nextSortOrder++,
-                status: 'draft',
-              },
-            })
-            renderRows.push(created)
-            added++
-
-            await tx.cmfActivity.create({
-              data: {
-                packetId: existingPacket.id,
-                userId: ownerId,
-                action: 'sku_added',
-                targetId: created.id,
-                metadata: {
-                  label: created.label,
-                  productCode: created.productCode,
-                  productSlug,
-                  importId: importId ?? null,
-                },
-              },
-            })
-          }
-        }
-
-        // One umbrella activity per merge so the timeline gives a quick
-        // "this import touched the packet" signal even if zero SKUs
-        // moved.
         await tx.cmfActivity.create({
           data: {
             packetId: existingPacket.id,
             userId: ownerId,
-            action: 'packet_merged',
+            action: 'sku_updated',
+            targetId: updatedRender.id,
             metadata: {
-              productSlug,
-              cmfCode: inferredCmf,
+              label: updatedRender.label,
+              productCode: updatedRender.productCode,
+              changedRegions: componentDiff.changedRegions,
+              paletteChanged,
               importId: importId ?? null,
-              added,
-              updated,
-              unchanged,
-              changedRenderIds,
+              before: {
+                componentSpecs: match.componentSpecs,
+                paletteSwatches: match.paletteSwatches,
+              },
+              after: {
+                componentSpecs: row.components,
+                paletteSwatches: row.palette ?? [],
+              },
             },
           },
         })
-
-        // Refresh the packet's `updatedAt` timestamp so the dropdown
-        // sort-by-recency surfaces freshly-merged packets.
-        const refreshedPacket = await tx.cmfPacket.update({
-          where: { id: existingPacket.id },
-          data: {
-            // Keep notes / name as-is; merging is additive, not a rename.
-            updatedAt: new Date(),
-          },
-        })
-
-        out.push({
-          packet: refreshedPacket,
-          renders: renderRows,
-          mergeSummary: {
-            kind: 'merged',
-            productSlug,
-            packetId: refreshedPacket.id,
-            packetName: refreshedPacket.name,
-            cmfCode: refreshedPacket.cmfCode,
-            added,
-            updated,
-            unchanged,
-            changedRenderIds,
-            changes,
-          },
-        })
-        continue
+      } else {
+        renderRows.push(match)
+        unchanged++
       }
-
-      // ─── CREATE PATH (no existing packet for this product+code) ──
-      const packet = await tx.cmfPacket.create({
+    } else {
+      // Brand-new SKU for this packet — append.
+      const created = await tx.cmfRender.create({
         data: {
+          packetId: existingPacket.id,
           ownerId,
-          importId: importId ?? null,
-          name,
-          cmfCode: inferredCmf,
-          notes: args.notes ?? null,
+          label: row.label,
+          productCode: row.productCode ?? null,
+          ean: row.ean ?? null,
+          productSlug: row.productSlug,
+          variantSlug: row.variantSlug ?? 'default',
+          colorwayName: row.colorwayName ?? null,
+          componentSpecs: row.components,
+          paletteSwatches: row.palette ?? [],
+          modelId: row.modelId ?? product?.defaultModelId ?? null,
+          sortOrder: nextSortOrder++,
           status: 'draft',
         },
       })
-
-      const renders = await Promise.all(
-        rows.map((row: CmfSkuRow, index: number) =>
-          tx.cmfRender.create({
-            data: {
-              packetId: packet.id,
-              ownerId,
-              label: row.label,
-              productCode: row.productCode ?? null,
-              ean: row.ean ?? null,
-              productSlug: row.productSlug,
-              variantSlug: row.variantSlug ?? 'default',
-              colorwayName: row.colorwayName ?? null,
-              componentSpecs: row.components,
-              paletteSwatches: row.palette ?? [],
-              modelId: row.modelId ?? product?.defaultModelId ?? null,
-              sortOrder: index,
-              status: 'draft',
-            },
-          })
-        )
-      )
+      renderRows.push(created)
+      added++
 
       await tx.cmfActivity.create({
         data: {
-          packetId: packet.id,
+          packetId: existingPacket.id,
           userId: ownerId,
-          action: 'created_packet',
+          action: 'sku_added',
+          targetId: created.id,
           metadata: {
-            rows: rows.length,
+            label: created.label,
+            productCode: created.productCode,
             productSlug,
             importId: importId ?? null,
           },
         },
       })
+    }
+  }
 
-      out.push({
-        packet,
-        renders,
-        mergeSummary: {
-          kind: 'created',
-          productSlug,
+  // One umbrella activity per merge so the timeline gives a quick
+  // "this import touched the packet" signal even if zero SKUs moved.
+  await tx.cmfActivity.create({
+    data: {
+      packetId: existingPacket.id,
+      userId: ownerId,
+      action: 'packet_merged',
+      metadata: {
+        productSlug,
+        cmfCode: inferredCmf,
+        importId: importId ?? null,
+        added,
+        updated,
+        unchanged,
+        changedRenderIds,
+      },
+    },
+  })
+
+  // Refresh the packet's `updatedAt` timestamp so the dropdown's
+  // sort-by-recency surfaces freshly-merged packets.
+  const refreshedPacket = await tx.cmfPacket.update({
+    where: { id: existingPacket.id },
+    data: {
+      // Keep notes / name as-is; merging is additive, not a rename.
+      updatedAt: new Date(),
+    },
+  })
+
+  return {
+    packet: refreshedPacket,
+    renders: renderRows,
+    mergeSummary: {
+      kind: 'merged',
+      productSlug,
+      packetId: refreshedPacket.id,
+      packetName: refreshedPacket.name,
+      cmfCode: refreshedPacket.cmfCode,
+      added,
+      updated,
+      unchanged,
+      changedRenderIds,
+      changes,
+    },
+  }
+}
+
+/**
+ * Create a fresh packet plus one render per row. The historic create
+ * path. Activity rows: one `created_packet` event for the whole
+ * packet (per-render `sku_added` events would just duplicate the
+ * "you just imported this" signal).
+ */
+async function createPacketWithRenders(
+  tx: CmfTransactionClient,
+  rows: CmfSkuRow[],
+  packetName: string,
+  notes: string | null,
+  ctx: PacketWriteContext
+): Promise<CreatedPacket> {
+  const { ownerId, importId, productSlug, inferredCmf, product } = ctx
+  const packet = await tx.cmfPacket.create({
+    data: {
+      ownerId,
+      importId: importId ?? null,
+      name: packetName,
+      cmfCode: inferredCmf,
+      notes: notes ?? null,
+      status: 'draft',
+    },
+  })
+
+  const renders = await Promise.all(
+    rows.map((row: CmfSkuRow, index: number) =>
+      tx.cmfRender.create({
+        data: {
           packetId: packet.id,
-          packetName: packet.name,
-          cmfCode: packet.cmfCode,
-          added: renders.length,
-          updated: 0,
-          unchanged: 0,
-          changedRenderIds: [],
-          changes: [],
+          ownerId,
+          label: row.label,
+          productCode: row.productCode ?? null,
+          ean: row.ean ?? null,
+          productSlug: row.productSlug,
+          variantSlug: row.variantSlug ?? 'default',
+          colorwayName: row.colorwayName ?? null,
+          componentSpecs: row.components,
+          paletteSwatches: row.palette ?? [],
+          modelId: row.modelId ?? product?.defaultModelId ?? null,
+          sortOrder: index,
+          status: 'draft',
         },
       })
-    }
+    )
+  )
 
+  await tx.cmfActivity.create({
+    data: {
+      packetId: packet.id,
+      userId: ownerId,
+      action: 'created_packet',
+      metadata: {
+        rows: rows.length,
+        productSlug,
+        importId: importId ?? null,
+      },
+    },
+  })
+
+  return {
+    packet,
+    renders,
+    mergeSummary: {
+      kind: 'created',
+      productSlug,
+      packetId: packet.id,
+      packetName: packet.name,
+      cmfCode: packet.cmfCode,
+      added: renders.length,
+      updated: 0,
+      unchanged: 0,
+      changedRenderIds: [],
+      changes: [],
+    },
+  }
+}
+
+/**
+ * Resolve the per-product packet name. Prefers an explicit caller-supplied
+ * name (suffixed with the product display name so multi-product imports
+ * stay distinguishable), then the workbook `Collection` (carried on each
+ * row as `packetName`), and finally the product display name.
+ */
+function resolvePacketName(
+  rows: CmfSkuRow[],
+  productSlug: string,
+  explicit: string | null | undefined
+): string {
+  const product = getCmfProduct(productSlug)
+  const productName = product?.name ?? productSlug
+  if (explicit) return `${explicit} · ${productName}`
+  const collection = rows
+    .map((r: CmfSkuRow) => r.packetName)
+    .find((p: string | undefined) => Boolean(p))
+  return collection ?? productName
+}
+
+export async function createPacketFromRows(
+  args: CreatePacketArgs
+): Promise<{ packets: CreatedPacket[] }> {
+  if (args.rows.length === 0) return { packets: [] }
+  const buckets = groupRowsByProductSlug(args.rows)
+
+  return prisma.$transaction(async (tx) => {
+    const out: CreatedPacket[] = []
+    for (const { productSlug, rows } of buckets) {
+      const inferredCmf =
+        args.cmfCode ??
+        rows
+          .map((r: CmfSkuRow) => r.cmfCode)
+          .find((c: string | undefined) => Boolean(c)) ??
+        null
+      const ctx: PacketWriteContext = {
+        ownerId: args.ownerId,
+        importId: args.importId ?? null,
+        productSlug,
+        inferredCmf,
+        product: getCmfProduct(productSlug),
+      }
+      const existing = await findExistingPacketForMerge(tx, productSlug, inferredCmf, rows)
+      if (existing) {
+        out.push(await mergeRowsIntoPacket(tx, existing, rows, ctx))
+      } else {
+        const packetName = resolvePacketName(rows, productSlug, args.packetName)
+        out.push(
+          await createPacketWithRenders(tx, rows, packetName, args.notes ?? null, ctx)
+        )
+      }
+    }
     return { packets: out }
   })
 }

@@ -17,8 +17,7 @@
  * header carries flow context, the rows do the work.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useMemo, useState } from 'react'
 import {
   CmfPacket,
   useCmfClowns,
@@ -27,6 +26,7 @@ import {
   useGenerateCmfPdf,
   useBulkGenerateCmfPacket,
 } from '@/hooks/useCmf'
+import { useActivePacket } from '@/hooks/useActivePacket'
 import { clownCoverageForPacket } from '@/lib/cmf/coverage'
 import { timeAgo } from '@/lib/cmf/format'
 import { listCmfProducts } from '@/lib/cmf/products'
@@ -59,26 +59,11 @@ interface CmfPacketWorkspaceProps {
 }
 
 export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const [activePacketId, setActivePacketIdState] = useState<string | null>(initialPacketId)
+  // URL synchronisation, gallery pulse, and the URL-driven adoption of
+  // `initialPacketId` all live in `useActivePacket`. The workspace
+  // only consumes the result so it stops growing orchestration code.
+  const { activePacketId, setActivePacketId } = useActivePacket(initialPacketId)
 
-  // Wrap the setter so every selection change mirrors to the URL via
-  // `?packet=<id>`. Using `router.replace` rather than `push` keeps the
-  // back button useful (it goes to the previous page, not the previous
-  // packet selection).
-  const setActivePacketId = useCallback(
-    (next: string | null) => {
-      setActivePacketIdState(next)
-      const params = new URLSearchParams(searchParams?.toString() ?? '')
-      if (next) params.set('packet', next)
-      else params.delete('packet')
-      const query = params.toString()
-      router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false })
-    },
-    [pathname, router, searchParams]
-  )
   const [importOpen, setImportOpen] = useState(false)
   const [clownOpen, setClownOpen] = useState(false)
   const [clownFocusSlug, setClownFocusSlug] = useState<string | null>(null)
@@ -98,16 +83,6 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
   const { toast } = useToast()
   const { canWrite } = useCmfPermissions()
 
-  // Keep the workspace in sync with the URL when the user hits back/forward
-  // or pastes a deep link. We compare against the current state to avoid an
-  // infinite ping-pong with `setActivePacketId` (which writes the URL).
-  useEffect(() => {
-    if (initialPacketId !== activePacketId) {
-      setActivePacketIdState(initialPacketId)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPacketId])
-
   const readiness = useMemo(() => summarisePacketReadiness(packet), [packet])
   const totalAttempts = useMemo(
     () => packet?.renders.reduce((s, r) => s + (r.renderAttempts?.length ?? 0), 0) ?? 0,
@@ -126,45 +101,6 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
     const product = listCmfProducts().find((p) => p.slug === slug)
     return product?.name?.replace(/^Loop\s+/, '') ?? slug
   }, [packet])
-
-  // Gallery pulse on packet switch. Re-applies the existing
-  // `cmf-focus-pulse` keyframes to the whole gallery section whenever
-  // `activePacketId` changes to a non-null id, so designers see "the
-  // page just changed to a new packet" instead of being silently
-  // dropped onto a different gallery.
-  //
-  // We skip the initial mount (the first time the effect runs after
-  // the page loads) because that's the URL-driven landing, not a
-  // user-initiated switch — pulsing on first render would feel like
-  // background noise. A ref tracks "have we mounted yet?" so a refresh
-  // that lands on a packet doesn't pulse, but every subsequent change
-  // does.
-  const hasMountedRef = useRef(false)
-  useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true
-      return
-    }
-    if (!activePacketId) return
-    // requestAnimationFrame so we run after the gallery section has
-    // re-rendered with the new packet's content — otherwise the pulse
-    // fires on the OLD DOM node and is visually invisible.
-    const raf = requestAnimationFrame(() => {
-      const node = document.getElementById('cmf-gallery')
-      if (!node) return
-      // Re-trigger by removing first; otherwise re-applying the same
-      // class while it's already present doesn't restart the
-      // animation in browsers that aggressively cache animation state.
-      node.classList.remove('cmf-focus-pulse')
-      void node.offsetWidth
-      node.classList.add('cmf-focus-pulse')
-      const t = window.setTimeout(() => {
-        node.classList.remove('cmf-focus-pulse')
-      }, 2400)
-      return () => window.clearTimeout(t)
-    })
-    return () => cancelAnimationFrame(raf)
-  }, [activePacketId])
 
   // Coverage mirrors the render service's three-tier fallback so the badge
   // doesn't lie. Implementation lives in `src/lib/cmf/coverage.ts` so the
