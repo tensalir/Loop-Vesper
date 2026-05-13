@@ -365,7 +365,7 @@ function normaliseComponent(c: ComponentSpec): Record<string, string> {
   }
 }
 
-function componentsDiffer(
+export function componentsDiffer(
   existing: unknown,
   incoming: ComponentSpec[]
 ): { changed: boolean; changedRegions: string[] } {
@@ -407,7 +407,7 @@ function componentsDiffer(
   return { changed: changedRegions.length > 0, changedRegions }
 }
 
-function palettesDiffer(existing: unknown, incoming: PaletteSwatch[]): boolean {
+export function palettesDiffer(existing: unknown, incoming: PaletteSwatch[]): boolean {
   const prev = Array.isArray(existing) ? (existing as PaletteSwatch[]) : []
   if (prev.length !== incoming.length) return true
   for (let i = 0; i < incoming.length; i++) {

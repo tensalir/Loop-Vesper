@@ -145,6 +145,8 @@ export async function POST(request: NextRequest) {
           parsed.format === 'transposed' ? parsed.unrecognisedSheets : [],
         droppedSkuColumns:
           parsed.format === 'transposed' ? parsed.droppedSkuColumns : [],
+        unknownAttributeRows:
+          parsed.format === 'transposed' ? parsed.unknownAttributeRows : [],
       },
     })
   }
@@ -200,6 +202,8 @@ export async function POST(request: NextRequest) {
         parsed.format === 'transposed' ? parsed.unrecognisedSheets : [],
       droppedSkuColumns:
         parsed.format === 'transposed' ? parsed.droppedSkuColumns : [],
+      unknownAttributeRows:
+        parsed.format === 'transposed' ? parsed.unknownAttributeRows : [],
     },
     /** All packets created or merged by this import — one per product
      * slug. Each entry carries `productName` so the UI can say

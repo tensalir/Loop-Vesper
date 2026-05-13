@@ -22,6 +22,7 @@
  */
 
 import * as XLSX from 'xlsx'
+import { isRealValue } from './placeholder'
 import { getCmfProductBySheet, type CmfProductSpec } from './products'
 
 export interface XlsxParseResult {
@@ -45,6 +46,14 @@ export interface XlsxParseResult {
    *  like a placeholder" case so designers can see WHY a column was
    *  ignored and what we tried to parse. */
   droppedSkuColumns: DroppedSkuColumn[]
+  /** Attribute rows whose label wasn't in `ATTRIBUTE_MAP`. Today the
+   *  parser silently routes these to `notes`; surfacing them here lets
+   *  designers see "we didn't know what to do with the 'Substrate' row
+   *  under POM RING — it landed in notes" instead of wondering why a
+   *  spec column went missing. Deduplicated by (sheet, component,
+   *  rowLabel) so a label that appears under three SKUs only shows up
+   *  once in the list. */
+  unknownAttributeRows: UnknownAttributeRow[]
 }
 
 export interface UnrecognisedSheet {
@@ -65,6 +74,17 @@ export interface DroppedSkuColumn {
    *  drafts; `empty` = the column existed but had no values worth
    *  parsing. */
   reason: 'placeholder' | 'empty'
+}
+
+export interface UnknownAttributeRow {
+  /** Tab the attribute row lived on. */
+  sheetName: string
+  /** Resolved product slug for that tab. */
+  productSlug: string
+  /** Attribute row label as written in the workbook (e.g. "Substrate"). */
+  rowLabel: string
+  /** Component header that contained this row (e.g. "POM RING"). */
+  componentLabel: string
 }
 
 export interface ParsedSheet {
@@ -153,6 +173,7 @@ export function parseCmfWorkbook(buffer: Buffer): XlsxParseResult {
   const unmappedSheets: string[] = []
   const unrecognisedSheets: UnrecognisedSheet[] = []
   const droppedSkuColumns: DroppedSkuColumn[] = []
+  const unknownAttributeRows: UnknownAttributeRow[] = []
   let sawTransposedShape = false
 
   // Two-pass: first sniff which sheets pass the looksTransposed
@@ -200,6 +221,7 @@ export function parseCmfWorkbook(buffer: Buffer): XlsxParseResult {
           })
         }
         droppedSkuColumns.push(...result.droppedColumns)
+        unknownAttributeRows.push(...result.unknownAttributeRows)
         continue
       }
 
@@ -216,6 +238,7 @@ export function parseCmfWorkbook(buffer: Buffer): XlsxParseResult {
         if (result.parsed.skus.length > 0) {
           transposedSheets.push(result.parsed)
           droppedSkuColumns.push(...result.droppedColumns)
+          unknownAttributeRows.push(...result.unknownAttributeRows)
         } else {
           unrecognisedSheets.push({
             name: plan.name,
@@ -243,6 +266,7 @@ export function parseCmfWorkbook(buffer: Buffer): XlsxParseResult {
       unmappedSheets,
       unrecognisedSheets,
       droppedSkuColumns,
+      unknownAttributeRows,
     }
   }
 
@@ -254,6 +278,7 @@ export function parseCmfWorkbook(buffer: Buffer): XlsxParseResult {
     unmappedSheets: [],
     unrecognisedSheets: [],
     droppedSkuColumns: [],
+    unknownAttributeRows: [],
   }
 }
 
@@ -328,6 +353,14 @@ function parseTransposedSheet(
    *  result so the import dialog can show a "we saw SKU 3 but everything
    *  was placeholder" line. */
   dropped: Array<{ skuLabel: string; reason: 'placeholder' | 'empty' }>
+  /** Attribute rows the parser couldn't classify against `ATTRIBUTE_MAP`.
+   *  Today they fold into the component's `notes` field — fine for
+   *  preserving designer intent, but invisible to the UI. The wrapper
+   *  re-shapes these into `UnknownAttributeRow` entries so the import
+   *  dialog can flag them. Keyed by `(componentLabel, rowLabel)` to
+   *  drop duplicates that appear under multiple SKUs of the same
+   *  component. */
+  unknownAttributeRows: Array<{ rowLabel: string; componentLabel: string }>
 } {
   // Find the column count from row 0 (the SKU header row).
   const headerRow = aoa[0] ?? []
@@ -355,6 +388,15 @@ function parseTransposedSheet(
   let currentComponent: { name: string; region: string } | null = null
   let currentGroup: ParsedGroup | null = null
   let perSkuActive: Record<number, ParsedComponent | null> = {}
+
+  // Tracks the (componentLabel, rowLabel) pairs that fell through
+  // `ATTRIBUTE_MAP` so the parser can surface them as
+  // `unknownAttributeRows` on the result. Set instead of array because
+  // the same row label appears once per attribute row regardless of
+  // how many SKU columns it touches; we only want one diagnostic entry
+  // per unrecognised label per component.
+  const unknownAttributeKeys = new Set<string>()
+  const unknownAttributes: Array<{ rowLabel: string; componentLabel: string }> = []
 
   function ensureComponent(colIndex: number): ParsedComponent {
     if (!perSkuActive[colIndex]) {
@@ -436,8 +478,25 @@ function parseTransposedSheet(
 
     // Attribute row inside a component.
     if (mode === 'component' && currentComponent) {
-      const field = ATTRIBUTE_MAP[normalisedLabel] ?? 'notes'
+      const mappedField = ATTRIBUTE_MAP[normalisedLabel]
+      const field = mappedField ?? 'notes'
       const isColourField = field === 'pantone'
+
+      // Surface unrecognised attribute labels so a designer can see "we
+      // didn't know what 'Substrate' meant — it landed in notes" in the
+      // import dialog. Keyed by component+label so the same row under
+      // multiple SKUs only registers once. Empty labels are skipped
+      // because they're either spacer rows or formula leftovers.
+      if (!mappedField && labelCell) {
+        const key = `${currentComponent.name}::${normalisedLabel}`
+        if (!unknownAttributeKeys.has(key)) {
+          unknownAttributeKeys.add(key)
+          unknownAttributes.push({
+            rowLabel: labelCell,
+            componentLabel: currentComponent.name,
+          })
+        }
+      }
 
       for (const col of skuColumns) {
         const value = pickValue(skuCells[col.index], commonCell)
@@ -509,21 +568,27 @@ function parseTransposedSheet(
       skus,
     },
     dropped,
+    unknownAttributeRows: unknownAttributes,
   }
 }
 
 /**
  * Wrapper that runs `parseTransposedSheet` and re-shapes its dropped-
- * column report into the workbook-level `DroppedSkuColumn` shape that
- * rides on `XlsxParseResult`. Splitting this out keeps the per-sheet
- * function signature clean while the caller still gets a flat list it
- * can show in the import dialog.
+ * column report and unknown-attribute list into the workbook-level
+ * `DroppedSkuColumn` / `UnknownAttributeRow` shapes that ride on
+ * `XlsxParseResult`. Splitting this out keeps the per-sheet function
+ * signature clean while the caller still gets flat lists it can show in
+ * the import dialog.
  */
 function parseTransposedSheetWithDiagnostics(
   sheetName: string,
   aoa: unknown[][],
   product: CmfProductSpec
-): { parsed: ParsedSheet; droppedColumns: DroppedSkuColumn[] } {
+): {
+  parsed: ParsedSheet
+  droppedColumns: DroppedSkuColumn[]
+  unknownAttributeRows: UnknownAttributeRow[]
+} {
   const out = parseTransposedSheet(sheetName, aoa, product)
   return {
     parsed: out.parsed,
@@ -533,10 +598,16 @@ function parseTransposedSheetWithDiagnostics(
       skuLabel: d.skuLabel,
       reason: d.reason,
     })),
+    unknownAttributeRows: out.unknownAttributeRows.map((u) => ({
+      sheetName,
+      productSlug: product.slug,
+      rowLabel: u.rowLabel,
+      componentLabel: u.componentLabel,
+    })),
   }
 }
 
-function peekIsContainer(
+export function peekIsContainer(
   aoa: unknown[][],
   startRow: number,
   skuColumns: { index: number; label: string }[]
@@ -565,18 +636,14 @@ function isSkuFilled(banner: ParsedBanner, components: ParsedComponent[]): boole
   return realProductName || realCmfNumber || realProductCode || hasPerSkuPantone
 }
 
-function isReal(value: string | null | undefined): boolean {
-  if (!value) return false
-  const trimmed = value.trim()
-  if (!trimmed) return false
-  if (/^[/-]$/.test(trimmed)) return false
-  if (/^x+$/i.test(trimmed)) return false
-  if (/^x{2,}\/x{2,}\/x{2,}$/i.test(trimmed)) return false
-  if (/x{6,}/i.test(trimmed) && !/[a-w0-9]/i.test(trimmed.replace(/x/gi, ''))) return false
-  if (/^cmf-x+\s*rev\s*x$/i.test(trimmed)) return false
-  // "Pantone xxxxxxxxxxx" or any pantone with a long x-run is a placeholder.
-  if (/pantone\s+x{4,}/i.test(trimmed)) return false
-  return true
+/**
+ * "Is this string a real, non-placeholder value?" — re-exports the
+ * shared `isRealValue` from `placeholder.ts` under the original name
+ * the parser internals already use. Kept thin so consumers (tests,
+ * other parser modules) can import either name without breaking.
+ */
+export function isReal(value: string | null | undefined): boolean {
+  return isRealValue(value)
 }
 
 function emptyBanner(): ParsedBanner {
@@ -615,7 +682,7 @@ function mergeNotes(component: ParsedComponent, addition: string) {
   else if (!component.notes.includes(addition)) component.notes = `${component.notes} · ${addition}`
 }
 
-function extractPantone(value: string): string | null {
+export function extractPantone(value: string): string | null {
   const match = value.match(/pantone\s+[a-z0-9-]+\s*(c|cp|u|tcx|tpg)?/i)
   if (match) return match[0].replace(/\s+/g, ' ').trim()
   // Free-form "Black 6C", "Black" etc. — return as-is when the cell looks
@@ -626,7 +693,7 @@ function extractPantone(value: string): string | null {
   return null
 }
 
-function slugifyRegion(label: string): string {
+export function slugifyRegion(label: string): string {
   return label
     .toLowerCase()
     // Strip leading numbering like "1. " or "A. " from Aphrodite CC / Earplug.

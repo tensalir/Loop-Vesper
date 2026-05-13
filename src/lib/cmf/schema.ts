@@ -18,6 +18,7 @@
 import { z } from 'zod'
 import { getCmfProduct, type CmfProductComponent } from './products'
 import { enrichComponentColour, hasUnresolvedPantone } from './pantone'
+import { isPlaceholderValue } from './placeholder'
 import type { ParsedComponent, ParsedSheet, ParsedSkuRow } from './xlsx'
 
 export const ComponentSpecSchema = z.object({
@@ -237,12 +238,18 @@ function mergeWithCatalog(
   return result.success ? result.data : null
 }
 
+/**
+ * Trim and reject placeholder values. Delegates to the shared
+ * `isPlaceholderValue` so the parser's `isReal` gate and the
+ * normaliser's banner-cleanup stay in lockstep — a string can no
+ * longer be "real" in xlsx.ts but stripped in schema.ts (or vice
+ * versa).
+ */
 function cleanField(value: string | null | undefined): string | undefined {
   if (!value) return undefined
   const trimmed = value.trim()
   if (!trimmed) return undefined
-  if (/^x+$/i.test(trimmed)) return undefined
-  if (/^xxxxxxxxxxx$/i.test(trimmed)) return undefined
+  if (isPlaceholderValue(trimmed)) return undefined
   return trimmed
 }
 

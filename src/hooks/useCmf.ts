@@ -220,6 +220,17 @@ export interface CmfImportDroppedSkuColumn {
   reason: 'placeholder' | 'empty'
 }
 
+export interface CmfImportUnknownAttributeRow {
+  /** Tab the attribute row lived on. */
+  sheetName: string
+  /** Resolved product slug for that tab. */
+  productSlug: string
+  /** Attribute label as written in the workbook (e.g. "Substrate"). */
+  rowLabel: string
+  /** Component header that contained this row (e.g. "POM RING"). */
+  componentLabel: string
+}
+
 export interface CmfImportResponse {
   import: {
     id: string
@@ -238,6 +249,11 @@ export interface CmfImportResponse {
     /** SKU columns dropped by the parser because they looked like
      *  placeholders or were empty. */
     droppedSkuColumns?: CmfImportDroppedSkuColumn[]
+    /** Attribute rows whose label fell through `ATTRIBUTE_MAP`. They
+     *  still parse (text lands in the component's `notes`), but
+     *  surfacing them here lets a designer notice "we didn't know
+     *  what 'Substrate' meant". Deduplicated per (component, label). */
+    unknownAttributeRows?: CmfImportUnknownAttributeRow[]
   }
   /** One per product slug in the imported workbook. */
   packets?: Array<{

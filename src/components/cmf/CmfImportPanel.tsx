@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import {
   useImportCmfWorkbook,
   type CmfImportDroppedSkuColumn,
+  type CmfImportUnknownAttributeRow,
   type CmfImportUnrecognisedSheet,
   type CmfMergeSummary,
 } from '@/hooks/useCmf'
@@ -65,6 +66,7 @@ interface ImportDiagnostics {
   unmappedSheets: string[]
   unrecognisedSheets: CmfImportUnrecognisedSheet[]
   droppedSkuColumns: CmfImportDroppedSkuColumn[]
+  unknownAttributeRows: CmfImportUnknownAttributeRow[]
   rowErrors: Array<{ rowIndex: number; field?: string; message: string }>
 }
 
@@ -73,6 +75,7 @@ function emptyDiagnostics(): ImportDiagnostics {
     unmappedSheets: [],
     unrecognisedSheets: [],
     droppedSkuColumns: [],
+    unknownAttributeRows: [],
     rowErrors: [],
   }
 }
@@ -82,6 +85,7 @@ function hasAnyWarnings(d: ImportDiagnostics): boolean {
     d.unmappedSheets.length > 0 ||
     d.unrecognisedSheets.length > 0 ||
     d.droppedSkuColumns.length > 0 ||
+    d.unknownAttributeRows.length > 0 ||
     d.rowErrors.length > 0
   )
 }
@@ -133,6 +137,7 @@ export function CmfImportPanel({ onPacketCreated, onRenderFocus }: CmfImportPane
         unmappedSheets: result.import.unmappedSheets ?? [],
         unrecognisedSheets: result.import.unrecognisedSheets ?? [],
         droppedSkuColumns: result.import.droppedSkuColumns ?? [],
+        unknownAttributeRows: result.import.unknownAttributeRows ?? [],
         rowErrors: result.import.errors,
       }
       setDiagnostics(captured)
@@ -687,6 +692,42 @@ function DiagnosticsBody({
             {dropByLabel.size > 12 && (
               <li className={`text-[11px] italic ${subtleText}`}>
                 …and {dropByLabel.size - 12} more
+              </li>
+            )}
+          </ul>
+        </DiagnosticSection>
+      )}
+
+      {diagnostics.unknownAttributeRows.length > 0 && (
+        <DiagnosticSection
+          icon={AlertTriangle}
+          label={`${diagnostics.unknownAttributeRows.length} unknown attribute ${
+            diagnostics.unknownAttributeRows.length === 1 ? 'row' : 'rows'
+          }`}
+          labelClassName={labelText}
+          ruleColor={ruleColor}
+        >
+          <p className={`text-[11px] leading-snug pb-1 ${subtleText}`}>
+            We didn&apos;t recognise these attribute labels under their
+            component, so we kept the values verbatim in the
+            component&apos;s notes. Add them to the parser&apos;s
+            attribute map if they should drive material/finish/colour.
+          </p>
+          <ul className="space-y-1">
+            {diagnostics.unknownAttributeRows.slice(0, 12).map((u, idx) => (
+              <li key={idx} className="text-[11px] leading-snug">
+                <span className="font-mono font-semibold text-foreground">
+                  {u.rowLabel}
+                </span>
+                <span className={subtleText}>
+                  {' '}
+                  · under {u.componentLabel} on {u.sheetName} ({u.productSlug})
+                </span>
+              </li>
+            ))}
+            {diagnostics.unknownAttributeRows.length > 12 && (
+              <li className={`text-[11px] italic ${subtleText}`}>
+                …and {diagnostics.unknownAttributeRows.length - 12} more
               </li>
             )}
           </ul>

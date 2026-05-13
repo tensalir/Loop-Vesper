@@ -337,6 +337,106 @@ test('unknown sheet names land in unrecognisedSheets with a reason', () => {
   expect(parsed.sheets.map((s) => s.productSlug)).toContain('switch2')
 })
 
+test('unknown attribute rows surface as a diagnostic', () => {
+  // Designer adds a "Substrate" row under POM RING — not in
+  // ATTRIBUTE_MAP. Old behaviour: silently routed to notes. New
+  // behaviour: still routes to notes BUT flags it on
+  // `unknownAttributeRows` so the import dialog can show it.
+  const switch2 = [
+    ['', 'Common specs', 'SKU 1'],
+    ['BANNER', '', ''],
+    ['Product Name', '', 'Switch 2 Test'],
+    ['Product Code', '', 'en-sw-test-01'],
+    ['POM RING', '', ''],
+    ['Material', 'POM', ''],
+    ['Substrate', 'Aluminium core', ''],
+    ['Mood reference', 'Brushed steel', ''],
+    ['Colour', '', 'Pantone 7720C'],
+  ]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(switch2), 'Switch 2')
+  const out = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+  const buffer = Buffer.isBuffer(out) ? out : Buffer.from(out)
+
+  const parsed = parseCmfWorkbook(buffer)
+  expect(parsed.format).toBe('transposed')
+  // Both unknown rows show up, deduplicated by (component, label).
+  const labels = parsed.unknownAttributeRows.map((r) => r.rowLabel).sort()
+  expect(labels).toEqual(['Mood reference', 'Substrate'])
+  expect(parsed.unknownAttributeRows[0].componentLabel).toBe('POM RING')
+  expect(parsed.unknownAttributeRows[0].productSlug).toBe('switch2')
+
+  // The values still land in the parsed component's notes — no info
+  // is lost. The downstream consumer can move them to dedicated
+  // fields once we extend ATTRIBUTE_MAP.
+  const sku = parsed.sheets[0].skus[0]
+  const pom = sku.components.find((c) => /pom/i.test(c.region))!
+  expect(pom.notes).toContain('Substrate: Aluminium core')
+  expect(pom.notes).toContain('Mood reference: Brushed steel')
+})
+
+test('a richer "golden" workbook parses end-to-end with no warnings', () => {
+  // Closer-to-real fixture: multi-product, real Pantone strings,
+  // banner with extra punctuation, group + component blocks, palette-
+  // adjacent values that should NOT be flagged as placeholders.
+  const switch2 = [
+    ['', 'Common specs', 'SKU 1', 'SKU 2'],
+    ['BANNER', '', '', ''],
+    ['CMF number', '', 'CMF-001234revA', 'CMF-001235revA'],
+    ['Collection', 'Switch 2 — Spring 2026', '', ''],
+    ['Product Name', '', 'Switch 2 Sage', 'Switch 2 Cream'],
+    ['Product Code', '', 'en-sw-sage-01', 'en-sw-crm-01'],
+    ['EAN code', '', '5407009941993', '5407009942006'],
+    ['Edit Date', '', '2026-04-30', '2026-04-30'],
+    ['Drawn by', 'Damien', '', ''],
+    ['EARPLUG (1-4)', '', '', ''], // group header
+    ['POM RING', '', '', ''], // component header
+    ['Material', 'POM', '', ''],
+    ['Finish', 'Matte', '', ''],
+    ['Colour', '', 'Pantone 17-5641 TCX', 'Pantone 11-0809 TCX'],
+    ['COSMETIC CAP', '', '', ''],
+    ['Material', 'ABS', '', ''],
+    ['Outer surface finish', 'NCVM Satin', '', ''],
+    ['Colour', '', 'Pantone 7720C', 'Pantone Black 6C'],
+  ]
+  const cocoon = [
+    ['', 'Common specs', 'SKU 1'],
+    ['BANNER', '', ''],
+    ['CMF number', '', 'CMF-002000revA'],
+    ['Product Name', '', 'Cocoon Berry'],
+    ['Product Code', '', 'cc-ber-01'],
+    ['EAR CUSHION', '', ''],
+    ['Material', 'Microfiber', ''],
+    ['Colour', '', 'Pantone 1777C'],
+  ]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(switch2), 'Switch 2')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cocoon), 'Cocoon')
+  const out = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+  const buffer = Buffer.isBuffer(out) ? out : Buffer.from(out)
+
+  const parsed = parseCmfWorkbook(buffer)
+  expect(parsed.format).toBe('transposed')
+  expect(parsed.unmappedSheets).toEqual([])
+  expect(parsed.unrecognisedSheets).toEqual([])
+  expect(parsed.droppedSkuColumns).toEqual([])
+  expect(parsed.unknownAttributeRows).toEqual([])
+
+  // Both products parsed; Switch 2 has both SKUs filled.
+  const slugs = parsed.sheets.map((s) => s.productSlug).sort()
+  expect(slugs).toEqual(['cocoon', 'switch2'])
+  const switch2Sheet = parsed.sheets.find((s) => s.productSlug === 'switch2')!
+  expect(switch2Sheet.skus).toHaveLength(2)
+
+  // Group header recorded for the document layout.
+  expect(switch2Sheet.groups.map((g) => g.name)).toContain('EARPLUG (1-4)')
+
+  // Normalisation cleanly turns it into rows with no validation errors.
+  const normalised = normaliseParsedSheets(parsed.sheets)
+  expect(normalised.errors).toEqual([])
+  expect(normalised.rows).toHaveLength(3)
+})
+
 test('all-placeholder SKU columns appear in droppedSkuColumns', () => {
   // SKU 2 only carries placeholder text — used to silently disappear,
   // now must surface so designers see why it was skipped.
