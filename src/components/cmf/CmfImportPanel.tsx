@@ -1,10 +1,11 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
+  deriveImportErrorMessage,
   useImportCmfWorkbook,
   type CmfImportDroppedSkuColumn,
   type CmfImportUnknownAttributeRow,
@@ -95,6 +96,13 @@ export function CmfImportPanel({ onPacketCreated, onRenderFocus }: CmfImportPane
   const [file, setFile] = useState<File | null>(null)
   const [packetName, setPacketName] = useState('')
   const [cmfCode, setCmfCode] = useState('')
+  /** Opt-in signature-fallback merge. Defaults OFF so iterative
+   *  uploads land in fresh packets — flip ON when the designer
+   *  wants the new workbook to overwrite the most recent matching
+   *  packet (e.g. fixing a typo, replacing a draft). The label
+   *  copy spells out the trade-off in one line so the designer
+   *  knows when to tick it. */
+  const [replaceExisting, setReplaceExisting] = useState(false)
   // Combined diagnostics. Replaced the old standalone `errors` array
   // because we now also surface unmapped sheets, unrecognised sheets,
   // and placeholder/empty SKU columns from the parser. Keeping them in
@@ -109,6 +117,30 @@ export function CmfImportPanel({ onPacketCreated, onRenderFocus }: CmfImportPane
    *  used to flip the success block off and the empty-result panel on
    *  even when the API technically returned 200. */
   const [emptyResult, setEmptyResult] = useState<{ shown: boolean } | null>(null)
+  /** Surfaces a network/server/validation failure as a persistent
+   *  destructive panel. The original `catch` only fired a toast that
+   *  auto-dismissed within seconds, leaving designers with no
+   *  surviving evidence of what went wrong. We clear this at the top
+   *  of every submit so a successful retry erases the previous
+   *  failure. */
+  const [importError, setImportError] = useState<string | null>(null)
+  /** Pending auto-close timer. The success panel is the bridge from
+   *  "spinner stopped" to "workspace is on the new packet" — but
+   *  Damien's video showed users closing the dialog 4s after the
+   *  spinner stops without ever interacting with the in-dialog
+   *  CTA. So we render the summary for ~1.8s and then trigger the
+   *  explicit handoff (close dialog + switch workspace + pulse).
+   *  The ref lets us cancel the timer if the user clicks into the
+   *  success panel (deliberate navigation) or kicks off another
+   *  import (replace the previous timer). */
+  const autoCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cancelAutoClose = () => {
+    if (autoCloseTimerRef.current) {
+      clearTimeout(autoCloseTimerRef.current)
+      autoCloseTimerRef.current = null
+    }
+  }
+  useEffect(() => cancelAutoClose, [])
   const importMutation = useImportCmfWorkbook()
   const { toast } = useToast()
   const expectedSheets = useMemo(() => listExpectedSheetNames(), [])
@@ -122,12 +154,15 @@ export function CmfImportPanel({ onPacketCreated, onRenderFocus }: CmfImportPane
     setDiagnostics(emptyDiagnostics())
     setLastSuccess(null)
     setEmptyResult(null)
+    setImportError(null)
+    cancelAutoClose()
     try {
       const result = await importMutation.mutateAsync({
         file,
         packetName: packetName || undefined,
         cmfCode: cmfCode || undefined,
         createPacket: true,
+        replaceExisting,
       })
 
       // Capture every parser warning in one bag so the rendering branches
@@ -216,21 +251,38 @@ export function CmfImportPanel({ onPacketCreated, onRenderFocus }: CmfImportPane
         })
       }
 
-      if (result.packet?.id) {
-        // Auto-switch the workspace in the background so the gallery
-        // underneath the dialog is already on the new packet. The
-        // dialog itself stays open so the designer can see the
-        // success summary and click "Open packet" — that's where the
-        // explicit handoff happens. Skipped on empty imports because
-        // there's no packet to switch to.
-        onPacketCreated?.(result.packet.id, 'auto')
+      if (result.packet?.id && !importedZeroRows) {
+        // Two-step handoff so the success surface is unmissable:
+        //   1. Fire `auto` immediately so the workspace gallery
+        //      under the dialog is already on the new packet by
+        //      the time the dialog closes.
+        //   2. Schedule the `explicit` handoff after ~1.8s — the
+        //      dialog closes, the workspace identity strip
+        //      pulses, and the new packet's gallery becomes the
+        //      success confirmation. Damien's video showed
+        //      designers closing the dialog 4s after the spinner
+        //      stops without ever reading the in-dialog summary;
+        //      this brings the confirmation to where they're
+        //      already looking. Cancellable so a click into the
+        //      summary (deliberate navigation) wins over the
+        //      timer.
+        const targetPacketId = result.packet.id
+        onPacketCreated?.(targetPacketId, 'auto')
+        autoCloseTimerRef.current = setTimeout(() => {
+          autoCloseTimerRef.current = null
+          onPacketCreated?.(targetPacketId, 'explicit')
+        }, 1800)
       }
       // reset selection so the same file can be re-imported after edits
       setFile(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Import failed'
+      const message = deriveImportErrorMessage(err)
+      // Toast gives the immediate signal; the persistent panel below
+      // keeps the error visible after the toast dismisses so the
+      // designer can read it, copy it, or screenshot it.
       toast({ title: 'Import failed', description: message })
+      setImportError(message)
     }
   }
 
@@ -259,7 +311,13 @@ export function CmfImportPanel({ onPacketCreated, onRenderFocus }: CmfImportPane
           ref={fileInputRef}
           type="file"
           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => {
+            setFile(e.target.files?.[0] ?? null)
+            // Picking a fresh file is the designer's "I'm trying
+            // again" gesture — clear the persistent failure panel
+            // so it doesn't linger past a corrective action.
+            setImportError(null)
+          }}
           className="block w-full text-sm text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-2 file:text-xs file:font-medium file:text-secondary-foreground hover:file:bg-secondary/80"
         />
         {file && (
@@ -288,6 +346,34 @@ export function CmfImportPanel({ onPacketCreated, onRenderFocus }: CmfImportPane
           placeholder="CMF-001234revA"
         />
       </div>
+
+      {/* Opt-in "Replace existing" toggle. Default is OFF so an
+          upload without a real cmfCode lands in a fresh packet (no
+          surprise merges into older near-identical packets, which
+          was Damien's reported failure mode). When ticked, an
+          upload without a cmfCode will still merge into the most
+          recent matching packet via the SKU signature — the
+          existing power-user workflow stays available, just behind
+          an explicit gesture. The label spells out the trade-off
+          inline so a designer doesn't need to read separate docs. */}
+      <label className="flex items-start gap-2 cursor-pointer rounded-md border border-border/40 bg-muted/10 px-3 py-2.5 hover:border-border/60 transition-colors">
+        <input
+          type="checkbox"
+          checked={replaceExisting}
+          onChange={(e) => setReplaceExisting(e.target.checked)}
+          className="mt-0.5 h-3.5 w-3.5 accent-primary"
+        />
+        <span className="space-y-0.5">
+          <span className="block text-xs font-medium text-foreground">
+            Replace existing packet
+          </span>
+          <span className="block text-[10.5px] leading-snug text-muted-foreground">
+            Without a CMF code, default is to create a new packet. Tick to
+            instead merge into the most recent matching packet (same SKU
+            set).
+          </span>
+        </span>
+      </label>
 
       <div className="flex flex-wrap gap-2 pt-1">
         <Button type="submit" disabled={importMutation.isPending} className="gap-2">
@@ -379,7 +465,13 @@ export function CmfImportPanel({ onPacketCreated, onRenderFocus }: CmfImportPane
                     <div className="rounded-md border border-emerald-500/30 bg-background/40 overflow-hidden">
                       <button
                         type="button"
-                        onClick={() => onPacketCreated?.(p.id, 'explicit')}
+                        onClick={() => {
+                          // User explicitly picked a packet — beat
+                          // the auto-close so we don't race the
+                          // dialog dismissal with their click.
+                          cancelAutoClose()
+                          onPacketCreated?.(p.id, 'explicit')
+                        }}
                         className="group flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-emerald-500/[0.06] transition-colors"
                       >
                         <Package className="h-4 w-4 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -452,7 +544,10 @@ export function CmfImportPanel({ onPacketCreated, onRenderFocus }: CmfImportPane
                               <li key={change.renderId}>
                                 <button
                                   type="button"
-                                  onClick={() => onRenderFocus?.(p.id, change.renderId)}
+                                  onClick={() => {
+                                    cancelAutoClose()
+                                    onRenderFocus?.(p.id, change.renderId)
+                                  }}
                                   className="text-left underline-offset-2 hover:underline text-foreground/90"
                                 >
                                   <span className="font-medium">{change.label}</span>
@@ -498,6 +593,34 @@ export function CmfImportPanel({ onPacketCreated, onRenderFocus }: CmfImportPane
             </p>
           )}
 
+        </div>
+      )}
+
+      {/* Persistent failure panel — fires when the mutation rejected
+          (network error, 403, 500, validation 4xx, timeout). The
+          original `catch` only fired a toast; without this panel the
+          dialog returned to a clean state after the toast dismissed,
+          leaving designers with no surviving evidence of WHY the
+          import failed. The message is whatever `Error.message`
+          carried (mirrored from the API's error envelope) so the
+          user can read, copy, or screenshot it before retrying. */}
+      {importError && (
+        <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3.5 text-xs text-foreground">
+          <div className="flex items-start gap-2">
+            <XCircle className="h-4 w-4 flex-shrink-0 mt-0.5 text-destructive" />
+            <div className="min-w-0 space-y-1">
+              <p className="font-semibold leading-tight text-destructive">
+                Import failed
+              </p>
+              <p className="text-[11px] leading-snug text-foreground/90 break-words">
+                {importError}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Pick the workbook again to retry. If this keeps
+                happening, share the message above with the team.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -791,3 +914,4 @@ function DiagnosticSection({
     </section>
   )
 }
+

@@ -25,8 +25,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
-/** Element id the gallery section sets so the pulse effect can find it. */
-const GALLERY_NODE_ID = 'cmf-gallery'
+/**
+ * Element ids that should pulse when the active packet changes.
+ * Order is not significant; both nodes receive the same animation
+ * on the same frame so the identity strip and the gallery feel
+ * linked. The identity strip pulse is the answer to "where did my
+ * import land?" — Damien's Gemini-confirmed failure mode was
+ * closing the import dialog without ever spotting the success
+ * surface, so the workspace strip becomes the success surface.
+ */
+const PULSE_NODE_IDS = ['cmf-identity-strip', 'cmf-gallery'] as const
 
 /** Duration the `cmf-focus-pulse` keyframes run for. Mirrors the CSS. */
 const PULSE_DURATION_MS = 2400
@@ -90,16 +98,23 @@ export function useActivePacket(
     // setTimeout.
     let timeoutId: number | undefined
     const raf = requestAnimationFrame(() => {
-      const node = document.getElementById(GALLERY_NODE_ID)
-      if (!node) return
-      // Re-trigger by removing the class first and forcing a reflow.
-      // Some browsers cache animation state and re-applying the same
-      // class without a reset doesn't replay the keyframes.
-      node.classList.remove('cmf-focus-pulse')
-      void node.offsetWidth
-      node.classList.add('cmf-focus-pulse')
-      timeoutId = window.setTimeout(() => {
+      // Pulse every registered node in lockstep (currently the
+      // identity strip + the gallery). Each node needs its own
+      // class reset + reflow so the keyframes replay even when
+      // the class is already on the element from a previous pulse.
+      const nodes = PULSE_NODE_IDS
+        .map((id) => document.getElementById(id))
+        .filter((n): n is HTMLElement => n !== null)
+      if (nodes.length === 0) return
+      for (const node of nodes) {
         node.classList.remove('cmf-focus-pulse')
+        void node.offsetWidth
+        node.classList.add('cmf-focus-pulse')
+      }
+      timeoutId = window.setTimeout(() => {
+        for (const node of nodes) {
+          node.classList.remove('cmf-focus-pulse')
+        }
       }, PULSE_DURATION_MS)
     })
     return () => {

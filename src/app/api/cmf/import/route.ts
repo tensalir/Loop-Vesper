@@ -78,6 +78,12 @@ export async function POST(request: NextRequest) {
   let cmfCode: string | undefined
   let notes: string | undefined
   let createPacket = false
+  // Opt-in signature-fallback merge. Defaults to `false` so a designer
+  // iterating on a workbook without a real cmfCode always lands on a
+  // fresh packet — Damien's debug Loom confirmed the alternative
+  // (silent always-merge-by-signature) hid his newly added SKUs in
+  // older near-identical packets.
+  let replaceExisting = false
   try {
     const formData = await request.formData()
     file = formData.get('file') as File | null
@@ -85,6 +91,7 @@ export async function POST(request: NextRequest) {
     cmfCode = (formData.get('cmfCode') as string | null) || undefined
     notes = (formData.get('notes') as string | null) || undefined
     createPacket = (formData.get('createPacket') as string | null) === 'true'
+    replaceExisting = (formData.get('replaceExisting') as string | null) === 'true'
   } catch {
     return cmfError('Invalid multipart body')
   }
@@ -204,6 +211,7 @@ export async function POST(request: NextRequest) {
     cmfCode,
     notes,
     rows: normalised.rows,
+    replaceExisting,
   })
 
   // Log one workbook-import event per packet so the activity timeline on

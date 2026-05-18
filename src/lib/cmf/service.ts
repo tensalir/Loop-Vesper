@@ -289,6 +289,29 @@ interface CreatePacketArgs {
   cmfCode?: string | null
   notes?: string | null
   rows: CmfSkuRow[]
+  /** Opt-in fallback merge by SKU signature. When `false` (the
+   *  default), uploads without a real `cmfCode` always create a
+   *  fresh packet — stopping the silent packet sprawl Damien
+   *  surfaced where iterative re-uploads landed in different old
+   *  packets depending on which SKU was added/renamed last. Only
+   *  the `(productSlug, cmfCode)` exact-match path runs
+   *  unconditionally; the signature fallback runs only when the
+   *  designer explicitly ticks "Replace existing packet" in the
+   *  import dialog AND the workbook has no cmfCode. */
+  replaceExisting?: boolean
+}
+
+/**
+ * Pure decision predicate for the signature-fallback merge. Exported
+ * so a unit test can pin the contract without a Prisma instance.
+ * The cmfCode-exact-match path is unconditional and not gated by
+ * this — only the signature fallback is.
+ */
+export function shouldRunSignatureMerge(args: {
+  replaceExisting: boolean
+  inferredCmf: string | null
+}): boolean {
+  return args.replaceExisting && !args.inferredCmf
 }
 
 /**
@@ -507,7 +530,8 @@ async function findExistingPacketForMerge(
   tx: CmfTransactionClient,
   productSlug: string,
   inferredCmf: string | null,
-  rows: CmfSkuRow[]
+  rows: CmfSkuRow[],
+  replaceExisting: boolean
 ) {
   if (inferredCmf) {
     const byCode = await tx.cmfPacket.findFirst({
@@ -520,12 +544,15 @@ async function findExistingPacketForMerge(
     })
     if (byCode) return byCode
   }
-  // Signature fallback. We intentionally span owners — under the
-  // global-library model anyone re-uploading the same workbook should
-  // land on the canonical record. Cardinality is small (tens of
-  // packets per product at most), so loading + signature-comparing in
-  // JS is cheaper than building a generated-column index.
-  if (!inferredCmf) {
+  // Signature fallback — only when the designer opted into
+  // "Replace existing packet" AND there's no cmfCode to anchor on.
+  // Until this gate landed, the fallback ran on every cmfCode-less
+  // upload and silently lumped near-identical iterations into
+  // different older packets (Damien's "I see edited 6/7 days ago"
+  // report). The gate keeps the desired "re-upload the same
+  // workbook over the same packet" workflow alive when the user
+  // wants it, without making it the default.
+  if (shouldRunSignatureMerge({ replaceExisting, inferredCmf })) {
     const incomingSig = packetRowSignature(rows)
     if (!incomingSig) return null
     const candidates = await tx.cmfPacket.findMany({
@@ -848,6 +875,7 @@ export async function createPacketFromRows(
 ): Promise<{ packets: CreatedPacket[] }> {
   if (args.rows.length === 0) return { packets: [] }
   const buckets = groupRowsByProductSlug(args.rows)
+  const replaceExisting = args.replaceExisting ?? false
 
   return prisma.$transaction(async (tx) => {
     const out: CreatedPacket[] = []
@@ -865,7 +893,13 @@ export async function createPacketFromRows(
         inferredCmf,
         product: getCmfProduct(productSlug),
       }
-      const existing = await findExistingPacketForMerge(tx, productSlug, inferredCmf, rows)
+      const existing = await findExistingPacketForMerge(
+        tx,
+        productSlug,
+        inferredCmf,
+        rows,
+        replaceExisting
+      )
       if (existing) {
         out.push(await mergeRowsIntoPacket(tx, existing, rows, ctx))
       } else {
@@ -915,10 +949,22 @@ export async function findAccessiblePacket(packetId: string, _userId: string) {
  *   - `'viewer'` for everyone else — they can browse but UI surfaces
  *     should hide write affordances.
  */
+/**
+ * orderBy used by the cross-product packet list (Products dialog
+ * rail + workspace dropdown). Sorting by `updatedAt` instead of
+ * `createdAt` so a just-merged or just-created packet jumps to the
+ * top — without this, the rail showed packets in the order they
+ * were FIRST created, which meant a re-upload that merged into an
+ * older packet stayed buried (Damien's "I see edited 6/7 days ago"
+ * report). Exported so the contract has a single source of truth
+ * the test can pin verbatim.
+ */
+export const LIST_PACKETS_ORDER_BY = { updatedAt: 'desc' as const }
+
 export async function listAccessiblePackets(userId: string) {
   const [packets, profile] = await Promise.all([
     prisma.cmfPacket.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: LIST_PACKETS_ORDER_BY,
       include: {
         renders: {
           // Wider per-render projection than the original "global

@@ -249,7 +249,10 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
             (besides re-importing) for swapping packets, so we surface
             it at the same level as the identity itself. */}
         {packet && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/40 bg-muted/20 px-3 py-2.5">
+          <div
+            id="cmf-identity-strip"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/40 bg-muted/20 px-3 py-2.5"
+          >
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <Package className="h-4 w-4 flex-shrink-0 text-primary/80" />
               <div className="min-w-0">

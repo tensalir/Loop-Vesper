@@ -275,6 +275,30 @@ export interface CmfImportResponse {
 }
 
 /**
+ * Pure derivation of the user-facing import error message. Lives
+ * outside the panel so a unit test can pin the mapping without
+ * standing up React + the toast system. Three cases:
+ *
+ *   - `Error` instances: use the message verbatim.
+ *   - Strings: use as-is so callers can pass an already-formatted
+ *     message without wrapping in `new Error()`.
+ *   - Anything else (null/undefined, plain objects, abort signals
+ *     without a message): fall back to the generic "Import failed"
+ *     so the panel never shows `[object Object]`.
+ */
+export function deriveImportErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    const msg = err.message?.trim()
+    return msg || 'Import failed'
+  }
+  if (typeof err === 'string') {
+    const msg = err.trim()
+    return msg || 'Import failed'
+  }
+  return 'Import failed'
+}
+
+/**
  * Pure derivation of the cache keys an import response should
  * invalidate. Lives outside the hook so a unit test can pin the
  * behaviour without setting up a QueryClient:
@@ -320,6 +344,12 @@ export function useImportCmfWorkbook() {
       cmfCode?: string
       notes?: string
       createPacket?: boolean
+      /** Opt-in signature-fallback merge. When omitted/false, an
+       *  upload without a real `cmfCode` always creates a fresh
+       *  packet instead of silently merging into a same-SKU-set
+       *  older one. Designers tick this in the import dialog when
+       *  they explicitly want to overwrite an existing packet. */
+      replaceExisting?: boolean
     }): Promise<CmfImportResponse> => {
       const formData = new FormData()
       formData.append('file', args.file)
@@ -327,6 +357,7 @@ export function useImportCmfWorkbook() {
       if (args.cmfCode) formData.append('cmfCode', args.cmfCode)
       if (args.notes) formData.append('notes', args.notes)
       if (args.createPacket) formData.append('createPacket', 'true')
+      if (args.replaceExisting) formData.append('replaceExisting', 'true')
 
       const res = await fetch('/api/cmf/import', {
         method: 'POST',
