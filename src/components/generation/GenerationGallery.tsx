@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, forwardRef, useMemo, memo } from 'react'
 import Image from 'next/image'
-import { Download, RotateCcw, Info, Copy, Bookmark, Check, Video, Wand2, X, Trash2, Pin, ArrowDownRight, Camera, Paintbrush, Film, Layers } from 'lucide-react'
+import { Download, RotateCcw, Info, Copy, Bookmark, Check, Video, Wand2, X, Trash2, Pin, ArrowDownRight, Camera, Paintbrush, Film } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { GenerationWithOutputs } from '@/types/generation'
 import type { Session } from '@/types/project'
@@ -1730,6 +1730,14 @@ export function GenerationGallery({
                     >
                       <Pin className="h-3.5 w-3.5 text-white" />
                     </button>
+                  </div>
+
+                  {/* Bottom Right - Quick edit + Use as Reference + Convert to Video (hover-only,
+                      Quick edit stays visible while it's the active edit target) */}
+                  <div
+                    className="absolute bottom-2 right-2 pointer-events-auto flex items-center gap-1.5"
+                    style={{ zIndex: 10 }}
+                  >
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
@@ -1739,64 +1747,55 @@ export function GenerationGallery({
                           generation,
                         })
                       }}
-                      className={`p-1.5 backdrop-blur-sm rounded-lg transition-colors ${
+                      className={`transition-all hover:scale-110 p-1.5 rounded-full backdrop-blur-sm ${
                         isEditTarget
-                          ? 'bg-primary/80 hover:bg-primary'
-                          : 'bg-white/20 hover:bg-white/30'
+                          ? 'bg-primary/80 hover:bg-primary opacity-100'
+                          : 'bg-primary/20 hover:bg-primary/30 opacity-0 group-hover:opacity-100'
                       }`}
                       title={isEditTarget ? 'Editing this image' : 'Quick edit'}
                     >
-                      <Paintbrush className="h-3.5 w-3.5 text-white" />
+                      <Paintbrush
+                        className={`h-3.5 w-3.5 ${isEditTarget ? 'text-white' : 'text-primary'}`}
+                        style={
+                          isEditTarget
+                            ? undefined
+                            : {
+                                filter:
+                                  'drop-shadow(0 0 6px hsl(var(--primary) / 0.5)) drop-shadow(0 0 10px hsl(var(--primary) / 0.25))',
+                              }
+                        }
+                      />
                     </button>
-                    {output.fileType === 'image' && (
+                    {onUseAsReference && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          setIterationContext({
-                            output: { id: output.id, fileUrl: output.fileUrl },
-                            generation,
-                          })
+                          onUseAsReference({ imageUrl: output.fileUrl, outputId: output.id })
                         }}
-                        className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
-                        title="Create iterations (Andromeda-aware)"
+                        className="transition-all hover:scale-110 opacity-0 group-hover:opacity-100 p-1.5 rounded-full bg-primary/20 hover:bg-primary/30 backdrop-blur-sm"
+                        title="Use as reference"
                       >
-                        <Layers className="h-3.5 w-3.5 text-white" />
+                        <ArrowDownRight
+                          className="h-3.5 w-3.5 text-primary"
+                          style={{
+                            filter: 'drop-shadow(0 0 6px hsl(var(--primary) / 0.5)) drop-shadow(0 0 10px hsl(var(--primary) / 0.25))',
+                          }}
+                        />
+                      </button>
+                    )}
+                    {currentGenerationType === 'image' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleVideoConversion(output.id, output.fileUrl)
+                        }}
+                        className="transition-all hover:scale-110 opacity-0 group-hover:opacity-100 p-1.5 rounded-full bg-primary/20 hover:bg-primary/30 backdrop-blur-sm"
+                        title="Convert to video"
+                      >
+                        <Video className="h-3.5 w-3.5 text-primary" />
                       </button>
                     )}
                   </div>
-                  
-                  {/* Bottom Right - Use as Reference + Convert to Video (hover-only) */}
-                  {onUseAsReference && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onUseAsReference({ imageUrl: output.fileUrl, outputId: output.id })
-                      }}
-                      className="absolute bottom-2 right-[2.5rem] pointer-events-auto transition-all hover:scale-110 opacity-0 group-hover:opacity-100 p-1.5 rounded-full bg-primary/20 hover:bg-primary/30 backdrop-blur-sm"
-                      style={{ zIndex: 10 }}
-                      title="Use as reference"
-                    >
-                      <ArrowDownRight
-                        className="h-3.5 w-3.5 text-primary"
-                        style={{
-                          filter: 'drop-shadow(0 0 6px hsl(var(--primary) / 0.5)) drop-shadow(0 0 10px hsl(var(--primary) / 0.25))',
-                        }}
-                      />
-                    </button>
-                  )}
-                  {currentGenerationType === 'image' && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleVideoConversion(output.id, output.fileUrl)
-                      }}
-                      className="absolute bottom-2 right-2 pointer-events-auto transition-all hover:scale-110 opacity-0 group-hover:opacity-100 p-1.5 rounded-full bg-primary/20 hover:bg-primary/30 backdrop-blur-sm"
-                      style={{ zIndex: 10 }}
-                      title="Convert to video"
-                    >
-                      <Video className="h-3.5 w-3.5 text-primary" />
-                    </button>
-                  )}
                 </div>
 
               </div>
