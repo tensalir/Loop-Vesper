@@ -1708,7 +1708,7 @@ export function GenerationGallery({
                     </button>
                   </div>
                   
-                  {/* Bottom Left - Reuse + Pin */}
+                  {/* Bottom Left - Reuse */}
                   <div className="absolute bottom-2 left-2 pointer-events-auto flex items-center gap-1">
                     <button
                       onClick={(e) => {
@@ -1719,16 +1719,6 @@ export function GenerationGallery({
                       title="Reuse parameters"
                     >
                       <RotateCcw className="h-3.5 w-3.5 text-white" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handlePinImage(output.fileUrl)
-                      }}
-                      className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
-                      title="Pin to project"
-                    >
-                      <Pin className="h-3.5 w-3.5 text-white" />
                     </button>
                   </div>
 
