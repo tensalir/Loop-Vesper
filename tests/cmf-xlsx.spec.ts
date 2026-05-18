@@ -437,6 +437,81 @@ test('a richer "golden" workbook parses end-to-end with no warnings', () => {
   expect(normalised.rows).toHaveLength(3)
 })
 
+/**
+ * Damien's exact scenario, end-to-end at the parser/normaliser level:
+ *
+ *   1. He uploads a Switch 2 workbook with two filled SKUs
+ *      (Emerald + Gold).
+ *   2. He re-uploads the same workbook with a THIRD SKU added
+ *      (Holographic TML).
+ *   3. The second parse must surface all three SKUs and produce a
+ *      normalised row for the new one — silently dropping it (the
+ *      reported behaviour) was the bug.
+ *
+ * Pins this so future parser changes can't quietly regress to "we
+ * only see the SKUs that were in the workbook the first time".
+ */
+test('re-uploading a Switch 2 workbook with a new SKU surfaces the new colourway', () => {
+  function buildSwitch2(skus: Array<{ name: string; code: string; pantone: string }>): Buffer {
+    const headerRow = ['', 'Common specs', ...skus.map((_, i) => `SKU ${i + 1}`)]
+    const rows: unknown[][] = [
+      headerRow,
+      ['BANNER', '', ...new Array(skus.length).fill('')],
+      ['CMF number', '', ...skus.map((_, i) => `CMF-00${1234 + i}revA`)],
+      ['Product Name', '', ...skus.map((s) => s.name)],
+      ['Product Code', '', ...skus.map((s) => s.code)],
+      ['POM RING', '', ...new Array(skus.length).fill('')],
+      ['Material', 'POM', ...new Array(skus.length).fill('')],
+      ['Finish', 'Matte', ...new Array(skus.length).fill('')],
+      ['Colour', '', ...skus.map((s) => s.pantone)],
+    ]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Switch 2')
+    const out = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+    return Buffer.isBuffer(out) ? out : Buffer.from(out)
+  }
+
+  // First upload — only Emerald + Gold.
+  const before = buildSwitch2([
+    { name: 'Switch 2 Emerald', code: 'en-sw-emb-02', pantone: 'Pantone 17-5641 TCX' },
+    { name: 'Switch 2 Gold', code: 'en-sw-gld-02', pantone: 'Pantone 16-1054 TCX' },
+  ])
+  const parsedBefore = parseCmfWorkbook(before)
+  const beforeRows = normaliseParsedSheets(parsedBefore.sheets)
+  expect(beforeRows.errors).toEqual([])
+  expect(beforeRows.rows).toHaveLength(2)
+  expect(beforeRows.rows.map((r) => r.colorwayName).sort()).toEqual([
+    'Switch 2 Emerald',
+    'Switch 2 Gold',
+  ])
+
+  // Second upload — designer added Holographic TML as SKU 3.
+  const after = buildSwitch2([
+    { name: 'Switch 2 Emerald', code: 'en-sw-emb-02', pantone: 'Pantone 17-5641 TCX' },
+    { name: 'Switch 2 Gold', code: 'en-sw-gld-02', pantone: 'Pantone 16-1054 TCX' },
+    {
+      name: 'Switch 2 Holographic TML',
+      code: 'en-sw-hol-02',
+      pantone: 'Pantone 877C',
+    },
+  ])
+  const parsedAfter = parseCmfWorkbook(after)
+  expect(parsedAfter.unrecognisedSheets).toEqual([])
+  expect(parsedAfter.droppedSkuColumns).toEqual([])
+
+  const afterRows = normaliseParsedSheets(parsedAfter.sheets)
+  expect(afterRows.errors).toEqual([])
+  expect(afterRows.rows).toHaveLength(3)
+  // The new SKU has to be present by name — that's what Damien
+  // checked the gallery for ("It still only generate the emerald
+  // and gold").
+  expect(afterRows.rows.map((r) => r.colorwayName).sort()).toEqual([
+    'Switch 2 Emerald',
+    'Switch 2 Gold',
+    'Switch 2 Holographic TML',
+  ])
+})
+
 test('all-placeholder SKU columns appear in droppedSkuColumns', () => {
   // SKU 2 only carries placeholder text — used to silently disappear,
   // now must surface so designers see why it was skipped.

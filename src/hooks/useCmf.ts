@@ -274,6 +274,40 @@ export interface CmfImportResponse {
   packet?: CmfPacket
 }
 
+/**
+ * Pure derivation of the cache keys an import response should
+ * invalidate. Lives outside the hook so a unit test can pin the
+ * behaviour without setting up a QueryClient:
+ *
+ *   - Always invalidate the global packet list — the new / merged
+ *     packet(s) need to show in the Products dropdown.
+ *   - Invalidate every packet detail touched by the import. Without
+ *     this, a re-upload that merged a new SKU into an already-open
+ *     packet keeps showing the stale renders list until the next
+ *     manual refetch (the "I added a SKU but the gallery still only
+ *     shows the old ones" report).
+ *
+ * Multi-product imports return the touched packets on `data.packets`
+ * and the auto-open packet on `data.packet`; we de-duplicate so the
+ * primary packet doesn't end up invalidated twice.
+ */
+export function cmfImportInvalidationKeys(
+  data: Pick<CmfImportResponse, 'packet' | 'packets'>
+): Array<['cmf', 'packets'] | ['cmf', 'packet', string]> {
+  const keys: Array<['cmf', 'packets'] | ['cmf', 'packet', string]> = [
+    ['cmf', 'packets'],
+  ]
+  const touchedIds = new Set<string>()
+  if (data.packet?.id) touchedIds.add(data.packet.id)
+  for (const p of data.packets ?? []) {
+    if (p.id) touchedIds.add(p.id)
+  }
+  for (const id of touchedIds) {
+    keys.push(['cmf', 'packet', id])
+  }
+  return keys
+}
+
 export function useImportCmfWorkbook() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -301,8 +335,10 @@ export function useImportCmfWorkbook() {
       }
       return res.json()
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cmf', 'packets'] })
+    onSuccess: (data) => {
+      for (const queryKey of cmfImportInvalidationKeys(data)) {
+        queryClient.invalidateQueries({ queryKey })
+      }
     },
   })
 }

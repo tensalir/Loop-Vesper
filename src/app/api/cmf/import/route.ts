@@ -14,6 +14,7 @@ import {
   requireCmfWrite,
 } from '@/lib/cmf/service'
 import { cmfError } from '@/lib/cmf/api'
+import { withTimeout } from '@/lib/cmf/promise'
 import { getCmfProduct } from '@/lib/cmf/products'
 import { createRateLimiter } from '@/lib/api/rate-limit'
 
@@ -21,6 +22,37 @@ export const dynamic = 'force-dynamic'
 
 const cmfImportLimiter = createRateLimiter({ maxRequests: 30, windowMs: 60_000 })
 const MAX_WORKBOOK_BYTES = 10 * 1024 * 1024 // 10 MB
+/**
+ * Upper bound on the workbook traceability upload. The actual upload
+ * usually completes in well under a second, but Supabase Storage has
+ * historically been the slowest dependency in the import path — when
+ * it stalls, the import button stays in its loading state until the
+ * route times out at the platform level (60s on Vercel hobby, longer
+ * elsewhere), which reads to designers as a fully hung app. Eight
+ * seconds is generous enough to absorb a slow round-trip without
+ * stalling the import for a feature (traceability) that's
+ * intentionally best-effort.
+ */
+const STORAGE_UPLOAD_TIMEOUT_MS = 8000
+
+/**
+ * Persist the raw workbook to storage and stamp the import row with
+ * the resulting path. Pulled out of the route so the timeout wrapper
+ * has a single awaited unit to race against — and so a future test
+ * can stub one side independently of the other.
+ */
+async function uploadImportArtifact(
+  buffer: Buffer,
+  path: string,
+  importId: string
+): Promise<void> {
+  const dataUrl = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${buffer.toString('base64')}`
+  await uploadBase64ToStorage(dataUrl, CMF_STORAGE_BUCKET, path)
+  await prisma.cmfImport.update({
+    where: { id: importId },
+    data: { storagePath: path },
+  })
+}
 
 /**
  * POST /api/cmf/import
@@ -115,17 +147,30 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  // Upload the original .xlsx for traceability. Best-effort.
+  // Upload the original .xlsx for traceability. Best-effort AND
+  // time-bounded: a hanging Supabase Storage call used to leave the
+  // import button spinning until the platform request timeout fired,
+  // even though the packet was already created in the database. The
+  // timeout lets the route return as soon as the meaningful work is
+  // done; the inner upload keeps running in the background and a
+  // structured warning carries enough context for an operator to
+  // tell "the upload was slow" from "the upload errored". The
+  // `storagePath` update is part of the timed block so a partial
+  // success (file uploaded but DB never updated) is treated the same
+  // as a full failure — we'd rather re-upload on the next try than
+  // lie in the database about where the file lives.
   try {
-    const dataUrl = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${buffer.toString('base64')}`
     const path = importStoragePath(auth.profile.userId, importRecord.id)
-    await uploadBase64ToStorage(dataUrl, CMF_STORAGE_BUCKET, path)
-    await prisma.cmfImport.update({
-      where: { id: importRecord.id },
-      data: { storagePath: path },
-    })
+    await withTimeout(
+      uploadImportArtifact(buffer, path, importRecord.id),
+      STORAGE_UPLOAD_TIMEOUT_MS,
+      `storage upload exceeded ${STORAGE_UPLOAD_TIMEOUT_MS}ms`
+    )
   } catch (err) {
-    console.warn('[cmf/import] storage upload failed', err)
+    console.warn('[cmf/import] storage upload skipped', {
+      importId: importRecord.id,
+      reason: err instanceof Error ? err.message : 'unknown error',
+    })
   }
 
   if (!createPacket || normalised.rows.length === 0) {
