@@ -302,7 +302,10 @@ export function cmfImportInvalidationKeys(
   for (const p of data.packets ?? []) {
     if (p.id) touchedIds.add(p.id)
   }
-  for (const id of touchedIds) {
+  // Materialise the set via Array.from so the iteration target stays
+  // compatible with the current tsconfig (no `--downlevelIteration`
+  // required) — same workaround used by `service.ts:componentsDiffer`.
+  for (const id of Array.from(touchedIds)) {
     keys.push(['cmf', 'packet', id])
   }
   return keys

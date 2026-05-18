@@ -129,11 +129,20 @@ test('handles the validation-only response (no packets created) without crashing
 test('skips packets entries with no id (defensive)', () => {
   // Defensive: a future server-side change shouldn't poison the
   // query cache with `['cmf','packet', undefined]` invalidations.
+  // Deliberately malformed entry the server should never emit — `id`
+  // is a falsy empty string. The helper has to skip it rather than
+  // poison the cache with `['cmf','packet', '']`.
   const data: Pick<CmfImportResponse, 'packet' | 'packets'> = {
     packets: [
-      // @ts-expect-error — testing the defensive branch with a
-      // deliberately malformed entry the server should never emit.
-      { id: '', name: 'Empty', cmfCode: null, status: 'draft', productSlug: null, productName: null, renderCount: 0 },
+      {
+        id: '',
+        name: 'Empty',
+        cmfCode: null,
+        status: 'draft',
+        productSlug: null,
+        productName: null,
+        renderCount: 0,
+      },
     ],
   }
   const keys = cmfImportInvalidationKeys(data)
