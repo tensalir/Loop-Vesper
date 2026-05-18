@@ -89,7 +89,10 @@ export async function publishUpdate(ctx: PublishContext): Promise<PublishResult>
     slug,
     title: ctx.generated.title,
     summary: ctx.generated.summary,
-    snippets: ctx.generated.snippets as unknown as Prisma.JsonValue,
+    // Snippets are always a populated array (the generator guarantees this),
+    // so cast to `InputJsonValue` rather than `JsonValue` — the latter
+    // includes `null`, which `ProductUpdateCreateInput.snippets` rejects.
+    snippets: ctx.generated.snippets as unknown as Prisma.InputJsonValue,
     publishedAt: new Date(newest.date),
     significanceScore: ctx.significanceScore,
     commitRangeStart: oldest.sha,

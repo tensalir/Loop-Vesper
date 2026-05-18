@@ -39,11 +39,17 @@ export const LIVENESS_DEFAULT_THRESHOLDS = {
   UI_VIDEO_DELAYED_MINUTES: 12,
 } as const
 
-/** Subset of `Generation` we need. Keep narrow to avoid coupling. */
+/** Subset of `Generation` we need. Keep narrow to avoid coupling.
+ *
+ * `parameters` is typed as `unknown` rather than `Record<string, unknown>`
+ * so this accepts a raw Prisma row (which types `parameters` as `JsonValue`,
+ * a wider union that includes primitives). Every read below already coerces
+ * to a record at runtime, so the narrower type was just lying to TypeScript.
+ */
 export interface GenerationLikeForLiveness {
   status: string
   createdAt: Date | string
-  parameters?: Record<string, unknown> | null
+  parameters?: unknown
 }
 
 export type LivenessReason =
