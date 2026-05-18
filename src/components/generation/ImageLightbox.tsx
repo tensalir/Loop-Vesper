@@ -17,8 +17,12 @@ interface ImageLightboxProps {
   onConvertToVideo?: () => void
   /** Optional: pin image to project for reuse as reference */
   onPin?: (imageUrl: string) => void
-  /** Optional: use image as reference in the prompt bar */
-  onUseAsReference?: (imageUrl: string) => void
+  /**
+   * Optional: use image as reference in the prompt bar. Receives the source
+   * output id alongside the URL so the parent can tag the next generation
+   * with iteration lineage (`sourceRootOutputId`).
+   */
+  onUseAsReference?: (ctx: { imageUrl: string; outputId: string }) => void
 }
 
 export function ImageLightbox({ 
@@ -104,7 +108,7 @@ export function ImageLightbox({
           )}
           {onUseAsReference && (
             <button
-              onClick={() => onUseAsReference(imageUrl)}
+              onClick={() => onUseAsReference({ imageUrl, outputId: output.id })}
               className="p-2 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
               title="Use as reference"
             >

@@ -31,11 +31,22 @@ Enhance the user's prompt by adding helpful details while respecting their creat
 ## Response Format
 Return ONLY the enhanced prompt text. Nothing else.`
 
+export type EnhancePromptMode = 'standard' | 'iteration-edit'
+
 export interface EnhancePromptInput {
   prompt: string
   modelId: string
   /** Data-URL or HTTPS URL of an optional reference image. */
   referenceImage?: string
+  /**
+   * Enhancement mode.
+   * - `standard` (default): the existing user-facing Enhance button behavior.
+   * - `iteration-edit`: silent server-side rewrite when iterating on a
+   *   previously-generated image. Steers Claude to perform an image-aware
+   *   preservation rewrite using the "Iterating on a Generated Image" section
+   *   of the genai-prompting skill, with a tight output budget.
+   */
+  mode?: EnhancePromptMode
 }
 
 export interface EnhancePromptResult {
@@ -315,6 +326,41 @@ Guidelines:
 Return ONLY the enhanced prompt text. Nothing else.`
 }
 
+/**
+ * Build the user message for `iteration-edit` mode. Inlines the 5-step
+ * analysis from the genai-prompting skill so Claude reliably performs an
+ * image-aware preservation rewrite, and enforces a tight output budget so the
+ * result steers the image model rather than burying it.
+ */
+function buildIterationRequestContent(args: {
+  userPrompt: string
+  modelId: string
+}): string {
+  const { userPrompt, modelId } = args
+  return `ITERATION-EDIT MODE — silent server-side rewrite.
+
+The user is iterating on a previously-generated image. The attached reference image is the actual current state. Your rewritten prompt will be sent verbatim to the image model (selected model: ${modelId}) with no surrounding chat, no quotes, and no preamble.
+
+The user's prompt almost always under-specifies preservation. Your job is to add the preservation language that's missing, scoped to what you actually see in the image.
+
+Perform this analysis silently before composing the prompt:
+1. Look at the attached image. Identify the specific subject(s) and product(s) that must survive unchanged — name them concretely (e.g. "the Loop case", "the white earplug stems", "the embossed wordmark"). Note geometry, materials, color saturation, labels/text/logos, and any fine surface detail that's at risk.
+2. Identify the user's edit intent (zoom in/out, lighting change, environment swap, add/remove, restyle, angle change, etc.).
+3. Identify the failure mode for that intent and the specific subject (zoom-out → product shrinks and muddies; environment swap → light/color cast bleeds onto product; restyle → grading bleeds onto product surface; add element → composition crowding; angle change → invented geometry).
+4. Compose one prompt with three parts: an anchor block (preserve, concrete), a change block (apply only this, with placement and lighting), and a short non-goals line ruling out the failure mode.
+
+Hard rules for your output:
+- Return ONE prompt only. No headings, no labels, no markdown, no quotes, no code fences, no explanations.
+- 2 to 5 sentences total. Tight, not verbose.
+- Never re-describe what's already visible in the reference image; the image is the source of truth.
+- Always reference the attached image as the high-fidelity source-of-truth for the subject(s) you identified.
+- Match original lighting direction and color temperature unless the user explicitly asked to change them.
+
+User's raw prompt: "${userPrompt}"
+
+Return the rewritten prompt now.`
+}
+
 function buildMessageContent(
   requestContent: string,
   referenceImage?: string
@@ -359,22 +405,32 @@ export async function enhancePrompt(
     throw new Error('prompt is required')
   }
 
+  const mode: EnhancePromptMode = input.mode ?? 'standard'
+
   const systemPrompt = await loadSystemPrompt(input.modelId)
   const enhancementPromptId = await loadEnhancementPromptId(input.modelId)
-  const requestContent = buildRequestContent({
-    userPrompt,
-    modelId: input.modelId,
-    hasReferenceImage: Boolean(input.referenceImage),
-  })
+  const requestContent =
+    mode === 'iteration-edit'
+      ? buildIterationRequestContent({ userPrompt, modelId: input.modelId })
+      : buildRequestContent({
+          userPrompt,
+          modelId: input.modelId,
+          hasReferenceImage: Boolean(input.referenceImage),
+        })
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const enhancementModel =
     process.env.ANTHROPIC_PROMPT_ENHANCE_MODEL || DEFAULT_PROMPT_ENHANCE_MODEL
 
+  // Iteration-edit mode wants a tight, deterministic rewrite. Standard mode
+  // keeps the existing creative-temperature settings.
+  const maxTokens = mode === 'iteration-edit' ? 600 : 2000
+  const temperature = mode === 'iteration-edit' ? 0.3 : 0.7
+
   const message = await anthropic.messages.create({
     model: enhancementModel,
-    max_tokens: 2000,
-    temperature: 0.7,
+    max_tokens: maxTokens,
+    temperature,
     system: systemPrompt,
     messages: [
       {
@@ -397,6 +453,16 @@ export async function enhancePrompt(
 
   if (!enhancedPrompt) {
     throw new Error('Enhancement model returned an empty response')
+  }
+
+  if (mode === 'iteration-edit') {
+    // Strip wrapping quotes if Claude added them despite instructions.
+    enhancedPrompt = enhancedPrompt.replace(/^["'\u201C\u201D\u2018\u2019]+|["'\u201C\u201D\u2018\u2019]+$/g, '').trim()
+    // Hard cap so the rewrite steers the image model rather than burying it.
+    const ITERATION_PROMPT_MAX_CHARS = 1200
+    if (enhancedPrompt.length > ITERATION_PROMPT_MAX_CHARS) {
+      enhancedPrompt = `${enhancedPrompt.slice(0, ITERATION_PROMPT_MAX_CHARS - 1).trimEnd()}\u2026`
+    }
   }
 
   return {

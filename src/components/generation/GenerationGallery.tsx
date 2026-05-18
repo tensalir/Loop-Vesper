@@ -13,9 +13,9 @@ import { markGenerationDismissed } from '@/hooks/useGenerationsRealtime'
 import { GenerationProgress } from './GenerationProgress'
 import { ImageLightbox } from './ImageLightbox'
 import { ImageToVideoOverlay } from './ImageToVideoOverlay'
-import { VideoIterationsStackHint } from './VideoIterationsStackHint'
 import { ImageBranchStack } from './ImageBranchStack'
-import { InlineEditComposer } from './InlineEditComposer'
+import { StackEffect } from './StackEffect'
+import { VideoAttachedPill } from './VideoAttachedPill'
 import { IterationSlateDialog } from './IterationSlateDialog'
 import {
   formatDate,
@@ -358,8 +358,10 @@ interface GenerationGalleryProps {
   scrollContainerRef?: React.RefObject<HTMLDivElement>
   /**
    * Callback to use a generated image as a reference in the prompt bar.
+   * Receives both the image URL and the source output id so the parent can
+   * tag the next generation with iteration lineage (`sourceRootOutputId`).
    */
-  onUseAsReference?: (imageUrl: string) => void
+  onUseAsReference?: (ctx: { imageUrl: string; outputId: string }) => void
   /**
    * Deep-link: output ID to scroll to (one-time scroll action).
    */
@@ -372,6 +374,20 @@ interface GenerationGalleryProps {
    * Callback when scroll-to-output action is complete.
    */
   onScrollToOutputComplete?: () => void
+  /**
+   * Quick-edit selection — clicking the paintbrush button surfaces the selected
+   * image to the main Prompt Bar instead of opening an inline composer.
+   */
+  onQuickEditSelect?: (ctx: {
+    outputId: string
+    imageUrl: string
+    generation: GenerationWithOutputs
+  }) => void
+  /**
+   * Output ID currently selected for quick edit — used to render a glow on the
+   * source card and as a connector target.
+   */
+  activeEditOutputId?: string | null
 }
 
 export function GenerationGallery({
@@ -391,6 +407,8 @@ export function GenerationGallery({
   scrollToOutputId,
   highlightOutputId,
   onScrollToOutputComplete,
+  onQuickEditSelect,
+  activeEditOutputId,
 }: GenerationGalleryProps) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -434,53 +452,11 @@ export function GenerationGallery({
     }
   }, [queryClient, toast])
 
-  // Inline edit composer state
-  const [editingOutputId, setEditingOutputId] = useState<string | null>(null)
   // Iteration slate dialog state — opened from the gallery for image-card iteration
   const [iterationContext, setIterationContext] = useState<{
     output: { id: string; fileUrl: string }
     generation: GenerationWithOutputs
   } | null>(null)
-
-  const handleInlineEdit = useCallback(async (
-    editPrompt: string,
-    referenceImageUrl: string,
-    sourceOutputId: string
-  ) => {
-    try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          sessionId,
-          modelId: 'gemini-nano-banana-2',
-          prompt: editPrompt,
-          parameters: {
-            aspectRatio: '1:1',
-            resolution: 1024,
-            numOutputs: 1,
-            referenceImageUrl,
-            sourceRootOutputId: sourceOutputId,
-            sourceKind: 'edited',
-            sourceLabel: `Edit: ${editPrompt.slice(0, 40)}`,
-          },
-        }),
-      })
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        throw new Error(errData.error || `Generation failed: ${res.status}`)
-      }
-
-      toast({ title: 'Edit started', description: 'Generating edited version...' })
-      queryClient.invalidateQueries({ queryKey: ['generations'] })
-    } catch (err: any) {
-      console.error('Inline edit error:', err)
-      toast({ title: 'Edit failed', description: err.message || 'Could not start edit', variant: 'destructive' })
-      throw err
-    }
-  }, [sessionId, queryClient, toast])
 
   /**
    * Generate a single iteration variant as a branch off the source output.
@@ -933,6 +909,35 @@ export function GenerationGallery({
     setOverlayImageUrl(null)
   }
 
+  /**
+   * Iteration branch index: maps a root output id to the number of image
+   * branches that derive from it, plus whether any branch is still
+   * processing. Used to render the stacked-card visual cue on image cards.
+   */
+  const iterationIndex = useMemo(() => {
+    const map = new Map<string, { count: number; hasProcessing: boolean }>()
+    for (const gen of generations) {
+      const params = (gen.parameters || {}) as Record<string, unknown>
+      const rootId = params.sourceRootOutputId
+      if (typeof rootId !== 'string') continue
+      // Only count image branches
+      const hasImageOutput =
+        !gen.outputs || gen.outputs.length === 0
+          ? true // optimistic / processing — counts toward pulse
+          : gen.outputs.some((o) => o.fileType === 'image')
+      if (!hasImageOutput) continue
+      const entry = map.get(rootId) ?? { count: 0, hasProcessing: false }
+      // Count actual produced image outputs once complete; count 1 for processing/optimistic rows
+      const produced =
+        gen.outputs?.filter((o) => o.fileType === 'image').length || 0
+      entry.count += produced > 0 ? produced : 1
+      if (gen.status === 'processing' || gen.status === 'queued') {
+        entry.hasProcessing = true
+      }
+      map.set(rootId, entry)
+    }
+    return map
+  }, [generations])
 
   if (generations.length === 0) {
     return (
@@ -1574,22 +1579,43 @@ export function GenerationGallery({
             <div className="flex-1 grid grid-cols-2 gap-4 max-w-5xl">
               {(generation.outputs || []).map((output) => {
                 const aspectRatio = (generation.parameters as any)?.aspectRatio || '1:1'
+                const iterationEntry = iterationIndex.get(output.id)
+                const hasIterations = !!iterationEntry && iterationEntry.count > 0
+                const isEditTarget = activeEditOutputId === output.id
+                // Focus treatment: while editing one image, soften every other
+                // image card so the user's eye is funneled to the selected source.
+                const isDimmedByEdit = !!activeEditOutputId && !isEditTarget
                 return (
-                <div key={output.id} className="group relative">
-                  {/* Video iterations indicator - glow effect + video button */}
+                <div
+                  key={output.id}
+                  className={`group relative transition-all duration-200 ${
+                    isDimmedByEdit
+                      ? 'opacity-40 blur-[2px] grayscale-[20%] hover:opacity-70 hover:blur-0 hover:grayscale-0'
+                      : ''
+                  }`}
+                >
+                  {/* Image-iteration stack cue — visible when this output has branches */}
+                  {hasIterations && (
+                    <StackEffect pulse={iterationEntry?.hasProcessing ?? false} />
+                  )}
+
+                  {/* Video-attached pill — subtle indicator above the top-right corner */}
                   {currentGenerationType === 'image' && (
-                    <VideoIterationsStackHint 
-                      outputId={output.id} 
+                    <VideoAttachedPill
+                      outputId={output.id}
                       onClick={() => handleVideoConversion(output.id, output.fileUrl)}
                     />
                   )}
-                  
+
                   {/* Main image card */}
                   <div
+                    data-edit-anchor-id={output.id}
                     className={`relative bg-muted rounded-xl overflow-hidden border group-hover:border-primary/50 group-hover:shadow-lg transition-all duration-200 ${
                       highlightOutputId === output.id
                         ? 'border-primary ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse'
-                        : 'border-border/50'
+                        : isEditTarget
+                          ? 'border-primary/80 ring-2 ring-primary/60 ring-offset-2 ring-offset-background shadow-[0_0_24px_-2px_hsl(var(--primary)/0.45)]'
+                          : 'border-border/50'
                     }`}
                     style={{ aspectRatio: getAspectRatioStyle(aspectRatio) }}
                   >
@@ -1707,10 +1733,18 @@ export function GenerationGallery({
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        setEditingOutputId(output.id)
+                        onQuickEditSelect?.({
+                          outputId: output.id,
+                          imageUrl: output.fileUrl,
+                          generation,
+                        })
                       }}
-                      className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
-                      title="Quick edit"
+                      className={`p-1.5 backdrop-blur-sm rounded-lg transition-colors ${
+                        isEditTarget
+                          ? 'bg-primary/80 hover:bg-primary'
+                          : 'bg-white/20 hover:bg-white/30'
+                      }`}
+                      title={isEditTarget ? 'Editing this image' : 'Quick edit'}
                     >
                       <Paintbrush className="h-3.5 w-3.5 text-white" />
                     </button>
@@ -1731,18 +1765,18 @@ export function GenerationGallery({
                     )}
                   </div>
                   
-                  {/* Bottom Right - Use as Reference (positioned left of the VideoIterationsStackHint video button) */}
+                  {/* Bottom Right - Use as Reference + Convert to Video (hover-only) */}
                   {onUseAsReference && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        onUseAsReference(output.fileUrl)
+                        onUseAsReference({ imageUrl: output.fileUrl, outputId: output.id })
                       }}
                       className="absolute bottom-2 right-[2.5rem] pointer-events-auto transition-all hover:scale-110 opacity-0 group-hover:opacity-100 p-1.5 rounded-full bg-primary/20 hover:bg-primary/30 backdrop-blur-sm"
                       style={{ zIndex: 10 }}
                       title="Use as reference"
                     >
-                      <ArrowDownRight 
+                      <ArrowDownRight
                         className="h-3.5 w-3.5 text-primary"
                         style={{
                           filter: 'drop-shadow(0 0 6px hsl(var(--primary) / 0.5)) drop-shadow(0 0 10px hsl(var(--primary) / 0.25))',
@@ -1750,17 +1784,20 @@ export function GenerationGallery({
                       />
                     </button>
                   )}
+                  {currentGenerationType === 'image' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleVideoConversion(output.id, output.fileUrl)
+                      }}
+                      className="absolute bottom-2 right-2 pointer-events-auto transition-all hover:scale-110 opacity-0 group-hover:opacity-100 p-1.5 rounded-full bg-primary/20 hover:bg-primary/30 backdrop-blur-sm"
+                      style={{ zIndex: 10 }}
+                      title="Convert to video"
+                    >
+                      <Video className="h-3.5 w-3.5 text-primary" />
+                    </button>
+                  )}
                 </div>
-
-                {/* Inline edit composer */}
-                {editingOutputId === output.id && (
-                  <InlineEditComposer
-                    imageUrl={output.fileUrl}
-                    outputId={output.id}
-                    onGenerate={handleInlineEdit}
-                    onClose={() => setEditingOutputId(null)}
-                  />
-                )}
 
               </div>
               {/* Close wrapper for stacked iterations */}
@@ -1794,8 +1831,8 @@ export function GenerationGallery({
           handlePinImage(imageUrl)
           setLightboxData(null)
         }}
-        onUseAsReference={onUseAsReference ? (imageUrl) => {
-          onUseAsReference(imageUrl)
+        onUseAsReference={onUseAsReference ? (ctx) => {
+          onUseAsReference(ctx)
           setLightboxData(null)
         } : undefined}
         onConvertToVideo={

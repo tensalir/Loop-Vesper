@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { prisma } from '@/lib/prisma'
-import { getModel } from '@/lib/models/registry'
+import { getModel, getModelConfig } from '@/lib/models/registry'
 import { uploadBase64ToStorage, uploadUrlToStorage } from '@/lib/supabase/storage'
 import { logMetric } from '@/lib/metrics'
 import { downloadReferenceImageAsDataUrl } from '@/lib/reference-images'
+import { enhancePrompt } from '@/lib/prompts/enhance'
 import { Prisma } from '@prisma/client'
 import { classifyError } from '@/lib/errors/classification'
 import { 
@@ -449,9 +450,109 @@ async function processGenerationById(
       console.log(`[${generationId}] Processed ${processedReferenceImages.length} reference image(s) for generation`)
     }
     
+    // Iteration-aware prompt guard: when the user iterates on a previously
+    // generated image (Quick Edit or Use-as-Reference arrow), silently rewrite
+    // the prompt with image-aware preservation language. Fail-soft.
+    let effectivePrompt = generation.prompt
+    const iterationParams = otherParameters as any
+    const isIterationEdit =
+      iterationParams?.sourceKind === 'edited' &&
+      typeof iterationParams?.sourceRootOutputId === 'string' &&
+      iterationParams.sourceRootOutputId.length > 0
+    const iterationSkipReason: string | null =
+      iterationParams?.skipIterationEnhance === true
+        ? 'opt-out flag'
+        : typeof iterationParams?.iterationEnhancedAt === 'string'
+          ? 'already enhanced'
+          : null
+    const iterationModelType = getModelConfig(generation.modelId)?.type
+    const iterationReferenceForEnhance =
+      inlineReferenceImage ||
+      (referenceImageUrl && !hasMultipleImages ? referenceImageUrl : undefined) ||
+      (hasMultipleImages && typeof referenceImages?.[0] === 'string' ? referenceImages[0] : undefined)
+
+    if (
+      isIterationEdit &&
+      iterationModelType !== 'video' &&
+      iterationReferenceForEnhance &&
+      !iterationSkipReason
+    ) {
+      await appendLog('iteration-guard:start', {
+        modelId: generation.modelId,
+        sourceRootOutputId: iterationParams.sourceRootOutputId,
+      })
+      const ITERATION_ENHANCE_TIMEOUT_MS = 8_000
+      try {
+        const enhanceResult = await Promise.race([
+          enhancePrompt({
+            prompt: generation.prompt,
+            modelId: generation.modelId,
+            referenceImage: iterationReferenceForEnhance,
+            mode: 'iteration-edit',
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error('iteration-enhance timeout')),
+              ITERATION_ENHANCE_TIMEOUT_MS
+            )
+          ),
+        ])
+
+        if (enhanceResult.enhancedPrompt && enhanceResult.enhancedPrompt.trim().length > 0) {
+          effectivePrompt = enhanceResult.enhancedPrompt
+          ;(otherParameters as any).iterationOriginalPrompt = generation.prompt
+          ;(otherParameters as any).iterationEnhancedPrompt = enhanceResult.enhancedPrompt
+          ;(otherParameters as any).iterationEnhancementModel = enhanceResult.enhancementModel
+          ;(otherParameters as any).iterationSkillVersion = enhanceResult.skill?.hash ?? null
+          ;(otherParameters as any).iterationEnhancedAt = new Date().toISOString()
+
+          // Persist provenance so the gallery / retries can see what was sent.
+          try {
+            await prisma.generation.update({
+              where: { id: generation.id },
+              data: {
+                parameters: {
+                  ...(generation.parameters as any),
+                  iterationOriginalPrompt: generation.prompt,
+                  iterationEnhancedPrompt: enhanceResult.enhancedPrompt,
+                  iterationEnhancementModel: enhanceResult.enhancementModel,
+                  iterationSkillVersion: enhanceResult.skill?.hash ?? null,
+                  iterationEnhancedAt: (otherParameters as any).iterationEnhancedAt,
+                },
+              },
+            })
+          } catch (persistErr) {
+            console.warn(
+              `[${generationId}] iteration-guard: failed to persist provenance (continuing):`,
+              persistErr
+            )
+          }
+
+          await appendLog('iteration-guard:applied', {
+            originalLength: generation.prompt.length,
+            enhancedLength: enhanceResult.enhancedPrompt.length,
+            enhancementModel: enhanceResult.enhancementModel,
+          })
+          console.log(
+            `[${generationId}] iteration-guard: prompt rewritten (${generation.prompt.length} -> ${enhanceResult.enhancedPrompt.length} chars)`
+          )
+        } else {
+          await appendLog('iteration-guard:empty-response')
+        }
+      } catch (enhanceErr: any) {
+        await appendLog('iteration-guard:failed', { error: enhanceErr?.message })
+        console.warn(
+          `[${generationId}] iteration-guard: enhance failed, falling back to original prompt:`,
+          enhanceErr?.message || enhanceErr
+        )
+      }
+    } else if (isIterationEdit && iterationSkipReason) {
+      await appendLog('iteration-guard:skipped', { reason: iterationSkipReason })
+    }
+
     // Build the generation request
     const generationRequest: any = {
-      prompt: generation.prompt,
+      prompt: effectivePrompt,
       negativePrompt: generation.negativePrompt || undefined,
       parameters: otherParameters,
       ...otherParameters,

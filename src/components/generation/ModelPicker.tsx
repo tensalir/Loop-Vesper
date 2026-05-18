@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ChevronUp, Star } from 'lucide-react'
 import {
@@ -10,6 +10,29 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useModels, findModelInList } from '@/hooks/useModels'
+import type { ModelConfig } from '@/lib/models/base'
+
+/**
+ * Preferred display order for the model picker. IDs listed here float to the
+ * top of both the pinned and the all-models sections, in this order. Other
+ * models keep their existing registry order beneath.
+ */
+const MODEL_PRIORITY_ORDER: string[] = [
+  'openai-gpt-image-2',
+  'gemini-nano-banana-pro',
+  'gemini-nano-banana-2',
+]
+
+function sortByPriority(models: ModelConfig[]): ModelConfig[] {
+  const priorityIndex = new Map<string, number>(
+    MODEL_PRIORITY_ORDER.map((id, idx) => [id, idx])
+  )
+  return [...models].sort((a, b) => {
+    const ai = priorityIndex.get(a.id) ?? Number.POSITIVE_INFINITY
+    const bi = priorityIndex.get(b.id) ?? Number.POSITIVE_INFINITY
+    return ai - bi
+  })
+}
 
 interface ModelPickerProps {
   selectedModel: string
@@ -23,10 +46,16 @@ export function ModelPicker({
   generationType,
 }: ModelPickerProps) {
   const [open, setOpen] = useState(false)
-  const [pinnedModels, setPinnedModels] = useState<string[]>(['gemini-nano-banana-pro', 'gemini-nano-banana-2'])
+  const [pinnedModels, setPinnedModels] = useState<string[]>([
+    'openai-gpt-image-2',
+    'gemini-nano-banana-pro',
+    'gemini-nano-banana-2',
+  ])
 
   // Use React Query hook for caching models
   const { data: models = [], isLoading: loading } = useModels(generationType)
+
+  const sortedModels = useMemo(() => sortByPriority(models), [models])
 
   const selectedModelData = findModelInList(models, selectedModel)
 
@@ -69,7 +98,7 @@ export function ModelPicker({
                   PINNED MODELS
                 </h3>
                 <div className="space-y-2">
-                  {models
+                  {sortedModels
                     .filter((m) => pinnedModels.includes(m.id))
                     .map((model) => (
                       <ModelCard
@@ -91,7 +120,7 @@ export function ModelPicker({
                 ALL {generationType.toUpperCase()} MODELS
               </h3>
               <div className="space-y-2">
-                {models
+                {sortedModels
                   .filter((m) => !pinnedModels.includes(m.id))
                   .map((model) => (
                     <ModelCard

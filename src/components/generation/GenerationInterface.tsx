@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } fr
 import dynamic from 'next/dynamic'
 import { useQueryClient, InfiniteData } from '@tanstack/react-query'
 import { ChatInput } from './ChatInput'
+import { AspectRatioSelector } from './AspectRatioSelector'
 import type { Session } from '@/types/project'
 import type { GenerationWithOutputs } from '@/types/generation'
 import type { ModelConfig } from '@/lib/models/base'
@@ -184,6 +185,25 @@ export function GenerationInterface({
   const timelineVideoSessionIdRef = useRef<string | null>(null)
   const timelineImageSessionIdRef = useRef<string | null>(null)
 
+  // Active quick-edit context — set when a user clicks Quick edit on an image
+  // card in the gallery. Lifts the edit flow into the main Prompt Bar (so the
+  // full Prompt Bar UI is used) and threads lineage params into handleGenerate.
+  const [activeEditContext, setActiveEditContext] = useState<{
+    outputId: string
+    imageUrl: string
+    sourceLabelHint: string
+  } | null>(null)
+
+  // Softer lineage tag set when the user clicks the Use-as-Reference arrow on
+  // a generated image. No Prompt Bar chrome (no glow, no connector, no label)
+  // — just enough metadata so the server-side iteration guard knows the next
+  // generation is iterating on a previously-generated output. Cleared as soon
+  // as the user manually clears the reference image rail.
+  const [pendingReferenceLineage, setPendingReferenceLineage] = useState<{
+    sourceRootOutputId: string
+    imageUrl: string
+  } | null>(null)
+
   // End-frame generation sub-mode state
   const [endFrameGenOpen, setEndFrameGenOpen] = useState(false)
   const [endFrameGenPrompt, setEndFrameGenPrompt] = useState('')
@@ -203,6 +223,18 @@ export function GenerationInterface({
       onExternalPromptConsumed?.()
     }
   }, [externalPrompt, onExternalPromptConsumed])
+
+  // Drop the soft Use-as-Reference lineage tag the moment its image is no
+  // longer attached to the composer (user removed it / replaced the rail).
+  useEffect(() => {
+    if (!pendingReferenceLineage) return
+    const stillAttached =
+      referenceImageUrls.includes(pendingReferenceLineage.imageUrl) ||
+      referenceImageUrl === pendingReferenceLineage.imageUrl
+    if (!stillAttached) {
+      setPendingReferenceLineage(null)
+    }
+  }, [pendingReferenceLineage, referenceImageUrls, referenceImageUrl])
   
   // Handle external reference image from pinned images rail
   useEffect(() => {
@@ -500,7 +532,7 @@ export function GenerationInterface({
   const generateMutation = useGenerateMutation()
   
   // Get model capabilities to check if pasting images is supported
-  const { modelConfig } = useModelCapabilities(selectedModel)
+  const { modelConfig, supportedAspectRatios } = useModelCapabilities(selectedModel)
   
   // Check if current model supports reference images
   const supportsReferenceImages = useMemo(() => {
@@ -902,6 +934,50 @@ export function GenerationInterface({
     setShowNewItemsIndicator(false)
   }
 
+  /**
+   * Promote a gallery image into the main Prompt Bar as a quick-edit target.
+   * - Clears the prompt so the user writes a fresh edit instruction.
+   * - Sets the selected image as the active reference image so the existing
+   *   reference-image pipeline picks it up.
+   * - Records lineage hints so `handleGenerate` can attach edit metadata to
+   *   the resulting `/api/generate` call.
+   */
+  const handleQuickEditSelect = useCallback(
+    (ctx: { outputId: string; imageUrl: string; generation: GenerationWithOutputs }) => {
+      setPrompt('')
+      const sourceLabelHint = (ctx.generation.prompt || '').slice(0, 40) || 'image'
+
+      if (generationType === 'video') {
+        setReferenceImageUrl(ctx.imageUrl)
+      } else {
+        // Replace existing references with just the selected image so the
+        // edit flow is unambiguous about what is being edited.
+        setReferenceImageUrls([ctx.imageUrl])
+      }
+
+      setActiveEditContext({
+        outputId: ctx.outputId,
+        imageUrl: ctx.imageUrl,
+        sourceLabelHint,
+      })
+
+      // Focus the main prompt textarea so the user can start typing immediately.
+      window.requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLTextAreaElement>('[data-generation-input="true"]')
+        el?.focus()
+      })
+    },
+    [generationType]
+  )
+
+  /**
+   * Exit quick-edit mode without clearing reference images (the user may want
+   * to keep iterating with the same reference as a normal generation).
+   */
+  const handleClearEditMode = useCallback(() => {
+    setActiveEditContext(null)
+  }, [])
+
   const handleGenerate = async (
     prompt: string,
     options?: { 
@@ -1116,6 +1192,25 @@ export function GenerationInterface({
         }
       }
 
+      // Merge iteration-lineage params. Quick Edit takes precedence over the
+      // softer Use-as-Reference signal. Both tag the generation with
+      // sourceKind='edited' so the server-side iteration guard fires.
+      // Matches the payload shape used by `InlineEditComposer` previously so
+      // edited generations show up in `ImageBranchStack` correctly.
+      const editLineage = activeEditContext
+        ? {
+            sourceRootOutputId: activeEditContext.outputId,
+            sourceKind: 'edited' as const,
+            sourceLabel: `Edit: ${(prompt.trim().slice(0, 40) || activeEditContext.sourceLabelHint)}`,
+          }
+        : pendingReferenceLineage
+          ? {
+              sourceRootOutputId: pendingReferenceLineage.sourceRootOutputId,
+              sourceKind: 'edited' as const,
+              sourceLabel: `Iterate: ${prompt.trim().slice(0, 40) || 'reference'}`,
+            }
+          : {}
+
       const result = await generateMutation.mutateAsync({
         sessionId: targetSessionId,
         modelId: selectedModel,
@@ -1135,9 +1230,19 @@ export function GenerationInterface({
           ...(endFrameImageUrl_ && { endFrameImageUrl: endFrameImageUrl_ }),
           ...(endFrameImageData_ && !endFrameImageUrl_ && { endFrameImage: endFrameImageData_ }),
           ...(options?.endFrameImageId && { endFrameImageId: options.endFrameImageId }),
+          ...editLineage,
         },
       })
-      
+
+      // Clear iteration tags once the request has been accepted so the next
+      // generation starts from a clean slate.
+      if (activeEditContext) {
+        setActiveEditContext(null)
+      }
+      if (pendingReferenceLineage) {
+        setPendingReferenceLineage(null)
+      }
+
       // Success is indicated by the progress bar, no toast needed
       return result
     } catch (error: any) {
@@ -2053,7 +2158,7 @@ export function GenerationInterface({
                 scrollToOutputId={scrollToOutputId}
                 highlightOutputId={highlightOutputId}
                 onScrollToOutputComplete={() => setScrollToOutputId(null)}
-                onUseAsReference={(imageUrl) => {
+                onUseAsReference={({ imageUrl, outputId }) => {
                   // Clear prompt and any existing images, leaving only the reference
                   setPrompt('')
                   if (generationType === 'video') {
@@ -2062,11 +2167,18 @@ export function GenerationInterface({
                     // Replace all existing reference images with just this one
                     setReferenceImageUrls([imageUrl])
                   }
+                  // Tag the next generation as iterating on this generated
+                  // image so the server-side iteration guard fires. Quick
+                  // Edit visual chrome (glow / label / connector) intentionally
+                  // does NOT activate for this softer path.
+                  setPendingReferenceLineage({ sourceRootOutputId: outputId, imageUrl })
                   toast({
                     title: 'Reference added',
                     description: 'Prompt cleared. Image set as reference.',
                   })
                 }}
+                onQuickEditSelect={handleQuickEditSelect}
+                activeEditOutputId={activeEditContext?.outputId ?? null}
               />
             </div>
           </div>
@@ -2093,7 +2205,71 @@ export function GenerationInterface({
           : "max-w-[var(--dock-prompt-max-w)]"
       )}>
         <div className="flex items-end gap-3">
-          <div className="flex-1 bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl composer-surface-transition p-4">
+          <div
+            data-prompt-bar="true"
+            className={cn(
+              'relative flex-1 bg-card/95 backdrop-blur-xl border rounded-2xl shadow-2xl composer-surface-transition p-4',
+              activeEditContext
+                ? 'border-primary/60 shadow-[0_0_32px_-4px_hsl(var(--primary)/0.45)]'
+                : 'border-border/50'
+            )}
+          >
+            {activeEditContext && (
+              <>
+                {/* Soft gradient halo overlay to signal active edit mode */}
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 rounded-2xl"
+                  style={{
+                    background:
+                      'linear-gradient(135deg, hsl(var(--primary) / 0.10) 0%, hsl(var(--primary) / 0.04) 45%, transparent 70%)',
+                  }}
+                />
+                {/* Active-edit label / clear control */}
+                <div className="relative z-10 mb-2 -mt-1 flex items-center gap-2">
+                  <div className="flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="absolute inset-0 rounded-full bg-primary opacity-75 animate-ping" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+                    </span>
+                    <span className="uppercase tracking-wide">Editing image</span>
+                    <div className="ml-1 h-4 w-4 overflow-hidden rounded-sm border border-primary/40 bg-background/40">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={activeEditContext.imageUrl}
+                        alt="Editing target"
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  </div>
+                  <span className="truncate text-[11px] text-muted-foreground/80">
+                    Describe the change — the original image stays as reference.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClearEditMode}
+                    className="ml-auto inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+                    title="Exit edit mode"
+                  >
+                    <X className="h-3 w-3" />
+                    Exit edit
+                  </button>
+                </div>
+                {/* Inline aspect-ratio quick selector — limited to current model's supported ratios */}
+                {supportedAspectRatios.length > 0 && (
+                  <div className="relative z-10 mb-2 flex items-center gap-2 overflow-x-auto pb-1">
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70 flex-shrink-0">
+                      Ratio
+                    </span>
+                    <AspectRatioSelector
+                      value={parameters.aspectRatio}
+                      onChange={(value) => setParameters({ aspectRatio: value })}
+                      options={supportedAspectRatios}
+                    />
+                  </div>
+                )}
+              </>
+            )}
             {generationType === 'video' ? (
               <VideoInput
                 prompt={prompt}

@@ -88,6 +88,48 @@ When using a generated image as style reference for a NEW scene:
 
 ---
 
+## Iterating on a Generated Image
+
+When the reference image is itself a previously-generated image (not an original product render or original photo), every round risks visual loss in translation. Subject geometry softens, fine surface detail muddies, color saturation drifts, and small text or logos degrade.
+
+Treat this as a distinct mode. The user's prompt almost always under-specifies preservation — they describe the change they want and assume the model will keep the product fidelity. It will not, unless you make it explicit.
+
+### Five-step analysis before composing the iteration prompt
+
+1. **Identify the subject(s) to preserve.** Look at the reference image. Name the product, geometry, materials, exact colors and saturation, labels/text/logos, and any fine surface detail that must survive unchanged. Be concrete — "the Loop case", "the white earplug stems", "the embossed Loop wordmark" — not generic ("the product").
+2. **Identify the user's edit intent.** Zoom in/out, lighting change, environment swap, add/remove an element, restyle, angle change, color grade.
+3. **Identify the likely failure mode for that intent.**
+   - Zoom-out → product shrinks in frame and resamples; fine detail and label legibility degrade first.
+   - Environment swap → ambient light and color cast shift across the product surface.
+   - Restyle / film look → texture and grading bleed onto the product.
+   - Add element → composition crowding can deform or obscure the product silhouette.
+   - Angle change → unseen geometry has to be invented; high risk of drift.
+4. **Compose one concise prompt with three parts:**
+   - **Anchor block** — what must stay. Use language like "Preserve exactly", "keep unchanged", "do not alter". Name the specific things from step 1.
+   - **Change block** — apply only this. Describe the requested change with placement, lighting direction, and any framing detail needed.
+   - **Non-goals line** — one short "Do not" sentence ruling out the failure mode from step 3.
+5. **Stay within 2-5 sentences.** Never re-describe what's visible in the reference image. The image is the source of truth; the prompt steers it.
+
+### Zoom-out mitigation
+
+Zoom-out is the most common failure mode. The reliable framing:
+
+```
+Treat the attached image as the high-fidelity source-of-truth for [subject]. Preserve the [subject]'s geometry, materials, color saturation, surface detail, and any text or logos exactly as in the reference. Pull the camera back to reveal more of the surrounding [environment] while keeping the [subject]'s position, scale relative to itself, and orientation consistent. Match the original lighting direction and color temperature. Do not redraw, resample, or stylize the [subject] — only the surrounding environment, framing, and depth-of-field change.
+```
+
+### Worked example
+
+User's sloppy prompt: `zoom out a little to show the bedroom around the chair`
+
+Tight rewritten prompt:
+
+```
+Treat the attached image as the high-fidelity source-of-truth for the chair and the Loop case on its armrest. Preserve their geometry, materials, color saturation, surface detail, and the embossed Loop wordmark exactly. Pull the camera back roughly 25% to reveal the surrounding bedroom — soft morning light through the window camera-left, neutral linens, a side table just within frame. Match the original lighting direction and color temperature. Do not redraw, resample, or stylize the chair or the Loop case; only the surrounding room and depth-of-field change.
+```
+
+---
+
 ## Context-Dependent Aesthetics
 
 ### Midjourney

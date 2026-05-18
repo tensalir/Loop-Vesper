@@ -62,6 +62,27 @@ These tools handle multiple reference images. Assign roles explicitly:
 - Character images (people to maintain consistency)
 - Style/environment references (aesthetic to match)
 
+### Iteration Patterns (editing a previously-generated image)
+
+When the reference image is itself a previously-generated Nano Banana output, the product or hero subject degrades fastest. Common failure modes and their mitigation:
+
+**Zoom-out / pull-back:**
+```
+Treat the attached image as the high-fidelity source-of-truth for [subject]. Pull the camera back to reveal more of the surrounding scene while preserving [subject]'s geometry, materials, color saturation, labels, and fine surface detail exactly. Match the original lighting direction and color temperature. Do not redraw or stylize [subject] — only the surrounding environment and depth-of-field change.
+```
+
+**Environment swap with product preservation:**
+```
+Keep [subject] exactly as it appears in the attached image — same geometry, materials, color saturation, labels, and surface detail. Change only the surrounding environment to [new environment]. Match a light direction and color temperature that flatters [subject] without altering its surface tones.
+```
+
+**Restyle without bleeding onto product:**
+```
+Apply [style adjustment] only to the surrounding environment. Keep [subject] unchanged: same color saturation, labels, materials, and surface detail. Do not let the style affect [subject]'s surface.
+```
+
+See the main `genai-prompting` skill section "Iterating on a Generated Image" for the full 5-step analysis the rewriter performs before composing these.
+
 ---
 
 ## Multi-Turn Editing
