@@ -992,7 +992,18 @@ export function GenerationInterface({
       endFrameImageUrl?: string
     }
   ) => {
-    if (!session || !prompt.trim()) return null
+    if (!session) return null
+
+    // Iteration mode lets the user generate without typing — the server-side
+    // iteration-edit enhancer composes the actual model prompt from the image.
+    // Synthesize a default intent prompt from the chosen aspect ratio so the
+    // enhancer has a clear anchor (typically "reframe / outpaint to {ratio}").
+    const inIterationMode = !!activeEditContext || !!pendingReferenceLineage
+    if (!prompt.trim()) {
+      if (!inIterationMode) return null
+      const targetRatio = parameters.aspectRatio || '1:1'
+      prompt = `Reframe to a ${targetRatio} aspect ratio while preserving the subject exactly.`
+    }
 
     // Create pending generation ID
     const pendingId = `pending-${Date.now()}`
@@ -2243,7 +2254,7 @@ export function GenerationInterface({
                     </div>
                   </div>
                   <span className="truncate text-[11px] text-muted-foreground/80">
-                    Describe the change — the original image stays as reference.
+                    Describe the change, or pick an aspect ratio and hit Generate — the source image stays as reference.
                   </span>
                   <button
                     type="button"
@@ -2300,6 +2311,12 @@ export function GenerationInterface({
                 onReferenceImageUrlsChange={setReferenceImageUrls}
                 onRegisterPasteHandler={registerPasteHandler}
                 onRegisterSubmit={registerSubmit}
+                allowEmptyPrompt={!!activeEditContext || !!pendingReferenceLineage}
+                placeholderOverride={
+                  activeEditContext || pendingReferenceLineage
+                    ? `Describe the change, or just hit Generate to reframe to ${parameters.aspectRatio}.`
+                    : undefined
+                }
               />
             )}
           </div>

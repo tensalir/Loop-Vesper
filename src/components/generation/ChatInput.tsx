@@ -43,6 +43,18 @@ interface ChatInputProps {
   onReferenceImageUrlsChange?: (urls: string[]) => void // Keep parent URLs in sync with UI removals
   onRegisterPasteHandler?: (handler: (files: File[]) => void) => () => void // Register to receive pasted images
   onRegisterSubmit?: (submit: () => void) => () => void // Register submit for global shortcut
+  /**
+   * Allow the user to submit with an empty prompt. Used in iteration mode
+   * (Quick Edit / Use-as-Reference) where the parent synthesizes a default
+   * intent prompt from the chosen aspect ratio and the iteration-edit prompt
+   * enhancer composes the final model prompt from the reference image.
+   */
+  allowEmptyPrompt?: boolean
+  /**
+   * Optional placeholder override. Used by iteration mode to hint that the
+   * user can just hit Generate.
+   */
+  placeholderOverride?: string
 }
 
 export function ChatInput({
@@ -59,6 +71,8 @@ export function ChatInput({
   onReferenceImageUrlsChange,
   onRegisterPasteHandler,
   onRegisterSubmit,
+  allowEmptyPrompt = false,
+  placeholderOverride,
 }: ChatInputProps) {
   const params = useParams()
   const { toast } = useToast()
@@ -237,7 +251,7 @@ export function ChatInput({
       })
       return
     }
-    if (!prompt.trim()) return
+    if (!prompt.trim() && !allowEmptyPrompt) return
 
     try {
       // Show brief visual feedback that generation was triggered
@@ -810,7 +824,7 @@ export function ChatInput({
             </div>
             
             <Textarea
-              placeholder={supportsImageEditing ? "Describe an image and click generate, or drag and drop images here..." : "Describe an image and click generate..."}
+              placeholder={placeholderOverride ?? (supportsImageEditing ? "Describe an image and click generate, or drag and drop images here..." : "Describe an image and click generate...")}
               value={transformedPrompt !== null ? transformedPrompt : prompt}
               onChange={(e) => {
                 setTransformedPrompt(null) // Clear transformation when user types
@@ -957,7 +971,7 @@ export function ChatInput({
         {/* Generate Button */}
         <Button
           onClick={handleSubmit}
-          disabled={!prompt.trim() || isEnhancing || transformedPrompt !== null || showGeneratingFeedback}
+          disabled={(!prompt.trim() && !allowEmptyPrompt) || isEnhancing || transformedPrompt !== null || showGeneratingFeedback}
           size="default"
           className="h-[52px] px-8 rounded-lg font-semibold shadow-sm hover:shadow transition-all"
         >
