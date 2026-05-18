@@ -219,13 +219,25 @@ export function useGenerateMutation() {
         console.log(`[${data.id}] Webhook-based generation - skipping frontend fallback (prediction: ${data.predictionId})`)
       }
       if (data.status === 'processing' && !data.predictionId) {
-        // Trigger background process with retry logic
+        // Trigger background process with retry logic.
+        //
+        // IMPORTANT: this is a *belt-and-suspenders* fallback for the
+        // server-side `waitUntil` trigger in `/api/generate`. It NEVER
+        // marks the generation row as failed in the cache, even when all
+        // attempts return non-OK. Why?
+        //   - The backend already accepted the row (`status: 'processing'`)
+        //     and `waitUntil` may already be running it.
+        //   - In a backgrounded tab, `setTimeout` is throttled to ~1/min,
+        //     so retry attempts here can stretch past real backend
+        //     completion. A frontend "all retries exhausted" log is NOT
+        //     evidence the job failed.
+        // The DB and Supabase realtime are the source of truth.
         const triggerWithRetry = async (retries = 3, delay = 500) => {
           for (let attempt = 1; attempt <= retries; attempt++) {
             try {
               await new Promise(resolve => setTimeout(resolve, delay * attempt))
               console.log(`[${data.id}] Frontend fallback: Triggering background process (attempt ${attempt}/${retries})`)
-              
+
               const res = await fetch('/api/generate/process', {
                 method: 'POST',
                 headers: {
@@ -236,37 +248,40 @@ export function useGenerateMutation() {
                   generationId: data.id,
                 }),
               })
-              
+
               if (res.ok) {
                 console.log(`[${data.id}] Frontend trigger successful`)
                 return // Success, exit retry loop
               } else {
                 const errorText = await res.text()
                 console.warn(`[${data.id}] Frontend trigger failed (attempt ${attempt}): ${res.status} ${errorText}`)
-                
+
                 // If it's a 401, the session might have expired - don't retry
                 if (res.status === 401) {
                   console.error(`[${data.id}] Authentication failed - session may have expired. Stopping retries.`)
                   return
                 }
-                
+
                 // Retry on other errors (network issues, 500s, etc.)
                 if (attempt < retries) {
                   console.log(`[${data.id}] Will retry in ${delay * (attempt + 1)}ms...`)
                   continue
                 } else {
-                  console.error(`[${data.id}] All ${retries} attempts exhausted. Generation may be stuck.`)
+                  // Final attempt failed — backend may still be running via
+                  // `waitUntil`. Do NOT touch cache; let realtime/refetch
+                  // resolve the truth.
+                  console.warn(`[${data.id}] All ${retries} frontend trigger attempts failed; relying on server waitUntil + realtime`)
                 }
               }
             } catch (err) {
               console.error(`[${data.id}] Frontend trigger error (attempt ${attempt}):`, err)
               if (attempt === retries) {
-                console.error(`[${data.id}] All frontend trigger attempts failed`)
+                console.warn(`[${data.id}] All frontend trigger attempts failed; relying on server waitUntil + realtime`)
               }
             }
           }
         }
-        
+
         // Start the retry process (don't await - fire and forget)
         triggerWithRetry().catch((err) => {
           console.error(`[${data.id}] Frontend trigger retry process failed:`, err)

@@ -67,7 +67,15 @@ function mergeGenerationsData(
     }
   }
 
-  // Merge each page, preserving clientId and non-empty outputs from cache
+  // Set of statuses we treat as terminal — these must never regress to a
+  // non-terminal status during a merge. This guards against stale read
+  // replicas or out-of-order responses surfacing a "completed → processing"
+  // bounce in the UI right after a tab/visibility change refetch.
+  const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'dismissed'])
+
+  // Merge each page, preserving clientId, non-empty outputs, AND terminal
+  // status from the cache so the UI never bounces a finished row back into
+  // "processing" because of a stale read.
   const mergedPages = newData.pages.map((newPage, pageIndex) => {
     const mergedData = newPage.data.map((newGen) => {
       const oldGen = oldGenerationsMap.get(newGen.id)
@@ -83,8 +91,15 @@ function mergeGenerationsData(
           ? oldGen.outputs
           : newGen.outputs
 
+      // Monotonic status: terminal in cache wins over non-terminal in fetch.
+      const status =
+        TERMINAL.has(oldGen.status as string) && !TERMINAL.has(newGen.status as string)
+          ? oldGen.status
+          : newGen.status
+
       return {
         ...newGen,
+        status,
         clientId,
         outputs,
       }

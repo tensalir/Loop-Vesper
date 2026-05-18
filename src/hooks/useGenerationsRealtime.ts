@@ -79,36 +79,49 @@ export function useGenerationsRealtime(sessionId: string | null, userId: string 
     }, 3000)
   }, [sessionId, queryClient])
 
-  // Update cache directly for status changes (efficient, no flicker)
+  // Update cache directly for status changes (efficient, no flicker).
+  //
+  // IMPORTANT: never regress a terminal state (completed/failed/cancelled/dismissed)
+  // back to processing. Out-of-order Supabase realtime events (or a late
+  // server fetch reading from a stale replica) can otherwise temporarily
+  // flip a finished row back to "processing", which surfaces in the UI
+  // as a generation that "stalled" right after the user switched tabs.
   const updateCacheStatus = useCallback((generationId: string, newStatus: string) => {
     if (!sessionId) return false
-    
+
+    const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'dismissed'])
     let updated = false
-    
+
     queryClient.setQueryData<InfiniteData<PaginatedGenerationsResponse>>(
       ['generations', 'infinite', sessionId],
       (old) => {
         if (!old) return old
-        
+
         return {
           ...old,
           pages: old.pages.map((page) => {
             const foundIndex = page.data.findIndex(gen => gen.id === generationId)
-            if (foundIndex !== -1 && page.data[foundIndex].status !== newStatus) {
-              updated = true
-              const newData = [...page.data]
-              newData[foundIndex] = {
-                ...newData[foundIndex],
-                status: newStatus as any,
-              }
-              return { ...page, data: newData }
+            if (foundIndex === -1) return page
+            const current = page.data[foundIndex]
+            if (current.status === newStatus) return page
+            if (TERMINAL.has(current.status) && !TERMINAL.has(newStatus)) {
+              console.log(
+                `🔴 Ignoring regressive status update for ${generationId}: ${current.status} → ${newStatus}`
+              )
+              return page
             }
-            return page
+            updated = true
+            const newData = [...page.data]
+            newData[foundIndex] = {
+              ...current,
+              status: newStatus as any,
+            }
+            return { ...page, data: newData }
           }),
         }
       }
     )
-    
+
     return updated
   }, [sessionId, queryClient])
 
@@ -144,37 +157,50 @@ export function useGenerationsRealtime(sessionId: string | null, userId: string 
       }
       
       const generation: GenerationWithOutputs = await response.json()
-      
-      // Merge the fetched generation into the infinite cache
-      // IMPORTANT: Preserve existing outputs if the fetched generation has none (monotonic update)
+
+      const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'dismissed'])
+
+      // Helper: monotonic merge for a single page row. Never lets a terminal
+      // status be overwritten by a non-terminal one, never lets non-empty
+      // outputs be replaced by empty ones.
+      const mergeRow = (cachedGen: GenerationWithOutputs): GenerationWithOutputs => {
+        const isCachedTerminal = TERMINAL.has(cachedGen.status as string)
+        const isFetchedTerminal = TERMINAL.has(generation.status as string)
+        const status =
+          isCachedTerminal && !isFetchedTerminal ? cachedGen.status : generation.status
+
+        const outputs =
+          (!generation.outputs || generation.outputs.length === 0) &&
+          cachedGen.outputs && cachedGen.outputs.length > 0
+            ? cachedGen.outputs
+            : generation.outputs
+
+        return {
+          ...generation,
+          status,
+          clientId: cachedGen.clientId || generation.clientId,
+          outputs,
+        }
+      }
+
+      // Merge the fetched generation into the infinite cache.
       queryClient.setQueryData<InfiniteData<PaginatedGenerationsResponse>>(
         ['generations', 'infinite', sessionId],
         (old) => {
           if (!old) return old
-          
+
           return {
             ...old,
             pages: old.pages.map((page) => {
               const foundIndex = page.data.findIndex(gen => gen.id === generationId)
               if (foundIndex !== -1) {
                 const cachedGen = page.data[foundIndex]
-                
-                // Monotonic outputs: never replace non-empty outputs with empty ones
-                // This prevents flicker when realtime fires before outputs are fully written
-                const outputs =
-                  (!generation.outputs || generation.outputs.length === 0) && 
-                  cachedGen.outputs && cachedGen.outputs.length > 0
-                    ? cachedGen.outputs
-                    : generation.outputs
-                
-                console.log(`🔴 Merged generation ${generationId} into cache (status: ${generation.status}, outputs: ${outputs?.length || 0}, preserved: ${outputs === cachedGen.outputs})`)
+                const merged = mergeRow(cachedGen)
+                console.log(
+                  `🔴 Merged generation ${generationId} into cache (status: ${merged.status}, outputs: ${merged.outputs?.length || 0})`
+                )
                 const newData = [...page.data]
-                // Preserve clientId for stable React keys
-                newData[foundIndex] = {
-                  ...generation,
-                  clientId: cachedGen.clientId,
-                  outputs,
-                }
+                newData[foundIndex] = merged
                 return { ...page, data: newData }
               }
               return page
@@ -182,7 +208,7 @@ export function useGenerationsRealtime(sessionId: string | null, userId: string 
           }
         }
       )
-      
+
       // Also update the regular generations cache
       queryClient.setQueryData<GenerationWithOutputs[]>(
         ['generations', sessionId],
@@ -190,21 +216,8 @@ export function useGenerationsRealtime(sessionId: string | null, userId: string 
           if (!old) return [generation]
           const foundIndex = old.findIndex(gen => gen.id === generationId)
           if (foundIndex !== -1) {
-            const cachedGen = old[foundIndex]
-            
-            // Monotonic outputs: preserve if new data has empty outputs
-            const outputs =
-              (!generation.outputs || generation.outputs.length === 0) &&
-              cachedGen.outputs && cachedGen.outputs.length > 0
-                ? cachedGen.outputs
-                : generation.outputs
-            
             const newData = [...old]
-            newData[foundIndex] = {
-              ...generation,
-              clientId: cachedGen.clientId,
-              outputs,
-            }
+            newData[foundIndex] = mergeRow(old[foundIndex])
             return newData
           }
           return old
@@ -223,6 +236,11 @@ export function useGenerationsRealtime(sessionId: string | null, userId: string 
   // force a refetch of all generations to catch up on missed realtime events.
   // Chrome throttles WebSockets and timers in background tabs, so the Supabase
   // realtime channel may have silently disconnected and polling may have stopped.
+  //
+  // We invalidate BOTH query shapes (infinite + plain) so any consumer of
+  // either cache key reconciles. The terminal-state guard in
+  // `updateCacheStatus` / `fetchAndMergeGeneration` ensures the resulting
+  // refetch can never regress a finished row back to "processing".
   useEffect(() => {
     if (!sessionId || isTempSession) return
 
@@ -231,6 +249,10 @@ export function useGenerationsRealtime(sessionId: string | null, userId: string 
         console.log('🔴 Tab became visible — refetching generations to catch up on missed updates')
         queryClient.invalidateQueries({
           queryKey: ['generations', 'infinite', sessionId],
+          refetchType: 'active',
+        })
+        queryClient.invalidateQueries({
+          queryKey: ['generations', sessionId],
           refetchType: 'active',
         })
       }

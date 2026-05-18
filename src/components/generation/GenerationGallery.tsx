@@ -10,6 +10,7 @@ import { useModels } from '@/hooks/useModels'
 import { useToast } from '@/components/ui/use-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { markGenerationDismissed } from '@/hooks/useGenerationsRealtime'
+import { assessGenerationForGallery } from '@/lib/generation/liveness'
 import { GenerationProgress } from './GenerationProgress'
 import { ImageLightbox } from './ImageLightbox'
 import { ImageToVideoOverlay } from './ImageToVideoOverlay'
@@ -1079,27 +1080,25 @@ export function GenerationGallery({
             const isVideoModel = modelConfig?.type === 'video'
             const params = (generation.parameters as any) || {}
 
-            // Heartbeat is written by the background processor every ~10s while the model call is active.
-            // Use it to distinguish "slow but alive" vs "likely stuck".
+            // Backend-aware liveness assessment
+            // ----------------------------------
+            // Browser timers and WebSockets are throttled in background tabs,
+            // so age/heartbeat math computed in the browser cannot, by itself,
+            // tell us a job is stuck — it might just mean the user came back
+            // to a tab they had hidden. The shared `assessGenerationForGallery`
+            // helper folds in webhook + routing-retry markers written by the
+            // server so a webhook-active or queued-for-retry job is never
+            // shown as "Delayed".
             const now = Date.now()
             const createdAtMs = new Date(generation.createdAt).getTime()
-            const ageMinutes = (now - createdAtMs) / (60 * 1000)
-            const lastHeartbeatAtRaw = params?.lastHeartbeatAt
-            const lastHeartbeatAtMs =
-              typeof lastHeartbeatAtRaw === 'string' ? new Date(lastHeartbeatAtRaw).getTime() : null
-            const heartbeatAgeMinutes =
-              typeof lastHeartbeatAtMs === 'number' && Number.isFinite(lastHeartbeatAtMs)
-                ? (now - lastHeartbeatAtMs) / (60 * 1000)
-                : null
-
-            const longThresholdMinutes = isVideoModel ? 2 : 1
-            const stuckThresholdMinutes = isVideoModel ? 12 : 5
-            const heartbeatStaleMinutes = isVideoModel ? 3 : 2
-
-            const isTakingLong = ageMinutes > longThresholdMinutes
-            const isHeartbeatStale =
-              heartbeatAgeMinutes === null ? ageMinutes > (isVideoModel ? 4 : 2) : heartbeatAgeMinutes > heartbeatStaleMinutes
-            const isLikelyStuck = ageMinutes > stuckThresholdMinutes && isHeartbeatStale
+            const liveness = assessGenerationForGallery(generation, {
+              isVideo: isVideoModel,
+              now,
+            })
+            const ageMinutes = liveness.ageMinutes
+            const isTakingLong = liveness.isTakingLong
+            const isLikelyStuck = liveness.isLikelyStuck
+            const awaitingReason = liveness.awaitingReason
             
             return (
               <div 
@@ -1115,9 +1114,11 @@ export function GenerationGallery({
                     <div className={`bg-prompt-card rounded-xl p-6 border flex flex-col relative group ${
                       isLikelyStuck
                         ? 'border-destructive/50 border-destructive'
-                        : isTakingLong
-                        ? 'border-amber-500/50 border-amber-500/30'
-                        : 'border-border/50 border-primary/30'
+                        : awaitingReason
+                          ? 'border-border/50 border-primary/30'
+                          : isTakingLong
+                            ? 'border-amber-500/50 border-amber-500/30'
+                            : 'border-border/50 border-primary/30'
                     }`} style={{ minHeight: '320px' }}>
                       {/* Cancel button - top left, only visible on hover when processing (owner only) */}
                       {generation.isOwner !== false && (
@@ -1130,16 +1131,28 @@ export function GenerationGallery({
                         </button>
                       )}
                       
-                      {/* Status badge (only when taking longer than usual) */}
-                      {isTakingLong && (
+                      {/* Status badge.
+                          Awaiting (webhook / routing-retry): calm primary tint,
+                          tells the user the backend is working in the background.
+                          Delayed: only when liveness assessment positively says stuck.
+                          Processing (>longThreshold): amber tint, neutral. */}
+                      {(isTakingLong || awaitingReason) && (
                         <div
                           className={`absolute top-2 left-10 px-2 py-1 text-xs font-medium rounded z-10 ${
                             isLikelyStuck
                               ? 'bg-destructive/20 text-destructive'
-                              : 'bg-amber-500/15 text-amber-300'
+                              : awaitingReason
+                                ? 'bg-primary/15 text-primary'
+                                : 'bg-amber-500/15 text-amber-300'
                           }`}
                         >
-                          {isLikelyStuck ? 'Delayed' : 'Processing'} ({Math.round(ageMinutes)}min)
+                          {isLikelyStuck
+                            ? `Delayed (${Math.round(ageMinutes)}min)`
+                            : awaitingReason === 'webhook'
+                              ? `Awaiting provider (${Math.round(ageMinutes)}min)`
+                              : awaitingReason === 'routing-retry'
+                                ? 'Queued for retry'
+                                : `Processing (${Math.round(ageMinutes)}min)`}
                         </div>
                       )}
                       

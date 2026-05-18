@@ -166,10 +166,37 @@ async function processGenerationById(
     }
 
     // Skip if webhook-based prediction is already submitted
-    // The generate route submits directly to Replicate with webhook, so we don't need to process again
+    // The generate route submits directly to Replicate with webhook, so we don't need to process again.
+    //
+    // IMPORTANT (tab-switch resilience):
+    // After this skip, the local processor stops writing heartbeats. The
+    // cleanup endpoint and the gallery UI must therefore treat
+    // `replicatePredictionId` as positive liveness evidence (see
+    // `src/lib/generation/liveness.ts`). We persist `webhookSubmittedAt`
+    // alongside the existing `submittedAt` so that anchor is unambiguous
+    // even if older rows are missing one of the two keys.
     const params = generation.parameters as any
     if (params?.replicatePredictionId) {
       console.log(`[${generationId}] Skipping - webhook prediction already submitted: ${params.replicatePredictionId}`)
+      try {
+        await prisma.generation.update({
+          where: { id: generation.id },
+          data: {
+            parameters: {
+              ...(generation.parameters as any),
+              webhookActive: true,
+              webhookSubmittedAt:
+                typeof params.webhookSubmittedAt === 'string'
+                  ? params.webhookSubmittedAt
+                  : typeof params.submittedAt === 'string'
+                    ? params.submittedAt
+                    : new Date().toISOString(),
+            },
+          },
+        })
+      } catch (err) {
+        console.warn(`[${generationId}] Failed to persist webhook liveness marker:`, err)
+      }
       await appendLog('process:skipped-webhook-active', { predictionId: params.replicatePredictionId })
       return {
         id: generation.id,

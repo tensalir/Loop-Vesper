@@ -275,7 +275,16 @@ export async function POST(request: NextRequest) {
             webhookEventsFilter: ['completed'],
           })
           
-          // Store prediction ID for webhook matching
+          // Store prediction ID for webhook matching, and a normalized
+          // liveness anchor (`webhookActive` + `webhookSubmittedAt`).
+          //
+          // The cleanup endpoint and the gallery UI key off these markers
+          // (see `src/lib/generation/liveness.ts`) so that:
+          //   - long-running webhook predictions are NEVER auto-failed
+          //     while the webhook is still expected to fire, and
+          //   - the user does not see "Taking unusually long" simply
+          //     because they switched tabs and timers paused.
+          const webhookSubmittedAt = new Date().toISOString()
           await prisma.generation.update({
             where: { id: generation.id },
             data: {
@@ -283,7 +292,11 @@ export async function POST(request: NextRequest) {
                 ...generationParameters,
                 replicatePredictionId: prediction.predictionId,
                 webhookUrl,
-                submittedAt: new Date().toISOString(),
+                submittedAt: webhookSubmittedAt,
+                webhookSubmittedAt,
+                webhookActive: true,
+                lastHeartbeatAt: webhookSubmittedAt,
+                lastStep: 'webhook:submitted',
               },
             },
           })

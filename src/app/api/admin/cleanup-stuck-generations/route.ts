@@ -3,6 +3,10 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
+import {
+  assessGenerationLiveness,
+  LIVENESS_DEFAULT_THRESHOLDS,
+} from '@/lib/generation/liveness'
 
 // Force dynamic rendering since we use cookies
 export const dynamic = 'force-dynamic'
@@ -46,13 +50,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden - admin access required' }, { status: 403 })
     }
 
-    // "Stuck" heuristic:
-    // - Only consider older generations (avoid false positives for slow video models)
-    // - Require missing/stale heartbeat (written by the background processor)
-    const MIN_AGE_MINUTES = 10
-    const HEARTBEAT_STALE_MINUTES = 5
+    // "Stuck" heuristic — see [`src/lib/generation/liveness.ts`](src/lib/generation/liveness.ts).
+    //
+    // We must NOT mark these as failed:
+    //  - Webhook-backed Replicate predictions inside their grace window
+    //    (heartbeats stop after `process:skipped-webhook-active`, but the
+    //    job is healthy and will resolve via the webhook).
+    //  - Jobs the provider router rescheduled (`routingDelayed` +
+    //    `routingRetryAt`) — the queue picks those up after the cool-off.
+    //  - Recent rows that simply haven't started writing heartbeats yet.
+    //
+    // The shared `assessGenerationLiveness` helper enforces these rules so
+    // the cleanup endpoint, the gallery UI, and the tests cannot drift.
+    const MIN_AGE_MINUTES = LIVENESS_DEFAULT_THRESHOLDS.MIN_AGE_MINUTES
+    const HEARTBEAT_STALE_MINUTES = LIVENESS_DEFAULT_THRESHOLDS.HEARTBEAT_STALE_MINUTES
+    const WEBHOOK_GRACE_MINUTES = LIVENESS_DEFAULT_THRESHOLDS.WEBHOOK_GRACE_MINUTES
     const minAgeAgo = new Date(Date.now() - MIN_AGE_MINUTES * 60 * 1000)
-    
+
     const candidates = await prisma.generation.findMany({
       where: {
         status: 'processing',
@@ -72,23 +86,32 @@ export async function POST(request: NextRequest) {
     })
 
     const now = Date.now()
-    const stuckGenerations = candidates.filter((gen) => {
-      const params = (gen.parameters as any) || {}
-      const lastHeartbeatAtRaw = params?.lastHeartbeatAt
-      if (typeof lastHeartbeatAtRaw !== 'string') return true
-      const lastHeartbeatAtMs = new Date(lastHeartbeatAtRaw).getTime()
-      if (!Number.isFinite(lastHeartbeatAtMs)) return true
-      return (now - lastHeartbeatAtMs) > HEARTBEAT_STALE_MINUTES * 60 * 1000
-    })
+    const skippedReasons: Record<string, number> = {}
+    const stuckGenerations: typeof candidates = []
+    for (const gen of candidates) {
+      const liveness = assessGenerationLiveness(gen, {
+        now,
+        minAgeMinutes: MIN_AGE_MINUTES,
+        heartbeatStaleMinutes: HEARTBEAT_STALE_MINUTES,
+        webhookGraceMinutes: WEBHOOK_GRACE_MINUTES,
+      })
+      if (liveness.isStuck) {
+        stuckGenerations.push(gen)
+      } else {
+        skippedReasons[liveness.reason] = (skippedReasons[liveness.reason] || 0) + 1
+      }
+    }
 
     if (stuckGenerations.length === 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         message: 'No stuck generations found',
         cleaned: 0,
         scanned: candidates.length,
+        skippedReasons,
         heuristic: {
           minAgeMinutes: MIN_AGE_MINUTES,
           heartbeatStaleMinutes: HEARTBEAT_STALE_MINUTES,
+          webhookGraceMinutes: WEBHOOK_GRACE_MINUTES,
         },
       })
     }
@@ -143,8 +166,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       message: `Cleaned up ${cleanedIds.length} stuck generation(s)`,
       cleaned: cleanedIds.length,
+      scanned: candidates.length,
+      skippedReasons,
       generationIds: cleanedIds,
       byUser: Object.values(cleanedByUser),
+      heuristic: {
+        minAgeMinutes: MIN_AGE_MINUTES,
+        heartbeatStaleMinutes: HEARTBEAT_STALE_MINUTES,
+        webhookGraceMinutes: WEBHOOK_GRACE_MINUTES,
+      },
     })
   } catch (error: any) {
     console.error('Error cleaning up stuck generations:', error)

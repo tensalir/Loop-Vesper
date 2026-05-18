@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { waitUntil } from '@vercel/functions'
 import { prisma } from '@/lib/prisma'
 import { captionOutput } from '@/lib/analysis/gemini'
 import { parseCaption } from '@/lib/analysis/claude'
@@ -388,11 +389,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Start background processing (don't await)
-    processJobs().catch((error) => {
-      // Last resort error handler
-      console.error('[Analysis Process] Fatal error in background processing:', error)
-    })
+    // Start background processing — wrapped in `waitUntil` so the Vercel
+    // function runtime keeps the work alive after we return the 202, even
+    // if the calling client (or a cron caller) disconnects mid-batch.
+    //
+    // Without `waitUntil`, a serverless freeze right after the response
+    // could truncate analysis jobs, leaving them locked in `processing`
+    // until the lock-timeout sweep recovers them. With it, we get the
+    // same fire-and-forget UX with proper durability semantics.
+    waitUntil(
+      processJobs().catch((error) => {
+        console.error('[Analysis Process] Fatal error in background processing:', error)
+      })
+    )
 
     // Return immediately - processing continues in background
     metricMeta.claimed = jobs.length
