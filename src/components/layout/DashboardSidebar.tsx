@@ -14,6 +14,7 @@ import {
   BarChart3,
   Globe,
   Palette,
+  Sparkles,
 } from 'lucide-react'
 
 interface NavItem {
@@ -84,12 +85,18 @@ const toolsNavItems: NavItem[] = [
   },
 ]
 
-// Bottom section — Bookmarks lives below its own divider.
+// Bottom section — Bookmarks and Updates live below their own divider.
+// Updates surfaces release notes; the "What's New" popup also links here.
 const secondaryNavItems: NavItem[] = [
   {
     title: 'Bookmarks',
     href: '/bookmarks',
     icon: Bookmark,
+  },
+  {
+    title: 'Updates',
+    href: '/updates',
+    icon: Sparkles,
   },
 ]
 

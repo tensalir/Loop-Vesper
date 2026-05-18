@@ -2,6 +2,7 @@ import { RequireAuth } from '@/components/auth/RequireAuth'
 import { DashboardSidebar } from '@/components/layout/DashboardSidebar'
 import { DashboardHeader } from '@/components/layout/DashboardHeader'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { UpdatesAnnouncementGate } from '@/components/updates/UpdatesAnnouncementGate'
 
 export default function DashboardLayout({
   children,
@@ -27,6 +28,9 @@ export default function DashboardLayout({
             </div>
           </main>
         </div>
+        {/* One-time "What's New" announcement. Lives inside RequireAuth so it
+            only mounts for authenticated, non-paused users. */}
+        <UpdatesAnnouncementGate />
       </div>
     </RequireAuth>
   )

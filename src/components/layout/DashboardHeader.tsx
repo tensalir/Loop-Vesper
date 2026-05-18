@@ -21,6 +21,7 @@ import {
   BarChart3,
   Globe,
   Palette,
+  Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -37,6 +38,7 @@ const mobileNavItems = [
   { title: 'Review', href: '/review', icon: CheckCircle },
   { title: 'Product', href: '/product', icon: Palette },
   { title: 'Bookmarks', href: '/bookmarks', icon: Bookmark },
+  { title: 'Updates', href: '/updates', icon: Sparkles },
   { title: 'Settings', href: '/settings', icon: Settings },
 ]
 

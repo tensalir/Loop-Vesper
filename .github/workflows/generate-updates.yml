@@ -1,0 +1,61 @@
+name: Generate user-facing updates
+
+# Runs after every push to main and on a daily schedule as a safety net.
+# The script is idempotent — it dedupes by commit range — so running it
+# twice on the same merge does not produce duplicate entries.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # 09:00 UTC every weekday. Catches the rare case where a push lands
+    # while the previous workflow run was still executing.
+    - cron: '0 9 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: 'Run a 60-day backfill instead of incremental'
+        type: boolean
+        default: false
+
+concurrency:
+  group: generate-updates
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          # Auto path needs enough history to resolve the last published
+          # commit. Default `fetch-depth: 1` is too shallow.
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        # Use the project's pinned package manager. `--ignore-scripts` matches
+        # the repo-wide supply-chain baseline.
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run updates pipeline
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.backfill }}" = "true" ]; then
+            npm run updates:backfill
+          else
+            npm run updates:generate
+          fi

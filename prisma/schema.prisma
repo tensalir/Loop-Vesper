@@ -62,8 +62,80 @@ model Profile {
   cmfComments         CmfComment[]      @relation("CmfComment_user")
   cmfCommentResolutions CmfComment[]    @relation("CmfComment_resolvedBy")
   cmfActivities       CmfActivity[]
+  productUpdateViews  UserProductUpdateView[]
 
   @@map("profiles")
+}
+
+// ── Product Updates (in-app "What's New") ──────────────────────────────────
+//
+// Non-technical, user-facing release notes shown to every authenticated user
+// once per release. The auto-generation workflow writes rows here when a
+// significant batch of changes lands on `main`; the backfill task uses the
+// same shape so the Updates page has a consistent history.
+//
+// `slug` is a stable human-readable id (e.g. `2026-05-18-tab-switch-fix`).
+// `summary` is a one-line headline shown in the popup and timeline.
+// `snippets` is the ordered list of plain-language bullets users actually
+// read (see `src/lib/updates/types.ts` for the schema).
+// `commitRangeStart`/`commitRangeEnd` carry the git boundaries the entry was
+// derived from so the auto-pipeline can dedupe by commit range.
+
+model ProductUpdate {
+  id               String   @id @default(uuid()) @db.Uuid
+  slug             String   @unique
+  title            String
+  summary          String   @db.Text
+  // Ordered list of {label, body, icon?} bullets. Strongly typed at the app
+  // layer; kept as JSON so the auto-generator can ship richer shapes later
+  // without a migration.
+  snippets         Json     @default("[]")
+  publishedAt      DateTime @default(now()) @map("published_at")
+  // Auto-pipeline metadata. `significanceScore` is the 0–1 confidence the
+  // generator had that this batch was user-facing. `commitRangeStart` and
+  // `commitRangeEnd` give the inclusive git SHAs the entry covers.
+  significanceScore Decimal? @map("significance_score") @db.Decimal(4, 3)
+  commitRangeStart  String?  @map("commit_range_start")
+  commitRangeEnd    String?  @map("commit_range_end")
+  // `backfilled` flags entries that came from the 60-day historical pass so
+  // we can spot-check or rerun them without touching the live stream.
+  backfilled       Boolean  @default(false)
+  // `source` records which pipeline produced the entry. Stable strings used
+  // by the auto-pipeline + admin tooling: `auto` | `backfill` | `manual`.
+  source           String   @default("manual")
+  // `isPublished` lets the auto-pipeline write a draft entry and have an
+  // admin promote it. Default `true` keeps backfill + manual flows working
+  // without a separate publish step.
+  isPublished      Boolean  @default(true) @map("is_published")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  views UserProductUpdateView[]
+
+  @@index([publishedAt(sort: Desc)])
+  @@index([isPublished, publishedAt(sort: Desc)])
+  @@index([commitRangeEnd])
+  @@map("product_updates")
+}
+
+// Per-user "seen" record. Idempotent via the unique `(userId, updateId)`
+// constraint so the mark-seen endpoint can be called multiple times safely.
+// Used to compute the next unseen update for the login popup and to mark a
+// timeline entry as "already read" on the Updates page.
+
+model UserProductUpdateView {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  updateId  String   @map("update_id") @db.Uuid
+  seenAt    DateTime @default(now()) @map("seen_at")
+
+  user   Profile       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  update ProductUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, updateId])
+  @@index([userId])
+  @@index([updateId])
+  @@map("user_product_update_views")
 }
 
 model Project {
