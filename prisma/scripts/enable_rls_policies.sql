@@ -512,16 +512,22 @@ GRANT SELECT ON public.failed_generations_view TO authenticated;
 --    SET search_path = '' to prevent search-path injection.
 -- ============================================================================
 
+ALTER TABLE public.profiles
+  ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
+
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, username, display_name, avatar_url)
+  INSERT INTO public.profiles (id, username, display_name, avatar_url, created_at, updated_at)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
-    NEW.raw_user_meta_data->>'avatar_url'
-  );
+    NEW.raw_user_meta_data->>'avatar_url',
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+  )
+  ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
