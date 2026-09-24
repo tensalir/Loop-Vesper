@@ -13,6 +13,7 @@ import { listProductRendersHandler } from './list-product-renders'
 import { getGenerationStatusHandler } from './get-generation-status'
 import { generateVideoHandler } from './generate-video'
 import { estimateGenerationCostHandler } from './estimate-generation-cost'
+import { getCreativeKitHandler, listCreativeProductsHandler, getProductReferencesHandler } from './creative-read'
 
 export const TOOL_HANDLERS: Record<HeadlessTool, ToolHandler> = {
   enhance_prompt: enhancePromptHandler,
@@ -23,6 +24,9 @@ export const TOOL_HANDLERS: Record<HeadlessTool, ToolHandler> = {
   get_generation_status: getGenerationStatusHandler,
   generate_video: generateVideoHandler,
   estimate_generation_cost: estimateGenerationCostHandler,
+  get_creative_kit: getCreativeKitHandler,
+  list_creative_products: listCreativeProductsHandler,
+  get_product_references: getProductReferencesHandler,
 }
 
 export type { ToolContext, ToolHandler, ToolResult, ToolPrincipal, UsageEntry } from './types'

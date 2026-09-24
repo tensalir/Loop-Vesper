@@ -71,6 +71,9 @@ interface AdminUser {
   cmfAccess: boolean
   packagingAccess?: boolean
   packagingEngineerRole?: boolean
+  // Per-user grant to connect Claude to Vesper with their own sign-in (OAuth).
+  // Admins pass without it.
+  mcpAccess?: boolean
   pausedAt: string | null
   deletedAt: string | null
   createdAt: string
@@ -264,6 +267,28 @@ export function UserManagementSettings() {
     }
   }
 
+  const handleToggleMcpAccess = async (user: AdminUser) => {
+    setActionLoading(user.id)
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/mcp-access`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !(user.mcpAccess ?? false) }),
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        let message = 'Failed to update Claude access'
+        try { message = JSON.parse(text).error || message } catch { /* non-JSON */ }
+        throw new Error(message)
+      }
+      await fetchUsers()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update Claude access')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   const handleTogglePackagingAccess = async (user: AdminUser) => {
     setActionLoading(user.id)
     try {
@@ -441,6 +466,15 @@ export function UserManagementSettings() {
                                   CMF
                                 </Badge>
                               )}
+                              {user.role !== 'admin' && (user.mcpAccess ?? false) && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] px-1.5 py-0 border-sky-500/40 text-sky-700 dark:text-sky-300"
+                                  title="Can connect Claude to Vesper with their own sign-in"
+                                >
+                                  Claude
+                                </Badge>
+                              )}
                               {user.role !== 'admin' && (user.packagingAccess ?? false) && (
                                 <Badge
                                   variant="outline"
@@ -508,6 +542,12 @@ export function UserManagementSettings() {
                                 {user.headlessAccess
                                   ? 'Revoke Headless Access'
                                   : 'Grant Headless Access'}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleToggleMcpAccess(user)}>
+                                <KeyRound className="h-4 w-4 mr-2" />
+                                {(user.mcpAccess ?? false)
+                                  ? 'Revoke Claude Access'
+                                  : 'Grant Claude Access'}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleToggleCmfAccess(user)}>
                                 <Palette className="h-4 w-4 mr-2" />

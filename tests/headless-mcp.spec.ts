@@ -15,8 +15,11 @@ test.describe('MCP_TOOLS catalog', () => {
       'estimate_generation_cost',
       'generate_asset',
       'generate_video',
+      'get_creative_kit',
       'get_generation_status',
+      'get_product_references',
       'iterate_prompt',
+      'list_creative_products',
       'list_models',
       'list_product_renders',
     ])

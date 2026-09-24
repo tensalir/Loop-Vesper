@@ -24,6 +24,9 @@ export const HEADLESS_TOOLS = [
   'get_generation_status',
   'generate_video',
   'estimate_generation_cost',
+  'get_creative_kit',
+  'list_creative_products',
+  'get_product_references',
 ] as const
 
 export type HeadlessTool = (typeof HEADLESS_TOOLS)[number]
@@ -56,6 +59,10 @@ export const TOOL_META: Record<HeadlessTool, ToolMeta> = {
   get_generation_status: { group: 'core', oauth: true, selfIssued: true, org: false, adminIssuable: true },
   generate_video: { group: 'core', oauth: true, selfIssued: true, org: false, adminIssuable: true },
   estimate_generation_cost: { group: 'core', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  // The creative kit, read-only. Hidden everywhere while CREATIVE_TOOLS_ENABLED=0.
+  get_creative_kit: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  list_creative_products: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  get_product_references: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
 }
 
 export function isHeadlessTool(name: string): name is HeadlessTool {
@@ -94,14 +101,17 @@ function ownerHasFlag(needs: ToolMeta['needs'], profile: ToolPolicyProfile | nul
  */
 export function effectiveTools(
   credential: { allowedTools: readonly string[] },
-  profile?: ToolPolicyProfile | null
+  profile?: ToolPolicyProfile | null,
+  env: NodeJS.ProcessEnv = process.env
 ): HeadlessTool[] {
+  const switchedOn = (tool: HeadlessTool) =>
+    TOOL_META[tool].group !== 'creative' || env.CREATIVE_TOOLS_ENABLED !== '0'
   if (credential.allowedTools.includes('*')) {
     return HEADLESS_TOOLS.filter(
-      (tool) => TOOL_META[tool].oauth && ownerHasFlag(TOOL_META[tool].needs, profile)
+      (tool) => TOOL_META[tool].oauth && ownerHasFlag(TOOL_META[tool].needs, profile) && switchedOn(tool)
     )
   }
-  return HEADLESS_TOOLS.filter((tool) => credential.allowedTools.includes(tool))
+  return HEADLESS_TOOLS.filter((tool) => credential.allowedTools.includes(tool) && switchedOn(tool))
 }
 
 /**

@@ -1,0 +1,6362 @@
+{
+ "comment_lines": [
+  {
+   "fields": {
+    "answer": "no",
+    "date": "2026-10-02",
+    "decoded": [
+     "B3"
+    ],
+    "failed": [
+     "B3"
+    ],
+    "judge": "gemini-flash-latest",
+    "product": "eclipse",
+    "reads": 3,
+    "remark": "the strap stops at the ear",
+    "rubric": "0.5.3",
+    "surface": "vesper",
+    "verdict": "PASS_WITH_NOTES"
+   },
+   "line": "[creative eclipse 2026-10-02] no | decoded B3 | grade PASS_WITH_NOTES B3 | judge gemini-flash-latest vesper x3 | rubric 0.5.3 | the strap stops at the ear"
+  },
+  {
+   "fields": {
+    "answer": "yes",
+    "date": "2026-10-02",
+    "judge": "claude-opus-5-5",
+    "product": "eclipse",
+    "reads": 1,
+    "remark": "",
+    "rubric": "0.5.3",
+    "surface": "chat"
+   },
+   "line": "[creative eclipse 2026-10-02] yes | decoded - | grade - | judge claude-opus-5-5 chat x1 | rubric 0.5.3 | -"
+  },
+  {
+   "fields": {
+    "answer": "no",
+    "date": "2026-10-03",
+    "decoded": [
+     "D1"
+    ],
+    "decoded_unconfirmed": [
+     "C2"
+    ],
+    "failed": [
+     "C2",
+     "D1"
+    ],
+    "judge": "gemini-flash-latest",
+    "product": "packaging",
+    "reads": 3,
+    "remark": "the lid inside | is pink",
+    "rubric": "0.1.1",
+    "surface": "vesper",
+    "verdict": "RETRY"
+   },
+   "line": "[creative packaging 2026-10-03] no | decoded D1,C2? | grade RETRY C2,D1 | judge gemini-flash-latest vesper x3 | rubric 0.1.1 | the lid inside | is pink"
+  }
+ ],
+ "products": {
+  "cmf": {
+   "ladder": [
+    {
+     "failed": [],
+     "verdict": "PASS"
+    },
+    {
+     "failed": [
+      "A1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "B1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "B4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "C4"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "C5"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "D1"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "D2"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "D3"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "E1"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "E2"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "E3"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "Z9"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A1",
+      "A2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "A3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "A4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "D1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "D2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "D3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "E1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "E2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "E3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "Z9"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "A3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "A4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "D1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "D2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "D3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "E1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "E2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "E3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "Z9"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "A4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "D1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "D2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "D3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "E1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "E2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "E3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "Z9"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "B1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "B2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "B3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "B4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "C1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "C2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "C3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "C4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "C5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "D1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "D2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "D3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "E1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "E2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "E3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "Z9"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "B1",
+      "B2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "B3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "B4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "B3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "B4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "B4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D3",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D3",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D3",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D3",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E1",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E1",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E1",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E2",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E2",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E3",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    }
+   ],
+   "payloads": [
+    {
+     "id": "experience-2-cc--C--case-experience2--front",
+     "prompt_sha256": "88947526b793498dc50ec1fdac715149df8d51d64c0d352bf9d7b357b3a8aee8"
+    },
+    {
+     "id": "experience-2-cc--D--case-experience2--front",
+     "prompt_sha256": "4dd741f0ed62ce276653b3ebb95681499e8fc78e4c42f2ab24d34ca41868cf2f"
+    },
+    {
+     "id": "experience-2-cc--E--case-experience2--front",
+     "prompt_sha256": "94e256a80c7bde698f185969144e14ef3e7e2e22c5fae67ffc14fad7fda3b648"
+    },
+    {
+     "id": "experience-2-cc--F--case-experience2--front",
+     "prompt_sha256": "195d229ecab8aea9b1f87eb5cde62808c996ed9e107c99f0061d49591a738204"
+    }
+   ]
+  },
+  "eclipse": {
+   "grading_prompt": {
+    "example": {
+     "inputs": {
+      "asset_class": "",
+      "attached": [
+       {
+        "colourway": "Teal",
+        "role": "side"
+       },
+       {
+        "colourway": null,
+        "role": "wear_frontal"
+       }
+      ],
+      "claim": "Teal",
+      "claim_source": "prompt",
+      "detected": null,
+      "detected_confidence": "",
+      "missing": [],
+      "view": "profile"
+     },
+     "prompt": "You are grading one candidate image of the Loop Eclipse sleep mask for the Loop studio team, with the real product on the desk beside you. Read the image as someone who has never seen the brief.\n\nImage 1 is the CANDIDATE under review. Grade image 1, and only image 1.\nImage 2 is a PINNED REFERENCE (Teal): the side render of the real product. Every profile or three-quarter candidate must agree with this geometry: ear scoop, wordmark placement, the ridged silicone patch, cup depth. The O-logo at the tip of the strap end is hidden by the overlap here, and that is correct.\nImage 3 is a PINNED REFERENCE: a live photograph of the real product being worn. Use it for how the band sits, how the cup compresses and where the wordmark falls.\nReferences are the real product. They are never under review, and a difference between the candidate and a reference is a fault in the CANDIDATE.\n\nTHE PRODUCT, from the product sheet:\nOne continuous, wide, curved head strap with the eye cups built into its middle, plus a separate removable eye pad that presses into the cups from the inside.\nStrap (exterior and interior): knit textile, 85 % polyamide / 15 % elastane, 130 GSM. Matte. At close range a fine rib runs *along* the band (horizontal when worn). No sheen, no weave pattern, no satin, no neoprene grain. Flat-lay reference: Loop_Eclipse-Black-Flatlay Back-Open-Washing Label Update (Frontify, Eclipse/Renders/Product Renders) shows the whole band opened out.\nEye cups: two low oblong pockets formed in the band itself, joined over a nose notch. Each is a wide oval in outline, wider than it is tall and shallow: it stands off the eye by roughly a fifth of its width, which is the room the eyes and eyelashes need (Frontify graphic Eyelash_Clearance). The top edge of each pocket is the top edge of the band, one continuous line with no step. The two pockets meet over the nose in a shallow saddle: seen from the front, three-quarter or above, the outer face of the cup section reads as one smooth, low, continuous form whose top edge runs as a single unbroken arc (Loop_Eclipse-Plum-05 Angle 1), and what marks the two pockets is the nose notch cut into the lower edge, with the surface rising to either side of it. The transition from band to pocket is a soft rounded edge in the knit, not a stitched seam and not a raised ring (Loop_Eclipse-Black-05 Angle 1). They are not hemispheres, not padded cups fixed onto a flat band, and not a moulded foam shell. Both pockets are the same size.\nEye pad (removable): a symmetrical foam piece shaped like the two cups with the nose notch; peels off the strap for washing. Reference: second row of the flat-lay render.\nEar scoop: between the eye cups and the back, the lower edge of the band rises in a deep concave arc. The band passes above the ear; the ear sits in the scoop and stays visible below the strap. Reference: Loop_Eclipse-Teal-Side_2 and the Eyelash_Clearance graphic.\nClosure end (back of the head): hook-and-loop. One strap end carries, from the tip inward, the round O-logo patch (a ring with the care icons printed inside it) and then a black matte silicone patch with a row of curved ridges, the tactile guides (three to five concentric arcs). The other end carries the plain hook-and-loop field. When the mask is closed the tip with the O-logo is usually hidden by the overlap, so a view can show the ridges and not the O-logo and be correct. Anti-slip silicone sits on the inside of the band. Reference: both ends in the flat-lay render; the ridged patch in Loop_Eclipse-Teal-Side_2 and Loop_Eclipse-Plum-05 Angle 1.\nWordmark: \"loop\", lowercase, small, white, printed flat on the outer flank of the eye-cup section toward the temple, near the top edge, reading along the band. One per side. Seen from the front it sits on the temple-side edge of the cup; on a side sleeper it can stand vertical in the frame because the head is on its side, and that is correct. Product reference: Loop_Eclipse-Teal-Side_2; in wear: LOOP_Eclipse_1029-final (frontal) and loop-eclipse-lifestyle-05 (side). Never embossed, never metal, never a second wordmark, never \"Loop Eclipse\" written on the product.\nInterior face: dark (black or near-black) where visible, on every colourway (Loop_Eclipse-Plum-05 Angle 1).\nNothing else on the product. No buckle, no slider, no second strap, no nose bridge piece, no visible foam, no elastic cord, no zip, no tag on the outside.\n\nSTANDING RULES, from the rubric:\nThe grader reads this section into its prompt verbatim.\n\n- **The stranger's read comes first.** Before the checks, a separate call that saw only the candidate, with no product name, no references and no product sheet, named the object on the face in one phrase and described its eye section in one sentence. Both are quoted under THIS CANDIDATE, and A6 is graded as that reader saw it, not as you know the product to be. A word from the Object-class words list in that phrase forces A6 in code, whatever you answer.\n- **Judge what the view shows.** A part hidden by the angle passes its check; a part shown wrongly fails it. A profile hides the far cup; a frontal hides the closure; a flat-lay hides the wear; the strap overlap hides the tip of the strap end.\n- **Know the asset class.** *Product*: the bare mask or render. *Wear*: a person wearing it. *Composite*: a finished channel deliverable with headline, badges, callouts, other Loop products. Loop's own products and typography are normal in a composite and never count as invented.\n- **The colourway claim.** A claim from library metadata is untrusted. A colourway token in the title or a reviewer's statement is trusted. With no trusted claim, identify the colourway from the image and say so.\n- **Absence is the usual miss.** Graders over-penalise excess and under-penalise absence. The likeliest misses on this product are flat fabric where the two eye pockets should be (B2), a missing ear scoop (B5), a missing wordmark (A2), a knit with no rib (C1). Look for what is not there.\n- **The numbers are evidence.** The measurement layer's textile lightness, chroma and hue distance to the colourway band are attached to every grade. They do not decide; they tell you where to look, and a note that ignores a large distance is an incomplete note.\n- **Fail when unsure**, and say in the note what you could not see.\n\nTHIS CANDIDATE.\nIts view reads as: profile.\nTrusted colourway claim: Teal (from the prompt). Judge D1 against that colourway, and fail E3 if the image disagrees with it.\n\nGrade every check strictly true (passes) or false (fails). When you are unsure, the check FAILS. Judge only what this image shows; do not credit the candidate for anything you cannot see.\n\nTHE CHECKS:\n- A1 [gate]: It is the Eclipse. One continuous wide curved band with two low eye pockets formed in its middle over a nose notch, the ear scoop, the hook-and-loop closure at the back. Not a generic sleep mask, not goggles, not a VR headset, not an eyeshade on an elastic cord. FAILS WHEN: The silhouette could be any sleep mask, or a thin elastic band; or any hard part appears on the band other than the black silicone patch, wherever it sits, including at the temple or above the ear: a buckle, slider, clip, dial, pod, second strap, zip or nose piece\n- A2 [gate]: The wordmark exists and is right. Wherever the outside of the mask is in view, a white lowercase \"loop\" wordmark is present, once per visible side, correctly spelled, as a flat print. No other lettering on the product. Where it sits is B8, not this check. FAILS WHEN: No wordmark visible on a view that shows the outside of the mask, or it is misspelled, capitalised, duplicated on one side, embossed or metallic, or any other lettering appears on the mask\n- A3 [gate]: Real colourway. The textile is Black, Teal or Plum (or a named planned colourway on request), one colour for strap and cups; silicone parts black; wordmark white. FAILS WHEN: An invented colour, a two-tone textile, coloured silicone, a coloured wordmark\n- A4 [gate]: Wearer anatomy. Eyes covered by the cups, nose in the notch, strap over the top of the ears and around the back of the head. Hands, ears, faces anatomically sound at viewing size. FAILS WHEN: Strap under the ear, through the ear, or floating; mask over the forehead or mouth; an extra hand or finger; a face that melts into the pillow\n- A5 [gate]: Nothing invented around the product. Other Loop products, headlines, badges, price callouts and layout are normal in a finished channel deliverable. What must not appear is anything that is not Loop's or not real. FAILS WHEN: A competitor mark, a non-Loop product presented as ours, invented packaging, or gibberish lettering anywhere in frame\n- A6 [advisory]: Reads as the Eclipse to a stranger. Before the checks, a reader who saw only the candidate, with no references and no product sheet, named the object on the face in one phrase and described its eye section in one sentence; both are quoted under THIS CANDIDATE. Grade the object as that reader saw it. FAILS WHEN: The phrase, or the picture, reads as a bra or bra cups, a pastie, a padded or moulded-foam contoured sleep mask with ball-shaped cups, goggles, a VR headset or visor, an eyeshade on a cord, or a blindfold strip; or the phrase contains a word from the Object-class words list, in which case the harness records this check false whatever you answered\n- B1 [critical]: Band width. The strap is wide and flat, about twice as tall at the eye cups as at the temple, and still a broad band at the back. FAILS WHEN: Reads as a thin headband or elastic, or as a rigid goggle frame\n- B2 [critical]: Two low pockets, not one dome and not two balls. Two shallow oblong pockets, each a wide oval in outline, much wider than it is tall and much wider than it is deep, formed in the band itself: the band pushed forward, not a cup fixed onto it. The top edge of each pocket runs on as the top edge of the band, with no step and no seam. The two pockets meet over the nose in a shallow saddle, and the outer face of the cup section is one smooth, low, continuous form: from the front, three-quarter or above, the top edge can run as a single unbroken arc and the surface between the pockets settles only slightly, and that is the product. What marks two pockets rather than one is the nose notch cut into the lower edge over the bridge of the nose, with the surface rising to either side of it. In profile the pocket stands off the face by a fraction of its width and its lower edge dips to the nose bridge rather than running straight across. In wear the pocket compresses, and on a side sleeper with the cup pressed into a pillow it can read almost flat; that too is the product. Flat fails only when there is no pocket at all: the fabric follows the eyelids and the brow with no raised outline anywhere. FAILS WHEN: A cup section with no nose notch in its lower edge and no rise to either side of the nose, one bulge from temple to temple; fabric that follows the eyelids with no pocket outline anywhere; or a cup drawn as a hemisphere or ball: round in outline, about as tall as it is wide, standing proud of a flat band like a padded cup stitched on, or so deep it reads as goggles\n- B3 [critical]: Scale on the head, and the strap goes round it. From just above the eyebrows to the top of the cheekbones, reaching past the temples. The strap continues behind the ear and round the back of the head, and the closure with its ridged silicone patch sits there, out of sight in most wear views. If the ridged patch is visible on, above or just in front of the ear, the strap has stopped at the ear and this check fails, whatever else is right. FAILS WHEN: Covers the forehead or the cheeks, stops short of the temples, the closure sits on the crown or the neck, or the ridged silicone patch is visible at the temple, on top of the ear or in front of it so that the strap ends at the ear instead of going round the head\n- B4 [minor]: Symmetry. Both cups the same size and depth; the band the same height on both sides at the same point. Judge only when both sides are in view. FAILS WHEN: One cup visibly larger or deeper, or the band tapers on one side only\n- B5 [minor]: Ear scoop. The lower edge rises over the ear and the ear stays visible below the strap. Judge only when an ear is in view. FAILS WHEN: Strap covers the ear, cuts across it, or has no scoop at all\n- B6 [minor]: Closure end. Judge only when the back of the head or a strap end is in view. One overlap, a black silicone patch with curved ridges on the strap end, strap ends of plausible length. The round O-logo sits at the very tip of that same end and is hidden by the overlap in most views; its absence is never a failure. FAILS WHEN: A knot, a buckle, a bow, two overlaps, a strap end that trails, a strap end with no silicone patch at all, or a patch that reads as a hard clip, pod or dial rather than a soft ridged silicone patch\n- B7 [minor]: Fit. Snug and face-hugging: no gap along the cheek or at the nose bridge, no skin bulging at the strap edge, no strap digging in. Wear shots only. FAILS WHEN: A visible gap under the cups, a strap pressing a crease into the skin, or a mask hovering off the face\n- B8 [critical]: Wordmark placement. Judge position on the mask, never in the frame: find the nose notch and the two temples first, then say where the wordmark sits between them. It belongs on the outer flank of the eye-cup section toward one temple, near the top edge, reading along the band. In wear its angle and its place in the picture follow the head: on a side sleeper it stands vertical in the frame, on a back sleeper shot from above the temple flank can land at the top centre of the picture, and both are right. FAILS WHEN: Relative to the mask itself: centred between the two cups over the nose notch, on the front face of a cup rather than its outer flank, on the strap behind the ear, on the closure, or on the inside of the band\n- C1 [critical]: Knit reads as knit. Matte technical knit with a fine rib running along the band, showing as fine parallel lines wherever the mask is sharp and large in the frame. If the wordmark is legible, the rib is visible at the same scale; only where the mask is small or soft does the rib fall below what the image can show, and there only gloss can be judged. Matte is not enough: the surface must read as a textile, not as a moulded or coated one. FAILS WHEN: Satin, silk, velvet, leather, neoprene, canvas weave, plastic, or a glossy sheen anywhere on the textile; or a smooth moulded surface with no rib and no textile grain at a scale where the wordmark can be read, however matte. The absence of any knit is a failure, not a pass\n- C2 [minor]: Silicone reads as silicone. The ridged patch, the O-logo and the anti-slip zones are matte black rubber with a faint satin edge highlight. Judge only the silicone parts that are in view. FAILS WHEN: Glossy plastic, metal, painted-on, or embossed fabric where a silicone part is shown\n- C3 [minor]: Wordmark finish. Flat white print sitting in the knit, crisp at its size. FAILS WHEN: Stitched, embossed, metallic, blurred, or floating above the surface\n- C4 [minor]: Edges and seams. Clean bound edges; the pocket rises out of the band with a soft transition in the knit and no stitched line around it; no stitching where the product has none. FAILS WHEN: Fraying, raw edges, decorative stitching, piping, a seam down the middle, or a circular seam, rim or ridge running around a cup that separates it from the band\n- C5 [minor]: Softness. In wear shots the cups compress gently against the face and the band follows the head; the textile shows no rigid creases. Wear shots only. FAILS WHEN: Rigid shell behaviour, sharp folds, or a band that does not follow the skull\n- C6 [minor]: Light response. The textile absorbs light with no specular hotspot; only the silicone shows a small highlight. FAILS WHEN: A highlight streak on the fabric, a mirror-like cup, or a uniformly flat unlit surface with no shading at all\n- D1 [critical]: Hue family. Black is neutral near-black; Teal is deep blue-green; Plum is deep purple-red. Judge against the pinned reference of the colourway in question (the trusted claim, else the one identified from the image). FAILS WHEN: Black goes navy or brown, Teal goes green, turquoise or navy, Plum goes magenta, burgundy or lilac\n- D2 [minor]: One colour. Strap and cups the same colour; silicone black; wordmark white; interior dark where visible. FAILS WHEN: Cups a different shade from the band, colour bleeding into the silicone or wordmark, a light interior\n- D3 [minor]: Scene light explains the shift. Warmer or darker under a lamp is the lamp; a hue change is not. The measurement block states in words whether the textile's hue sits over the line from its colourway band. When it says over, look for the coloured or warm light that would explain it, and say in the note whether you found one. Do not compare the numbers yourself. FAILS WHEN: The mask colour cannot be explained by the light on the face and pillow beside it, or the measurement block reports the hue over the line and nothing in the scene accounts for it\n- D4 [minor]: Depth of tone. The colourways are dark and saturated, not pastel or washed out. FAILS WHEN: A pale, chalky or desaturated version of the colourway\n- E1 [minor]: The image is otherwise sound. No AI artefacts in the scene: doubled objects, melted bedding, broken furniture, impossible light. FAILS WHEN: Any artefact a viewer would notice before they notice the mask\n- E2 [minor]: The product is whole. The mask is not cropped through the eye cups unless the crop is deliberate for the format. FAILS WHEN: A cup cut by the frame edge in a hero or PDP crop\n- E3 [minor]: Colourway identifiable. The textile reads unambiguously as one real colourway, and agrees with the trusted claim where one exists. FAILS WHEN: Ambiguous between two colourways, or a trusted claim that disagrees with the image\n\nBefore the checks, in your own words: name the object in this image in one short noun phrase (reads_as) and describe the part of it that sits over the eyes in one sentence (cup_section). Answer those two first, then grade. A description you have committed to is what the checks are graded against.\n\nReturn ONLY JSON, no fences, every check id present:\n{\"reads_as\":\"<one phrase>\",\"cup_section\":\"<one sentence>\",\"checks\":{\"A1\":bool,\"A2\":bool,\"A3\":bool,\"A4\":bool,\"A5\":bool,\"A6\":bool,\"B1\":bool,\"B2\":bool,\"B3\":bool,\"B4\":bool,\"B5\":bool,\"B6\":bool,\"B7\":bool,\"B8\":bool,\"C1\":bool,\"C2\":bool,\"C3\":bool,\"C4\":bool,\"C5\":bool,\"C6\":bool,\"D1\":bool,\"D2\":bool,\"D3\":bool,\"D4\":bool,\"E1\":bool,\"E2\":bool,\"E3\":bool},\"view_class\":\"frontal|profile|three_quarter|flat_lay|product_only|other\",\"asset_class\":\"product|wear|composite\",\"colourway_read\":\"Black|Teal|Plum|other|null\",\"worst_issue\":\"<one short phrase>\",\"notes\":\"<max 2 short sentences>\"}",
+     "sha256": "9665ba6722046358d448ec7f78fd63cc187b0dc29327961b37330f8683b59487"
+    },
+    "fixtures": [
+     {
+      "inputs": {
+       "asset_class": "",
+       "attached": [],
+       "claim": "Teal",
+       "claim_source": "prompt",
+       "detected": null,
+       "detected_confidence": "",
+       "missing": [],
+       "view": "profile"
+      },
+      "length": 18404,
+      "sha256": "783e19716f90b7d4e6eee74886d704fda7961f22ca6fd37c3d0264c1525ab85f"
+     },
+     {
+      "inputs": {
+       "asset_class": "wear",
+       "attached": [
+        {
+         "colourway": "Teal",
+         "role": "side"
+        }
+       ],
+       "claim": "Plum",
+       "claim_source": "reviewer",
+       "detected": null,
+       "detected_confidence": "",
+       "missing": [],
+       "view": "frontal"
+      },
+      "length": 18745,
+      "sha256": "b90d63919ce391a97875c031fefa26498ee70208bc30456730ff13342e4b9a18"
+     },
+     {
+      "inputs": {
+       "asset_class": "",
+       "attached": [
+        {
+         "colourway": "Teal",
+         "role": "side"
+        },
+        {
+         "colourway": null,
+         "role": "wear_frontal"
+        }
+       ],
+       "claim": "Black",
+       "claim_source": "metadata-untrusted",
+       "detected": "Teal",
+       "detected_confidence": "high",
+       "missing": [
+        {
+         "role": "wear_face",
+         "why": "its sha256 is not the pinned one"
+        }
+       ],
+       "view": "three_quarter"
+      },
+      "length": 19223,
+      "sha256": "ddf644f7226c1e0b30b6bd8a9b23a4e260d8c9c2bc2d2bb4f8f6dbd97de6b397"
+     },
+     {
+      "inputs": {
+       "asset_class": "product",
+       "attached": [
+        {
+         "colourway": "Teal",
+         "role": "side"
+        },
+        {
+         "colourway": null,
+         "role": "wear_frontal"
+        },
+        {
+         "colourway": null,
+         "role": "cross_section"
+        }
+       ],
+       "claim": "Black",
+       "claim_source": "metadata-untrusted",
+       "detected": null,
+       "detected_confidence": "",
+       "missing": [],
+       "view": "flat_lay"
+      },
+      "length": 19255,
+      "sha256": "24c08ae254239add0a42fe3730b72d742021c4850bf6493a9ba1c44b511cbd55"
+     },
+     {
+      "inputs": {
+       "asset_class": "",
+       "attached": [
+        {
+         "colourway": "Teal",
+         "role": "side"
+        },
+        {
+         "colourway": null,
+         "role": "wear_frontal"
+        },
+        {
+         "colourway": null,
+         "role": "cross_section"
+        },
+        {
+         "colourway": null,
+         "role": "a-role-the-kit-does-not-name"
+        }
+       ],
+       "claim": null,
+       "claim_source": "",
+       "detected": "Plum",
+       "detected_confidence": "",
+       "missing": [
+        {
+         "role": "wear_face",
+         "why": "its sha256 is not the pinned one"
+        }
+       ],
+       "view": "other"
+      },
+      "length": 19416,
+      "sha256": "1a94f54b287e60098382e9885ebbf19e53f530e8975434d61f006a2b4adbe630"
+     },
+     {
+      "inputs": {
+       "asset_class": "composite",
+       "attached": [
+        {
+         "colourway": "Teal",
+         "role": "side"
+        },
+        {
+         "colourway": null,
+         "role": "wear_frontal"
+        }
+       ],
+       "claim": null,
+       "claim_source": "",
+       "detected": null,
+       "detected_confidence": "",
+       "missing": [],
+       "view": "product_only"
+      },
+      "length": 18931,
+      "sha256": "f6eb2e5f7d80a9ce331521688afd61d59debf9efcc6f4f72e46fe40af4bcd2ec"
+     }
+    ]
+   },
+   "ladder": [
+    {
+     "failed": [],
+     "verdict": "PASS"
+    },
+    {
+     "failed": [
+      "A1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A6"
+     ],
+     "verdict": "PASS"
+    },
+    {
+     "failed": [
+      "B1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "B5"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "B6"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "B7"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "B8"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "C3"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "C4"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "C5"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "C6"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "D3"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "D4"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "E1"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "E2"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "E3"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "Z9"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A1",
+      "A2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "A3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "A4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "A5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "A6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B7"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B8"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "D1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "D2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "D3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "D4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "E1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "E2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "E3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "Z9"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "A3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "A4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "A5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "A6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B7"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B8"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "D1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "D2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "D3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "D4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "E1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "E2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "E3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "Z9"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "A4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "A5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "A6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B7"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B8"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "D1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "D2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "D3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "D4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "E1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "E2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "E3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "Z9"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "A5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "A6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "B1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "B2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "B3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "B4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "B5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "B6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "B7"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "B8"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "C1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "C2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "C3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "C4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "C5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "C6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "D1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "D2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "D3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "D4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "E1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "E2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "E3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "Z9"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "A6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "B1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "B2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "B3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "B4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "B5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "B6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "B7"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "B8"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "C1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "C2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "C3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "C4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "C5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "C6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "D1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "D2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "D3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "D4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "E1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "E2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "E3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A5",
+      "Z9"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A6",
+      "B1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A6",
+      "B2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A6",
+      "B3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A6",
+      "B4"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "B5"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "B6"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "B7"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "B8"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A6",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A6",
+      "C2"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "C3"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "C4"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "C5"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "C6"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A6",
+      "D2"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "D3"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "D4"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "E1"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "E2"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "E3"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A6",
+      "Z9"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "B1",
+      "B2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "B3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "B4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "B5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "B6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "B7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "B8"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "B3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "B4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "B5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "B6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "B7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "B8"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "B4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "B5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "B6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "B7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "B8"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "B5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "B6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "B7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "B8"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "B6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "B7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "B8"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B5",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "B7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "B8"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B6",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "B8"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B7",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B8",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B8",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B8",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B8",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B8",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B8",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B8",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B8",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B8",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B8",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B8",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B8",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B8",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B8",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D3",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D3",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D3",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D3",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D3",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D4",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D4",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D4",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D4",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E1",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E1",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E1",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E2",
+      "E3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E2",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E3",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    }
+   ],
+   "skeleton": [
+    {
+     "inputs": {
+      "colourway": "Teal",
+      "format": "4:5",
+      "light": "Soft window light from the left, cool, early morning.",
+      "n_refs": 1,
+      "scene": "A woman asleep on her side in a hotel bed, seen from the side at pillow height."
+     },
+     "prompt": "Using the provided product render of the Loop Eclipse sleep mask (image 1) as the exact object, A woman asleep on her side in a hotel bed, seen from the side at pillow height..\n\nThe mask is the object in image 1: one wide curved matte knit band in Teal, with two low oblong eye pockets formed in the band over the nose, the lower edge rising over the ear so the ear stays visible, the small white \"loop\" wordmark on the temple, the black silicone patch at the closure behind the head. From the outside the eye section is one smooth, continuous surface from temple to temple, with nothing traced on it; the two pockets are shallow, formed in the band itself, and show only where the lower edge dips into the nose notch. Keep its proportions exactly as in image 1. The textile is matte with a fine rib and no sheen; the silicone is matte black.\n\nLight: Soft window light from the left, cool, early morning.. The mask absorbs light; only the silicone shows a small highlight.\n\nPhotorealistic, 4:5, the mask sharp.",
+     "sha256": "647f6625f3e8fc594bed96c3201e21febbe657a7278a2cd3c7c7fd52d25c90d9"
+    },
+    {
+     "inputs": {
+      "colourway": "Plum",
+      "format": "1:1",
+      "light": "Warm lamp light from the right, evening.",
+      "n_refs": 1,
+      "scene": "A man lying on his back on a sofa, seen from above."
+     },
+     "prompt": "Using the provided product render of the Loop Eclipse sleep mask (image 1) as the exact object, A man lying on his back on a sofa, seen from above..\n\nThe mask is the object in image 1: one wide curved matte knit band in Plum, with two low oblong eye pockets formed in the band over the nose, the lower edge rising over the ear so the ear stays visible, the small white \"loop\" wordmark on the temple, the black silicone patch at the closure behind the head. From the outside the eye section is one smooth, continuous surface from temple to temple, with nothing traced on it; the two pockets are shallow, formed in the band itself, and show only where the lower edge dips into the nose notch. Keep its proportions exactly as in image 1. The textile is matte with a fine rib and no sheen; the silicone is matte black.\n\nLight: Warm lamp light from the right, evening.. The mask absorbs light; only the silicone shows a small highlight.\n\nPhotorealistic, 1:1, the mask sharp.",
+     "sha256": "b4b330f0562d51672a42224d30a13e3c403f138d6ba6e0d55188ee0f2147efb2"
+    },
+    {
+     "inputs": {
+      "colourway": "Black",
+      "format": "16:9",
+      "light": "Even daylight from overhead, neutral.",
+      "n_refs": 1,
+      "scene": "The mask alone on white linen, seen from above."
+     },
+     "prompt": "Using the provided product render of the Loop Eclipse sleep mask (image 1) as the exact object, The mask alone on white linen, seen from above..\n\nThe mask is the object in image 1: one wide curved matte knit band in Black, with two low oblong eye pockets formed in the band over the nose, the lower edge rising over the ear so the ear stays visible, the small white \"loop\" wordmark on the temple, the black silicone patch at the closure behind the head. From the outside the eye section is one smooth, continuous surface from temple to temple, with nothing traced on it; the two pockets are shallow, formed in the band itself, and show only where the lower edge dips into the nose notch. Keep its proportions exactly as in image 1. The textile is matte with a fine rib and no sheen; the silicone is matte black.\n\nLight: Even daylight from overhead, neutral.. The mask absorbs light; only the silicone shows a small highlight.\n\nPhotorealistic, 16:9, the mask sharp.",
+     "sha256": "7d100c6e32c0666feab8898ca3f64087463229bf7d8a01349b815282c135e40a"
+    },
+    {
+     "inputs": {
+      "colourway": "Teal",
+      "format": "4:5",
+      "light": "Soft window light from the left, cool, early morning.",
+      "n_refs": 2,
+      "scene": "A woman asleep on her side in a hotel bed, seen from the side at pillow height."
+     },
+     "prompt": "Using the provided product render of the Loop Eclipse sleep mask (image 1) as the exact object, and the reference photograph (image 2) for how it is worn, A woman asleep on her side in a hotel bed, seen from the side at pillow height..\n\nThe mask is the object in image 1: one wide curved matte knit band in Teal, with two low oblong eye pockets formed in the band over the nose, the lower edge rising over the ear so the ear stays visible, the small white \"loop\" wordmark on the temple, the black silicone patch at the closure behind the head. From the outside the eye section is one smooth, continuous surface from temple to temple, with nothing traced on it; the two pockets are shallow, formed in the band itself, and show only where the lower edge dips into the nose notch. Keep its proportions exactly as in image 1. The textile is matte with a fine rib and no sheen; the silicone is matte black.\n\nLight: Soft window light from the left, cool, early morning.. The mask absorbs light; only the silicone shows a small highlight.\n\nPhotorealistic, 4:5, the mask sharp.",
+     "sha256": "26caff0ea39755071fd2141ea2dfe5da730ea0133d8f38773a946b48dc76ac8e"
+    },
+    {
+     "inputs": {
+      "colourway": "Plum",
+      "format": "1:1",
+      "light": "Warm lamp light from the right, evening.",
+      "n_refs": 2,
+      "scene": "A man lying on his back on a sofa, seen from above."
+     },
+     "prompt": "Using the provided product render of the Loop Eclipse sleep mask (image 1) as the exact object, and the reference photograph (image 2) for how it is worn, A man lying on his back on a sofa, seen from above..\n\nThe mask is the object in image 1: one wide curved matte knit band in Plum, with two low oblong eye pockets formed in the band over the nose, the lower edge rising over the ear so the ear stays visible, the small white \"loop\" wordmark on the temple, the black silicone patch at the closure behind the head. From the outside the eye section is one smooth, continuous surface from temple to temple, with nothing traced on it; the two pockets are shallow, formed in the band itself, and show only where the lower edge dips into the nose notch. Keep its proportions exactly as in image 1. The textile is matte with a fine rib and no sheen; the silicone is matte black.\n\nLight: Warm lamp light from the right, evening.. The mask absorbs light; only the silicone shows a small highlight.\n\nPhotorealistic, 1:1, the mask sharp.",
+     "sha256": "d6580e4425a51fa701fbe8ab0be527cbff29bcfb67b04b311c223df742a1fe7e"
+    },
+    {
+     "inputs": {
+      "colourway": "Black",
+      "format": "16:9",
+      "light": "Even daylight from overhead, neutral.",
+      "n_refs": 2,
+      "scene": "The mask alone on white linen, seen from above."
+     },
+     "prompt": "Using the provided product render of the Loop Eclipse sleep mask (image 1) as the exact object, and the reference photograph (image 2) for how it is worn, The mask alone on white linen, seen from above..\n\nThe mask is the object in image 1: one wide curved matte knit band in Black, with two low oblong eye pockets formed in the band over the nose, the lower edge rising over the ear so the ear stays visible, the small white \"loop\" wordmark on the temple, the black silicone patch at the closure behind the head. From the outside the eye section is one smooth, continuous surface from temple to temple, with nothing traced on it; the two pockets are shallow, formed in the band itself, and show only where the lower edge dips into the nose notch. Keep its proportions exactly as in image 1. The textile is matte with a fine rib and no sheen; the silicone is matte black.\n\nLight: Even daylight from overhead, neutral.. The mask absorbs light; only the silicone shows a small highlight.\n\nPhotorealistic, 16:9, the mask sharp.",
+     "sha256": "546ac293afd290c4cca7591a2b7749c942a0e5a8f31a829f96e25442f7d3227e"
+    }
+   ]
+  },
+  "packaging": {
+   "ladder": [
+    {
+     "failed": [],
+     "verdict": "PASS"
+    },
+    {
+     "failed": [
+      "A1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "B4"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C7"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D3"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "D4"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "E1"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "E2"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "Z9"
+     ],
+     "verdict": "PASS_WITH_NOTES"
+    },
+    {
+     "failed": [
+      "A1",
+      "A2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "A3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "A4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "B4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "C7"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "D1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "D2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "D3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "D4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "E1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "E2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A1",
+      "Z9"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "A3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "A4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "B4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "C7"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "D1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "D2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "D3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "D4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "E1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "E2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A2",
+      "Z9"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "A4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "B4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C5"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C6"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "C7"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "D1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "D2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "D3"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "D4"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "E1"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "E2"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A3",
+      "Z9"
+     ],
+     "verdict": "FAIL"
+    },
+    {
+     "failed": [
+      "A4",
+      "B1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "B2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "B3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "B4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "C7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "A4",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "B2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "B3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "B4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "C7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B1",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "B3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "B4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "C7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B2",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "B4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "C7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B3",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "C7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "B4",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "C7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C1",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "C3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "C7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C2",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "C4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "C7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C3",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "C5"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "C7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C4",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "C6"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "C7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C5",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "C7"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C6",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C7",
+      "D1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C7",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C7",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C7",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C7",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C7",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "C7",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "D2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D1",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "D3"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D2",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D3",
+      "D4"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D3",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D3",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D3",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D4",
+      "E1"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D4",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "D4",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E1",
+      "E2"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E1",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    },
+    {
+     "failed": [
+      "E2",
+      "Z9"
+     ],
+     "verdict": "RETRY"
+    }
+   ]
+  }
+ },
+ "schema": 1,
+ "version": "0.2.0"
+}

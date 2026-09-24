@@ -11,6 +11,7 @@ import { getSkillSystemPrompt } from '@/lib/skills/registry'
 import { getModelConfig } from '@/lib/models/registry'
 import { referenceToDataUrl, splitDataUrl } from '@/lib/net/fetch-allowlisted'
 import { getSkillVersion, type SkillVersion } from './skill-version'
+import { buildIterateSystemPrompt } from './iteration-slate-mode'
 
 const DEFAULT_PROMPT_ITERATE_MODEL = 'claude-sonnet-4-5-20250929'
 
@@ -153,10 +154,12 @@ export async function iteratePrompt(
     config?.type === 'video' ||
     /veo|video|replicate-video|fal-video|gemini-video/i.test(input.modelId)
 
-  const skillPrompt = getSkillSystemPrompt('genai-prompting')
-  const systemPrompt =
-    skillPrompt ||
+  // The slate schema travels with iterate itself (./iteration-slate-mode.ts), so the
+  // skill body it runs on may be any edition of the prompting skill.
+  const systemPrompt = buildIterateSystemPrompt(
+    getSkillSystemPrompt('genai-prompting'),
     'You are an expert AI prompt engineer specializing in Meta-Andromeda-aware ad creative iteration.'
+  )
 
   const anchorLines: string[] = []
   if (input.anchors?.product) anchorLines.push(`- Product: ${input.anchors.product}`)

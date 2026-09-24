@@ -14,6 +14,7 @@
 import crypto from 'crypto'
 
 const TOKEN_PREFIX = 'vsp_live'
+const OAUTH_ACCESS_PREFIX = 'vsp_oat_'
 const PREFIX_RANDOM_LEN = 8 // bytes -> 16 hex chars
 const SECRET_RANDOM_LEN = 24 // bytes -> 48 hex chars
 
@@ -76,6 +77,10 @@ export function extractBearerToken(headerValue: string | null | undefined): stri
   // Accept "Bearer <token>" or a bare token value.
   const match = /^Bearer\s+(.+)$/i.exec(trimmed)
   const token = match ? match[1].trim() : trimmed
+  // A one-hour access token from the per-person Claude sign-in (src/lib/oauth).
+  if (token.startsWith(OAUTH_ACCESS_PREFIX)) {
+    return /^vsp_oat_[A-Za-z0-9_-]{43}$/.test(token) ? token : null
+  }
   if (!token.startsWith(`${TOKEN_PREFIX}_`)) return null
   // Reject obviously malformed tokens.
   if (token.length < TOKEN_PREFIX.length + 1 + 16 + 1 + 32) return null

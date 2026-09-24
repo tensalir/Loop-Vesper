@@ -270,6 +270,54 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
     },
   },
+  {
+    name: 'get_creative_kit',
+    title: 'Read the Loop creative kit',
+    description:
+      "What Vesper is running on: the Loop Creative plugin's kit at its release tag. section 'summary' (the default) names the version, commit and products; 'products' lists them in full; 'prompting' returns the Loop edition of the prompting skill; 'feedback' the feedback targets and labels; 'rubric:<product>' a product's checks with their plain-language captions. Says when the kit is stale.",
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        section: {
+          type: 'string',
+          description: "summary | products | prompting | feedback | rubric:<product>, e.g. rubric:eclipse",
+          default: 'summary',
+        },
+      },
+    },
+  },
+  {
+    name: 'list_creative_products',
+    title: 'List Loop products Vesper serves',
+    description:
+      'The Loop products in the creative kit that Vesper serves (pilot or live): name, kind, rubric version, colourways or looks, who decides, where answers go, and the Vesper tools that work with each.',
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+  },
+  {
+    name: 'get_product_references',
+    title: "See a product's pinned references",
+    description:
+      "The real pictures a grade or a draw of a Loop product attaches, in the order it attaches them, with JPEG previews of exactly those pictures and why any is not attached. purpose 'grade' (the grader's references for a colourway and view) or 'generate' (the product render first, then a photograph of it worn). Packaging takes a look and a scene; CMF takes a clown key.",
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['product'],
+      properties: {
+        product: { type: 'string', description: 'slug or name, e.g. eclipse, packaging, cmf' },
+        purpose: { type: 'string', enum: ['grade', 'generate'], default: 'grade' },
+        colourway: { type: 'string', maxLength: 40, description: 'e.g. Teal; the kit default when omitted' },
+        view: { type: 'string', maxLength: 40, description: 'frontal, profile, three_quarter, flat_lay, product_only, other' },
+        look: { type: 'string', maxLength: 40, description: 'packaging: e.g. coachella' },
+        scene: { type: 'string', maxLength: 40, description: 'packaging: both, closed or open' },
+        clown: { type: 'string', maxLength: 80, description: 'CMF: a clown key, e.g. case-experience2--front' },
+        previews: { type: 'boolean', default: true },
+      },
+    },
+  },
 ]
 
 export function findMcpTool(name: string): McpToolDefinition | undefined {

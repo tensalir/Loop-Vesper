@@ -203,19 +203,19 @@ export const surfaces: Surface[] = [
     id: 'mcp',
     icon: '◇',
     name: 'Add to Claude',
-    verb: 'One URL to paste. Five-minute install.',
+    verb: 'One URL to paste, then sign in.',
     status: 'recommended',
     badge: 'Recommended',
     detail: {
       title: 'Add Vesper to Claude',
-      meta: 'One URL to paste',
+      meta: 'One URL, your own sign-in',
       body:
-        'Vesper plugs into Claude as a custom connector. Generate your URL below, then paste it into Claude once. There is nothing else to install and no separate login to remember.',
+        'Vesper plugs into Claude as a custom connector. Add the server URL once, click Connect and sign in with your Vesper login: Claude then acts in Vesper as you, and what it makes lands in your project "Claude". Your Vesper account needs Claude access; ask whoever runs Vesper at Loop to turn it on. The token URL below still works for Cursor and scripts.',
       fields: [
         {
           label: 'Server URL',
-          value: 'https://vesper.loop.dev/api/mcp/<your-token>',
-          hint: 'Treat the URL like a password. Anyone who has it can call Vesper as you.',
+          value: 'https://vesper.loop.dev/api/mcp',
+          hint: 'No token in it: you sign in when you click Connect. Disconnect it any time in Settings, Connected apps.',
         },
       ],
       instructions: [
@@ -228,10 +228,12 @@ export const surfaces: Surface[] = [
           main: 'Click the + button at the top right, then Add custom connector.',
         },
         {
-          main: 'Paste the URL into the Remote MCP server URL field. Leave Advanced settings empty.',
+          main: 'Paste the server URL into the Remote MCP server URL field. Leave Advanced settings empty.',
         },
         {
-          main: 'Click Add. Vesper now appears in the Connectors list with three tools: make a prompt better, see alternatives, find the right model.',
+          main: 'Click Add, then Connect. Sign in to Vesper and click Allow.',
+          detail:
+            'Claude opens Vesper in a browser tab. After you allow it, Vesper appears in your Connectors list and its tools are yours to use.',
         },
       ],
     },

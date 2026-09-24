@@ -1,0 +1,21 @@
+{
+  "name": "creative",
+  "displayName": "Loop Creative",
+  "version": "0.2.0",
+  "description": "Loop's creative work on product imagery, packaging and CMF files, paired with the Vesper connector. The mother finds the product and the job and names who decides; genai-prompting writes prompts the way Loop's graded rounds taught; the Eclipse, packaging and CMF review skills grade against the real product; the feedback skill files a colleague's remark as an issue. Vesper holds the keys: it draws, grades three times, records verdicts and files feedback.",
+  "author": {
+    "name": "Loop studio team"
+  },
+  "repository": "https://github.com/tensalir/loop-asset-reviewer",
+  "keywords": [
+    "loop",
+    "creative",
+    "vesper",
+    "asset review",
+    "eclipse",
+    "packaging",
+    "cmf",
+    "genai prompting",
+    "feedback"
+  ]
+}

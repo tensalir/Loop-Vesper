@@ -2,6 +2,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { NEXT_COOKIE, safeNext } from '@/lib/auth/next-param'
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
@@ -25,7 +26,19 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // URL to redirect to after sign in process completes
-  return NextResponse.redirect(new URL('/projects', requestUrl.origin))
+  // Where to go after signing in: the page the login started from (set by the
+  // login page before a Google sign-in, e.g. the Claude consent page), else the projects.
+  const saved = cookieStore.get(NEXT_COOKIE)?.value
+  let target = '/projects'
+  if (saved) {
+    try {
+      target = safeNext(decodeURIComponent(saved))
+    } catch {
+      target = '/projects'
+    }
+  }
+  const response = NextResponse.redirect(new URL(target, requestUrl.origin))
+  if (saved) response.cookies.set(NEXT_COOKIE, '', { path: '/', maxAge: 0 })
+  return response
 }
 
