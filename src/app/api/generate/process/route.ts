@@ -6,6 +6,7 @@ import { uploadBase64ToStorage, uploadUrlToStorage } from '@/lib/supabase/storag
 import { logMetric } from '@/lib/metrics'
 import { downloadReferenceImageAsDataUrl } from '@/lib/reference-images'
 import { enhancePrompt } from '@/lib/prompts/enhance'
+import { composeAnchoredPrompt, resolveLineageAnchor } from '@/lib/generation/anchor'
 import { Prisma } from '@prisma/client'
 import { classifyError } from '@/lib/errors/classification'
 import { 
@@ -439,6 +440,54 @@ async function processGenerationById(
       })
     }
 
+    // Iterating on a draw anchored on a product render or a CMF clown:
+    // attach the anchor, never the previous draw, skip the model rewrite, and
+    // send the anchored draw's prompt followed by the change. Drawing from the
+    // last draw compounds its mistakes about the product (src/lib/generation/anchor.ts).
+    let anchoredPrompt: string | null = null
+    const lineageParams = otherParameters as any
+    if (
+      lineageParams?.sourceKind === 'edited' &&
+      typeof lineageParams?.sourceRootOutputId === 'string' &&
+      getModelConfig(generation.modelId)?.type !== 'video'
+    ) {
+      try {
+        const resolved = await resolveLineageAnchor(parameters, {
+          generationForOutput: async (outputId) => {
+            const output = await prisma.output.findUnique({
+              where: { id: outputId },
+              select: { generation: { select: { prompt: true, parameters: true } } },
+            })
+            return output?.generation ?? null
+          },
+        })
+        if (resolved) {
+          inlineReferenceImage = await downloadReferenceImageAsDataUrl(resolved.anchor.url)
+          referenceImageUrl = resolved.anchor.url
+          fallbackReferenceImageUrls = []
+          delete (otherParameters as any).referenceImages
+          anchoredPrompt = composeAnchoredPrompt(resolved.anchorPrompt, generation.prompt)
+          // Written onto this generation too, so iterating on it finds the anchor in one hop.
+          const anchoredParameters = {
+            ...(generation.parameters as any),
+            anchor: resolved.anchor,
+            anchorPrompt: resolved.anchorPrompt,
+            anchoredIteration: true,
+          }
+          generation.parameters = anchoredParameters
+          await prisma.generation
+            .update({ where: { id: generation.id }, data: { parameters: anchoredParameters } })
+            .catch((persistErr: unknown) =>
+              console.warn(`[${generationId}] anchor: failed to persist (continuing):`, persistErr)
+            )
+          await appendLog('anchor:reattached', { kind: resolved.anchor.kind, id: resolved.anchor.id ?? null })
+        }
+      } catch (anchorErr: any) {
+        await appendLog('anchor:failed', { error: anchorErr?.message })
+        console.warn(`[${generationId}] anchor: could not re-attach, iterating as before:`, anchorErr?.message || anchorErr)
+      }
+    }
+
     console.log(`[${generationId}] Starting generation with model ${generation.modelId}`)
     await appendLog('model:generate:start', { modelId: generation.modelId })
     startHeartbeat('model:generate:heartbeat')
@@ -480,7 +529,7 @@ async function processGenerationById(
     // Iteration-aware prompt guard: when the user iterates on a previously
     // generated image (Quick Edit or Use-as-Reference arrow), silently rewrite
     // the prompt with image-aware preservation language. Fail-soft.
-    let effectivePrompt = generation.prompt
+    let effectivePrompt = anchoredPrompt ?? generation.prompt
     const iterationParams = otherParameters as any
     const isIterationEdit =
       iterationParams?.sourceKind === 'edited' &&
@@ -502,7 +551,9 @@ async function processGenerationById(
       isIterationEdit &&
       iterationModelType !== 'video' &&
       iterationReferenceForEnhance &&
-      !iterationSkipReason
+      !iterationSkipReason &&
+      // An anchored iteration is filled by code; the model never rewrites it.
+      !anchoredPrompt
     ) {
       await appendLog('iteration-guard:start', {
         modelId: generation.modelId,

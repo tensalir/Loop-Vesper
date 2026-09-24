@@ -47,15 +47,22 @@ test('applyRefinementToPrompt trims whitespace from the correction', () => {
   expect(out).toContain('not fully capture: warmer chrome accent\n')
 })
 
-test('pickVariantIndex defaults to attemptNumber - 1 (bulk burst path)', () => {
+test('pickVariantIndex holds the light at variant 0 by default', () => {
+  // Since 2026-09-24 the light no longer rotates per attempt: a burst of
+  // attempts differs only in the draw, so each can be judged against the sheet.
+  expect(pickVariantIndex({ attemptNumber: 1, isRefinement: false })).toBe(0)
+  expect(pickVariantIndex({ attemptNumber: 4, isRefinement: false })).toBe(0)
+})
+
+test('pickVariantIndex rotates with the attempt under legacy prompting', () => {
+  // CMF_LEGACY_PROMPTING=1: variant cycles through 0, 1, 2, 3, ...
+  // mod-4 happens downstream in selectPromptVariant.
   expect(
-    pickVariantIndex({ attemptNumber: 1, isRefinement: false })
+    pickVariantIndex({ attemptNumber: 1, isRefinement: false, legacyRotation: true })
   ).toBe(0)
   expect(
-    pickVariantIndex({ attemptNumber: 4, isRefinement: false })
+    pickVariantIndex({ attemptNumber: 4, isRefinement: false, legacyRotation: true })
   ).toBe(3)
-  // Bulk burst with no parent: variant cycles through 0, 1, 2, 3, ...
-  // mod-4 happens downstream in selectPromptVariant.
 })
 
 test('pickVariantIndex reuses the parent variant when refining', () => {
@@ -71,16 +78,23 @@ test('pickVariantIndex reuses the parent variant when refining', () => {
   ).toBe(2)
 })
 
-test('pickVariantIndex falls back to attemptNumber - 1 when refining without a parent', () => {
+test('pickVariantIndex without a parent holds variant 0, or rotates under legacy', () => {
   // Fresh-spec refinement (no anchor) is still valid — the prompt
-  // gets the spec + correction, and we pick the variant from the
-  // new attempt number. Tested explicitly so we don't accidentally
+  // gets the spec + correction. Tested explicitly so we don't accidentally
   // crash when parentAttemptNumber is null.
   expect(
     pickVariantIndex({
       attemptNumber: 5,
       parentAttemptNumber: null,
       isRefinement: true,
+    })
+  ).toBe(0)
+  expect(
+    pickVariantIndex({
+      attemptNumber: 5,
+      parentAttemptNumber: null,
+      isRefinement: true,
+      legacyRotation: true,
     })
   ).toBe(4)
 })
