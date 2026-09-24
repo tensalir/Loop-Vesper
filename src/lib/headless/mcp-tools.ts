@@ -437,6 +437,92 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
     },
   },
+  {
+    name: 'list_feedback_targets',
+    title: 'What feedback can be about',
+    description:
+      "The skills and products of the Loop Creative plugin a colleague's remark can be about, each with its command and, for a product, its checks and their plain-language captions; the kinds of feedback (remark, bug, idea, question).",
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+  },
+  {
+    name: 'list_feedback',
+    title: 'See feedback already filed',
+    description:
+      "Feedback issues in the Loop Creative plugin's repository, newest first, at most 15: number, title, state, triage labels and the first lines of the triage's answer. target narrows to one skill; query searches the words; mine keeps the ones the caller filed. Use it to find the same remark before filing, and to answer 'what happened to my feedback'.",
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        target: { type: 'string', description: 'an id from list_feedback_targets' },
+        state: { type: 'string', enum: ['open', 'closed', 'all'], default: 'open' },
+        query: { type: 'string', maxLength: 200, description: 'words to look for' },
+        mine: { type: 'boolean', default: false, description: 'only the ones the caller filed' },
+      },
+    },
+  },
+  {
+    name: 'preview_feedback',
+    title: 'Preview a feedback issue',
+    description:
+      "The exact issue a colleague's remark becomes, before anything is filed: title, labels and body, with their name and Loop email (the signed-in person, never an argument), possible earlier issues with the same remark, and a preview_id valid 15 minutes. Refuses anything shaped like a key or token. Show it to them; file only on a yes, with submit_feedback.",
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['target', 'kind', 'words'],
+      properties: {
+        target: { type: 'string', description: 'what the remark is about: an id from list_feedback_targets, e.g. eclipse' },
+        kind: { type: 'string', enum: ['remark', 'bug', 'idea', 'question'] },
+        words: { type: 'string', maxLength: 4000, description: "the colleague's remark, verbatim, never paraphrased" },
+        summary: { type: 'string', maxLength: 160, description: "for the title; their first words when omitted" },
+        what_should_have_happened: { type: 'string', maxLength: 4000, description: 'in their words, when they said it' },
+        example: { type: 'string', maxLength: 4000, description: 'where it happened, in words; never an image' },
+        links: { type: 'array', maxItems: 10, items: { type: 'string' }, description: 'https links: a Frontify asset, a round, a page' },
+        claudes_reading: { type: 'string', maxLength: 4000, description: "Claude's own reading, labelled as Claude's" },
+        check: { type: 'string', description: 'the check the remark names, e.g. B3' },
+        check_confirmed: { type: 'boolean', description: 'true when they confirmed that check' },
+        output_id: { type: 'string', description: 'the Vesper output it is about' },
+        grade_id: { type: 'string', description: 'the Vesper grade it is about' },
+        surface: { type: 'string', enum: ['chat', 'cowork', 'code'], default: 'chat' },
+        plugin_version: { type: 'string', description: 'the plugin version they have, e.g. 0.2.0; the kit version when omitted' },
+        mode: { type: 'string', enum: ['issue', 'comment'], default: 'issue', description: "'comment' joins an earlier issue with the same remark" },
+        issue_number: { type: 'integer', description: "the earlier issue, for mode 'comment'" },
+      },
+    },
+  },
+  {
+    name: 'submit_feedback',
+    title: 'File the previewed feedback issue',
+    description:
+      "Files exactly what preview_feedback showed, as one issue in the plugin's repository (or, in mode 'comment', on the earlier issue it joins), in the signed-in person's name. Pass the preview_id and the same fields; if anything changed it files nothing and asks for a new preview. Filing the same preview twice files it once. Only after they said yes.",
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['preview_id', 'target', 'kind', 'words'],
+      properties: {
+        preview_id: { type: 'string', description: 'from preview_feedback' },
+        target: { type: 'string', description: 'what the remark is about: an id from list_feedback_targets, e.g. eclipse' },
+        kind: { type: 'string', enum: ['remark', 'bug', 'idea', 'question'] },
+        words: { type: 'string', maxLength: 4000, description: "the colleague's remark, verbatim, never paraphrased" },
+        summary: { type: 'string', maxLength: 160, description: "for the title; their first words when omitted" },
+        what_should_have_happened: { type: 'string', maxLength: 4000, description: 'in their words, when they said it' },
+        example: { type: 'string', maxLength: 4000, description: 'where it happened, in words; never an image' },
+        links: { type: 'array', maxItems: 10, items: { type: 'string' }, description: 'https links: a Frontify asset, a round, a page' },
+        claudes_reading: { type: 'string', maxLength: 4000, description: "Claude's own reading, labelled as Claude's" },
+        check: { type: 'string', description: 'the check the remark names, e.g. B3' },
+        check_confirmed: { type: 'boolean', description: 'true when they confirmed that check' },
+        output_id: { type: 'string', description: 'the Vesper output it is about' },
+        grade_id: { type: 'string', description: 'the Vesper grade it is about' },
+        surface: { type: 'string', enum: ['chat', 'cowork', 'code'], default: 'chat' },
+        plugin_version: { type: 'string', description: 'the plugin version they have, e.g. 0.2.0; the kit version when omitted' },
+        mode: { type: 'string', enum: ['issue', 'comment'], default: 'issue', description: "'comment' joins an earlier issue with the same remark" },
+        issue_number: { type: 'integer', description: "the earlier issue, for mode 'comment'" },
+      },
+    },
+  },
 ]
 
 export function findMcpTool(name: string): McpToolDefinition | undefined {

@@ -1673,3 +1673,31 @@ model CreativeVerdict {
   @@index([createdAt], map: "creative_verdicts_created_idx")
   @@map("creative_verdicts")
 }
+
+// A colleague's feedback on the Loop Creative plugin, per preview: the per-person limits count here,
+// and a preview is filed at most once (keyed on the rendered issue's sha256). The issue itself lives
+// in the plugin's repository, filed by Vesper's GitHub App in the person's name.
+model FeedbackSubmission {
+  id           String    @id @default(uuid()) @db.Uuid
+  previewHash  String    @unique @map("preview_hash")
+  profileId    String    @map("profile_id") @db.Uuid
+  credentialId String?   @map("credential_id") @db.Uuid
+  repo         String
+  mode         String // issue | comment
+  issueNumber  Int?      @map("issue_number")
+  commentId    BigInt?   @map("comment_id")
+  title        String?
+  labels       String[]  @default([])
+  target       String
+  kind         String
+  surface      String
+  status       String    @default("previewed") // previewed | filing | filed | labels_failed | failed
+  error        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  filedAt      DateTime? @map("filed_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@index([profileId, createdAt], map: "feedback_submissions_profile_created_idx")
+  @@index([profileId, filedAt], map: "feedback_submissions_profile_filed_idx")
+  @@map("feedback_submissions")
+}

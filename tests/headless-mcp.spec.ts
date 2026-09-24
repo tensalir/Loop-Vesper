@@ -23,10 +23,14 @@ test.describe('MCP_TOOLS catalog', () => {
       'grade_image',
       'iterate_prompt',
       'list_creative_products',
+      'list_feedback',
+      'list_feedback_targets',
       'list_models',
       'list_product_renders',
+      'preview_feedback',
       'record_grade',
       'record_verdict',
+      'submit_feedback',
     ])
   })
 

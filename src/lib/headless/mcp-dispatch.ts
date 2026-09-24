@@ -40,7 +40,8 @@ export const SERVER_INSTRUCTIONS =
   'list_creative_products, get_creative_kit and get_product_references read the Loop creative kit: the products, their rubrics, and the pinned references a grade or a draw attaches. ' +
   'generate_product_image draws a Loop product from its skeleton, filled by code, with the product render first and no reference parameter; ' +
   "grade_image reads a picture three times with the product's grader (judge <model> vesper x3, advisory, never pooled with your own read, which record_grade keeps apart); " +
-  "record_verdict records the decider's answer and, for a Frontify asset, returns the comment line to post with the person's own Frontify connector."
+  "record_verdict records the decider's answer and, for a Frontify asset, returns the comment line to post with the person's own Frontify connector. " +
+  "Feedback on the Loop Creative plugin: list_feedback_targets, list_feedback to find the same remark, preview_feedback to show the exact issue, submit_feedback only after the colleague says yes; it is filed in the signed-in person's name."
 
 interface JsonRpcRequest {
   jsonrpc: '2.0'
