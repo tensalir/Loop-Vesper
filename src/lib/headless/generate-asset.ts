@@ -100,6 +100,8 @@ export interface GenerateAssetOutput {
   mimeType: string
   /** The `outputs` row in the web app; null when recording failed. */
   outputId: string | null
+  /** A small public JPEG of the same picture, for showing in a reply; null when it could not be made. */
+  previewUrl: string | null
 }
 
 /** A product render or clown the draw was anchored on; iterating in the web app re-attaches it. */
@@ -319,12 +321,29 @@ export async function executeGenerateAsset(
       const storedUrl = output.url.startsWith('data:')
         ? await uploadBase64ToStorage(output.url, STORAGE_BUCKET, path)
         : await uploadUrlToStorage(output.url, STORAGE_BUCKET, path)
+      const previewSource = output.url.startsWith('data:') ? output.url : storedUrl
+      // A small public JPEG beside the original: what a reply shows (claude.ai draws a picture the
+      // reply carries as a markdown image, never one inside the tool result), and what a poll
+      // sends as the preview without re-reading a multi-megabyte original.
+      let previewUrl: string | null = null
+      try {
+        const { buffer } = await readImageBytes(previewSource)
+        const preview = await makeImagePreview(buffer)
+        previewUrl = await uploadBase64ToStorage(
+          `data:${preview.mimeType};base64,${preview.data}`,
+          STORAGE_BUCKET,
+          `mcp/${ctx.credentialId}/${generationId}/${idx}-preview.jpg`
+        )
+      } catch (err) {
+        console.warn('[mcp/generate_asset] preview upload failed', (err as Error)?.message)
+      }
       return {
         url: storedUrl,
         width: output.width,
         height: output.height,
         mimeType,
-        previewSource: output.url.startsWith('data:') ? output.url : storedUrl,
+        previewSource,
+        previewUrl,
       }
     })
   )
@@ -395,6 +414,7 @@ export async function executeGenerateAsset(
       height: p.height,
       mimeType: p.mimeType,
       outputId: outputIds[idx] ?? null,
+      previewUrl: p.previewUrl,
     })),
     previewSources: persisted.map((p) => p.previewSource),
     durationMs: Date.now() - startedAt,
@@ -463,12 +483,35 @@ const PREVIEW_NOTE =
   'The images below are JPEG previews (long edge at most 1568 px) for reading; open the links for the originals.'
 
 /**
- * Build the MCP content for image results: the summary, then for each image
- * a link to the original and, when `inline`, a preview Claude can read.
+ * The lines a reply carries so the person sees the pictures. claude.ai draws a picture only when the
+ * assistant's own text holds it as a markdown image; a picture inside the tool result stays folded
+ * behind the "used the tool" line, whatever it is annotated with (tested 2026-09-24). The small
+ * preview is what goes in the reply; the original stays behind its link.
+ */
+export function showInReplyLines(
+  outputs: Array<{ url: string; previewUrl?: string | null }>,
+  modelId: string
+): string[] {
+  return outputs.map((out, idx) => `![Image ${idx + 1} from ${modelId}](${out.previewUrl ?? out.url})`)
+}
+
+export function showInReplyText(outputs: Array<{ url: string; previewUrl?: string | null }>, modelId: string): string {
+  const n = outputs.length
+  return [
+    n === 1
+      ? 'To show the person the picture, put this line in your reply exactly as it is (claude.ai draws it there and nowhere else):'
+      : 'To show the person the pictures, put these lines in your reply exactly as they are (claude.ai draws them there and nowhere else):',
+    ...showInReplyLines(outputs, modelId),
+  ].join('\n')
+}
+
+/**
+ * Build the MCP content for image results: the summary, the lines a reply shows the pictures with,
+ * then for each image a link to the original and, when `inline`, a preview Claude can read.
  */
 export async function imageResultContent(input: {
   summary: string
-  outputs: Array<{ url: string; width: number; height: number; mimeType: string }>
+  outputs: Array<{ url: string; width: number; height: number; mimeType: string; previewUrl?: string | null }>
   modelId: string
   previewSources?: string[]
   inline: boolean
@@ -476,6 +519,7 @@ export async function imageResultContent(input: {
   const content: McpContent[] = [{ type: 'text', text: input.summary }]
   const n = input.outputs.length
   const mode = imageAudienceMode()
+  if (n > 0) content.push({ type: 'text', text: showInReplyText(input.outputs, input.modelId) })
   input.outputs.forEach((out, idx) => {
     content.push({
       type: 'resource_link',
@@ -491,6 +535,11 @@ export async function imageResultContent(input: {
   const previews = await Promise.all(
     input.outputs.map(async (out, idx) => {
       try {
+        if (out.previewUrl) {
+          // Already the small JPEG; no second resize.
+          const { buffer } = await readImageBytes(out.previewUrl)
+          return { data: buffer.toString('base64'), mimeType: 'image/jpeg' }
+        }
         const { buffer } = await readImageBytes(input.previewSources?.[idx] ?? out.url)
         return await makeImagePreview(buffer)
       } catch (err) {

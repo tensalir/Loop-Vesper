@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import sharp from 'sharp'
 import { dispatch } from '../src/lib/headless/mcp-dispatch'
-import { imageAudienceMode, imageBlocks, imageResultContent } from '../src/lib/headless/generate-asset'
+import { imageAudienceMode, imageBlocks, imageResultContent, showInReplyLines } from '../src/lib/headless/generate-asset'
 import { PREVIEW_LONG_EDGE, PREVIEW_MAX_BYTES } from '../src/lib/images/preview'
 import { ORG_DEFAULT_TOOLS, HEADLESS_TOOLS } from '../src/lib/headless/tool-registry'
 import { TOOL_HANDLERS } from '../src/lib/headless/tools'
@@ -126,6 +126,33 @@ test.describe('dispatch', () => {
 })
 
 test.describe('image results Claude can see', () => {
+  test('every image result hands Claude the markdown line that shows the picture in its reply', async () => {
+    const png = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#fff' } }).png().toBuffer()
+    const preview = `data:image/jpeg;base64,${(await sharp(png).jpeg().toBuffer()).toString('base64')}`
+    const content = await imageResultContent({
+      summary: 's',
+      modelId: 'gemini-nano-banana-2',
+      outputs: [
+        { url: 'https://abcd.supabase.co/full-0.png', width: 8, height: 8, mimeType: 'image/png', previewUrl: preview },
+        { url: 'https://abcd.supabase.co/full-1.png', width: 8, height: 8, mimeType: 'image/png', previewUrl: null },
+      ],
+      inline: true,
+    })
+    const texts = content.filter((c) => c.type === 'text').map((c) => (c as { text: string }).text)
+    const show = texts.find((x) => x.includes('put these lines in your reply'))
+    expect(show).toBeDefined()
+    // the small preview when there is one, the original when there is not
+    expect(show).toContain(`![Image 1 from gemini-nano-banana-2](${preview})`)
+    expect(show).toContain('![Image 2 from gemini-nano-banana-2](https://abcd.supabase.co/full-1.png)')
+    expect(showInReplyLines([{ url: 'u', previewUrl: 'p' }], 'm')).toEqual(['![Image 1 from m](p)'])
+    // a preview that is already the small JPEG is sent as it is, not resized again; the second
+    // output's original cannot be fetched here, so it gets the "no preview" line instead
+    const images = content.filter((c) => c.type === 'image') as Array<{ data: string }>
+    expect(images.length).toBe(2)
+    expect(`data:image/jpeg;base64,${images[0].data}`).toBe(preview)
+    expect(texts.some((x) => x.startsWith('No preview for image 2'))).toBe(true)
+  })
+
   test('the audience modes: one block for each by default, the old user mark, or one for both', () => {
     const both = imageBlocks('AAAA', 'image/jpeg', 'both')
     expect(both).toHaveLength(1)
