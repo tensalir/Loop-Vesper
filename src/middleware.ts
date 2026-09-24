@@ -1,21 +1,8 @@
 import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-
-// Public routes that don't require authentication checks
-// Includes password recovery pages so unauthenticated users can reset their password
-const PUBLIC_ROUTES = ['/login', '/signup', '/auth', '/forgot-password', '/reset-password']
-
-// Routes that skip middleware entirely (no auth call needed)
-const SKIP_AUTH_ROUTES = ['/api']
-
-function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_ROUTES.some(route => pathname.startsWith(route))
-}
-
-function shouldSkipAuth(pathname: string): boolean {
-  return SKIP_AUTH_ROUTES.some(route => pathname.startsWith(route))
-}
+import { safeNext } from '@/lib/auth/next-param'
+import { isPublicRoute, shouldSkipAuth } from '@/lib/auth/route-rules'
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
@@ -37,7 +24,9 @@ export async function middleware(req: NextRequest) {
     const { data: { session } } = await supabase.auth.getSession()
     
     if (session && (pathname.startsWith('/login') || pathname.startsWith('/signup'))) {
-      return NextResponse.redirect(new URL('/projects', req.url))
+      // Signed in already: go where the sign-in was taking them (the Claude
+      // consent page, say), else the projects.
+      return NextResponse.redirect(new URL(safeNext(req.nextUrl.searchParams.get('next')), req.url))
     }
     // Allow access to public routes without further checks
     return res
@@ -48,9 +37,12 @@ export async function middleware(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Redirect unauthenticated users to login
+  // Redirect unauthenticated users to login, remembering where they were going
   if (!user) {
-    return NextResponse.redirect(new URL('/login', req.url))
+    const login = new URL('/login', req.url)
+    const next = safeNext(`${pathname}${req.nextUrl.search}`, '')
+    if (next && next !== '/') login.searchParams.set('next', next)
+    return NextResponse.redirect(login)
   }
 
   return res

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
+import { NEXT_COOKIE, safeNext } from '@/lib/auth/next-param'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,6 +19,12 @@ export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
 
+  // Where the sign-in was taking the person (the Claude consent page, say).
+  // Read from the URL when needed rather than with useSearchParams, so the
+  // page needs no Suspense boundary.
+  const nextPath = () =>
+    typeof window === 'undefined' ? '/projects' : safeNext(new URLSearchParams(window.location.search).get('next'))
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -30,7 +37,7 @@ export default function LoginPage() {
       })
 
       if (error) throw error
-      router.push('/projects')
+      router.push(nextPath())
     } catch (error: any) {
       setError(error.message || 'An error occurred during login')
     } finally {
@@ -41,6 +48,14 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     setLoading(true)
     try {
+      // Google comes back through /auth/callback, which reads this cookie to
+      // finish where the sign-in started (Supabase matches redirect URLs exactly,
+      // so the destination cannot ride in the redirect URL itself).
+      const next = nextPath()
+      document.cookie =
+        next !== '/projects'
+          ? `${NEXT_COOKIE}=${encodeURIComponent(next)}; path=/; max-age=600; samesite=lax`
+          : `${NEXT_COOKIE}=; path=/; max-age=0; samesite=lax`
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
