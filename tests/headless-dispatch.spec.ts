@@ -126,7 +126,7 @@ test.describe('dispatch', () => {
 })
 
 test.describe('image results Claude can see', () => {
-  test('the audience modes: both by default, the old user mark, or one block for each', () => {
+  test('the audience modes: one block for each by default, the old user mark, or one for both', () => {
     const both = imageBlocks('AAAA', 'image/jpeg', 'both')
     expect(both).toHaveLength(1)
     expect(both[0].annotations?.audience).toEqual(['user', 'assistant'])
@@ -135,14 +135,16 @@ test.describe('image results Claude can see', () => {
     expect(split.map((b) => b.annotations?.audience)).toEqual([['user'], ['assistant']])
     const was = process.env.MCP_IMAGE_AUDIENCE
     process.env.MCP_IMAGE_AUDIENCE = 'nonsense'
+    expect(imageAudienceMode()).toBe('split')
+    process.env.MCP_IMAGE_AUDIENCE = 'both'
     expect(imageAudienceMode()).toBe('both')
-    process.env.MCP_IMAGE_AUDIENCE = 'split'
+    delete process.env.MCP_IMAGE_AUDIENCE
     expect(imageAudienceMode()).toBe('split')
     if (was === undefined) delete process.env.MCP_IMAGE_AUDIENCE
     else process.env.MCP_IMAGE_AUDIENCE = was
   })
 
-  test('previews are JPEG, under the inline cap, long edge capped, marked for the user and for Claude', async () => {
+  test('previews are JPEG, under the inline cap, long edge capped, one for the user and one for Claude', async () => {
     // Noise does not compress: a worst case for the size loop.
     const width = 3000
     const height = 2000
@@ -159,11 +161,12 @@ test.describe('image results Claude can see', () => {
       inline: true,
     })
 
-    // claude.ai draws inline only what is marked for the user; Claude reads what is marked for it.
+    // claude.ai draws inline only a picture marked for the user alone; Claude reads the other copy.
     const images = content.filter((c) => c.type === 'image')
-    expect(images).toHaveLength(1)
-    const audience = (images[0] as { annotations?: { audience?: string[] } }).annotations?.audience
-    expect(audience).toEqual(['user', 'assistant'])
+    expect(images).toHaveLength(2)
+    expect(images.map((i) => (i as { annotations?: { audience?: string[] } }).annotations?.audience))
+      .toEqual([['user'], ['assistant']])
+    expect((images[0] as { data: string }).data).toBe((images[1] as { data: string }).data)
     const image = images[0] as { data: string; mimeType: string }
     expect(image.mimeType).toBe('image/jpeg')
     const bytes = Buffer.from(image.data, 'base64')

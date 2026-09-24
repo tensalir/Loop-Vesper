@@ -7,9 +7,9 @@
  * or collects it later as a job, and a job runs this function directly, so a
  * stored request can never queue itself again.
  *
- * Results carry JPEG previews and links to the full-resolution files. Each preview is marked for
- * both the user and the assistant (`imageBlocks`): claude.ai draws inline only what is marked for
- * the user, and Claude reads what is marked for the assistant.
+ * Results carry JPEG previews and links to the full-resolution files. Each preview goes out twice
+ * (`imageBlocks`): once marked for the user alone, which claude.ai draws inline, and once for the
+ * assistant, which Claude reads.
  */
 
 import { createHash, randomUUID } from 'node:crypto'
@@ -61,17 +61,19 @@ export type McpContent = McpTextContent | McpImageContent | McpResourceLinkConte
  * Who a picture is for. claude.ai draws an image inline in the chat only when it is marked for the
  * user; before 2026-09-24 every preview was marked `['user']`, so the person saw it and Claude did
  * not. The jobs fix (#9) removed the mark so Claude could read its draws, and the pictures fell back
- * into the folded tool result. The default now marks each preview for both.
+ * into the folded tool result. Marking each preview for both (#18) did not bring it back: tested
+ * in claude.ai on 2026-09-24, a picture marked `['user', 'assistant']` is handed to Claude and not
+ * drawn. What claude.ai draws is a picture marked for the user alone. So the default sends each
+ * preview twice: one block marked `['user']`, exactly as before #9, and one marked `['assistant']`.
  *
- * `MCP_IMAGE_AUDIENCE` changes it without a code change: `both` (default), `user` (the mark from
- * before #9: inline, and Claude may not see it), or `split` (each preview twice, one block for the
- * user and one for the assistant, for a client that shows only one of the two).
+ * `MCP_IMAGE_AUDIENCE` changes it without a code change: `split` (default), `user` (the mark from
+ * before #9 alone: inline, and Claude may not see it), or `both` (one block for both audiences).
  */
-export type ImageAudienceMode = 'both' | 'user' | 'split'
+export type ImageAudienceMode = 'split' | 'user' | 'both'
 
 export function imageAudienceMode(): ImageAudienceMode {
   const v = (process.env.MCP_IMAGE_AUDIENCE || '').trim().toLowerCase()
-  return v === 'user' || v === 'split' ? v : 'both'
+  return v === 'user' || v === 'both' ? v : 'split'
 }
 
 export function imageBlocks(data: string, mimeType: string, mode: ImageAudienceMode = imageAudienceMode()): McpImageContent[] {
