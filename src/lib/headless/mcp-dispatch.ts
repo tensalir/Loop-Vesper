@@ -37,6 +37,7 @@ export const SERVER_INSTRUCTIONS =
   'a slower draw, or one called with async: true, returns a jobId to collect with get_generation_status. ' +
   'Every draw is saved in the caller\'s Vesper project "Claude". Set allowFallback: false to forbid Replicate routing. ' +
   'A prompt filled from a Loop product skeleton is sent as it is: enhance_prompt returns it unchanged. ' +
+  'Packaging looks (people with packaging access): packaging_list_looks, packaging_mockup (the composite built in code, no model), packaging_finish (the model adds paper, light, shadow and gloss; only its grain is kept, so geometry, artwork, type and colour stay the code\'s), and grade_image with product packaging and the cell (uncalibrated, every result says so). ' +
   'CMF files (people with CMF access): cmf_list, cmf_prompt (the template filled by code, verbatim), cmf_render (the clown the only image), grade_image with product cmf and its tab, column and clown, and cmf_check_pdf (every PDF value against its sheet cell; a PDF that is not clean does not go out). ' +
   'list_creative_products, get_creative_kit and get_product_references read the Loop creative kit: the products, their rubrics, and the pinned references a grade or a draw attaches. ' +
   'generate_product_image draws a Loop product from its skeleton, filled by code, with the product render first and no reference parameter; ' +

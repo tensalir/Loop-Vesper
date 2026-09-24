@@ -1,0 +1,111 @@
+{
+ "schema": 1,
+ "render": "references/figma/white-open.png",
+ "render_sha256": "3f96d37bfd0d",
+ "image_size": [4096, 2286],
+ "box": "experience",
+ "picked": {
+  "on": "2026-09-24",
+  "by": "read off a gridded view by eye, then snapped",
+  "snapped": "2026-09-24"
+ },
+ "corner_order": "TL, TR, BR, BL of the flat panel with the panel's own up pointing up, clockwise as seen on the render; quad[k] is where the dieline rectangle's corner k lands",
+ "panels": {
+  "closed.front": {
+   "quad": [[1338.2, 611.6], [1751.8, 406.1], [2097.0, 917.0], [1691.6, 1139.0]],
+   "source": "front",
+   "note": "the closed box's large face; the edge from the left corner to the top corner is the top of the print, as the agency scene reads",
+   "snap_moved_px": [12.7, 7.0, 27.0, 28.2]
+  },
+  "closed.wall_left": {
+   "quad": [[1344.4, 620.9], [1691.8, 1139.4], [1619.6, 1178.4], [1279.7, 670.7]],
+   "source": "side_left",
+   "note": "the thin wall along the face's lower-left edge",
+   "snap_moved_px": [23.8, 28.6, 11.3, 13.8]
+  },
+  "closed.wall_front": {
+   "quad": [[1664.0, 1133.0], [2080.0, 896.0], [2053.0, 951.0], [1667.0, 1180.0]],
+   "source": "wall_lockup",
+   "note": "the thin wall along the face's lower-right edge; the agency scene shows the lockup line here",
+   "snap_moved_px": [408.0, 88.4, 134.1, 447.3]
+  },
+  "open.lid_wall_top": {
+   "source": "flat",
+   "colour_from": "lid_inside",
+   "quad": [[2296, 300], [2752, 516], [2749, 548], [2330, 340]],
+   "note": "the inner face of the lid's top wall, the wedge between the lid's rim and the flat inside; widest at the top-left corner",
+   "picked": "read off gridded 2x crops, round 2; the flat inner colour, no print"
+  },
+  "open.lid_wall_left": {
+   "source": "flat",
+   "colour_from": "lid_inside",
+   "quad": [[2275, 310], [2342, 300], [2236, 884], [2140, 866]],
+   "note": "the inner face of the lid's left wall, the band along the flat inside's left edge; its inner edge overlaps the inside, which is composed after",
+   "picked": "read off gridded 2x crops, round 2; the flat inner colour, no print"
+  },
+  "open.lid_ear_left": {
+   "source": "flat",
+   "colour_from": "lid_inside",
+   "quad": [[2262, 322], [2298, 306], [2282, 404], [2247, 446]],
+   "note": "the folded tuck ear at the lid's top-left corner; a curved flap read as a quad",
+   "picked": "read off gridded 2x crops, round 2; the flat inner colour, no print"
+  },
+  "open.lid_inside": {
+   "quad": [[2330, 334], [2749.1, 542.8], [2578.7, 1064.0], [2212.7, 884.9]],
+   "source": "lid_inside",
+   "note": "the flat inside of the upright lid, inside its rim; round 2: the top-left corner moved out to the fold (the snap had pulled it 40 px inward and left a grey strip against the wall)",
+   "snap_moved_px": [31.6, 14.9, 36.0, 27.1]
+  },
+  "open.tray_top": {
+   "quad": [[2201.7, 883.8], [2642.1, 1103.3], [2248.3, 1434.4], [1795.1, 1207.8]],
+   "source": "tray_top",
+   "note": "the top of the tray between the lid hinge and the fold of the flap",
+   "snap_moved_px": [4.1, 23.8, 19.2, 20.9]
+  },
+  "open.flap": {
+   "quad": [[1785.5, 1203.0], [2273.1, 1446.8], [1832.5, 1974.2], [1414.5, 1737.9]],
+   "source": "flap",
+   "holes": [
+    {
+     "type": "ellipse",
+     "centre": [1813, 1573],
+     "axes": [100, 87],
+     "angle": -25,
+     "fill": "render"
+    }
+   ],
+   "note": "the front flap folded down; the die-cut shows the floor behind it; its top edge is the fold, the tray top's front edge (round 2: moving it down opened a strip of bare render between the two panels; the render's fold is a thin dark line, not a rim); shade floor 0.55 so the first line, 8 px under the crease on the dieline, stays legible in the fold's shadow",
+   "snap_moved_px": [28.2, 21.0, 34.5, 16.6],
+   "shade_floor": 0.55
+  },
+  "open.wall_right": {
+   "quad": [[2235.8, 1444.9], [2647.1, 1099.1], [2667.0, 1127.0], [2260.7, 1502.4]],
+   "source": "side_right",
+   "note": "the outer face of the near right wall, below the tray's right edge",
+   "snap_moved_px": [19.0, 19.1, 41.0, 6.8]
+  },
+  "open.wall_far": {
+   "quad": [[2213.2, 874.6], [1824.6, 1184.3], [1792, 1204], [2128, 856]],
+   "source": "flat",
+   "colour_from": "tray_under",
+   "note": "the inner face of the far left wall, seen from above the tray, from the tray's edge to the wall's rim; the inner flat colour, no print (round 2: the outer corner brought in to the base's corner)",
+   "snap_moved_px": [14.2, 17.2, 36.7, 33.3]
+  },
+  "open.lid_wall_right_upper": {
+   "source": "lid_edge_upper",
+   "quad": [[2742, 519], [2806, 534], [2735, 800], [2652, 800]],
+   "note": "the lid's outer right wall, upper half, from the rim; the front's gradient continues round the edge"
+  },
+  "open.lid_wall_right_lower": {
+   "source": "lid_edge_lower",
+   "quad": [[2652, 800], [2735, 800], [2636, 1088], [2578, 1066]],
+   "note": "the lid's outer right wall, lower half, to the lid's bottom-right corner; the wall bows, read off a 2x crop"
+  }
+ },
+ "box_mask": {
+  "how": "union of every panel quad, minus holes with fill render, dilated 2 px"
+ },
+ "background": {
+  "how": "outside the box mask dilated 40 px; the far ring outside 300 px"
+ }
+}

@@ -347,7 +347,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'grade_image',
     title: 'Grade a picture of a Loop product',
     description:
-      "Vesper's scripted read of one picture against its product's rubric: three reads with the product's grader words and pinned references from the creative kit, majority per check, the verdict ladder. Labelled judge <model> vesper x3; advisory, the product's decider decides; never pooled with your own read (record that with record_grade). Give exactly one picture: output_id (a draw of yours), frontify_asset_id or an https image_url. A draw of yours brings its colourway and view; otherwise name them, or the kit default is assumed and the answer says so. When most reads error the result is ERROR, not a verdict. For a CMF render (product cmf) name the tab, column and clown key: it is read against its sheet row and its clown, the clown attached second, reporting only while the CMF rubric is; Vesper measures nothing on the pixels. Packaging is not graded here yet.",
+      "Vesper's scripted read of one picture against its product's rubric: three reads with the product's grader words and pinned references from the creative kit, majority per check, the verdict ladder. Labelled judge <model> vesper x3; advisory, the product's decider decides; never pooled with your own read (record that with record_grade). Give exactly one picture: output_id (a draw of yours), frontify_asset_id or an https image_url. A draw of yours brings its colourway and view; otherwise name them, or the kit default is assumed and the answer says so. When most reads error the result is ERROR, not a verdict. For a CMF render (product cmf) name the tab, column and clown key: it is read against its sheet row and its clown, the clown attached second, reporting only while the CMF rubric is; Vesper measures nothing on the pixels. For packaging (product packaging) name the look, box and colourway, or give a packaging draw of yours: it is read against the cell's composite built in code, the white render, the dieline and the front panel; packaging's grader words are uncalibrated and every result says so. Needs packaging access for packaging.",
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
@@ -364,8 +364,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         tab: { type: 'string', description: 'CMF: the sheet tab, e.g. "Experience 2 CC" (needed for product cmf)' },
         column: { type: 'string', description: 'CMF: the SKU column letter, e.g. E (needed for product cmf)' },
         clown: { type: 'string', description: 'CMF: the clown key the render was drawn through, e.g. case-experience2--front (needed for product cmf)' },
-        look: { type: 'string', description: 'packaging: the look' },
-        box: { type: 'string', description: 'packaging: the box' },
+        look: { type: 'string', description: 'packaging: the look, e.g. coachella' },
+        box: { type: 'string', description: 'packaging: the box, experience or link' },
         async: { type: 'boolean', default: false },
       },
     },
@@ -591,6 +591,57 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         layout: { type: 'string', enum: ['vesper', 'ours'], default: 'vesper', description: "vesper: Vesper's export today; ours: a PDF made to spec-fields.md" },
         clown: { type: 'string', description: "a clown key: the legend is checked in the key's order" },
         engine: { type: 'string', enum: ['vesper', 'worker'], default: 'vesper' },
+      },
+    },
+  },
+  {
+    name: 'packaging_list_looks',
+    title: 'What packaging looks can be made',
+    description:
+      "The packaging looks the creative kit carries: per look, box and colourway (a cell), the pictures a grade is read against (the composite built in code, the white render, the dieline, the front panel) and whether Vesper holds each, and your newest mockup of the cell. The head of design decides packaging, and is not named yet. Needs packaging access.",
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { look: { type: 'string', description: 'e.g. coachella; every look when omitted' } },
+    },
+  },
+  {
+    name: 'packaging_mockup',
+    title: 'Build the mockup of a packaging cell, in code',
+    description:
+      "Builds the cell's composite with the plugin repository's own mockup code on the creative worker: the look's artwork warped onto the white render's marked panels, the render's shading kept, no model involved. Round 2 kept four of four pictures built this way. The composite is the cell's control and the ground truth for placement and colour; it is saved under Claude / Packaging. Run it before packaging_finish. Needs packaging access.",
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['box', 'colourway'],
+      properties: {
+        look: { type: 'string', description: 'e.g. coachella; the only look when omitted' },
+        box: { type: 'string', description: 'experience or link' },
+        colourway: { type: 'string', description: 'e.g. teal-plum' },
+        async: { type: 'boolean', default: false, description: 'return a job id at once; collect with get_generation_status' },
+      },
+    },
+  },
+  {
+    name: 'packaging_finish',
+    title: 'Finish a packaging mockup',
+    description:
+      "Finishes your mockup of a cell the way the repository's finish.py does: the model, in Vesper, is sent the padded composite, the white render and the dieline half, in that order, with the newest finishing skeleton byte for byte; the draw is cut back to the render's frame and only its paper grain is laid onto the composite, so geometry, artwork, type and colour stay the code's. A draw whose frame moved is reported and not kept. Lanes: pro (Nano Banana Pro, the kit's router), nb2 (Nano Banana 2); gpt is refused while the kit's router rules GPT Image 2 out for packaging. Grade each result with grade_image. Needs packaging access.",
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['box', 'colourway'],
+      properties: {
+        look: { type: 'string', description: 'e.g. coachella; the only look when omitted' },
+        box: { type: 'string', description: 'experience or link' },
+        colourway: { type: 'string', description: 'e.g. teal-plum' },
+        lane: { type: 'string', enum: ['pro', 'nb2', 'gpt'], default: 'pro' },
+        n: { type: 'integer', minimum: 1, maximum: 4, default: 1, description: "capped at the kit's draws per call" },
+        composite_output_id: { type: 'string', description: 'a mockup of yours to finish; your newest of the cell when omitted' },
+        async: { type: 'boolean', default: false, description: 'return a job id at once; collect with get_generation_status' },
       },
     },
   },

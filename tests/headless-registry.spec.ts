@@ -48,8 +48,10 @@ test.describe('the tool registry', () => {
     ])
   })
 
-  test('self-issued tokens get every tool but the repository export and the CMF tools, admins may issue any', () => {
-    expect([...SELF_ISSUED_TOOLS].sort()).toEqual(HEADLESS_TOOLS.filter((t) => t !== 'export_creative_records' && !t.startsWith('cmf_')).sort())
+  test('self-issued tokens get every tool but the repository export, the CMF and the packaging tools, admins may issue any', () => {
+    expect([...SELF_ISSUED_TOOLS].sort()).toEqual(
+      HEADLESS_TOOLS.filter((t) => t !== 'export_creative_records' && !t.startsWith('cmf_') && !t.startsWith('packaging_')).sort()
+    )
     expect([...ADMIN_ISSUABLE_TOOLS].sort()).toEqual([...HEADLESS_TOOLS].sort())
   })
 
@@ -79,8 +81,10 @@ test.describe('effectiveTools', () => {
 
   test("'*' expands to every OAuth tool the owner's flags allow", () => {
     const tools = effectiveTools({ allowedTools: ['*'] }, { role: 'user' })
-    // The repository's export is never carried by a person's connection; CMF needs its flag.
-    expect([...tools].sort()).toEqual(HEADLESS_TOOLS.filter((t) => t !== 'export_creative_records' && !t.startsWith('cmf_')).sort())
+    // The repository's export is never carried by a person's connection; CMF and packaging need their flags.
+    expect([...tools].sort()).toEqual(
+      HEADLESS_TOOLS.filter((t) => t !== 'export_creative_records' && !t.startsWith('cmf_') && !t.startsWith('packaging_')).sort()
+    )
     expect(canPollJobs(tools)).toBe(true)
   })
 
@@ -92,6 +96,18 @@ test.describe('effectiveTools', () => {
     expect(cmf.every((t) => (admin as string[]).includes(t))).toBe(true)
     const off = effectiveTools({ allowedTools: ['*'] }, { role: 'admin' }, { CREATIVE_TOOLS_ENABLED: '0' } as unknown as NodeJS.ProcessEnv)
     expect(cmf.some((t) => (off as string[]).includes(t))).toBe(false)
+  })
+
+  test('the packaging tools need packaging access or an admin, and the creative switch hides them', () => {
+    const packaging = ['packaging_finish', 'packaging_list_looks', 'packaging_mockup']
+    const without = effectiveTools({ allowedTools: ['*'] }, { role: 'user', cmfAccess: true })
+    expect(packaging.some((t) => (without as string[]).includes(t))).toBe(false)
+    const withFlag = effectiveTools({ allowedTools: ['*'] }, { role: 'user', packagingAccess: true })
+    expect(packaging.every((t) => (withFlag as string[]).includes(t))).toBe(true)
+    const admin = effectiveTools({ allowedTools: ['*'] }, { role: 'admin' })
+    expect(packaging.every((t) => (admin as string[]).includes(t))).toBe(true)
+    const off = effectiveTools({ allowedTools: ['*'] }, { role: 'admin' }, { CREATIVE_TOOLS_ENABLED: '0' } as unknown as NodeJS.ProcessEnv)
+    expect(packaging.some((t) => (off as string[]).includes(t))).toBe(false)
   })
 })
 
