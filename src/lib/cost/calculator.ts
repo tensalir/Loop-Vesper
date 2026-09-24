@@ -2,7 +2,8 @@
  * Cost calculation utilities for different AI model providers
  * 
  * Pricing sources:
- * - Gemini: https://ai.google.dev/pricing (Nano Banana: ~$0.01/image, Veo 3.1: ~$0.05/second)
+ * - Gemini: https://ai.google.dev/gemini-api/docs/pricing (Nano Banana Pro $0.134 at 1K/2K and $0.24 at 4K,
+ *   Nano Banana 2 $0.067-$0.151 by resolution, read 2026-09-24, see src/lib/models/pricing.ts; Veo 3.1: ~$0.05/second)
  * - Replicate: https://replicate.com/pricing (compute time based, varies by hardware)
  *   - Pricing is per-second based on actual predict_time from API response
  *   - Different models run on different hardware with different rates
@@ -11,6 +12,8 @@
  *   - Standard mode: ~$0.035 per second of video
  * - FAL.ai: Pay-per-use, typically similar to Replicate
  */
+
+import { geminiImagePriceUsd } from '@/lib/models/pricing'
 
 export interface CostCalculationResult {
   cost: number // Cost in USD
@@ -58,12 +61,15 @@ const MODEL_HARDWARE_MAP: Record<string, string> = {
 export function calculateGeminiCost(
   modelId: string,
   outputCount: number = 1,
-  videoDurationSeconds?: number
+  videoDurationSeconds?: number,
+  resolution?: number | string
 ): CostCalculationResult {
   if (modelId === 'gemini-nano-banana-pro' || modelId === 'gemini-nano-banana-2') {
+    // Google's published price by resolution (src/lib/models/pricing.ts); was a flat $0.01.
+    const perImage = geminiImagePriceUsd(modelId, resolution) ?? 0
     return {
-      cost: 0.01 * outputCount,
-      unit: `per image (${outputCount} image${outputCount > 1 ? 's' : ''})`,
+      cost: perImage * outputCount,
+      unit: `$${perImage.toFixed(3)} per image (${outputCount} image${outputCount > 1 ? 's' : ''})`,
       isActual: false,
     }
   }
@@ -331,7 +337,7 @@ export function calculateGenerationCost(
 
   // Determine provider and calculate cost
   if (modelId.startsWith('gemini-') || modelId.includes('veo')) {
-    return calculateGeminiCost(modelId, outputCount, videoDurationSeconds)
+    return calculateGeminiCost(modelId, outputCount, videoDurationSeconds, resolution)
   }
 
   if (modelId.startsWith('replicate-')) {
