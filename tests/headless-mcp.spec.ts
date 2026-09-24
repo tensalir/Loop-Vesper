@@ -13,15 +13,20 @@ test.describe('MCP_TOOLS catalog', () => {
     expect(names).toEqual([
       'enhance_prompt',
       'estimate_generation_cost',
+      'export_creative_records',
       'generate_asset',
+      'generate_product_image',
       'generate_video',
       'get_creative_kit',
       'get_generation_status',
       'get_product_references',
+      'grade_image',
       'iterate_prompt',
       'list_creative_products',
       'list_models',
       'list_product_renders',
+      'record_grade',
+      'record_verdict',
     ])
   })
 

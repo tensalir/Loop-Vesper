@@ -27,6 +27,11 @@ export const HEADLESS_TOOLS = [
   'get_creative_kit',
   'list_creative_products',
   'get_product_references',
+  'generate_product_image',
+  'grade_image',
+  'record_grade',
+  'record_verdict',
+  'export_creative_records',
 ] as const
 
 export type HeadlessTool = (typeof HEADLESS_TOOLS)[number]
@@ -63,6 +68,13 @@ export const TOOL_META: Record<HeadlessTool, ToolMeta> = {
   get_creative_kit: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
   list_creative_products: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
   get_product_references: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  // Drawing, grading and answers for Loop products (paid calls go through the daily cap).
+  generate_product_image: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  grade_image: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  record_grade: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  record_verdict: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  // The plugin repository's nightly read-back: only on a static credential an admin issues for it.
+  export_creative_records: { group: 'creative', oauth: false, selfIssued: false, org: false, adminIssuable: true },
 }
 
 export function isHeadlessTool(name: string): name is HeadlessTool {

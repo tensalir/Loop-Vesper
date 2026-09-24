@@ -33,6 +33,8 @@ test.describe('the tool registry', () => {
     }
     expect(typeof TOOL_HANDLERS.generate_asset.estimateCostUsd).toBe('function')
     expect(typeof TOOL_HANDLERS.generate_video.estimateCostUsd).toBe('function')
+    expect(typeof TOOL_HANDLERS.generate_product_image.estimateCostUsd).toBe('function')
+    expect(typeof TOOL_HANDLERS.grade_image.estimateCostUsd).toBe('function')
     expect(TOOL_HANDLERS.list_models.estimateCostUsd).toBeUndefined()
   })
 
@@ -46,8 +48,8 @@ test.describe('the tool registry', () => {
     ])
   })
 
-  test('self-issued tokens get all eight tools, admins may issue any', () => {
-    expect([...SELF_ISSUED_TOOLS].sort()).toEqual([...HEADLESS_TOOLS].sort())
+  test('self-issued tokens get every tool but the repository export, admins may issue any', () => {
+    expect([...SELF_ISSUED_TOOLS].sort()).toEqual(HEADLESS_TOOLS.filter((t) => t !== 'export_creative_records').sort())
     expect([...ADMIN_ISSUABLE_TOOLS].sort()).toEqual([...HEADLESS_TOOLS].sort())
   })
 
@@ -77,7 +79,8 @@ test.describe('effectiveTools', () => {
 
   test("'*' expands to every OAuth tool the owner's flags allow", () => {
     const tools = effectiveTools({ allowedTools: ['*'] }, { role: 'user' })
-    expect([...tools].sort()).toEqual([...HEADLESS_TOOLS].sort())
+    // The repository's export is never carried by a person's connection.
+    expect([...tools].sort()).toEqual(HEADLESS_TOOLS.filter((t) => t !== 'export_creative_records').sort())
     expect(canPollJobs(tools)).toBe(true)
   })
 })
