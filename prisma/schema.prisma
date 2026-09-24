@@ -1600,3 +1600,76 @@ model CreativePin {
   @@index([geminiFileExpiresAt], map: "creative_pins_gemini_expiry_idx")
   @@map("creative_pins")
 }
+
+// ---------------------------------------------------------------------------
+// The creative work's record: grades (Vesper's reads or Claude's own look,
+// labelled by judge, never pooled) and the deciders' answers. See
+// src/lib/creative/records.ts. Foreign keys live in the migration only, so no
+// existing model gains a relation field.
+// ---------------------------------------------------------------------------
+
+model CreativeGrade {
+  id              String   @id @default(uuid()) @db.Uuid
+  product         String
+  ownerId         String   @map("owner_id") @db.Uuid
+  credentialId    String?  @map("credential_id") @db.Uuid
+  outputId        String?  @map("output_id") @db.Uuid
+  imageUrl        String?  @map("image_url")
+  frontifyAssetId String?  @map("frontify_asset_id")
+  imageSha256     String   @map("image_sha256")
+  colourway       String?
+  view            String?
+  viewAssumed     Boolean  @default(false) @map("view_assumed")
+  claimSource     String?  @map("claim_source")
+  judge           String // vesper | chat
+  judgeModel      String?  @map("judge_model")
+  reads           Int
+  templateId      String?  @map("template_id")
+  kitVersion      String   @map("kit_version")
+  kitCommit       String   @map("kit_commit")
+  rubricVersion   String   @map("rubric_version")
+  runs            Json
+  fails           Json
+  failed          String[] @default([])
+  failedAdvisory  String[] @default([]) @map("failed_advisory")
+  verdict         String
+  verdictMajority String?  @map("verdict_majority")
+  unstable        Boolean  @default(false)
+  errors          Int      @default(0)
+  references      Json     @default("[]")
+  latencyMs       Int?     @map("latency_ms")
+  costUsd         Decimal? @map("cost_usd") @db.Decimal(10, 6)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([outputId, createdAt(sort: Desc)], map: "creative_grades_output_idx")
+  @@index([product, createdAt(sort: Desc)], map: "creative_grades_product_idx")
+  @@index([imageSha256], map: "creative_grades_sha_idx")
+  @@index([frontifyAssetId], map: "creative_grades_frontify_idx")
+  @@index([createdAt], map: "creative_grades_created_idx")
+  @@map("creative_grades")
+}
+
+model CreativeVerdict {
+  id                 String   @id @default(uuid()) @db.Uuid
+  product            String
+  profileId          String   @map("profile_id") @db.Uuid
+  credentialId       String?  @map("credential_id") @db.Uuid
+  gradeId            String?  @map("grade_id") @db.Uuid
+  outputId           String?  @map("output_id") @db.Uuid
+  imageUrl           String?  @map("image_url")
+  frontifyAssetId    String?  @map("frontify_asset_id")
+  imageSha256        String?  @map("image_sha256")
+  answer             String // yes | no
+  remark             String?
+  decoded            String[] @default([])
+  decodedUnconfirmed String[] @default([]) @map("decoded_unconfirmed")
+  route              String // frontify-comment | vesper
+  commentLine        String?  @map("comment_line")
+  kitVersion         String   @map("kit_version")
+  rubricVersion      String?  @map("rubric_version")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@index([product, createdAt(sort: Desc)], map: "creative_verdicts_product_idx")
+  @@index([createdAt], map: "creative_verdicts_created_idx")
+  @@map("creative_verdicts")
+}
