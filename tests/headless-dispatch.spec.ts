@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import sharp from 'sharp'
 import { dispatch } from '../src/lib/headless/mcp-dispatch'
-import { imageResultContent } from '../src/lib/headless/generate-asset'
+import { imageAudienceMode, imageBlocks, imageResultContent } from '../src/lib/headless/generate-asset'
 import { PREVIEW_LONG_EDGE, PREVIEW_MAX_BYTES } from '../src/lib/images/preview'
 import { ORG_DEFAULT_TOOLS, HEADLESS_TOOLS } from '../src/lib/headless/tool-registry'
 import { TOOL_HANDLERS } from '../src/lib/headless/tools'
@@ -126,7 +126,23 @@ test.describe('dispatch', () => {
 })
 
 test.describe('image results Claude can see', () => {
-  test('previews are JPEG, under the inline cap, long edge capped, with no audience annotation', async () => {
+  test('the audience modes: both by default, the old user mark, or one block for each', () => {
+    const both = imageBlocks('AAAA', 'image/jpeg', 'both')
+    expect(both).toHaveLength(1)
+    expect(both[0].annotations?.audience).toEqual(['user', 'assistant'])
+    expect(imageBlocks('AAAA', 'image/jpeg', 'user')[0].annotations?.audience).toEqual(['user'])
+    const split = imageBlocks('AAAA', 'image/jpeg', 'split')
+    expect(split.map((b) => b.annotations?.audience)).toEqual([['user'], ['assistant']])
+    const was = process.env.MCP_IMAGE_AUDIENCE
+    process.env.MCP_IMAGE_AUDIENCE = 'nonsense'
+    expect(imageAudienceMode()).toBe('both')
+    process.env.MCP_IMAGE_AUDIENCE = 'split'
+    expect(imageAudienceMode()).toBe('split')
+    if (was === undefined) delete process.env.MCP_IMAGE_AUDIENCE
+    else process.env.MCP_IMAGE_AUDIENCE = was
+  })
+
+  test('previews are JPEG, under the inline cap, long edge capped, marked for the user and for Claude', async () => {
     // Noise does not compress: a worst case for the size loop.
     const width = 3000
     const height = 2000
@@ -143,10 +159,12 @@ test.describe('image results Claude can see', () => {
       inline: true,
     })
 
-    for (const block of content) {
-      expect((block as { annotations?: { audience?: string[] } }).annotations?.audience).toBeUndefined()
-    }
-    const image = content.find((c) => c.type === 'image') as { data: string; mimeType: string }
+    // claude.ai draws inline only what is marked for the user; Claude reads what is marked for it.
+    const images = content.filter((c) => c.type === 'image')
+    expect(images).toHaveLength(1)
+    const audience = (images[0] as { annotations?: { audience?: string[] } }).annotations?.audience
+    expect(audience).toEqual(['user', 'assistant'])
+    const image = images[0] as { data: string; mimeType: string }
     expect(image.mimeType).toBe('image/jpeg')
     const bytes = Buffer.from(image.data, 'base64')
     expect(bytes.length).toBeLessThanOrEqual(PREVIEW_MAX_BYTES)
