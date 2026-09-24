@@ -1,34 +1,16 @@
 /**
- * Async MCP generation jobs — polled via get_generation_status.
+ * The Prisma-backed store for MCP jobs (`headless_mcp_jobs`).
  *
- * Jobs are stored in `headless_mcp_jobs` so slow video generations and
- * async image runs survive client tool-call timeouts (~60s on Claude/Cursor).
+ * The run-once logic lives in `./jobs.ts`; this file only reads and writes
+ * rows. Jobs are scoped by owner, not by credential, so a person who signs
+ * in again (a new credential) can still collect a job they started.
  */
 
 import { randomUUID } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
-import { generateAssetTool, type GenerateAssetResult } from './generate-asset'
-import { generateVideoTool, type GenerateVideoResult } from './generate-video'
-import type { McpProgressReporter } from './mcp-progress'
+import type { JobPayload, JobRecord, JobStatus, JobStore } from './jobs'
 
-export type HeadlessMcpJobStatus = 'queued' | 'processing' | 'completed' | 'failed'
-
-export interface HeadlessMcpJobRecord {
-  id: string
-  credentialId: string
-  ownerId: string
-  toolName: string
-  modelId: string
-  status: HeadlessMcpJobStatus
-  request: Record<string, unknown>
-  result: GenerateAssetResult | GenerateVideoResult | null
-  error: string | null
-  createdAt: Date
-  updatedAt: Date
-  completedAt: Date | null
-}
-
-function mapJob(row: {
+type JobRow = {
   id: string
   credentialId: string
   ownerId: string
@@ -38,197 +20,105 @@ function mapJob(row: {
   request: unknown
   result: unknown
   error: string | null
+  attempts: number
+  startedAt: Date | null
   createdAt: Date
   updatedAt: Date
   completedAt: Date | null
-}): HeadlessMcpJobRecord {
+}
+
+function mapJob(row: JobRow): JobRecord {
   return {
     id: row.id,
     credentialId: row.credentialId,
     ownerId: row.ownerId,
     toolName: row.toolName,
     modelId: row.modelId,
-    status: row.status as HeadlessMcpJobStatus,
+    status: row.status as JobStatus,
     request: (row.request as Record<string, unknown>) ?? {},
-    result: (row.result as GenerateAssetResult | GenerateVideoResult | null) ?? null,
+    result: row.result ?? null,
     error: row.error,
+    attempts: row.attempts ?? 0,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    startedAt: row.startedAt ?? null,
     completedAt: row.completedAt,
   }
 }
 
-export async function createHeadlessMcpJob(input: {
-  credentialId: string
-  ownerId: string
-  toolName: string
-  modelId: string
-  request: Record<string, unknown>
-}): Promise<HeadlessMcpJobRecord> {
-  const row = await prisma.headlessMcpJob.create({
-    data: {
-      id: randomUUID(),
-      credentialId: input.credentialId,
-      ownerId: input.ownerId,
-      toolName: input.toolName,
-      modelId: input.modelId,
-      status: 'queued',
-      request: input.request as never,
-    },
-  })
-  return mapJob(row)
-}
-
-export async function getHeadlessMcpJob(
-  jobId: string,
-  credentialId: string
-): Promise<HeadlessMcpJobRecord | null> {
-  const row = await prisma.headlessMcpJob.findFirst({
-    where: { id: jobId, credentialId },
-  })
-  return row ? mapJob(row) : null
-}
-
-async function markJobProcessing(jobId: string): Promise<boolean> {
-  const updated = await prisma.headlessMcpJob.updateMany({
-    where: { id: jobId, status: 'queued' },
-    data: { status: 'processing' },
-  })
-  return updated.count > 0
-}
-
-async function completeJob(
-  jobId: string,
-  result: GenerateAssetResult | GenerateVideoResult
-): Promise<void> {
-  await prisma.headlessMcpJob.update({
-    where: { id: jobId },
-    data: {
-      status: 'completed',
-      result: result as never,
-      error: null,
-      completedAt: new Date(),
-    },
-  })
-}
-
-async function failJob(jobId: string, message: string): Promise<void> {
-  await prisma.headlessMcpJob.update({
-    where: { id: jobId },
-    data: {
-      status: 'failed',
-      error: message,
-      completedAt: new Date(),
-    },
-  })
-}
-
-/** Run a queued job once (single-flight via status transition). */
-export async function processHeadlessMcpJobIfQueued(
-  job: HeadlessMcpJobRecord,
-  principal: { allowedModels: string[]; credentialId: string; ownerId: string },
-  progress?: McpProgressReporter
-): Promise<HeadlessMcpJobRecord> {
-  if (job.status === 'completed' || job.status === 'failed') return job
-  if (job.status === 'processing') return job
-
-  const claimed = await markJobProcessing(job.id)
-  if (!claimed) {
-    const latest = await getHeadlessMcpJob(job.id, principal.credentialId)
-    return latest ?? job
-  }
-
-  progress?.step('Job started')
-
-  try {
-    if (job.toolName === 'generate_asset') {
-      const result = await generateAssetTool(job.request, {
-        allowedModels: principal.allowedModels,
-        credentialId: principal.credentialId,
-        ownerId: principal.ownerId,
-        progress,
-      })
-      await completeJob(job.id, result)
-    } else if (job.toolName === 'generate_video') {
-      const result = await generateVideoTool(job.request, {
-        allowedModels: principal.allowedModels,
-        credentialId: principal.credentialId,
-        ownerId: principal.ownerId,
-        progress,
-      })
-      await completeJob(job.id, result)
-    } else {
-      throw new Error(`Unsupported async tool: ${job.toolName}`)
-    }
-  } catch (err) {
-    const message = (err as Error)?.message || 'Job failed'
-    await failJob(job.id, message)
-  }
-
-  const latest = await getHeadlessMcpJob(job.id, principal.credentialId)
-  return latest ?? job
-}
-
-export function jobToMcpResult(job: HeadlessMcpJobRecord): {
-  content: import('./generate-asset').McpContent[]
-  structuredContent: Record<string, unknown>
-  isError?: boolean
-} {
-  if (job.status === 'queued' || job.status === 'processing') {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Job ${job.id} is ${job.status}. Poll get_generation_status again in a few seconds.`,
-        },
-      ],
-      structuredContent: {
-        jobId: job.id,
-        status: job.status,
-        toolName: job.toolName,
-        modelId: job.modelId,
+export const prismaJobStore: JobStore = {
+  async create(input) {
+    const now = new Date()
+    const row = await prisma.headlessMcpJob.create({
+      data: {
+        id: randomUUID(),
+        credentialId: input.credentialId,
+        ownerId: input.ownerId,
+        toolName: input.toolName,
+        modelId: input.modelId,
+        status: 'processing',
+        attempts: 1,
+        startedAt: now,
+        request: input.request as never,
       },
-    }
-  }
+      select: { id: true },
+    })
+    return { id: row.id }
+  },
 
-  if (job.status === 'completed' && job.result) {
-    return {
-      content: job.result.content,
-      structuredContent: {
-        jobId: job.id,
-        status: job.status,
-        ...(job.result.structuredContent as Record<string, unknown>),
+  async complete(id: string, payload: JobPayload) {
+    await prisma.headlessMcpJob.update({
+      where: { id },
+      data: {
+        status: 'completed',
+        result: payload as never,
+        outputIds: payload.outputIds,
+        error: null,
+        completedAt: new Date(),
       },
-    }
-  }
+    })
+  },
 
-  if (job.status === 'failed') {
-    return {
-      isError: true,
-      content: [{ type: 'text', text: job.error || 'Job failed' }],
-      structuredContent: {
-        jobId: job.id,
-        status: job.status,
-        error: job.error,
+  async fail(id: string, message: string) {
+    await prisma.headlessMcpJob.update({
+      where: { id },
+      data: { status: 'failed', error: message, completedAt: new Date() },
+    })
+  },
+
+  async claimQueued(id: string) {
+    const updated = await prisma.headlessMcpJob.updateMany({
+      where: { id, status: 'queued' },
+      data: { status: 'processing', startedAt: new Date(), attempts: { increment: 1 } },
+    })
+    return updated.count > 0
+  },
+
+  async get(id: string, ownerId: string) {
+    const row = await prisma.headlessMcpJob.findFirst({ where: { id, ownerId } })
+    return row ? mapJob(row as JobRow) : null
+  },
+
+  async failStale(olderThan: Date, message: string) {
+    const updated = await prisma.headlessMcpJob.updateMany({
+      where: {
+        status: 'processing',
+        OR: [
+          { startedAt: { lt: olderThan } },
+          { startedAt: null, updatedAt: { lt: olderThan } },
+        ],
       },
-    }
-  }
+      data: { status: 'failed', error: message, completedAt: new Date() },
+    })
+    return updated.count
+  },
 
-  const result = job.result
-  if (!result) {
-    return {
-      isError: true,
-      content: [{ type: 'text', text: 'Job completed but result payload is missing.' }],
-      structuredContent: { jobId: job.id, status: job.status },
-    }
-  }
-
-  return {
-    content: result.content.filter((c) => c.type === 'text'),
-    structuredContent: {
-      jobId: job.id,
-      status: job.status,
-      ...(result.structuredContent as Record<string, unknown>),
-    },
-  }
+  async listQueued(olderThan: Date, limit: number) {
+    const rows = await prisma.headlessMcpJob.findMany({
+      where: { status: 'queued', createdAt: { lt: olderThan } },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    })
+    return rows.map((row) => mapJob(row as JobRow))
+  },
 }

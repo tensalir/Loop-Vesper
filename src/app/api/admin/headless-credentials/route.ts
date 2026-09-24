@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/api/auth'
 import { prisma } from '@/lib/prisma'
 import { issueCredential } from '@/lib/headless/credentials'
 import type { HeadlessTool } from '@/lib/headless/auth'
+import { ADMIN_ISSUABLE_TOOLS } from '@/lib/headless/tool-registry'
 
 /**
  * Admin-only management of headless Vesper credentials.
@@ -13,12 +14,8 @@ import type { HeadlessTool } from '@/lib/headless/auth'
  *        Subsequent reads return only the prefix.
  */
 
-const TOOL_VALUES: HeadlessTool[] = [
-  'enhance_prompt',
-  'iterate_prompt',
-  'list_models',
-  'generate_asset',
-]
+// From the tool registry, so a new tool is issuable the day it ships.
+const TOOL_VALUES: HeadlessTool[] = ADMIN_ISSUABLE_TOOLS
 
 const IssueCredentialSchema = z.object({
   ownerId: z.string().uuid('ownerId must be a valid Profile UUID'),

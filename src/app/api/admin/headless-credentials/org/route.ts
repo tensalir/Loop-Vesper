@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { requireAdmin } from '@/lib/api/auth'
 import { prisma } from '@/lib/prisma'
 import { issueCredential } from '@/lib/headless/credentials'
-import type { HeadlessTool } from '@/lib/headless/auth'
+import { ORG_DEFAULT_TOOLS } from '@/lib/headless/tool-registry'
 
 /**
  * Admin-only shortcut for issuing an org-shared headless credential.
@@ -31,13 +31,8 @@ import type { HeadlessTool } from '@/lib/headless/auth'
 export const dynamic = 'force-dynamic'
 
 const ORG_DEFAULTS = {
-  allowedTools: [
-    'enhance_prompt',
-    'iterate_prompt',
-    'list_models',
-    'generate_asset',
-    'list_product_renders',
-  ] as HeadlessTool[],
+  // From the tool registry (`org: true`), unchanged from the live org token.
+  allowedTools: ORG_DEFAULT_TOOLS,
   allowedModels: ['*'],
   rateLimitPerMinute: 200,
   rateLimitPerDay: 20_000,

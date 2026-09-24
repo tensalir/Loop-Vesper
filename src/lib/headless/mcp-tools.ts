@@ -2,7 +2,7 @@
  * MCP tool definitions for the Vesper headless surface.
  */
 
-import type { HeadlessTool } from './auth'
+import type { HeadlessTool } from './tool-registry'
 import { PHASE_1_MODEL_IDS, VIDEO_MODEL_IDS } from './model-allowlists'
 
 export interface McpToolAnnotations {
@@ -41,9 +41,11 @@ const generateAssetOutputSchema = {
           width: { type: 'number' },
           height: { type: 'number' },
           mimeType: { type: 'string' },
+          outputId: { type: ['string', 'null'] },
         },
       },
     },
+    generationId: { type: 'string' },
     durationMs: { type: 'number' },
     estimatedCostUsd: { type: ['number', 'null'] },
   },
@@ -54,7 +56,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'enhance_prompt',
     title: 'Enhance a generation prompt',
     description:
-      'Enhance a single image or video prompt using the Vesper Gen-AI prompting skill. Returns the enhanced prompt text and the substrate version used.',
+      'Enhance a single image or video prompt using the Vesper Gen-AI prompting skill. Returns the enhanced prompt text and the substrate version used. A prompt filled by code from a Loop product skeleton, or one naming a Loop product, comes back unchanged with the reason: send those as they are.',
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: 'object',
@@ -152,7 +154,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'generate_asset',
     title: 'Generate an image',
     description:
-      'Generate an image with a Vesper model. Returns inline image blocks by default plus Storage URLs for iteration. Pass async: true to queue a job when the client MCP timeout is tight (~60s). Pass allowFallback: false to forbid silent Replicate routing.',
+      'Generate an image with a Vesper model. Answers inline when the draw finishes within about 50 seconds: a JPEG preview you can read for each image plus a link to the full-resolution file. A slower draw, or async: true, returns a jobId to collect with get_generation_status. Every draw is saved in your Vesper project "Claude". Pass allowFallback: false to forbid silent Replicate routing.',
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
@@ -224,9 +226,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   },
   {
     name: 'get_generation_status',
-    title: 'Poll async generation job',
+    title: 'Collect a long-running job',
     description:
-      'Poll a queued/processing MCP generation job. Returns the final image or video payload when status is completed.',
+      'Collect the result of any long Vesper call that returned a jobId (image or video generation). While the job runs it says so; when it is done it returns the result, with image previews.',
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: 'object',

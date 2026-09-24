@@ -24,19 +24,13 @@ import {
 
 export type HeadlessSurface = 'rest' | 'mcp'
 
-export type HeadlessTool =
-  | 'enhance_prompt'
-  | 'iterate_prompt'
-  | 'list_models'
-  | 'generate_asset'
-  | 'list_product_renders'
-  | 'get_generation_status'
-  | 'generate_video'
-  | 'estimate_generation_cost'
+// The tool names live in one registry; re-exported here so existing imports keep working.
+export type { HeadlessTool } from './tool-registry'
+import type { HeadlessTool } from './tool-registry'
 
 export interface HeadlessPrincipal {
   credential: HeadlessCredential
-  owner: Pick<Profile, 'id' | 'role' | 'pausedAt' | 'deletedAt'>
+  owner: Pick<Profile, 'id' | 'role' | 'pausedAt' | 'deletedAt' | 'cmfAccess' | 'packagingAccess'>
 }
 
 export interface VerifyOptions {
@@ -127,6 +121,8 @@ export async function verifyHeadlessRequest(
           role: true,
           pausedAt: true,
           deletedAt: true,
+          cmfAccess: true,
+          packagingAccess: true,
         },
       },
     },

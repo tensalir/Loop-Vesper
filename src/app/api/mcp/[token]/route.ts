@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server'
-import { handleMcpPost } from '../route'
+import { handleMcpPost } from '@/lib/headless/mcp-dispatch'
 
 /**
  * POST /api/mcp/[token]

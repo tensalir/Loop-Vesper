@@ -31,5 +31,11 @@
     "app/api/packaging/import/route.ts": {
       "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/mcp-jobs",
+      "schedule": "* * * * *"
+    }
+  ]
 }

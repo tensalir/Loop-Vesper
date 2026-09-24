@@ -1,24 +1,32 @@
 /**
- * `generate_asset` MCP tool.
+ * `generate_asset`: the work itself, separate from the MCP entry.
  *
- * Synchronous fast image models by default; optional async job queue for
- * slow runs. Returns inline image blocks by default plus Storage URLs.
+ * `executeGenerateAsset` draws, stores the files and records the draw as a
+ * generation in the caller's "Claude" project. It never queues anything: the
+ * entry in `./tools/generate-asset.ts` decides whether the caller waits for it
+ * or collects it later as a job, and a job runs this function directly, so a
+ * stored request can never queue itself again.
+ *
+ * Results carry JPEG previews Claude can read (no `audience` annotation) and
+ * links to the full-resolution files.
  */
 
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import { z } from 'zod'
 import { HeadlessGenerateAssetSchema } from '@/lib/api/validation'
 import { getModel, getModelConfig } from '@/lib/models/registry'
 import type { GenerationRequest } from '@/lib/models/base'
 import { uploadBase64ToStorage, uploadUrlToStorage } from '@/lib/supabase/storage'
+import { referenceToDataUrl } from '@/lib/net/fetch-allowlisted'
+import { makeImagePreview } from '@/lib/images/preview'
 import { resolveProductRenders } from './list-product-renders'
 import { getMcpGenerationTimeoutMs } from './mcp-timeout'
-import {
-  MCP_INLINE_IMAGE_MAX_BYTES,
-  type McpProgressReporter,
-} from './mcp-progress'
+import type { McpProgressReporter } from './mcp-progress'
 import { estimateGenerationCostUsd } from './estimate-cost'
-import { createHeadlessMcpJob } from './mcp-jobs'
 import { PHASE_1_MODEL_IDS } from './model-allowlists'
+import type { JobPayload } from './jobs'
+import { recordMcpGeneration, STREAM_SESSIONS, type McpStream } from './record-generation'
+import type { GenerationAnchor } from '@/lib/generation/anchor'
 
 export { PHASE_1_MODEL_IDS, type Phase1ModelId } from './model-allowlists'
 
@@ -48,34 +56,45 @@ type McpResourceLinkContent = {
 }
 export type McpContent = McpTextContent | McpImageContent | McpResourceLinkContent
 
-export interface GenerateAssetResult {
-  content: McpContent[]
-  structuredContent: {
-    modelId: string
-    requestedModelId?: string
-    effectiveModelId?: string
-    provider?: string
-    isFallback?: boolean
-    routeReason?: string | null
-    jobId?: string
-    status?: string
-    outputs: Array<{
-      url: string
-      width: number
-      height: number
-      mimeType: string
-    }>
-    durationMs: number
-    estimatedCostUsd: number | null
-  }
-  costUsd: number | null
+export type GenerateAssetArgs = z.infer<typeof HeadlessGenerateAssetSchema>
+
+export interface GenerateAssetOutput {
+  url: string
+  width: number
+  height: number
+  mimeType: string
+  /** The `outputs` row in the web app; null when recording failed. */
+  outputId: string | null
 }
 
-interface CallerPrincipal {
+/** A product render or clown the draw was anchored on; iterating in the web app re-attaches it. */
+export type { GenerationAnchor }
+
+export interface GenerateAssetExecution {
+  generationId: string
+  modelId: string
+  effectiveModelId: string
+  provider: string | undefined
+  isFallback: boolean
+  routeReason: string | null
+  outputs: GenerateAssetOutput[]
+  /** Where each image's bytes can be read for a preview (a data URL when we still hold it). */
+  previewSources: string[]
+  durationMs: number
+  estimatedCostUsd: number | null
+  recorded: { projectId: string; sessionId: string; stream: McpStream } | null
+  recordError: string | null
+  progressTrail: string | null
+}
+
+export interface ExecuteContext {
   allowedModels: string[]
   credentialId: string
   ownerId: string
   progress?: McpProgressReporter
+  jobId?: string | null
+  /** Injected for tests. */
+  record?: typeof recordMcpGeneration
 }
 
 const STORAGE_BUCKET = 'generated-images'
@@ -132,113 +151,31 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   })
 }
 
-async function inlineImageFromUrl(
-  url: string
-): Promise<{ data: string; mimeType: string; bytes: number }> {
-  if (url.startsWith('data:')) {
-    const commaIndex = url.indexOf(',')
-    if (commaIndex < 0) throw new Error('Malformed data URL from upstream')
-    const meta = url.slice(0, commaIndex)
-    const data = url.slice(commaIndex + 1)
-    const mimeMatch = meta.match(/^data:([^;]+)/)
-    const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream'
-    return {
-      data,
-      mimeType,
-      bytes: Math.floor((data.length * 3) / 4),
-    }
+/** Read bytes from a data URL or from one of our own storage / provider URLs. */
+async function readImageBytes(source: string): Promise<{ buffer: Buffer; mimeType: string }> {
+  if (source.startsWith('data:')) {
+    const comma = source.indexOf(',')
+    if (comma < 0) throw new Error('Malformed data URL from upstream')
+    const mimeType = source.slice(5, comma).split(';')[0] || 'image/png'
+    return { buffer: Buffer.from(source.slice(comma + 1), 'base64'), mimeType }
   }
-
-  const res = await fetch(url)
-  if (!res.ok) {
-    throw new Error(`Failed to fetch reference image (HTTP ${res.status}).`)
-  }
-  const buf = await res.arrayBuffer()
-  const data = Buffer.from(buf).toString('base64')
-  let mimeType = res.headers.get('content-type')?.split(';')[0]?.trim() || ''
-  if (!mimeType.startsWith('image/')) {
-    const m = url.toLowerCase().match(/\.(png|jpe?g|webp|gif)(?:[?#]|$)/)
-    if (m) {
-      mimeType = m[1] === 'jpg' || m[1] === 'jpeg' ? 'image/jpeg' : `image/${m[1]}`
-    } else {
-      mimeType = 'image/png'
-    }
-  }
-  return { data, mimeType, bytes: buf.byteLength }
+  const res = await fetch(source)
+  if (!res.ok) throw new Error(`Failed to fetch image (HTTP ${res.status}).`)
+  const mimeType = res.headers.get('content-type')?.split(';')[0]?.trim() || 'image/png'
+  return { buffer: Buffer.from(await res.arrayBuffer()), mimeType }
 }
 
-async function normalizeReferenceInput(
-  referenceImage: string | undefined
-): Promise<string | undefined> {
-  if (!referenceImage) return undefined
-  if (referenceImage.startsWith('data:')) return referenceImage
-  if (referenceImage.startsWith('http://') || referenceImage.startsWith('https://')) {
-    const inlined = await inlineImageFromUrl(referenceImage)
-    return `data:${inlined.mimeType};base64,${inlined.data}`
-  }
-  throw new Error(
-    'referenceImage must be a data URL or https URL (e.g. a prior Vesper Storage link).'
-  )
-}
-
-export async function generateAssetTool(
-  args: Record<string, unknown>,
-  principal: CallerPrincipal
-): Promise<GenerateAssetResult> {
-  const startedAt = Date.now()
-  const progress = principal.progress
-
+export function parseGenerateAssetArgs(args: Record<string, unknown>): GenerateAssetArgs {
   const parsed = HeadlessGenerateAssetSchema.safeParse(args)
   if (!parsed.success) {
-    throw new Error(
-      `Invalid arguments: ${parsed.error.issues.map((i) => i.message).join('; ')}`
-    )
+    throw new Error(`Invalid arguments: ${parsed.error.issues.map((i) => i.message).join('; ')}`)
   }
+  return parsed.data
+}
 
-  const {
-    prompt,
-    modelId,
-    aspectRatio,
-    referenceImage,
-    productRenderIds,
-    numOutputs,
-    seed,
-    inlineBase64,
-    allowFallback,
-    async: runAsync,
-  } = parsed.data
-
-  if (runAsync) {
-    progress?.step('Queueing async job')
-    const job = await createHeadlessMcpJob({
-      credentialId: principal.credentialId,
-      ownerId: principal.ownerId,
-      toolName: 'generate_asset',
-      modelId,
-      request: args,
-    })
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Generation queued as job ${job.id}. Poll get_generation_status with this jobId until status is completed.`,
-          annotations: { audience: ['user'], priority: 0.9 },
-        },
-      ],
-      structuredContent: {
-        modelId,
-        jobId: job.id,
-        status: 'queued',
-        outputs: [],
-        durationMs: Date.now() - startedAt,
-        estimatedCostUsd: estimateGenerationCostUsd({ modelId, numOutputs }),
-      },
-      costUsd: null,
-    }
-  }
-
-  const generationId = randomUUID()
-
+/** The checks that must fail before a job exists, so a bad call never becomes a job. */
+export function assertGenerateAssetAllowed(args: GenerateAssetArgs, allowedModels: string[]): void {
+  const { modelId } = args
   if (!(PHASE_1_MODEL_IDS as readonly string[]).includes(modelId)) {
     const config = getModelConfig(modelId)
     if (config?.type === 'video') {
@@ -250,33 +187,44 @@ export async function generateAssetTool(
       `Model '${modelId}' is not yet available via generate_asset. Allowed: ${PHASE_1_MODEL_IDS.join(', ')}.`
     )
   }
-
-  if (
-    principal.allowedModels.length > 0 &&
-    !principal.allowedModels.includes('*') &&
-    !principal.allowedModels.includes(modelId)
-  ) {
+  if (allowedModels.length > 0 && !allowedModels.includes('*') && !allowedModels.includes(modelId)) {
     throw new Error(`This token is not permitted to use model '${modelId}'.`)
   }
+}
 
+export async function executeGenerateAsset(
+  args: GenerateAssetArgs,
+  ctx: ExecuteContext
+): Promise<GenerateAssetExecution> {
+  const startedAt = Date.now()
+  const progress = ctx.progress
+  assertGenerateAssetAllowed(args, ctx.allowedModels)
+
+  const { prompt, modelId, aspectRatio, referenceImage, productRenderIds, numOutputs, seed, allowFallback } = args
   const adapter = getModel(modelId)
   if (!adapter) throw new Error(`Unknown model '${modelId}'.`)
 
   progress?.step('Resolving references')
 
+  // Product renders come from our own table, so their URLs are trusted.
+  let anchor: GenerationAnchor | null = null
   const renderRefs: string[] = []
   if (productRenderIds && productRenderIds.length > 0) {
     const rows = await resolveProductRenders(productRenderIds)
-    const inlinedRefs = await Promise.all(
-      rows.map(async (row) => {
-        const inlined = await inlineImageFromUrl(row.imageUrl)
-        return `data:${inlined.mimeType};base64,${inlined.data}`
-      })
-    )
-    renderRefs.push(...inlinedRefs)
+    const read = await Promise.all(rows.map((row) => readImageBytes(row.imageUrl)))
+    read.forEach(({ buffer, mimeType }) => {
+      renderRefs.push(`data:${mimeType};base64,${buffer.toString('base64')}`)
+    })
+    anchor = {
+      kind: 'product-render',
+      id: rows[0].id,
+      url: rows[0].imageUrl,
+      sha256: createHash('sha256').update(read[0].buffer).digest('hex'),
+    }
   }
 
-  const normalizedRef = await normalizeReferenceInput(referenceImage)
+  // A caller-supplied reference goes through the fetch allowlist.
+  const normalizedRef = referenceImage ? await referenceToDataUrl(referenceImage) : undefined
   const allRefs: string[] = []
   if (normalizedRef) allRefs.push(normalizedRef)
   allRefs.push(...renderRefs)
@@ -318,7 +266,7 @@ export async function generateAssetTool(
   const generation = await withTimeout(
     adapter.generate(request),
     timeoutMs,
-    `Generation timed out after ${Math.floor(timeoutMs / 1000)}s. Pass async: true and poll get_generation_status, or try a faster model.`
+    `Generation timed out after ${Math.floor(timeoutMs / 1000)}s. Try again, or try a faster model.`
   )
 
   if (generation.status !== 'completed' || !generation.outputs?.length) {
@@ -327,11 +275,12 @@ export async function generateAssetTool(
 
   progress?.step('Uploading to Storage')
 
+  const generationId = randomUUID()
   const persisted = await Promise.all(
     generation.outputs.map(async (output, idx) => {
       const mimeType = await probeMimeType(output.url)
       const ext = extensionForMime(mimeType)
-      const path = `mcp/${principal.credentialId}/${generationId}/${idx}.${ext}`
+      const path = `mcp/${ctx.credentialId}/${generationId}/${idx}.${ext}`
       const storedUrl = output.url.startsWith('data:')
         ? await uploadBase64ToStorage(output.url, STORAGE_BUCKET, path)
         : await uploadUrlToStorage(output.url, STORAGE_BUCKET, path)
@@ -340,7 +289,7 @@ export async function generateAssetTool(
         width: output.width,
         height: output.height,
         mimeType,
-        path,
+        previewSource: output.url.startsWith('data:') ? output.url : storedUrl,
       }
     })
   )
@@ -353,86 +302,173 @@ export async function generateAssetTool(
         ? meta.provider
         : config?.provider?.toLowerCase()
   const isFallback = Boolean(meta.isFallback)
-  const routeReason =
-    typeof meta.routeReason === 'string' ? meta.routeReason : null
-  const effectiveModelId =
-    typeof meta.effectiveModelId === 'string' ? meta.effectiveModelId : modelId
-
+  const routeReason = typeof meta.routeReason === 'string' ? meta.routeReason : null
+  const effectiveModelId = typeof meta.effectiveModelId === 'string' ? meta.effectiveModelId : modelId
   const estimatedCostUsd = estimateGenerationCostUsd({ modelId, numOutputs: persisted.length })
 
-  const dimensionsSummary = persisted.map((o) => `${o.width}x${o.height}`).join(', ')
-  const urlsLine =
-    persisted.length === 1
-      ? `View: ${persisted[0].url}`
-      : `View:\n${persisted.map((o, idx) => `${idx + 1}. ${o.url}`).join('\n')}`
+  progress?.step('Recording in Vesper')
 
-  let summary = `Generated ${persisted.length} image${persisted.length === 1 ? '' : 's'} with ${modelId} (${dimensionsSummary}). ${urlsLine}`
-  if (isFallback && provider) {
-    summary += `\nNote: routed via ${provider} fallback${routeReason ? ` (${routeReason})` : ''}. Pass allowFallback: false to require the primary provider.`
-  }
-  summary = progress?.appendToSummary(summary) ?? summary
-
-  const content: McpContent[] = [
-    {
-      type: 'text',
-      text: summary,
-      annotations: { audience: ['user'], priority: 0.9 },
-    },
-  ]
-
-  for (let idx = 0; idx < persisted.length; idx++) {
-    const out = persisted[idx]
-    content.push({
-      type: 'resource_link',
-      uri: out.url,
-      name: `${modelId}-${out.width}x${out.height}-${idx}.${extensionForMime(out.mimeType)}`,
-      mimeType: out.mimeType,
-      description: `Image ${idx + 1} of ${persisted.length} from ${modelId}`,
-      annotations: { audience: ['user'], priority: 0.85 },
+  const stream: McpStream = 'free'
+  let outputIds: Array<string | null> = persisted.map(() => null)
+  let recorded: GenerateAssetExecution['recorded'] = null
+  let recordError: string | null = null
+  try {
+    const result = await (ctx.record ?? recordMcpGeneration)({
+      ownerId: ctx.ownerId,
+      generationId,
+      stream,
+      modelId,
+      prompt,
+      costUsd: estimatedCostUsd,
+      outputs: persisted.map((p) => ({ url: p.url, width: p.width, height: p.height })),
+      parameters: {
+        toolName: 'generate_asset',
+        credentialId: ctx.credentialId,
+        mcpJobId: ctx.jobId ?? null,
+        numOutputs,
+        ...(aspectRatio ? { aspectRatio } : {}),
+        ...(typeof seed === 'number' ? { seed } : {}),
+        allowFallback: allowFallback !== false,
+        ...(productRenderIds?.length ? { productRenderIds } : {}),
+        ...(referenceImage && /^https:\/\//i.test(referenceImage) ? { referenceImageUrl: referenceImage } : {}),
+        ...(anchor ? { anchor } : {}),
+        provider,
+        effectiveModelId,
+        isFallback,
+        routeReason,
+        estimatedCostUsd,
+      },
     })
-  }
-
-  const includeInline = inlineBase64 !== false
-  if (includeInline) {
-    const inlined = await Promise.all(
-      persisted.map((out) => inlineImageFromUrl(out.url))
-    )
-    for (const img of inlined) {
-      if (img.bytes > MCP_INLINE_IMAGE_MAX_BYTES) {
-        content.push({
-          type: 'text',
-          text: `Inline preview omitted (${Math.round(img.bytes / 1024)} KB exceeds MCP inline cap). Use the URL above or set inlineBase64: false.`,
-          annotations: { audience: ['user'], priority: 0.5 },
-        })
-        continue
-      }
-      content.push({
-        type: 'image',
-        data: img.data,
-        mimeType: img.mimeType,
-        annotations: { audience: ['user'], priority: 0.95 },
-      })
-    }
+    outputIds = result.outputIds
+    recorded = { projectId: result.projectId, sessionId: result.sessionId, stream }
+  } catch (err) {
+    // The images exist and were paid for; hand them back and say they were not recorded.
+    recordError = (err as Error)?.message || 'unknown error'
+    console.warn('[mcp/generate_asset] recording failed', recordError)
   }
 
   return {
-    content,
-    structuredContent: {
-      modelId,
-      requestedModelId: modelId,
-      effectiveModelId,
-      provider,
-      isFallback,
-      routeReason,
-      outputs: persisted.map((o) => ({
-        url: o.url,
-        width: o.width,
-        height: o.height,
-        mimeType: o.mimeType,
-      })),
-      durationMs: Date.now() - startedAt,
-      estimatedCostUsd,
-    },
-    costUsd: estimatedCostUsd,
+    generationId,
+    modelId,
+    effectiveModelId,
+    provider,
+    isFallback,
+    routeReason,
+    outputs: persisted.map((p, idx) => ({
+      url: p.url,
+      width: p.width,
+      height: p.height,
+      mimeType: p.mimeType,
+      outputId: outputIds[idx] ?? null,
+    })),
+    previewSources: persisted.map((p) => p.previewSource),
+    durationMs: Date.now() - startedAt,
+    estimatedCostUsd,
+    recorded,
+    recordError,
+    progressTrail: progress?.appendToSummary('')?.trim() || null,
   }
+}
+
+function describeRecording(exec: Pick<GenerateAssetExecution, 'recorded' | 'recordError'>): string {
+  if (exec.recorded) {
+    return `Saved in Vesper under Claude / ${STREAM_SESSIONS[exec.recorded.stream].name}.`
+  }
+  if (exec.recordError) return `Not recorded in Vesper's web app (${exec.recordError}); the files are safe at the links.`
+  return ''
+}
+
+export function generateAssetSummary(exec: GenerateAssetExecution): string {
+  const n = exec.outputs.length
+  const dims = exec.outputs.map((o) => `${o.width}x${o.height}`).join(', ')
+  const links =
+    n === 1
+      ? `Full resolution: ${exec.outputs[0].url}`
+      : `Full resolution:\n${exec.outputs.map((o, i) => `${i + 1}. ${o.url}`).join('\n')}`
+  const lines = [`Generated ${n} image${n === 1 ? '' : 's'} with ${exec.modelId} (${dims}). ${links}`]
+  if (exec.isFallback && exec.provider) {
+    lines.push(
+      `Note: routed via ${exec.provider} fallback${exec.routeReason ? ` (${exec.routeReason})` : ''}. Pass allowFallback: false to require the primary provider.`
+    )
+  }
+  const recording = describeRecording(exec)
+  if (recording) lines.push(recording)
+  if (exec.progressTrail) lines.push(exec.progressTrail)
+  return lines.join('\n')
+}
+
+export function generateAssetStructured(exec: GenerateAssetExecution): Record<string, unknown> {
+  return {
+    modelId: exec.modelId,
+    requestedModelId: exec.modelId,
+    effectiveModelId: exec.effectiveModelId,
+    provider: exec.provider,
+    isFallback: exec.isFallback,
+    routeReason: exec.routeReason,
+    generationId: exec.generationId,
+    status: 'completed',
+    outputs: exec.outputs,
+    durationMs: exec.durationMs,
+    estimatedCostUsd: exec.estimatedCostUsd,
+    recorded: exec.recorded,
+  }
+}
+
+/** What the job row keeps: structured data and output ids, never bytes. */
+export function generateAssetPayload(exec: GenerateAssetExecution): JobPayload {
+  return {
+    summary: generateAssetSummary(exec),
+    structuredContent: generateAssetStructured(exec),
+    outputIds: exec.outputs.map((o) => o.outputId).filter((id): id is string => typeof id === 'string'),
+    costUsd: exec.estimatedCostUsd,
+  }
+}
+
+const PREVIEW_NOTE =
+  'The images below are JPEG previews (long edge at most 1568 px) for reading; open the links for the originals.'
+
+/**
+ * Build the MCP content for image results: the summary, then for each image
+ * a link to the original and, when `inline`, a preview Claude can read.
+ */
+export async function imageResultContent(input: {
+  summary: string
+  outputs: Array<{ url: string; width: number; height: number; mimeType: string }>
+  modelId: string
+  previewSources?: string[]
+  inline: boolean
+}): Promise<McpContent[]> {
+  const content: McpContent[] = [{ type: 'text', text: input.summary }]
+  const n = input.outputs.length
+  input.outputs.forEach((out, idx) => {
+    content.push({
+      type: 'resource_link',
+      uri: out.url,
+      name: `${input.modelId}-${out.width}x${out.height}-${idx}.${extensionForMime(out.mimeType)}`,
+      mimeType: out.mimeType,
+      description: `Image ${idx + 1} of ${n} from ${input.modelId}, full resolution`,
+    })
+  })
+  if (!input.inline || n === 0) return content
+
+  const previews = await Promise.all(
+    input.outputs.map(async (out, idx) => {
+      try {
+        const { buffer } = await readImageBytes(input.previewSources?.[idx] ?? out.url)
+        return await makeImagePreview(buffer)
+      } catch (err) {
+        console.warn('[mcp] preview failed', (err as Error)?.message)
+        return null
+      }
+    })
+  )
+  content.push({ type: 'text', text: PREVIEW_NOTE })
+  previews.forEach((preview, idx) => {
+    if (!preview) {
+      content.push({ type: 'text', text: `No preview for image ${idx + 1}; use its link.` })
+      return
+    }
+    content.push({ type: 'image', data: preview.data, mimeType: preview.mimeType })
+  })
+  return content
 }
