@@ -85,7 +85,7 @@ When using a generated image as style reference for a NEW scene:
 |-------|-----------|---------------|-------|-------|
 | Nano Banana 2 (3.1 Flash) | Up to 10 | Up to 4 | 14 | |
 | Nano Banana Pro (3 Pro) | Up to 6 | Up to 5 | 14 | |
-| GPT Image 2 | Multiple | Multiple | First 5 preserved at high fidelity when `input_fidelity: high` | |
+| GPT Image 2 | Multiple | Multiple | Inputs kept at high fidelity by default; never send `input_fidelity` (rejected) | |
 
 ---
 
@@ -225,7 +225,7 @@ Create a detailed description once, reuse verbatim across prompts:
 SARAH: Early 40s woman with shoulder-length auburn hair with visible gray at temples, oval face with slight crow's feet, green-gray eyes, small mole on left cheek. Wearing navy wool cardigan over white cotton blouse, reading glasses pushed up on head. Medium build with slightly rounded shoulders.
 ```
 
-When character reference images are available (Nano Banana 2/Pro, GPT Image 2 with `input_fidelity: high`), combine the image reference with minimal text anchors instead of re-describing what's visible.
+When character reference images are available (Nano Banana 2/Pro, GPT Image 2), combine the image reference with minimal text anchors instead of re-describing what's visible.
 
 ---
 
@@ -492,7 +492,7 @@ Like Nano Banana, semantic. Differentiators in practice:
 
 - Best text rendering inside an image
 - Real-world knowledge (specific brands, places, objects)
-- Tightest face/product fidelity preservation across edits when paired with `input_fidelity: high` (first 5 input images preserved at high fidelity — order matters)
+- Strong face/product preservation across edits: input images are kept at high fidelity by default (order matters: the asset to keep goes first). Never send `input_fidelity`; GPT Image 2 rejects it
 - Sizes: `1024x1024` (square), `1024x1536` (portrait, ≈4:5), `1536x1024` (landscape)
 - Quality `medium` for iteration, `high` for finals
 

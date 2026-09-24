@@ -9,6 +9,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { getSkillSystemPrompt } from '@/lib/skills/registry'
 import { getModelConfig } from '@/lib/models/registry'
+import { referenceToDataUrl, splitDataUrl } from '@/lib/net/fetch-allowlisted'
 import { getSkillVersion, type SkillVersion } from './skill-version'
 
 const DEFAULT_PROMPT_ITERATE_MODEL = 'claude-sonnet-4-5-20250929'
@@ -114,9 +115,9 @@ function buildMessageContent(
 ): MessageContent[] {
   const content: MessageContent[] = []
   if (referenceImage) {
-    const [dataUrlPrefix, base64Data] = referenceImage.split(',')
-    const mediaTypeMatch = dataUrlPrefix.match(/data:([^;]+)/)
-    const mediaType = mediaTypeMatch ? mediaTypeMatch[1] : 'image/jpeg'
+    // Already a data URL (see iteratePrompt); an https URL used to arrive
+    // here unchanged and go out as an empty image.
+    const { mediaType, base64: base64Data } = splitDataUrl(referenceImage)
     content.push({
       type: 'image',
       source: { type: 'base64', media_type: mediaType, data: base64Data || '' },
@@ -143,6 +144,9 @@ export async function iteratePrompt(
     throw new Error('prompt is required')
   }
   const variantCount = input.variantCount ?? 4
+  const referenceImage = input.referenceImage
+    ? await referenceToDataUrl(input.referenceImage)
+    : undefined
 
   const config = getModelConfig(input.modelId)
   const isVideoModel =
@@ -171,7 +175,7 @@ export async function iteratePrompt(
       ? `Preferred axes to vary: ${input.preferredAxes.join(', ')}`
       : 'No preferred axes specified — pick 2-3 strong axes given the brief.'
 
-  const baselineImageNote = input.referenceImage
+  const baselineImageNote = referenceImage
     ? `A baseline image is attached. FIRST, analyze it in one mental pass: identify the main subject(s), composition, framing, lighting register, color treatment, and any visible text. Then design variants that PRESERVE the locked anchors but credibly DIFFER from the baseline on at least 2 of your chosen axes. Each variant's whyDifferentEnough must reference what the baseline looked like and why the variant is meaningfully different.`
     : `No baseline image is attached. Treat the user prompt as the baseline concept and design variants that branch off it without drifting into another ad set.`
 
@@ -219,7 +223,7 @@ Hard requirements:
     messages: [
       {
         role: 'user',
-        content: buildMessageContent(userMessage, input.referenceImage) as never,
+        content: buildMessageContent(userMessage, referenceImage) as never,
       },
     ],
   })

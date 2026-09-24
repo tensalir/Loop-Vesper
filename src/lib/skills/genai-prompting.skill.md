@@ -84,7 +84,7 @@ When using a generated image as style reference for a NEW scene:
 |-------|-----------|---------------|-------|-------|
 | Nano Banana 2 (3.1 Flash) | Up to 10 | Up to 4 | 14 | |
 | Nano Banana Pro (3 Pro) | Up to 6 | Up to 5 | 14 | |
-| GPT Image 2 | Multiple | Multiple | First 5 preserved at high fidelity when `input_fidelity: high` | |
+| GPT Image 2 | Multiple | Multiple | Inputs kept at high fidelity by default; never send `input_fidelity` (rejected) | |
 
 ---
 
@@ -163,7 +163,7 @@ Create a detailed description once, reuse verbatim across prompts:
 SARAH: Early 40s woman with shoulder-length auburn hair with visible gray at temples, oval face with slight crow's feet, green-gray eyes, small mole on left cheek. Wearing navy wool cardigan over white cotton blouse, reading glasses pushed up on head. Medium build with slightly rounded shoulders.
 ```
 
-When character reference images are available (Nano Banana 2/Pro, GPT Image 2 with `input_fidelity: high`), combine the image reference with minimal text anchors instead of re-describing what's visible.
+When character reference images are available (Nano Banana 2/Pro, GPT Image 2), combine the image reference with minimal text anchors instead of re-describing what's visible.
 
 ---
 
@@ -188,7 +188,7 @@ See [references/video.md](references/video.md) for image-to-video and text-to-vi
 - **Nano Banana 2 & Pro** — [references/nano-banana.md](references/nano-banana.md)
   Tiers, semantic editing, multi-turn workflows, resolution/aspect ratio, thinking mode, search grounding
 - **GPT Image 2 (gpt-image-2)** — [references/gpt-image.md](references/gpt-image.md)
-  Image API vs Responses API, multi-turn editing, input fidelity, sizes/quality/formats, mask-based inpainting, prompting patterns, differences vs Nano Banana
+  Image API vs Responses API, multi-turn editing, reference-image fidelity, sizes/quality/formats, mask-based inpainting, prompting patterns, differences vs Nano Banana
 - **Midjourney** — [references/midjourney.md](references/midjourney.md)
   Multi-prompts, style references, permutations, artist/director lists
 - **Video (I2V/T2V)** — [references/video.md](references/video.md)

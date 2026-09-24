@@ -14,6 +14,8 @@ export interface SkillVersion {
   hash: string
   /** Last filesystem mtime of the skill file. */
   lastModified: string
+  /** Which source the text came from: kit, db (admin override), bundled or fallback. */
+  source?: string
 }
 
 export function getSkillVersion(skillId: string): SkillVersion | null {
