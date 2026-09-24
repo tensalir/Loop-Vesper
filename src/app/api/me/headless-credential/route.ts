@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/api/auth'
 import { prisma } from '@/lib/prisma'
 import { issueCredential } from '@/lib/headless/credentials'
-import type { HeadlessTool } from '@/lib/headless/auth'
+import { SELF_ISSUED_TOOLS } from '@/lib/headless/tool-registry'
 
 /**
  * Self-service MCP credential management for the /headless landing page.
@@ -27,16 +27,7 @@ import type { HeadlessTool } from '@/lib/headless/auth'
 export const dynamic = 'force-dynamic'
 
 const SELF_ISSUED_NAME = 'Self-issued (vesper-headless)'
-const SELF_ISSUED_TOOLS: HeadlessTool[] = [
-  'enhance_prompt',
-  'iterate_prompt',
-  'list_models',
-  'generate_asset',
-  'list_product_renders',
-  'get_generation_status',
-  'generate_video',
-  'estimate_generation_cost',
-]
+// SELF_ISSUED_TOOLS comes from the tool registry (`selfIssued: true`).
 // `*` = wildcard access to every model the registry exposes. Self-service
 // users get the full set; admins can issue narrower credentials via the
 // admin endpoint if they want to scope a specific partner.

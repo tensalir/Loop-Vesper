@@ -70,16 +70,16 @@ The model maintains context across turns. Each refinement builds on the previous
 
 ---
 
-## Input Fidelity (Preserving Faces, Logos, Products)
+## Preserving Faces, Logos, Products
 
-`input_fidelity: high` makes input images survive to the output with their detail intact. Critical for:
+GPT Image 2 keeps input images at high fidelity on its own. It matters for:
 - Faces that need to remain recognizable
 - Logos that need to remain readable
 - Product hero shots that need to remain on-brand
 
-GPT Image 2 preserves the **first 5** input images at high fidelity. Order matters — put the asset that most needs to survive recognizably as the first image.
+Order matters: GPT Image 2 edits image 1, so put the asset that most needs to survive recognizably first.
 
-`input_fidelity: high` increases input token cost. Use it when the inputs need to survive recognizably; leave at `low` (default) when you're using inputs as loose style anchors.
+**Never send `input_fidelity` to GPT Image 2.** The parameter belonged to the older gpt-image-1; GPT Image 2 rejects it, and Loop's graded rounds hit the refusal. There is no fidelity switch to set.
 
 ---
 
@@ -120,7 +120,7 @@ Using the provided image, [add / remove / change] [specific element]. Match exis
 ```
 [Edit instruction]. Preserve the [face / logo / product] from the reference image with full fidelity, no changes to [specific identity markers].
 ```
-(Pair with `input_fidelity: high` and put the asset to preserve as the first input image.)
+(Put the asset to preserve as the first input image. Never send `input_fidelity`: GPT Image 2 rejects it.)
 
 ### Text Rendering
 ```
@@ -162,7 +162,7 @@ Both are semantic. They overlap heavily. Differentiators in practice:
 |------|-------------|
 | Best text rendering inside an image | GPT Image 2 |
 | Real-world knowledge (specific brands, places, objects) | GPT Image 2 |
-| Tightest face / product fidelity preservation across edits | GPT Image 2 with `input_fidelity: high` |
+| Tight face / product preservation across edits | GPT Image 2 (asset first; no `input_fidelity`) |
 | Native search grounding (web images as context) | Nano Banana 2 |
 | Extended aspect ratios (1:4, 1:8, 4:1, 8:1) | Nano Banana 2 |
 | 512px output for high-volume thumbnails | Nano Banana 2 |
@@ -177,7 +177,7 @@ For Loop's paid social pipeline (Vesper, Inku, etc.), keep both wired in — the
 
 - **Latency:** complex prompts can take up to ~2 minutes
 - **Text precision:** strong but not pixel-perfect; long strings degrade
-- **Character consistency:** can drift across multiple generations even with the same prompt — anchor with reference images and `input_fidelity: high`
+- **Character consistency:** can drift across multiple generations even with the same prompt — anchor with reference images, the asset to keep first
 - **Strict layout control:** improving but still imperfect for tight grid / poster compositions
 
 ---
@@ -192,6 +192,6 @@ Cost scales with image output tokens, which scale with size × quality:
 | Medium | 1056 | 1584 | 1568 |
 | High | 4160 | 6240 | 6208 |
 
-Plus input text tokens, plus input image tokens (more if `input_fidelity: high`), plus 100 image output tokens per partial image when streaming.
+Plus input text tokens, plus input image tokens, plus 100 image output tokens per partial image when streaming.
 
 For ad-slate work: iterate at `medium`, render finals at `high`. Don't render the whole slate at `high` until concepts are locked.

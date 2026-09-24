@@ -41,6 +41,12 @@ const nextConfig = {
   },
   experimental: {
     optimizePackageImports: ['lucide-react'],
+    // The prompting skill is read from disk at runtime (src/lib/skills/registry.ts,
+    // src/lib/headless/mcp-prompts.ts). Without this the files were never traced
+    // into the serverless bundle and every prompt rewrite ran on a generic fallback.
+    outputFileTracingIncludes: {
+      '/api/**/*': ['./src/lib/skills/**/*.md'],
+    },
   },
   webpack: (config, { isServer }) => {
     // Handle Node.js modules for server-side only (for Vertex AI SDK)

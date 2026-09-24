@@ -156,6 +156,10 @@ model Project {
   briefing      String?  @db.Text // High-level instructions that apply to all chats in this project
   ownerId       String   @map("owner_id") @db.Uuid
   isShared      Boolean  @default(true) @map("is_shared")
+  // Marks a project the system keeps for its owner, found by key rather than
+  // by name so renaming it is safe. 'claude' = images made from Claude through
+  // the MCP connector. Unique per owner (partial index, in the migration).
+  systemKey     String?  @map("system_key")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -852,6 +856,11 @@ model HeadlessMcpJob {
   request      Json
   result       Json?
   error        String?   @db.Text
+  // How many times a worker picked the job up, when the current run
+  // started, and the outputs rows it wrote (results never hold image bytes).
+  attempts     Int       @default(0)
+  startedAt    DateTime? @map("started_at")
+  outputIds    String[]  @default([]) @map("output_ids") @db.Uuid
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
   completedAt  DateTime? @map("completed_at")
@@ -860,6 +869,8 @@ model HeadlessMcpJob {
 
   @@index([credentialId, createdAt(sort: Desc)])
   @@index([status])
+  @@index([ownerId, createdAt(sort: Desc)])
+  @@index([status, updatedAt])
   @@map("headless_mcp_jobs")
 }
 

@@ -8,28 +8,13 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
-import { prisma } from '@/lib/prisma'
-import { getSkillSystemPrompt } from '@/lib/skills/registry'
 import { getModelConfig } from '@/lib/models/registry'
-import { getSkillVersion, type SkillVersion } from './skill-version'
+import { referenceToDataUrl, splitDataUrl } from '@/lib/net/fetch-allowlisted'
+import { getPromptingSystemPrompt, type PromptingSource } from './prompting-source'
+import { productPromptPassthrough, type PromptPassthrough } from './product-prompt-guard'
+import type { SkillVersion } from './skill-version'
 
 const DEFAULT_PROMPT_ENHANCE_MODEL = 'claude-sonnet-4-5-20250929'
-const FALLBACK_SYSTEM_PROMPT = `You are an expert AI prompt engineer. Your job is to enhance user prompts for generative AI models.
-
-**CRITICAL INSTRUCTION**: Return ONLY the enhanced prompt text. Do NOT include explanations, versions, reasons, or any other text. Just the prompt itself.
-
-## Your Mission
-Enhance the user's prompt by adding helpful details while respecting their creative intent. Make it more effective without overwriting their vision.
-
-## Guidelines
-- Add missing details (lighting, camera, framing) if appropriate
-- Clarify ambiguous elements
-- Keep the original tone and style
-- Don't add unnecessary complexity
-- Don't force "best practices" that contradict intent
-
-## Response Format
-Return ONLY the enhanced prompt text. Nothing else.`
 
 export type EnhancePromptMode = 'standard' | 'iteration-edit'
 
@@ -47,6 +32,12 @@ export interface EnhancePromptInput {
    *   of the genai-prompting skill, with a tight output budget.
    */
   mode?: EnhancePromptMode
+  /**
+   * Also return prompts that name a Loop product unchanged (the MCP tool sets
+   * this). Prompts carrying a product skeleton's fingerprint are always
+   * returned unchanged.
+   */
+  guardProductNames?: boolean
 }
 
 export interface EnhancePromptResult {
@@ -59,6 +50,10 @@ export interface EnhancePromptResult {
   enhancementModel: string
   /** Skill substrate version used. */
   skill: SkillVersion | null
+  /** Set when the prompt was returned unchanged, with the reason. */
+  passthrough?: PromptPassthrough | null
+  /** Which system prompt ran: kit, admin override, bundled skill or fallback. */
+  promptingSource?: Pick<PromptingSource, 'source' | 'sha256' | 'version'> | null
 }
 
 interface MessageContentImage {
@@ -110,53 +105,17 @@ function isVideoModelId(modelId: string): boolean {
   )
 }
 
-async function loadSystemPrompt(modelId: string): Promise<string> {
-  // Database override takes precedence so admins can hot-patch the
-  // enhancement prompt without redeploying the skill file.
-  try {
-    const override = await (prisma as unknown as {
-      promptEnhancementPrompt: {
-        findFirst: (args: unknown) => Promise<{ systemPrompt: string; id: string } | null>
-      }
-    }).promptEnhancementPrompt.findFirst({
-      where: {
-        modelIds: { has: modelId },
-        isActive: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    })
-    if (override?.systemPrompt) {
-      return override.systemPrompt
-    }
-  } catch {
-    // Table may not exist on older schemas — fall through to skill loader.
-  }
-
-  const skillPrompt = getSkillSystemPrompt('genai-prompting')
-  return skillPrompt || FALLBACK_SYSTEM_PROMPT
-}
-
-async function loadEnhancementPromptId(modelId: string): Promise<string | null> {
-  try {
-    const override = await (prisma as unknown as {
-      promptEnhancementPrompt: {
-        findFirst: (args: unknown) => Promise<{ id: string } | null>
-      }
-    }).promptEnhancementPrompt.findFirst({
-      where: {
-        modelIds: { has: modelId },
-        isActive: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true },
-    })
-    return override?.id ?? null
-  } catch {
-    return null
+/** The skill version reported with every result, read from the source that actually ran. */
+export function skillVersionFromSource(source: PromptingSource): SkillVersion {
+  return {
+    skillId: source.source === 'db' ? `prompt-override:${source.id}` : 'genai-prompting',
+    hash: source.sha256.slice(0, 12),
+    lastModified: source.version ?? new Date(0).toISOString(),
+    source: source.source,
   }
 }
 
-function buildRequestContent(args: {
+export function buildRequestContent(args: {
   userPrompt: string
   modelId: string
   hasReferenceImage: boolean
@@ -318,7 +277,6 @@ Return ONLY the enhanced prompt text. Nothing else.`
 Please enhance this text-to-image prompt while respecting the user's creative vision.
 
 Guidelines:
-- Add helpful details (lighting, camera, framing) if appropriate
 - Clarify ambiguous elements
 - Keep the original tone and style
 - Don't add unnecessary complexity
@@ -369,11 +327,9 @@ function buildMessageContent(
     return [{ type: 'text', text: requestContent }]
   }
 
-  // Accept both `data:...,base64,...` and bare base64 (latter unusual but
-  // some tools strip the data URL prefix on copy).
-  const [dataUrlPrefix, base64Data] = referenceImage.split(',')
-  const mediaTypeMatch = dataUrlPrefix.match(/data:([^;]+)/)
-  const mediaType = mediaTypeMatch ? mediaTypeMatch[1] : 'image/jpeg'
+  // `enhancePrompt` has already turned https URLs and bare base64 into a
+  // data URL. The old split on ',' sent an https URL as an empty image.
+  const { mediaType, base64: base64Data } = splitDataUrl(referenceImage)
 
   return [
     {
@@ -396,26 +352,47 @@ function buildMessageContent(
 export async function enhancePrompt(
   input: EnhancePromptInput
 ): Promise<EnhancePromptResult> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY not configured')
-  }
-
   const userPrompt = input.prompt.trim()
   if (!userPrompt) {
     throw new Error('prompt is required')
   }
 
+  // Code-filled product prompts are never rewritten by a model.
+  const passthrough = productPromptPassthrough(userPrompt, {
+    checkProductNames: input.guardProductNames === true,
+  })
+  if (passthrough) {
+    return {
+      originalPrompt: input.prompt,
+      enhancedPrompt: input.prompt,
+      modelId: input.modelId,
+      enhancementPromptId: null,
+      enhancementModel: 'none',
+      skill: null,
+      passthrough,
+      promptingSource: null,
+    }
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY not configured')
+  }
+
   const mode: EnhancePromptMode = input.mode ?? 'standard'
 
-  const systemPrompt = await loadSystemPrompt(input.modelId)
-  const enhancementPromptId = await loadEnhancementPromptId(input.modelId)
+  const source = await getPromptingSystemPrompt(input.modelId)
+  const systemPrompt = source.text
+  const enhancementPromptId = source.source === 'db' ? source.id : null
+  const referenceImage = input.referenceImage
+    ? await referenceToDataUrl(input.referenceImage)
+    : undefined
   const requestContent =
     mode === 'iteration-edit'
       ? buildIterationRequestContent({ userPrompt, modelId: input.modelId })
       : buildRequestContent({
           userPrompt,
           modelId: input.modelId,
-          hasReferenceImage: Boolean(input.referenceImage),
+          hasReferenceImage: Boolean(referenceImage),
         })
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -423,9 +400,11 @@ export async function enhancePrompt(
     process.env.ANTHROPIC_PROMPT_ENHANCE_MODEL || DEFAULT_PROMPT_ENHANCE_MODEL
 
   // Iteration-edit mode wants a tight, deterministic rewrite. Standard mode
-  // keeps the existing creative-temperature settings.
-  const maxTokens = mode === 'iteration-edit' ? 600 : 2000
-  const temperature = mode === 'iteration-edit' ? 0.3 : 0.7
+  // keeps the existing creative-temperature settings. The kit, when it is
+  // the source, sets both for the standard mode.
+  const kitSettings = mode === 'standard' ? source.settings : undefined
+  const maxTokens = kitSettings?.maxTokens ?? (mode === 'iteration-edit' ? 600 : 2000)
+  const temperature = kitSettings?.temperature ?? (mode === 'iteration-edit' ? 0.3 : 0.7)
 
   const message = await anthropic.messages.create({
     model: enhancementModel,
@@ -435,7 +414,7 @@ export async function enhancePrompt(
     messages: [
       {
         role: 'user',
-        content: buildMessageContent(requestContent, input.referenceImage) as never,
+        content: buildMessageContent(requestContent, referenceImage) as never,
       },
     ],
   })
@@ -471,6 +450,8 @@ export async function enhancePrompt(
     modelId: input.modelId,
     enhancementPromptId,
     enhancementModel,
-    skill: getSkillVersion('genai-prompting'),
+    skill: skillVersionFromSource(source),
+    passthrough: null,
+    promptingSource: { source: source.source, sha256: source.sha256, version: source.version },
   }
 }

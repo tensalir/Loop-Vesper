@@ -5,7 +5,8 @@
  *   1. Creates a fresh `CmfRenderAttempt` row tied to that SKU.
  *   2. Builds the deterministic CMF recolour prompt from the row.
  *   3. Looks up the clown reference image (uploaded asset or product render).
- *   4. Asks `enhancePrompt` to polish the prompt for Nano Banana–style models.
+ *   4. Sends that prompt as it is. (Under CMF_LEGACY_PROMPTING=1 it first asks
+ *      `enhancePrompt` to polish it, and the light rotates per attempt.)
  *   5. Calls the model adapter through the existing Vesper pattern.
  *   6. Persists the rendered image into Supabase Storage and updates the
  *      attempt row.
@@ -395,21 +396,36 @@ export function applyRefinementToPrompt(
 }
 
 /**
+ * CMF Studio's legacy prompting: a model rewrite of the code-built prompt and
+ * a lighting variant that rotates with every attempt. Off by default since
+ * 2026-09-24: Damien's brief and the CMF rounds found the rewrite invents
+ * colour words and the rotating light changes two things at once, so neither
+ * can be judged against the sheet. `CMF_LEGACY_PROMPTING=1` restores both.
+ */
+export function cmfLegacyPrompting(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.CMF_LEGACY_PROMPTING === '1'
+}
+
+/**
  * Pure helper: pick the lighting variant index for a new attempt.
- * When refining, reuse the parent's variant index so the refinement
- * doesn't accidentally change two things at once (colour AND
- * lighting). When not refining, fall back to the default
- * `attemptNumber - 1` rotation that the bulk burst relies on.
+ *
+ * - Refining reuses the parent's variant, so the refinement changes one
+ *   thing (the colour/material correction), not the light as well.
+ * - Otherwise the light is held fixed at variant 0 (Studio Classic,
+ *   Damien's gold standard).
+ * - With `legacyRotation` (CMF_LEGACY_PROMPTING=1), attempts rotate through
+ *   the variants (`attemptNumber - 1`), as the bulk burst used to.
  */
 export function pickVariantIndex(args: {
   attemptNumber: number
   parentAttemptNumber?: number | null
   isRefinement: boolean
+  legacyRotation?: boolean
 }): number {
   if (args.isRefinement && typeof args.parentAttemptNumber === 'number') {
     return args.parentAttemptNumber - 1
   }
-  return args.attemptNumber - 1
+  return args.legacyRotation ? args.attemptNumber - 1 : 0
 }
 
 /**
@@ -495,16 +511,21 @@ export async function runCmfRender({
   // prompt can address components by their clown colour ("the blue surface
   // on the reference (Cosmetic cap): recolour to …"). Falls back silently
   // when the resolved clown has no per-region colour metadata.
+  const legacyPrompting = cmfLegacyPrompting()
   const variantIndex = pickVariantIndex({
     attemptNumber,
     parentAttemptNumber: parentAttempt?.attemptNumber ?? null,
     isRefinement: Boolean(refinementPrompt?.trim()),
+    legacyRotation: legacyPrompting,
   })
   const clownComponents = await peekClownComponents({
     productSlug: render.productSlug,
     variantSlug: render.variantSlug,
     clownAssetId: render.clownAssetId,
-    attemptNumber: variantIndex + 1,
+    // Legacy peeks by variant, as before. Otherwise peek the same attempt the
+    // references are resolved for below, so the prompt's zone colours and the
+    // clown actually sent are the same clown.
+    attemptNumber: legacyPrompting ? variantIndex + 1 : attemptNumber,
   })
   const { basePrompt: specPrompt, variant } = buildCmfPrompt(row, {
     variantIndex,
@@ -592,16 +613,20 @@ export async function runCmfRender({
       }
     }
 
+    // The prompt is built by code from the sheet row and sent as it is. The
+    // model rewrite runs only under CMF_LEGACY_PROMPTING=1.
     let enhancedPrompt = basePrompt
-    try {
-      const enhancement = await enhancePrompt({
-        prompt: basePrompt,
-        modelId,
-        referenceImage: refs.primaryDataUrl ?? undefined,
-      })
-      if (enhancement.enhancedPrompt) enhancedPrompt = enhancement.enhancedPrompt
-    } catch (err) {
-      console.warn('[cmf/render] prompt enhancement failed, using base prompt', err)
+    if (legacyPrompting) {
+      try {
+        const enhancement = await enhancePrompt({
+          prompt: basePrompt,
+          modelId,
+          referenceImage: refs.primaryDataUrl ?? undefined,
+        })
+        if (enhancement.enhancedPrompt) enhancedPrompt = enhancement.enhancedPrompt
+      } catch (err) {
+        console.warn('[cmf/render] prompt enhancement failed, using base prompt', err)
+      }
     }
 
     const adapter = getModel(modelId)

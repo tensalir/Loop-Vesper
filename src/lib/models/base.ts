@@ -46,6 +46,8 @@ export interface ModelConfig {
   }
   pricing?: {
     perImage?: number
+    /** Per-image price by output long edge (1024, 2048, 4096; 512 for 0.5K) when it varies. */
+    perImageByResolution?: Record<number, number>
     perSecond?: number
     currency: string
   }

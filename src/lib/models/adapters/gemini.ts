@@ -1,4 +1,5 @@
 import { BaseModelAdapter, GenerationRequest, GenerationResponse, ModelConfig } from '../base'
+import { GEMINI_IMAGE_PRICES_USD } from '../pricing'
 import { recordApiCall } from '@/lib/rate-limits/usage'
 import { getScopeForModel } from '@/lib/rate-limits/config'
 import { checkGoogleRateLimit } from '@/lib/rate-limits/trackedFetch'
@@ -1643,8 +1644,10 @@ export const NANO_BANANA_CONFIG: ModelConfig = {
     multiImageEditing: true,
     maxReferenceImages: 14,
   },
+  // Google's price, see src/lib/models/pricing.ts (was $0.01, about 13x low).
   pricing: {
-    perImage: 0.01,
+    perImage: GEMINI_IMAGE_PRICES_USD['gemini-nano-banana-pro'][1024],
+    perImageByResolution: GEMINI_IMAGE_PRICES_USD['gemini-nano-banana-pro'],
     currency: 'USD',
   },
   parameters: [
@@ -1686,8 +1689,10 @@ export const NANO_BANANA_2_CONFIG: ModelConfig = {
     multiImageEditing: true,
     maxReferenceImages: 14,
   },
+  // Google's price, see src/lib/models/pricing.ts (was $0.01).
   pricing: {
-    perImage: 0.01,
+    perImage: GEMINI_IMAGE_PRICES_USD['gemini-nano-banana-2'][1024],
+    perImageByResolution: GEMINI_IMAGE_PRICES_USD['gemini-nano-banana-2'],
     currency: 'USD',
   },
   parameters: [

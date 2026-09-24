@@ -175,3 +175,44 @@ test.describe('Edits endpoint shape', () => {
     expect(fields).not.toContain('mask')
   })
 })
+
+// ---------------------------------------------------------------------------
+// GPT Image 2 rejects `input_fidelity`. The prompting skill used to tell the
+// model to send it; no request body may carry it, even when a caller passes it.
+// ---------------------------------------------------------------------------
+
+test.describe('the OpenAI adapter never sends input_fidelity', () => {
+  test('neither the generations JSON nor the edits form carries it', async () => {
+    process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'sk-test-not-real'
+    // Required after setting the key: the adapter reads it at module load.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { OpenAIAdapter, GPT_IMAGE_2_CONFIG } = require('../src/lib/models/adapters/openai')
+    const bodies: string[] = []
+    const realFetch = globalThis.fetch
+    globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+      const body = init?.body
+      if (typeof body === 'string') bodies.push(body)
+      else if (body instanceof FormData) bodies.push(Array.from(body.keys()).join(','))
+      return new Response(JSON.stringify({ data: [{ b64_json: 'AAAA' }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }) as typeof fetch
+    try {
+      const adapter = new OpenAIAdapter(GPT_IMAGE_2_CONFIG)
+      await adapter.generate({ prompt: 'a chair', input_fidelity: 'high', inputFidelity: 'high' } as never)
+      await adapter.generate({
+        prompt: 'a chair',
+        referenceImage: 'data:image/png;base64,iVBORw0KGgo=',
+        input_fidelity: 'high',
+      } as never)
+    } finally {
+      globalThis.fetch = realFetch
+    }
+    expect(bodies).toHaveLength(2)
+    for (const body of bodies) {
+      expect(body).not.toContain('input_fidelity')
+      expect(body).not.toContain('inputFidelity')
+    }
+  })
+})
