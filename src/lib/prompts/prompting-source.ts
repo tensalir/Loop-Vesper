@@ -3,7 +3,8 @@
  *
  * Order, first available wins:
  *   1. the creative kit (the Loop edition of the prompting skill, released
- *      from the plugin repository; wired in by the kit change, null until then);
+ *      from the plugin repository at its creative-v* tag; null when Vesper's
+ *      GitHub App is not configured or no kit can be read);
  *   2. an active `prompt_enhancement_prompts` row for the model (the admin
  *      hot-patch, as before);
  *   3. the bundled skill file `src/lib/skills/genai-prompting.skill.md`;
@@ -17,6 +18,7 @@
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { loadSkill } from '@/lib/skills/registry'
+import { githubAppConfigFromEnv } from '@/lib/github/app'
 
 export const FALLBACK_SYSTEM_PROMPT = `You are an expert AI prompt engineer. Your job is to make user prompts for generative AI models clearer.
 
@@ -60,7 +62,18 @@ export interface KitPrompting {
 
 export type KitPromptingLoader = () => Promise<KitPrompting | null>
 
-let kitLoader: KitPromptingLoader = async () => null
+/**
+ * The kit first: the Loop edition of the prompting skill, from the creative
+ * kit at the plugin's release tag. Loaded lazily and only when Vesper's GitHub
+ * App is configured, so nothing here reaches GitHub or the database otherwise.
+ */
+const defaultKitLoader: KitPromptingLoader = async () => {
+  if (!githubAppConfigFromEnv()) return null
+  const { loadKitPrompting } = await import('@/lib/creative/kit-runtime')
+  return loadKitPrompting()
+}
+
+let kitLoader: KitPromptingLoader = defaultKitLoader
 
 /** Wired by the creative-kit module; tests may set it too. */
 export function setKitPromptingLoader(loader: KitPromptingLoader): void {

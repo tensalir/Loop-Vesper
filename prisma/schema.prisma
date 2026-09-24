@@ -1536,3 +1536,67 @@ model McpOAuthToken {
   @@index([expiresAt])
   @@map("mcp_oauth_tokens")
 }
+
+// ---------------------------------------------------------------------------
+// The Loop creative kit (read from the plugin repository at its release tag)
+// and the reference pictures it pins. See src/lib/creative/kit.ts.
+// ---------------------------------------------------------------------------
+
+model CreativeKit {
+  id        String   @id @default(uuid()) @db.Uuid
+  blobSha   String   @unique @map("blob_sha")
+  commitSha String   @map("commit_sha")
+  ref       String
+  version   String
+  schema    Int
+  /// { kit, conformance } as read; null parts when the kit was refused.
+  json      Json
+  sizeBytes Int      @map("size_bytes")
+  valid     Boolean  @default(true)
+  error     String?
+  fetchedAt DateTime @default(now()) @map("fetched_at")
+
+  @@index([valid, fetchedAt(sort: Desc)], map: "creative_kits_valid_fetched_idx")
+  @@map("creative_kits")
+}
+
+model CreativeKitFile {
+  blobSha   String   @id @map("blob_sha")
+  path      String
+  commitSha String   @map("commit_sha")
+  sha256    String
+  content   Bytes
+  fetchedAt DateTime @default(now()) @map("fetched_at")
+
+  @@map("creative_kit_files")
+}
+
+model CreativePin {
+  id                  String    @id @default(uuid()) @db.Uuid
+  product             String
+  pinId               String    @map("pin_id")
+  source              String // frontify | vesper-storage | upload
+  title               String?
+  sha256              String
+  bytes               BigInt?
+  width               Int?
+  height              Int?
+  mime                String?
+  storagePath         String?   @map("storage_path")
+  previewPath         String?   @map("preview_path")
+  derivedPath         String?   @map("derived_path")
+  derivedSha256       String?   @map("derived_sha256")
+  derivedRecipe       Json?     @map("derived_recipe")
+  geminiFileUri       String?   @map("gemini_file_uri")
+  geminiFileExpiresAt DateTime? @map("gemini_file_expires_at")
+  status              String    @default("pending") // pending | ok | sha_mismatch | missing | needs_upload | needs_derived | error
+  error               String?
+  syncedAt            DateTime? @map("synced_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@unique([pinId, sha256])
+  @@index([product])
+  @@index([geminiFileExpiresAt], map: "creative_pins_gemini_expiry_idx")
+  @@map("creative_pins")
+}

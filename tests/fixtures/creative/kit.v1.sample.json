@@ -1,0 +1,2981 @@
+{
+ "built_at": null,
+ "comment_line": {
+  "answers": [
+   "yes",
+   "no"
+  ],
+  "date": "YYYY-MM-DD, the day the answer was given, Europe/Brussels",
+  "example": "[creative eclipse 2026-10-02] no | decoded B3 | grade PASS_WITH_NOTES B3 | judge gemini-flash-latest vesper x3 | rubric 0.5.3 | the strap stops at the ear",
+  "grammar": "tools/feedback_grammar.py",
+  "prefix": "creative",
+  "reads_also": [
+   "asset-review"
+  ],
+  "separator": " | ",
+  "surfaces": [
+   "chat",
+   "cowork",
+   "code",
+   "qa",
+   "vesper"
+  ],
+  "verdicts": [
+   "PASS",
+   "PASS_WITH_NOTES",
+   "RETRY",
+   "FAIL"
+  ]
+ },
+ "commit": null,
+ "conformance": {
+  "path": "kit/conformance.json",
+  "sha256": "37fe39d2ae3cbb7be597aad6dde9ed1c55d6b17c4f16e018355e64012d236e68"
+ },
+ "feedback": {
+  "bot_variable": "FEEDBACK_BOT",
+  "issue_schema": "kit/feedback-issue.schema.json",
+  "kinds": [
+   "remark",
+   "bug",
+   "idea",
+   "question"
+  ],
+  "labels": {
+   "all": "feedback",
+   "kind": [
+    "kind:bug",
+    "kind:idea",
+    "kind:question",
+    "kind:remark"
+   ],
+   "new": "triage:new",
+   "skill": [
+    "skill:cmf-review",
+    "skill:eclipse",
+    "skill:feedback",
+    "skill:genai-prompting",
+    "skill:mother",
+    "skill:packaging"
+   ],
+   "state": [
+    "triage:draft-open",
+    "triage:heard-once",
+    "triage:heard-twice",
+    "triage:joined",
+    "triage:needs-person",
+    "triage:new",
+    "triage:taste",
+    "triage:unverified"
+   ]
+  },
+  "marker": "loop-creative-feedback v1",
+  "repo": "tensalir/loop-asset-reviewer",
+  "surfaces": [
+   "chat",
+   "cowork",
+   "code"
+  ],
+  "targets": [
+   {
+    "command": "/creative:cmf-review",
+    "id": "cmf-review",
+    "kind": "workstream",
+    "label": "skill:cmf-review",
+    "product": "cmf",
+    "skill": "cmf-review"
+   },
+   {
+    "command": "/creative:eclipse",
+    "id": "eclipse",
+    "kind": "product",
+    "label": "skill:eclipse",
+    "product": "eclipse",
+    "skill": "eclipse"
+   },
+   {
+    "command": "/creative:feedback",
+    "id": "feedback",
+    "kind": "skill",
+    "label": "skill:feedback",
+    "product": null,
+    "skill": "feedback"
+   },
+   {
+    "command": "/creative:genai-prompting",
+    "id": "genai-prompting",
+    "kind": "skill",
+    "label": "skill:genai-prompting",
+    "product": null,
+    "skill": "genai-prompting"
+   },
+   {
+    "command": "/creative:mother",
+    "id": "mother",
+    "kind": "skill",
+    "label": "skill:mother",
+    "product": null,
+    "skill": "mother"
+   },
+   {
+    "command": "/creative:packaging",
+    "id": "packaging",
+    "kind": "product",
+    "label": "skill:packaging",
+    "product": "packaging",
+    "skill": "packaging"
+   }
+  ],
+  "title": "[feedback] <target>: <summary>"
+ },
+ "judges": {
+  "also_report": "the majority of the per-read verdicts, and whether it differs",
+  "erred_read": "an erred read fails every check",
+  "label": "judge <model> <surface> x<reads>",
+  "majority": "per check: a check fails when more than half the reads fail it",
+  "most_erred": "when more than half the reads erred, the result is ERROR and no verdict is given",
+  "never_pooled": true,
+  "surfaces": [
+   "chat",
+   "cowork",
+   "code",
+   "qa",
+   "vesper"
+  ],
+  "unanswered": "a check a read did not answer counts as failed in that read",
+  "vesper_surface": "vesper"
+ },
+ "ladder": {
+  "ignore": [
+   "advisory"
+  ],
+  "otherwise": "PASS",
+  "rank": [
+   "PASS",
+   "PASS_WITH_NOTES",
+   "RETRY",
+   "FAIL"
+  ],
+  "rules": [
+   {
+    "at_least": 1,
+    "severity": "gate",
+    "verdict": "FAIL"
+   },
+   {
+    "at_least": 1,
+    "severity": "critical",
+    "verdict": "RETRY"
+   },
+   {
+    "at_least": 2,
+    "severity": "minor",
+    "verdict": "RETRY"
+   },
+   {
+    "at_least": 1,
+    "severity": "minor",
+    "verdict": "PASS_WITH_NOTES"
+   }
+  ],
+  "unknown_severity": "minor"
+ },
+ "plugin": "creative",
+ "products": {
+  "cmf": {
+   "aliases": [
+    "CMF",
+    "CMF files",
+    "CMF file",
+    "CMF sheet",
+    "CMF workbook",
+    "CMF PDF",
+    "colour material finish",
+    "clown model",
+    "clown render",
+    "colourway render",
+    "supplier PDF"
+   ],
+   "command": "/creative:cmf-review",
+   "deciders": [
+    {
+     "github": null,
+     "name": "Damien",
+     "note": "Decides every render and every PDF. The GitHub handle is filled in when the ownership flow is set up; until then his verdicts arrive through the review page and the record.",
+     "role": "lead CMF designer"
+    }
+   ],
+   "description": "Colour, material and finish files for Loop products: a row of the CMF sheet and the clown model of its product become a recoloured render and a supplier PDF, each checked against the sheet before it goes out.",
+   "generation": {
+    "image_size": "2K",
+    "kind": "template",
+    "models": [
+     {
+      "lane": "final",
+      "model": "gemini-3-pro-image"
+     },
+     {
+      "lane": "draft",
+      "model": "gemini-3.1-flash-image"
+     }
+    ],
+    "only_image": "clown",
+    "rules": [
+     "no-model-rewrite",
+     "one-colourway-per-call",
+     "hold-lighting-fixed",
+     "never-reencode-a-pin"
+    ]
+   },
+   "grading": null,
+   "grading_prompt": null,
+   "keys": {
+    "aphrodite--v38": {
+     "clown": {
+      "height": 1230,
+      "id": "aphrodite--v38",
+      "sha256": "527f8716d7ca1eaedcf7f8146de7b827dd191d7e90a96ce6e2cf46f3faf94f3b",
+      "width": 1190
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/aphrodite--v38.json",
+     "product": "aphrodite",
+     "sha256": "4118f5d1f156bcbbb912066c0fe5f5793a47d3bf8f539ed1a32871f6cc5f635d",
+     "variant": "v38"
+    },
+    "aphrodite--v40": {
+     "clown": {
+      "height": 1058,
+      "id": "aphrodite--v40",
+      "sha256": "9dec9804d44aecd1f3a96e68d597ceb51bbdb494a52d60c9f2b1f5a5049e36ea",
+      "width": 1062
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/aphrodite--v40.json",
+     "product": "aphrodite",
+     "sha256": "7e7f592899e52e1542a41720115465203af76795047cfa4808c6cfd0c59306a2",
+     "variant": "v40"
+    },
+    "case--v1": {
+     "clown": {
+      "height": 1280,
+      "id": "case--v1",
+      "sha256": "0e8748904f5a5e0c7bdcb0eecbaacd0fafdbe633e7254e84788d2c086a86b7b3",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case--v1.json",
+     "product": "case",
+     "sha256": "75024e0fa979862245753a2bea0cbbbe9b622dcfc9ea8ff6d4ab5e8691bcaf73",
+     "variant": "v1"
+    },
+    "case--v2": {
+     "clown": {
+      "height": 1280,
+      "id": "case--v2",
+      "sha256": "1d9dbbe86bf4cbaa29d6444e6b4d1e6e5ce0d3a54bdd5e4c8ee003f9cc9d9296",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case--v2.json",
+     "product": "case",
+     "sha256": "c4bc1671916ceee891fa802b6b29801fa9dabbafe984f06ee28973adb8530c58",
+     "variant": "v2"
+    },
+    "case-aphrodite--7613-555": {
+     "clown": {
+      "height": 1600,
+      "id": "case-aphrodite--7613-555",
+      "sha256": "9065b152f463be6ae59c8925673606d8e44c398bb80035261df2d9412b3c834c",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-aphrodite--7613-555.json",
+     "product": "case-aphrodite",
+     "sha256": "39fc694020dcac64a05f19ab50ca5eecd0320b2476b02d141a20b631bc596f89",
+     "variant": "7613-555"
+    },
+    "case-aphrodite--7613-556": {
+     "clown": {
+      "height": 1600,
+      "id": "case-aphrodite--7613-556",
+      "sha256": "2a41cffaeec80f5490fb682155f3948689bae2c6ea7afe09e953f7cc38800a80",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-aphrodite--7613-556.json",
+     "product": "case-aphrodite",
+     "sha256": "88fd55f7ec31d80b4a2a3b3b2e4bd6642b9035ca9b09d05aa0878803db51ac31",
+     "variant": "7613-556"
+    },
+    "case-aphrodite--7613-558": {
+     "clown": {
+      "height": 1600,
+      "id": "case-aphrodite--7613-558",
+      "sha256": "473cef25b604ccdd6cdef8d7b63c93ae64acb31903a6996685ed186a82730300",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-aphrodite--7613-558.json",
+     "product": "case-aphrodite",
+     "sha256": "47b63b4ba641141c0860c941ed9ebd530a7dac79d623a0f3fbced962c9fdaf4b",
+     "variant": "7613-558"
+    },
+    "case-aphrodite--7613-560": {
+     "clown": {
+      "height": 1600,
+      "id": "case-aphrodite--7613-560",
+      "sha256": "0c8ee39047ded95c093b8b05bdfc5472698feb6f293f0e28e72e9c34b862ee02",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-aphrodite--7613-560.json",
+     "product": "case-aphrodite",
+     "sha256": "e66739ba89eca04e7a84c29e317b3eaa52c2a5617f53c4461fffdc14e2dfe23e",
+     "variant": "7613-560"
+    },
+    "case-aphrodite--7613-562": {
+     "clown": {
+      "height": 1600,
+      "id": "case-aphrodite--7613-562",
+      "sha256": "31fd0f4889d3f9b1a0741e7dc5d66047d04b70e4414391794fa71577b19e6866",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-aphrodite--7613-562.json",
+     "product": "case-aphrodite",
+     "sha256": "cdc7ee200664f13e3ceddcbb5a6081e2fa71e5acd1a88f2a2ad31a085a3e1e1c",
+     "variant": "7613-562"
+    },
+    "case-dream--v603": {
+     "clown": {
+      "height": 1280,
+      "id": "case-dream--v603",
+      "sha256": "e03f10874bf9668d274aa4efea852d8011aa78d3dc91adaa9eda436952cb6c17",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-dream--v603.json",
+     "product": "case-dream",
+     "sha256": "f604f8ccab986c40001b33da54575fb6399e0d265d3bde19cf8ead43f7fc5dac",
+     "variant": "v603"
+    },
+    "case-dream--v604": {
+     "clown": {
+      "height": 1280,
+      "id": "case-dream--v604",
+      "sha256": "745ca7fb437542d792b87769ef20a54931d7ec7460269f41811854a510f55b2e",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-dream--v604.json",
+     "product": "case-dream",
+     "sha256": "8881d681be696c84bec515dd1993ac6dfffc079b2bbbb6bbfeae70add4b38c8e",
+     "variant": "v604"
+    },
+    "case-dream--v605": {
+     "clown": {
+      "height": 1280,
+      "id": "case-dream--v605",
+      "sha256": "5f91ba135b857fae20b01d8019aecc8a1db49db924d2d1deab9be239282d76ba",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-dream--v605.json",
+     "product": "case-dream",
+     "sha256": "ccfa5d682bb3b0b14f61e041a25a2c9878105ddab0a362f740ae4512a5a85ea5",
+     "variant": "v605"
+    },
+    "case-dream--v606": {
+     "clown": {
+      "height": 1280,
+      "id": "case-dream--v606",
+      "sha256": "0b667eef24279d96259bb867cea5a8c7750d8d53cf09646d097dc651f657e18d",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-dream--v606.json",
+     "product": "case-dream",
+     "sha256": "644c6cfe1d36a7657f51ac29db3a9da62f878deefb902068407dd575a10ce70a",
+     "variant": "v606"
+    },
+    "case-experience2--back": {
+     "clown": {
+      "height": 1280,
+      "id": "case-experience2--back",
+      "sha256": "0e8748904f5a5e0c7bdcb0eecbaacd0fafdbe633e7254e84788d2c086a86b7b3",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-experience2--back.json",
+     "product": "case-experience2",
+     "sha256": "1e052cad68dbdd463c55b32a37bccd113064a741197373fa5edc11ad79c15117",
+     "variant": "back"
+    },
+    "case-experience2--front": {
+     "clown": {
+      "height": 1280,
+      "id": "case-experience2--front",
+      "sha256": "1d9dbbe86bf4cbaa29d6444e6b4d1e6e5ce0d3a54bdd5e4c8ee003f9cc9d9296",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": false,
+     "path": "skills/cmf-review/references/clown-keys/case-experience2--front.json",
+     "product": "case-experience2",
+     "sha256": "102bce0aff21a555fc7fa4e09e350c9885885ab0f6139f35b2b35ca747fdb9ae",
+     "variant": "front"
+    },
+    "case-switch2--default": {
+     "clown": {
+      "height": 1280,
+      "id": "case-switch2--default",
+      "sha256": "1d9dbbe86bf4cbaa29d6444e6b4d1e6e5ce0d3a54bdd5e4c8ee003f9cc9d9296",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-switch2--default.json",
+     "product": "case-switch2",
+     "sha256": "0373d2da917e9e444990203d58d1233571243e98305cd6b94ea5ab376cf0fe3a",
+     "variant": "default"
+    },
+    "cocoon--default": {
+     "clown": {
+      "height": 1919,
+      "id": "cocoon--default",
+      "sha256": "97c78f14777dc664818b74e240684092e921ecc116d65a4a871909852b156056",
+      "width": 2559
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/cocoon--default.json",
+     "product": "cocoon",
+     "sha256": "5a087b7066906df197a95632b023fb9ecd2b0361ac90837947127071686962e9",
+     "variant": "default"
+    },
+    "dream--default": {
+     "clown": {
+      "height": 1024,
+      "id": "dream--default",
+      "sha256": "e446b09b7949cb7f925a3b651e2b3affbaf1d316feb7c97c79d5bb216a235751",
+      "width": 2088
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/dream--default.json",
+     "product": "dream",
+     "sha256": "834cfd82667fb5bec6df43baf4253d6549543ad7e8e4e35a8f8b16f6a5384ada",
+     "variant": "default"
+    },
+    "engage2--v602": {
+     "clown": {
+      "height": 1600,
+      "id": "engage2--v602",
+      "sha256": "53c57a9c8b553f4bce6489a05a7f67f9f0e38718e8031c2e6baf96e8ade9eae3",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/engage2--v602.json",
+     "product": "engage2",
+     "sha256": "3e25530592dedc3a7b73ebd98d492df5b14db5c077050042b35cdbfa33f042ad",
+     "variant": "v602"
+    },
+    "experience2--glossy": {
+     "clown": {
+      "height": 1600,
+      "id": "experience2--glossy",
+      "sha256": "eb696ff0a690d2dc6898131836d99f09b0cb966bc609500d92cbecfc18eb0b6c",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/experience2--glossy.json",
+     "product": "experience2",
+     "sha256": "2259358abd94e3eb887dae41b97e62cb656880d8f06a0f3f7796bddd218b6def",
+     "variant": "glossy"
+    },
+    "experience2--satin": {
+     "clown": {
+      "height": 1600,
+      "id": "experience2--satin",
+      "sha256": "c4d800ca946ad12e24bbce1540610b017e4178441ae286373866d7e24a5ae361",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/experience2--satin.json",
+     "product": "experience2",
+     "sha256": "e30d5b5568de2ad1cf636d8f1f295433ff8f37434e52b09c043bb7eeeadc3b91",
+     "variant": "satin"
+    },
+    "link--v609": {
+     "clown": {
+      "height": 998,
+      "id": "link--v609",
+      "sha256": "1db2a4ed83c1071d6be2e7c0ce6a94faebf705bb23b31ff77e168a180186cbe7",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/link--v609.json",
+     "product": "link",
+     "sha256": "40bee3081f21906abf18b07567d23d6e892048202d49b8d1b85b727987d07d81",
+     "variant": "v609"
+    },
+    "link--v610": {
+     "clown": {
+      "height": 998,
+      "id": "link--v610",
+      "sha256": "afbe9d4043d130587a2e2f9d385b8da2e92277cd7ede49033ab03fea829d69dc",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/link--v610.json",
+     "product": "link",
+     "sha256": "248c28fa69873d53ce640b99e2f02266f300dfbb18a409ef5aadc34327468da7",
+     "variant": "v610"
+    },
+    "pouch-link--default": {
+     "clown": {
+      "height": 1920,
+      "id": "pouch-link--default",
+      "sha256": "09252342898bb6e334efadf04a3eb890235678d870f6d5c6f7d2937f169d1363",
+      "width": 1920
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/pouch-link--default.json",
+     "product": "pouch-link",
+     "sha256": "e628cda2c1d540f0fd67a77f88ba89a19217cabc127040dc62106567aa3f55cb",
+     "variant": "default"
+    },
+    "switch2--motorsport-615": {
+     "clown": {
+      "height": 1024,
+      "id": "switch2--motorsport-615",
+      "sha256": "c8497dbd04fc9d88ac2cd8986223a8d8293ab33c859c5742430d9653b46ffd92",
+      "width": 1024
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/switch2--motorsport-615.json",
+     "product": "switch2",
+     "sha256": "54af12b561f8b0ad18d0c7bb796ad9de8294045447f340d160a8e23f97dcd4db",
+     "variant": "motorsport-615"
+    }
+   },
+   "kind": "cmf",
+   "name": "CMF files",
+   "pantone": {
+    "path": "skills/cmf-review/references/pantone.json",
+    "sha256": "6aec3a2543728aed8b7995484fdc9beec2358eb17013224343f1103b6de665fb"
+   },
+   "payload_index": {
+    "path": "workstreams/cmf/references/payloads/INDEX.json",
+    "sha256": "af42101246b5de5d1fc37499ea23e068cb247b4b3b03d13c92d6fd641fbdff52"
+   },
+   "payloads": {
+    "experience-2-cc--C--case-experience2--front": {
+     "column": "C",
+     "key": "case-experience2--front",
+     "key_confirmed": false,
+     "path": "workstreams/cmf/references/payloads/experience-2-cc--C--case-experience2--front.payload.json",
+     "prompt_sha256": "88947526b793498dc50ec1fdac715149df8d51d64c0d352bf9d7b357b3a8aee8",
+     "sha256": "a5de85e418bdf4d36f214b5c390fb4c633afd5d2e331e2914d757da38cfa718e",
+     "sku_name": "c",
+     "spec": "experience-2-cc",
+     "status": "ready",
+     "tab": "Experience 2 CC"
+    },
+    "experience-2-cc--D--case-experience2--front": {
+     "column": "D",
+     "key": "case-experience2--front",
+     "key_confirmed": false,
+     "path": "workstreams/cmf/references/payloads/experience-2-cc--D--case-experience2--front.payload.json",
+     "prompt_sha256": "4dd741f0ed62ce276653b3ebb95681499e8fc78e4c42f2ab24d34ca41868cf2f",
+     "sha256": "c87cc6a753940462b73da10b471d6fe4dda93700f1e673186c93a65b4624570d",
+     "sku_name": "Ice blu marble",
+     "spec": "experience-2-cc",
+     "status": "ready",
+     "tab": "Experience 2 CC"
+    },
+    "experience-2-cc--E--case-experience2--front": {
+     "column": "E",
+     "key": "case-experience2--front",
+     "key_confirmed": false,
+     "path": "workstreams/cmf/references/payloads/experience-2-cc--E--case-experience2--front.payload.json",
+     "prompt_sha256": "94e256a80c7bde698f185969144e14ef3e7e2e22c5fae67ffc14fad7fda3b648",
+     "sha256": "7f342eb49d129c6b59e0cdf13db5868cd03a64ef1573bc3c1be234b4345711d6",
+     "sku_name": "Ice blu classic matte",
+     "spec": "experience-2-cc",
+     "status": "ready",
+     "tab": "Experience 2 CC"
+    },
+    "experience-2-cc--F--case-experience2--front": {
+     "column": "F",
+     "key": "case-experience2--front",
+     "key_confirmed": false,
+     "path": "workstreams/cmf/references/payloads/experience-2-cc--F--case-experience2--front.payload.json",
+     "prompt_sha256": "195d229ecab8aea9b1f87eb5cde62808c996ed9e107c99f0061d49591a738204",
+     "sha256": "fcd1b9ef685cde96a075db73c9721a154ac62dca51175ce3fa990fc16295575f",
+     "sku_name": "Ice blu marble",
+     "spec": "experience-2-cc",
+     "status": "ready",
+     "tab": "Experience 2 CC"
+    }
+   },
+   "rubric": {
+    "chat_families": [
+     "A",
+     "B",
+     "C",
+     "D"
+    ],
+    "checks": [
+     {
+      "caption": "the product's shape changed: a part reshaped, moved or merged",
+      "check": "The clown's object, unchanged. The same parts, in the same number, with the same silhouette, the same parting lines and the same pose as the clown. Only the surfaces change.",
+      "fails_when": "A part reshaped, resized, moved, merged with another or split in two; a silhouette that no longer lies on the clown's; a parting line gone, moved or added",
+      "family": "A",
+      "id": "A1",
+      "severity": "gate"
+     },
+     {
+      "caption": "a clown colour is still on the product",
+      "check": "No clown colour left. Every zone the key maps has lost its clown colour and taken its row's colour, all the way to its edges and into its shadows.",
+      "fails_when": "Any zone, or part of one, still in the clown's flat colour or a near shade of it: a whole part, a patch in shadow, a rim along a parting line, a tint the new colour did not cover",
+      "family": "A",
+      "id": "A2",
+      "severity": "gate"
+     },
+     {
+      "caption": "a colour or finish is on the wrong part",
+      "check": "Each zone is its component. The colour, material and finish of each row sit on the zone the key names for that component, and nowhere else.",
+      "fails_when": "Two components' specs swapped; a spec bleeding across a parting line onto the next part; a zone given a colour, material or finish its row does not hold",
+      "family": "A",
+      "id": "A3",
+      "severity": "gate"
+     },
+     {
+      "caption": "something added or missing: text, a logo, a part",
+      "check": "Nothing added, nothing removed. The render holds what the clown holds and nothing else.",
+      "fails_when": "Text, a logo, a marking or a label the clown does not carry and the row does not name; a hand, a prop, packaging, a second object; or a part, a marking or a component the key places on this clown gone missing",
+      "family": "A",
+      "id": "A4",
+      "severity": "gate"
+     },
+     {
+      "caption": "the colour does not read as its code",
+      "check": "Reads as the code. Each zone's colour reads as its row's code: as the confirmed hex THE ROW carries for it where there is one, else as the colour name the sheet gives beside the code.",
+      "fails_when": "A hue, lightness or saturation that someone holding the Pantone chip would call another colour; or a code with neither a hex nor a name judged from memory instead of reported as not judged",
+      "family": "B",
+      "id": "B1",
+      "severity": "critical"
+     },
+     {
+      "caption": "a part is not one colour, or its pattern is wrong",
+      "check": "One colour per zone, unless the row names a pattern. Each zone is one even colour, shaded only by the light, unless its row names a pattern or an effect (marble, speckle, two-tone). A named pattern is drawn in the row's own codes, in the proportion the row gives where it gives one.",
+      "fails_when": "A second colour, a gradient, a blotch or a stripe on a zone whose row names one colour; or a named pattern drawn in colours the row does not hold, reading as something else, or not drawn at all",
+      "family": "B",
+      "id": "B2",
+      "severity": "critical"
+     },
+     {
+      "caption": "parts with the same code do not match",
+      "check": "Shared codes match. Components the row gives the same code read as the same colour, allowing for their different materials and finishes.",
+      "fails_when": "Two parts with one code that read as two colours under the same light",
+      "family": "B",
+      "id": "B3",
+      "severity": "minor"
+     },
+     {
+      "caption": "the translucency is wrong: see-through where it should be opaque, or the reverse",
+      "check": "Translucency as specified. A part the row calls milky, frosted or see-through lets light through its thin edges, as much as the row's percentage says; a part the row does not call translucent is opaque.",
+      "fails_when": "A translucent part drawn opaque or clear as glass; an opaque part drawn see-through; the inside of the product showing through a part that should hide it",
+      "family": "B",
+      "id": "B4",
+      "severity": "critical"
+     },
+     {
+      "caption": "wrong finish: gloss for matte, matte for gloss",
+      "check": "Finish family. Each part reads as its row's finish, as the Grading rules describe it: matte, a VDI grain, satin, NCVM, gloss, mirror, grinded.",
+      "fails_when": "Gloss for matte, matte for gloss, a mirror where the row says satin, a smooth surface where the row gives a VDI grain, or one finish laid over parts the row gives different finishes",
+      "family": "C",
+      "id": "C1",
+      "severity": "critical"
+     },
+     {
+      "caption": "the material does not read as its material",
+      "check": "Material behaviour. Each part behaves as its material: silicone soft, with a rubbery sheen; ABS, PC and POM moulded plastic; aluminium anodised metal; textile with a visible weave or knit; foam soft and open; a TPE cord supple and matte.",
+      "fails_when": "A silicone part that reads as hard plastic or glass; a plastic part that reads as bare metal with no NCVM or anodising in its row; a metal part that reads as painted plastic; a textile that reads as a moulded surface",
+      "family": "C",
+      "id": "C2",
+      "severity": "critical"
+     },
+     {
+      "caption": "the texture is coarser or finer than specified",
+      "check": "Texture at the specified grade. A VDI or grain value in the row shows as that grade, the same on every part that shares the value.",
+      "fails_when": "A texture visibly coarser or finer than its grade, a texture on a part whose row gives none, or two parts with one grade drawn at two",
+      "family": "C",
+      "id": "C3",
+      "severity": "minor"
+     },
+     {
+      "caption": "a coating or effect is missing, wrong or in the wrong place",
+      "check": "Coatings and effects. NCVM, holographic, UV gloss, marble and every other effect the row names appear where it names them, embedded in the material, and nowhere else.",
+      "fails_when": "An effect missing, painted on top like a sticker, spread onto a part whose row does not give it, or an effect no row names",
+      "family": "C",
+      "id": "C4",
+      "severity": "minor"
+     },
+     {
+      "caption": "the artwork is missing, wrong or where it should not be",
+      "check": "Artwork and logos where the row says. Where the key maps a zone to artwork, it carries the row's artwork colour and technique; where a component's artwork cell is a `/`, the part carries none.",
+      "fails_when": "Artwork missing where the row and the key place it, in the wrong colour or technique (printed where the row says embossed), or present on a part whose artwork cell is a `/`",
+      "family": "C",
+      "id": "C5",
+      "severity": "minor"
+     },
+     {
+      "caption": "relit",
+      "check": "Lighting unchanged. The light falls as it does on the clown: the same direction, the same softness, highlights and shadows in the same places.",
+      "fails_when": "The render relit: a key light moved, a rim light or a warm or cool cast added, shadows deepened, softened or removed, a studio mood the clown does not have",
+      "family": "D",
+      "id": "D1",
+      "severity": "minor"
+     },
+     {
+      "caption": "the background changed",
+      "check": "Background unchanged. The ground behind and under the product is the clown's, in tone and colour.",
+      "fails_when": "A new colour, gradient, texture, floor, reflection or shadow behind or under the product",
+      "family": "D",
+      "id": "D2",
+      "severity": "minor"
+     },
+     {
+      "caption": "the camera moved or the crop changed",
+      "check": "Camera and framing unchanged. The same angle, lens, crop, position and size in the frame as the clown.",
+      "fails_when": "The product moved, rotated, zoomed, recropped or seen from another angle; a perspective that no longer matches the clown",
+      "family": "D",
+      "id": "D3",
+      "severity": "minor"
+     },
+     {
+      "caption": "soft or ragged edges where two parts meet",
+      "check": "Edges at parting lines. Where two components meet, the change of colour and finish runs along the parting line, crisp at the scale of the image.",
+      "fails_when": "A soft halo, a ragged or stepped edge, a gap, or a colour that stops short of the line or runs past it",
+      "family": "E",
+      "id": "E1",
+      "severity": "minor"
+     },
+     {
+      "caption": "an artefact in the image",
+      "check": "The image is otherwise sound. No artefact a viewer would notice: banding, noise, smears, doubled edges, compression blocks.",
+      "fails_when": "Any artefact a viewer would notice before they notice the part",
+      "family": "E",
+      "id": "E2",
+      "severity": "minor"
+     },
+     {
+      "caption": "cropped, too small or the wrong shape",
+      "check": "Whole and full size. The product is whole in the frame, and the image is at the size the payload asked for and at the clown's aspect.",
+      "fails_when": "A part cut by the frame edge, an image smaller than the size asked for, or an aspect other than the clown's",
+      "family": "E",
+      "id": "E3",
+      "severity": "minor"
+     }
+    ],
+    "families": [
+     {
+      "id": "A",
+      "name": "Identity and geometry",
+      "note": "Any failure here stops the render."
+     },
+     {
+      "id": "B",
+      "name": "Colour per component",
+      "note": ""
+     },
+     {
+      "id": "C",
+      "name": "Material and finish",
+      "note": ""
+     },
+     {
+      "id": "D",
+      "name": "The clown's scene",
+      "note": ""
+     },
+     {
+      "id": "E",
+      "name": "Craft and delivery",
+      "note": ""
+     }
+    ],
+    "grading_rules": "The grader reads this section into its prompt verbatim.\n\n- **Two images, named.** Image 1 is the candidate render. Image 2 is the clown model it was drawn\n  from: the same object with each component painted one flat colour, shaded, on its own ground.\n  Judge the candidate against the clown, side by side, never against what you think the product\n  looks like.\n- **THE ROW is the spec.** The sheet row for this SKU is quoted under THE ROW: each component with\n  its material, finish, colour name and code, as the sheet wrote them. A colour, material, finish or\n  effect the row does not hold is not in the spec, however plausible it looks.\n- **THE KEY is the map.** Quoted under THE KEY: each clown colour as a hex, the component or\n  components it marks, and the components that are not on this clown. A zone that serves two\n  components names both. A component the key says is not on this clown is absent by design, never\n  missing.\n- **The measurements are evidence, not verdict.** MEASUREMENTS states per zone, in words, how much of\n  it is still within reach of the clown's colour and, where the code has a confirmed hex, how far\n  the zone's colour sits from it. They tell you where to look; they do not decide. A note that\n  ignores a large leftover share is an incomplete note.\n- **What each finish word looks like.** Judge a finish by how the part takes the light:\n  - *matte*: diffuse, no specular hotspot, the light falls off softly across the form.\n  - *VDI 18 to VDI 27*: a spark-eroded grain that scatters the light evenly; near smooth-matte at\n    VDI 18, a fine visible grain at VDI 24, coarser at VDI 27; never glossy.\n  - *satin*: a soft sheen with broad, blurred highlights. *NCVM*: a metallic sheen on a plastic\n    part, highlights that follow the form like metal, no brushed grain unless the row says so.\n  - *gloss*, *high gloss*, *mirror*: sharp specular highlights and clear reflections of the light.\n  - *grinded*, *grinding*: an abraded, frosted surface, even, with the highlights broken up.\n  - *milky*, *frosted*, *see-through*, with or without a percentage: translucent, light passing\n    through the thin edges and a soft glow in the body, more the higher the percentage; never clear\n    like glass, never opaque.\n  - *opaque*: no light through the part at any edge.\n  - *holographic*, *iridescent*, *pearlescent*: the colour shifts with the angle, inside the\n    material, not a sticker on top.\n  - *anodised*: coloured metal with a fine metallic sheen and an even tone, brushed or polished as\n    the row says.\n  - *pad print*, *silk screen*: flat ink on the surface, crisp edges, no relief. *embossed*,\n    *debossed*: relief in the material itself, in the part's own colour unless the row names one.\n- **Absence and leftover are the usual misses.** Graders flag what is wrong and skip what is still\n  there. The likeliest misses on this work: a zone, or a rim of one along a parting line, still in\n  the clown's colour (the Experience 2 carry case shells came back red); a part given no finish; a\n  part that disappeared. Look for the clown's colours first.\n- **Judge what the view shows.** A component the key says is not on this clown, or one hidden by the\n  angle, passes its check; a component shown wrongly fails it.\n- **Fail when unsure**, and say in the note what you could not see.",
+    "object_class": null,
+    "path": "workstreams/cmf/plugin/skills/review/references/rubric.md",
+    "problem": null,
+    "reporting_only": true,
+    "sha256": "dbc10715a31ae189f964722048889ea32bbc65f05738b3e4f3f81e60dc178035",
+    "version": "0.1.0"
+   },
+   "skill": "cmf-review",
+   "spec_check": {
+    "cases": "workstreams/cmf/evals/spec-cases/",
+    "script": "workstreams/cmf/scripts/spec_diff.py"
+   },
+   "specs": {
+    "aphrodite-cc": {
+     "path": "workstreams/cmf/references/workbook/spec/aphrodite-cc.json",
+     "sha256": "355751b619fca3a41e05eacfe7c2e3730145a84da1718f6d9d26b3959fd567ee",
+     "tab": "Aphrodite CC",
+     "vesper_product": "case-aphrodite"
+    },
+    "aphrodite-earplug": {
+     "path": "workstreams/cmf/references/workbook/spec/aphrodite-earplug.json",
+     "sha256": "401e560c23756b4232803170da1875a80cf49403ed26bd6c941f92fc6968cce4",
+     "tab": "Aphrodite Earplug",
+     "vesper_product": "aphrodite"
+    },
+    "cocoon": {
+     "path": "workstreams/cmf/references/workbook/spec/cocoon.json",
+     "sha256": "5df6e76e9dc5c3fb915d05b8b82ae0a8b7324d57b647eaeaccefb76003742d03",
+     "tab": "Cocoon",
+     "vesper_product": "cocoon"
+    },
+    "dream": {
+     "path": "workstreams/cmf/references/workbook/spec/dream.json",
+     "sha256": "78c61333035f8a2108ac2ab5b3c36dd4cd7d613476ad81842c2714624bb57e4b",
+     "tab": "Dream",
+     "vesper_product": "dream"
+    },
+    "dream-cc": {
+     "path": "workstreams/cmf/references/workbook/spec/dream-cc.json",
+     "sha256": "b022c26101597ce37db20a3e093fb8f704b76def58ea016045b1ebefae16ec17",
+     "tab": "Dream CC",
+     "vesper_product": "case-dream"
+    },
+    "eclipse": {
+     "path": "workstreams/cmf/references/workbook/spec/eclipse.json",
+     "sha256": "577f92768884700b7da413aaaf742d77d1541248e69b467f476e7b048321ecd3",
+     "tab": "Eclipse",
+     "vesper_product": "eclipse"
+    },
+    "engage-2": {
+     "path": "workstreams/cmf/references/workbook/spec/engage-2.json",
+     "sha256": "c63f467bfa63669fe52d7ed04c43b4f9db4156c256c1225a40b3ec7c6cb26661",
+     "tab": "Engage 2",
+     "vesper_product": "engage2"
+    },
+    "engage-2-cc": {
+     "path": "workstreams/cmf/references/workbook/spec/engage-2-cc.json",
+     "sha256": "e6f37da4200fa09d2a598ca91049f609c54b4c6de3e8f50df6ce0e8319469f5e",
+     "tab": "Engage 2 CC",
+     "vesper_product": "case-engage2"
+    },
+    "experience-2": {
+     "path": "workstreams/cmf/references/workbook/spec/experience-2.json",
+     "sha256": "5b35b5843063bd43399117c496792fdfe70f845f55311e87d90e7d8d072a2c20",
+     "tab": "Experience 2",
+     "vesper_product": "experience2"
+    },
+    "experience-2-cc": {
+     "path": "workstreams/cmf/references/workbook/spec/experience-2-cc.json",
+     "sha256": "a43cefaf70d224c10e7525ac83e048c8cb4b395bc0625b567f2dbc1f49592e85",
+     "tab": "Experience 2 CC",
+     "vesper_product": "case-experience2"
+    },
+    "link": {
+     "path": "workstreams/cmf/references/workbook/spec/link.json",
+     "sha256": "f7a815e4b70f04b37129cfb739358e1a0d9601f5cd46d007fa49d0e93c69f39f",
+     "tab": "Link",
+     "vesper_product": "link"
+    },
+    "quiet-2": {
+     "path": "workstreams/cmf/references/workbook/spec/quiet-2.json",
+     "sha256": "201b1afd04ab9c9bc26107bd369a67b005a69789c8a763ef073f9bdaa877724e",
+     "tab": "Quiet 2",
+     "vesper_product": "quiet2"
+    },
+    "quiet-2-cc": {
+     "path": "workstreams/cmf/references/workbook/spec/quiet-2-cc.json",
+     "sha256": "7cb8f56fa9db058c7519ee80b07596c180fdaf8761960c3b7275cb1beb14ade1",
+     "tab": "Quiet 2 CC",
+     "vesper_product": "case-quiet2"
+    },
+    "switch-2": {
+     "path": "workstreams/cmf/references/workbook/spec/switch-2.json",
+     "sha256": "bcfcfc73d227acf8102b63e46f215149dd3ed0651bc22b1eecdd37c465ce3af2",
+     "tab": "Switch 2",
+     "vesper_product": "switch2"
+    },
+    "switch-2-cc": {
+     "path": "workstreams/cmf/references/workbook/spec/switch-2-cc.json",
+     "sha256": "88c3de72257f28fd7025cfbd4d9ca73df4668e96b7444e65b09fede0f74acf93",
+     "tab": "Switch 2 CC",
+     "vesper_product": "case-switch2"
+    }
+   },
+   "status": "pilot",
+   "template": {
+    "block": "Use the attached image as the exact base. Keep geometry, proportions, camera angle, framing, lighting and background unchanged.\nThe image is a clown model: each flat colour marks one component. Recolour ONLY these zones:\n- {zone_hex_1} → {component_1}: {material_1}, {finish_1}, {colour_name_1} ({colour_code_1})\n- {zone_hex_2} → {component_2}: {material_2}, {finish_2}, {colour_name_2} ({colour_code_2})\n- {zone_hex_3} → {component_3}: {material_3}, {finish_3}, {colour_name_3} ({colour_code_3})\nRender realistic material behaviour for each finish. Do not add, remove or reshape any part. No text, no logos, no extra objects.",
+    "block_sha256": "34df61cda3ba23ec31c46e168bcd24b828173a652c1305b72c49e39caf856b1b",
+    "fingerprint": "Use the attached image as the exact base. Keep g",
+    "path": "skills/cmf-review/references/prompt-template.md",
+    "sha256": "dfe8968f8c2267f4e6835feb32075f20616115b8ed572657e318f1e3804b8539"
+   },
+   "textile_library": {
+    "path": "workstreams/cmf/references/workbook/spec/_textile-library.json",
+    "sha256": "2abbc3a9dccb34a075ed18a8c626136179b8165f90eed88aaa6705be6e2d1396"
+   },
+   "verdicts": {
+    "route": "vesper",
+    "tool": "record_verdict"
+   }
+  },
+  "eclipse": {
+   "aliases": [
+    "Eclipse",
+    "Loop Eclipse",
+    "the sleep mask",
+    "the mask"
+   ],
+   "chat_scope": "A to D: identity, proportions, material and texture, colour. E (craft) and the light checks are out of scope in chat",
+   "command": "/creative:eclipse",
+   "deciders": [
+    {
+     "frontify_user_id": null,
+     "name": null,
+     "note": "Named by the owner. Until the id is filled in, no row in record/feedback counts as a decider's verdict.",
+     "role": "art director"
+    }
+   ],
+   "description": "The Loop Eclipse sleep mask: one wide knit band with two low eye pockets, in Black, Teal and Plum.",
+   "frontify": {
+    "approved_status": "Approved",
+    "approved_tags": [],
+    "library": "Assets",
+    "library_id": "eyJpZGVudGlmaWVyIjo1LCJ0eXBlIjoicHJvamVjdCJ9",
+    "review_statuses": [
+     "AI Image - QC",
+     "Assets to Review"
+    ]
+   },
+   "generation": {
+    "attach": {
+     "Black": {
+      "flat_lay": [
+       "eyJpZGVudGlmaWVyIjo3OTg1OCwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NzYsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "frontal": [
+       "eyJpZGVudGlmaWVyIjo3OTc5NCwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NzYsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "other": [
+       "eyJpZGVudGlmaWVyIjo3OTc5NCwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NzYsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "product_only": [
+       "eyJpZGVudGlmaWVyIjo3OTc5NCwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NzYsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "profile": [
+       "eyJpZGVudGlmaWVyIjo3OTc5NSwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NzYsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "three_quarter": [
+       "eyJpZGVudGlmaWVyIjo3OTc5OCwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NzYsInR5cGUiOiJhc3NldCJ9"
+      ]
+     },
+     "Plum": {
+      "flat_lay": [
+       "eyJpZGVudGlmaWVyIjo3OTg1OSwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NzYsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "frontal": [
+       "eyJpZGVudGlmaWVyIjo3OTgwNywidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NzYsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "other": [
+       "eyJpZGVudGlmaWVyIjo3OTgwNywidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NzYsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "product_only": [
+       "eyJpZGVudGlmaWVyIjo3OTgwNywidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NzYsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "profile": [
+       "eyJpZGVudGlmaWVyIjo3OTgwOCwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NzYsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "three_quarter": [
+       "eyJpZGVudGlmaWVyIjo3OTgxMiwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NzYsInR5cGUiOiJhc3NldCJ9"
+      ]
+     },
+     "Teal": {
+      "flat_lay": [
+       "eyJpZGVudGlmaWVyIjoxMzU0OTEsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjMsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "frontal": [
+       "eyJpZGVudGlmaWVyIjoxMzU0OTQsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjMsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "other": [
+       "eyJpZGVudGlmaWVyIjoxMzU0OTQsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjMsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "product_only": [
+       "eyJpZGVudGlmaWVyIjoxMzU0OTQsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjMsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "profile": [
+       "eyJpZGVudGlmaWVyIjoxMzU0OTcsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjMsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "three_quarter": [
+       "eyJpZGVudGlmaWVyIjoxMzU0ODIsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjMsInR5cGUiOiJhc3NldCJ9"
+      ]
+     }
+    },
+    "draws_per_call": 2,
+    "kind": "draw",
+    "max_references": 3,
+    "router": {
+     "dated": "2026-09-23",
+     "rows": [
+      {
+       "lane": "final",
+       "model": "gpt-image-2",
+       "name": "GPT Image 2",
+       "when": "First for stills and wear: round 11 kept 10 of its 12 draws by both judges; check the crop on every draw"
+      },
+      {
+       "lane": "second",
+       "model": "gemini-3-pro-image",
+       "name": "Nano Banana Pro",
+       "when": "When two GPT Image 2 draws fail the same check: round 11 kept 5 of 12"
+      },
+      {
+       "lane": "draft",
+       "model": "gemini-3.1-flash-image",
+       "name": "Nano Banana 2",
+       "when": "Exploration and identity rescue; fast and cheap"
+      }
+     ]
+    },
+    "rules": [
+     "render-first",
+     "never-chain",
+     "max-three-references",
+     "no-model-rewrite",
+     "log-every-draw",
+     "two-draws-then-switch",
+     "never-reencode-a-pin"
+    ],
+    "skeleton": {
+     "by_refs": {
+      "1": "Using the provided product render of the Loop Eclipse sleep mask (image 1) as the exact object, {{scene}}.\n\nThe mask is the object in image 1: one wide curved matte knit band in {{colourway}}, with two low oblong eye pockets formed in the band over the nose, the lower edge rising over the ear so the ear stays visible, the small white \"loop\" wordmark on the temple, the black silicone patch at the closure behind the head. From the outside the eye section is one smooth, continuous surface from temple to temple, with nothing traced on it; the two pockets are shallow, formed in the band itself, and show only where the lower edge dips into the nose notch. Keep its proportions exactly as in image 1. The textile is matte with a fine rib and no sheen; the silicone is matte black.\n\nLight: {{light}}. The mask absorbs light; only the silicone shows a small highlight.\n\nPhotorealistic, {{format}}, the mask sharp.",
+      "2": "Using the provided product render of the Loop Eclipse sleep mask (image 1) as the exact object, and the reference photograph (image 2) for how it is worn, {{scene}}.\n\nThe mask is the object in image 1: one wide curved matte knit band in {{colourway}}, with two low oblong eye pockets formed in the band over the nose, the lower edge rising over the ear so the ear stays visible, the small white \"loop\" wordmark on the temple, the black silicone patch at the closure behind the head. From the outside the eye section is one smooth, continuous surface from temple to temple, with nothing traced on it; the two pockets are shallow, formed in the band itself, and show only where the lower edge dips into the nose notch. Keep its proportions exactly as in image 1. The textile is matte with a fine rib and no sheen; the silicone is matte black.\n\nLight: {{light}}. The mask absorbs light; only the silicone shows a small highlight.\n\nPhotorealistic, {{format}}, the mask sharp."
+     },
+     "fill_slots": {
+      "colourway": "{{colourway}}",
+      "format": "{{format}}",
+      "light": "{{light}}",
+      "scene": "{{scene}}"
+     },
+     "heading": "Prompt skeleton",
+     "slots": [
+      "[scene / subject / camera in one sentence each]",
+      "[Colourway]",
+      "[source, direction, temperature, one sentence]",
+      "[format]"
+     ],
+     "text": "Using the provided product render of the Loop Eclipse sleep mask (image 1) as the exact object,\nand the reference photograph (image 2) for how it is worn, [scene / subject / camera in one\nsentence each].\n\nThe mask is the object in image 1: one wide curved matte knit band in [Colourway], with two low\noblong eye pockets formed in the band over the nose, the lower edge rising over the ear so the ear\nstays visible, the small white \"loop\" wordmark on the temple, the black silicone patch at the\nclosure behind the head. From the outside the eye section is one smooth, continuous surface from\ntemple to temple, with nothing traced on it; the two pockets are shallow, formed in the band\nitself, and show only where the lower edge dips into the nose notch. Keep its proportions\nexactly as in image 1. The textile is matte with a fine rib and no sheen; the silicone is matte\nblack.\n\nLight: [source, direction, temperature, one sentence]. The mask absorbs light; only the silicone\nshows a small highlight.\n\nPhotorealistic, [format], the mask sharp.",
+     "version": "v3"
+    },
+    "source": {
+     "path": "products/eclipse/skill/references/generation.md",
+     "sha256": "07729630bc4336766653c532ef4ce5fc2662c4cc807a022d8195793441efe2ae"
+    },
+    "view_render": {
+     "flat_lay": "flat_lay",
+     "frontal": "front",
+     "product_only": "front",
+     "profile": "side",
+     "three_quarter": "angle"
+    }
+   },
+   "grading": {
+    "claim_sources": [
+     "title",
+     "reviewer",
+     "prompt",
+     "metadata-untrusted",
+     "detected"
+    ],
+    "colourways": [
+     "Black",
+     "Teal",
+     "Plum"
+    ],
+    "default_colourway": "Black",
+    "derived_max_edge": 4096,
+    "inline_limit_bytes": 3500000,
+    "max_model_pixels": 80000000,
+    "models": [
+     "gemini-flash-latest",
+     "gemini-3.6-flash",
+     "gemini-3.5-flash"
+    ],
+    "response_mime_type": "application/json",
+    "runs": 3,
+    "temperature": 0,
+    "trusted_claims": [
+     "title",
+     "reviewer",
+     "prompt"
+    ],
+    "views": [
+     "frontal",
+     "profile",
+     "three_quarter",
+     "flat_lay",
+     "product_only",
+     "other"
+    ]
+   },
+   "grading_prompt": {
+    "anatomy": "One continuous, wide, curved head strap with the eye cups built into its middle, plus a separate removable eye pad that presses into the cups from the inside.\nStrap (exterior and interior): knit textile, 85 % polyamide / 15 % elastane, 130 GSM. Matte. At close range a fine rib runs *along* the band (horizontal when worn). No sheen, no weave pattern, no satin, no neoprene grain. Flat-lay reference: Loop_Eclipse-Black-Flatlay Back-Open-Washing Label Update (Frontify, Eclipse/Renders/Product Renders) shows the whole band opened out.\nEye cups: two low oblong pockets formed in the band itself, joined over a nose notch. Each is a wide oval in outline, wider than it is tall and shallow: it stands off the eye by roughly a fifth of its width, which is the room the eyes and eyelashes need (Frontify graphic Eyelash_Clearance). The top edge of each pocket is the top edge of the band, one continuous line with no step. The two pockets meet over the nose in a shallow saddle: seen from the front, three-quarter or above, the outer face of the cup section reads as one smooth, low, continuous form whose top edge runs as a single unbroken arc (Loop_Eclipse-Plum-05 Angle 1), and what marks the two pockets is the nose notch cut into the lower edge, with the surface rising to either side of it. The transition from band to pocket is a soft rounded edge in the knit, not a stitched seam and not a raised ring (Loop_Eclipse-Black-05 Angle 1). They are not hemispheres, not padded cups fixed onto a flat band, and not a moulded foam shell. Both pockets are the same size.\nEye pad (removable): a symmetrical foam piece shaped like the two cups with the nose notch; peels off the strap for washing. Reference: second row of the flat-lay render.\nEar scoop: between the eye cups and the back, the lower edge of the band rises in a deep concave arc. The band passes above the ear; the ear sits in the scoop and stays visible below the strap. Reference: Loop_Eclipse-Teal-Side_2 and the Eyelash_Clearance graphic.\nClosure end (back of the head): hook-and-loop. One strap end carries, from the tip inward, the round O-logo patch (a ring with the care icons printed inside it) and then a black matte silicone patch with a row of curved ridges, the tactile guides (three to five concentric arcs). The other end carries the plain hook-and-loop field. When the mask is closed the tip with the O-logo is usually hidden by the overlap, so a view can show the ridges and not the O-logo and be correct. Anti-slip silicone sits on the inside of the band. Reference: both ends in the flat-lay render; the ridged patch in Loop_Eclipse-Teal-Side_2 and Loop_Eclipse-Plum-05 Angle 1.\nWordmark: \"loop\", lowercase, small, white, printed flat on the outer flank of the eye-cup section toward the temple, near the top edge, reading along the band. One per side. Seen from the front it sits on the temple-side edge of the cup; on a side sleeper it can stand vertical in the frame because the head is on its side, and that is correct. Product reference: Loop_Eclipse-Teal-Side_2; in wear: LOOP_Eclipse_1029-final (frontal) and loop-eclipse-lifestyle-05 (side). Never embossed, never metal, never a second wordmark, never \"Loop Eclipse\" written on the product.\nInterior face: dark (black or near-black) where visible, on every colourway (Loop_Eclipse-Plum-05 Angle 1).\nNothing else on the product. No buckle, no slider, no second strap, no nose bridge piece, no visible foam, no elastic cord, no zip, no tag on the outside.",
+    "assembly": "qa.build_grading_prompt with crop off, no stranger read and no measurements; the order is written out in docs/kit.md",
+    "first_reference_index": 2,
+    "rules": "The grader reads this section into its prompt verbatim.\n\n- **The stranger's read comes first.** Before the checks, a separate call that saw only the candidate, with no product name, no references and no product sheet, named the object on the face in one phrase and described its eye section in one sentence. Both are quoted under THIS CANDIDATE, and A6 is graded as that reader saw it, not as you know the product to be. A word from the Object-class words list in that phrase forces A6 in code, whatever you answer.\n- **Judge what the view shows.** A part hidden by the angle passes its check; a part shown wrongly fails it. A profile hides the far cup; a frontal hides the closure; a flat-lay hides the wear; the strap overlap hides the tip of the strap end.\n- **Know the asset class.** *Product*: the bare mask or render. *Wear*: a person wearing it. *Composite*: a finished channel deliverable with headline, badges, callouts, other Loop products. Loop's own products and typography are normal in a composite and never count as invented.\n- **The colourway claim.** A claim from library metadata is untrusted. A colourway token in the title or a reviewer's statement is trusted. With no trusted claim, identify the colourway from the image and say so.\n- **Absence is the usual miss.** Graders over-penalise excess and under-penalise absence. The likeliest misses on this product are flat fabric where the two eye pockets should be (B2), a missing ear scoop (B5), a missing wordmark (A2), a knit with no rib (C1). Look for what is not there.\n- **The numbers are evidence.** The measurement layer's textile lightness, chroma and hue distance to the colourway band are attached to every grade. They do not decide; they tell you where to look, and a note that ignores a large distance is an incomplete note.\n- **Fail when unsure**, and say in the note what you could not see.",
+    "template_id": "eclipse-layer2-fe588e61ced6",
+    "text": {
+     "asset_class": " Its asset class reads as: {asset_class}.",
+     "candidate": "Image 1 is the CANDIDATE under review. Grade image 1, and only image 1.",
+     "candidate_heading": "THIS CANDIDATE.",
+     "check": "- {id} [{severity}]: {check} FAILS WHEN: {fails_when}",
+     "checks_heading": "THE CHECKS:",
+     "claim_detected": "There is no trusted colourway claim. Read from the image, the textile looks like {detected} (confidence {confidence}). Judge D1 against that colourway, and fail E3 if the textile is ambiguous between two colourways.",
+     "claim_none": "There is no trusted colourway claim and the colourway could not be read from the image. Identify it yourself; if it is ambiguous, E3 fails.",
+     "claim_trusted": "Trusted colourway claim: {claim} (from the {source}). Judge D1 against that colourway, and fail E3 if the image disagrees with it.",
+     "claim_untrusted": "The library's metadata says {claim}, and library metadata is NOT a trusted claim. Do not treat it as one.",
+     "confidence_unstated": "unstated",
+     "crop": "Image 1b is the CANDIDATE's mask region enlarged, for texture and cup shape; it is the same picture as image 1.",
+     "intro": "You are grading one candidate image of the Loop Eclipse sleep mask for the Loop studio team, with the real product on the desk beside you. Read the image as someone who has never seen the brief.",
+     "json": "{\"reads_as\":\"<one phrase>\",\"cup_section\":\"<one sentence>\",\"checks\":{ids},\"view_class\":\"frontal|profile|three_quarter|flat_lay|product_only|other\",\"asset_class\":\"product|wear|composite\",\"colourway_read\":\"Black|Teal|Plum|other|null\",\"worst_issue\":\"<one short phrase>\",\"notes\":\"<max 2 short sentences>\"}",
+     "json_id": "\"{id}\":bool",
+     "json_id_separator": ",",
+     "json_intro": "Return ONLY JSON, no fences, every check id present:",
+     "missing": "Some pinned references are missing locally and are not attached: {items}. Grade without them and be correspondingly careful.",
+     "missing_item": "{role} ({why})",
+     "missing_separator": "; ",
+     "product_heading": "THE PRODUCT, from the product sheet:",
+     "reference": "Image {n} is a PINNED REFERENCE{colour}: {role}",
+     "reference_colour": " ({colourway})",
+     "references_are_real": "References are the real product. They are never under review, and a difference between the candidate and a reference is a fault in the CANDIDATE.",
+     "restate": "Before the checks, in your own words: name the object in this image in one short noun phrase (reads_as) and describe the part of it that sits over the eyes in one sentence (cup_section). Answer those two first, then grade. A description you have committed to is what the checks are graded against.",
+     "role_default": "a reference photograph of the real product.",
+     "roles": {
+      "cross_section": "a cross-section LINE DRAWING of how far the eye cup stands off the eye. Use it for cup depth (B2) and for nothing else: it is a diagram, so it says nothing about texture, colour, print or light.",
+      "flat_lay": "the product opened flat — every part of the real product at once. Use it for anatomy, part inventory and closure ends.",
+      "side": "the side render of the real product. Every profile or three-quarter candidate must agree with this geometry: ear scoop, wordmark placement, the ridged silicone patch, cup depth. The O-logo at the tip of the strap end is hidden by the overlap here, and that is correct.",
+      "wear_face": "a live photograph of the real product worn and lit so the outer face of the eye section can be read. Compare the candidate's eye section with it.",
+      "wear_frontal": "a live photograph of the real product being worn. Use it for how the band sits, how the cup compresses and where the wordmark falls."
+     },
+     "rules_heading": "STANDING RULES, from the rubric:",
+     "stranger_check": "Grade {check} as that reader saw it.",
+     "stranger_cup_section": "They described its eye section as: \"{cup_section}\".",
+     "stranger_no_check": "Grade the check that asks how the object reads to a stranger as that reader saw it.",
+     "stranger_reads_as": "A reader who saw only this image, with no references and no brief, called the object: \"{reads_as}\".",
+     "strict": "Grade every check strictly true (passes) or false (fails). When you are unsure, the check FAILS. Judge only what this image shows; do not credit the candidate for anything you cannot see.",
+     "view": "Its view reads as: {view}."
+    }
+   },
+   "kind": "product-imagery",
+   "name": "Eclipse",
+   "references": {
+    "attach": {
+     "Black": {
+      "flat_lay": [
+       "eyJpZGVudGlmaWVyIjo4NDY2OCwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "frontal": [
+       "eyJpZGVudGlmaWVyIjo4NDY2OCwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0ODAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjQsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "other": [
+       "eyJpZGVudGlmaWVyIjo4NDY2OCwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "product_only": [
+       "eyJpZGVudGlmaWVyIjo4NDY2OCwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "profile": [
+       "eyJpZGVudGlmaWVyIjo4NDY2OCwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjo3OTc5NSwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjQsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "three_quarter": [
+       "eyJpZGVudGlmaWVyIjo4NDY2OCwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjo3OTc5NSwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0ODAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjQsInR5cGUiOiJhc3NldCJ9"
+      ]
+     },
+     "Plum": {
+      "flat_lay": [
+       "eyJpZGVudGlmaWVyIjo3OTg1OSwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "frontal": [
+       "eyJpZGVudGlmaWVyIjo3OTg1OSwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0ODAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjQsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "other": [
+       "eyJpZGVudGlmaWVyIjo3OTg1OSwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "product_only": [
+       "eyJpZGVudGlmaWVyIjo3OTg1OSwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "profile": [
+       "eyJpZGVudGlmaWVyIjo3OTg1OSwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjo3OTgwOCwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjQsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "three_quarter": [
+       "eyJpZGVudGlmaWVyIjo3OTg1OSwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjo3OTgwOCwidHlwZSI6ImFzc2V0In0=",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0ODAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjQsInR5cGUiOiJhc3NldCJ9"
+      ]
+     },
+     "Teal": {
+      "flat_lay": [
+       "eyJpZGVudGlmaWVyIjoxMzU0OTEsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "frontal": [
+       "eyJpZGVudGlmaWVyIjoxMzU0OTEsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0ODAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjMsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "other": [
+       "eyJpZGVudGlmaWVyIjoxMzU0OTEsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "product_only": [
+       "eyJpZGVudGlmaWVyIjoxMzU0OTEsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "profile": [
+       "eyJpZGVudGlmaWVyIjoxMzU0OTEsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxMzU0OTcsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjMsInR5cGUiOiJhc3NldCJ9"
+      ],
+      "three_quarter": [
+       "eyJpZGVudGlmaWVyIjoxMzU0OTEsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxMzU0OTcsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0ODAsInR5cGUiOiJhc3NldCJ9",
+       "eyJpZGVudGlmaWVyIjoxNTQ0NjMsInR5cGUiOiJhc3NldCJ9"
+      ]
+     }
+    },
+    "not_attached": [],
+    "pins": [
+     {
+      "bytes": 2126433,
+      "colourway": null,
+      "filename": "Eyelash_Clearance.png",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9",
+      "generate_roles": [],
+      "height": 16695,
+      "id": "eyJpZGVudGlmaWVyIjoxNTQ1MDAsInR5cGUiOiJhc3NldCJ9",
+      "kind": "reference",
+      "model_copy": "derived-4096",
+      "roles": [
+       "cross_section"
+      ],
+      "set": "renders",
+      "sha256": "bec7cd07090857e36b55aebf4007c9e0cd3f23f3b3b75b240ed5664970464ad8",
+      "source": "frontify",
+      "title": "Eyelash_Clearance",
+      "width": 16695
+     },
+     {
+      "bytes": 53189324,
+      "colourway": "Black",
+      "filename": "LOOP_Eclipse_0989-final.jpg",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjoxNTQ0NzYsInR5cGUiOiJhc3NldCJ9",
+      "generate_roles": [
+       "wear"
+      ],
+      "height": 8192,
+      "id": "eyJpZGVudGlmaWVyIjoxNTQ0NzYsInR5cGUiOiJhc3NldCJ9",
+      "kind": "reference",
+      "model_copy": "original",
+      "roles": [],
+      "set": "lifestyle",
+      "sha256": "8648fc76b564796c418e8e672df8486abc153ffe12a739ad92770e155dfaa315",
+      "source": "frontify",
+      "title": "LOOP_Eclipse_0989-final",
+      "width": 5464
+     },
+     {
+      "bytes": 62553564,
+      "colourway": null,
+      "filename": "LOOP_Eclipse_1029-final.jpg",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjoxNTQ0ODAsInR5cGUiOiJhc3NldCJ9",
+      "generate_roles": [],
+      "height": 8192,
+      "id": "eyJpZGVudGlmaWVyIjoxNTQ0ODAsInR5cGUiOiJhc3NldCJ9",
+      "kind": "positive",
+      "model_copy": "original",
+      "roles": [
+       "wear_frontal"
+      ],
+      "set": "lifestyle",
+      "sha256": "8cad633252fc1476a98e545ab351d7859f5cad4604ef101c53468ca686e51d33",
+      "source": "frontify",
+      "title": "LOOP_Eclipse_1029-final",
+      "width": 5464
+     },
+     {
+      "bytes": 54114140,
+      "colourway": "Black",
+      "filename": "LOOP_Eclipse_1326-final.jpg",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjoxNTQ0NjQsInR5cGUiOiJhc3NldCJ9",
+      "generate_roles": [],
+      "height": 8192,
+      "id": "eyJpZGVudGlmaWVyIjoxNTQ0NjQsInR5cGUiOiJhc3NldCJ9",
+      "kind": "positive",
+      "model_copy": "original",
+      "roles": [
+       "wear_face"
+      ],
+      "set": "lifestyle",
+      "sha256": "29cdb856d70c67f8413c8396fe7c74f35950d4ffc8048e2c40797638a830739d",
+      "source": "frontify",
+      "title": "LOOP_Eclipse_1326-final",
+      "width": 5464
+     },
+     {
+      "bytes": 54175909,
+      "colourway": "Teal",
+      "filename": "LOOP_Eclipse_1345-final.jpg",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjoxNTQ0NjMsInR5cGUiOiJhc3NldCJ9",
+      "generate_roles": [
+       "wear"
+      ],
+      "height": 8192,
+      "id": "eyJpZGVudGlmaWVyIjoxNTQ0NjMsInR5cGUiOiJhc3NldCJ9",
+      "kind": "positive",
+      "model_copy": "original",
+      "roles": [
+       "wear_face"
+      ],
+      "set": "lifestyle",
+      "sha256": "91019f9479b10ebef2c9269d593c64defc85f65904fc3a45240560604165f356",
+      "source": "frontify",
+      "title": "LOOP_Eclipse_1345-final",
+      "width": 5464
+     },
+     {
+      "bytes": 3810240,
+      "colourway": "Black",
+      "filename": "Loop_Eclipse-Black-05 Angle 1.png",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjo3OTc5OCwidHlwZSI6ImFzc2V0In0=",
+      "generate_roles": [
+       "render"
+      ],
+      "height": 3072,
+      "id": "eyJpZGVudGlmaWVyIjo3OTc5OCwidHlwZSI6ImFzc2V0In0=",
+      "kind": "reference",
+      "model_copy": "original",
+      "roles": [],
+      "set": "renders",
+      "sha256": "6b476bf683f706137073fca791911bf969c88ebf4b952fdabd636691c150fce7",
+      "source": "frontify",
+      "title": "Loop_Eclipse-Black-Angle 1",
+      "width": 3072
+     },
+     {
+      "bytes": 3087551,
+      "colourway": "Black",
+      "filename": "Loop_Eclipse-Black-14 Flatlay Back-Open.png",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjo3OTg1OCwidHlwZSI6ImFzc2V0In0=",
+      "generate_roles": [
+       "render"
+      ],
+      "height": 2048,
+      "id": "eyJpZGVudGlmaWVyIjo3OTg1OCwidHlwZSI6ImFzc2V0In0=",
+      "kind": "reference",
+      "model_copy": "original",
+      "roles": [],
+      "set": "renders",
+      "sha256": "0d786b4f752750a145d85f566cbdd3937be228e2e16bab480a765307a3096961",
+      "source": "frontify",
+      "title": "Loop_Eclipse-Black-Flatlay Back-Open",
+      "width": 5120
+     },
+     {
+      "bytes": 3100245,
+      "colourway": "Black",
+      "filename": "Loop_Eclipse-Black-Flatlay Back-Open-Washing Label Update.png",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjo4NDY2OCwidHlwZSI6ImFzc2V0In0=",
+      "generate_roles": [],
+      "height": 2048,
+      "id": "eyJpZGVudGlmaWVyIjo4NDY2OCwidHlwZSI6ImFzc2V0In0=",
+      "kind": "positive",
+      "model_copy": "original",
+      "roles": [
+       "flat_lay"
+      ],
+      "set": "renders",
+      "sha256": "21492f9059c3a96e006054e25e9d66c44b2944ab1a1c9b3f0b83d142febe9569",
+      "source": "frontify",
+      "title": "Loop_Eclipse-Black-Flatlay Back-Open-Washing Label Update",
+      "width": 5120
+     },
+     {
+      "bytes": 3497242,
+      "colourway": "Black",
+      "filename": "Loop_Eclipse-Black-01 Front.png",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjo3OTc5NCwidHlwZSI6ImFzc2V0In0=",
+      "generate_roles": [
+       "render"
+      ],
+      "height": 3072,
+      "id": "eyJpZGVudGlmaWVyIjo3OTc5NCwidHlwZSI6ImFzc2V0In0=",
+      "kind": "reference",
+      "model_copy": "original",
+      "roles": [],
+      "set": "renders",
+      "sha256": "5a7b9e2c0f0a2ba49a3657157e7d45851d9d3b4a416f68af1dc9e4171bbbb775",
+      "source": "frontify",
+      "title": "Loop_Eclipse-Black-Front",
+      "width": 3072
+     },
+     {
+      "bytes": 2950272,
+      "colourway": "Black",
+      "filename": "Loop_Eclipse-Black-04 Side 2.png",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjo3OTc5NSwidHlwZSI6ImFzc2V0In0=",
+      "generate_roles": [
+       "render"
+      ],
+      "height": 3072,
+      "id": "eyJpZGVudGlmaWVyIjo3OTc5NSwidHlwZSI6ImFzc2V0In0=",
+      "kind": "reference",
+      "model_copy": "original",
+      "roles": [
+       "side"
+      ],
+      "set": "renders",
+      "sha256": "91198c3dac9777b89b1b8428b9d3db2f80d24ab167c85dcc40adf106b7f667ab",
+      "source": "frontify",
+      "title": "Loop_Eclipse-Black-Side 2",
+      "width": 3072
+     },
+     {
+      "bytes": 4061773,
+      "colourway": "Plum",
+      "filename": "Loop_Eclipse-Plum-01 Front.png",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjo3OTgwNywidHlwZSI6ImFzc2V0In0=",
+      "generate_roles": [
+       "render"
+      ],
+      "height": 3072,
+      "id": "eyJpZGVudGlmaWVyIjo3OTgwNywidHlwZSI6ImFzc2V0In0=",
+      "kind": "reference",
+      "model_copy": "original",
+      "roles": [],
+      "set": "renders",
+      "sha256": "46a9a9a78fb577269c891451fb93a227a7057aca312910d7fcbd375432cc8b4f",
+      "source": "frontify",
+      "title": "Loop_Eclipse-Plum-01 Front",
+      "width": 3072
+     },
+     {
+      "bytes": 3366768,
+      "colourway": "Plum",
+      "filename": "Loop_Eclipse-Plum-04 Side 2.png",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjo3OTgwOCwidHlwZSI6ImFzc2V0In0=",
+      "generate_roles": [
+       "render"
+      ],
+      "height": 3072,
+      "id": "eyJpZGVudGlmaWVyIjo3OTgwOCwidHlwZSI6ImFzc2V0In0=",
+      "kind": "reference",
+      "model_copy": "original",
+      "roles": [
+       "side"
+      ],
+      "set": "renders",
+      "sha256": "dc4037ea3a7000531441a4da5f78c558de512ed27199415fa68ebca41c4328ef",
+      "source": "frontify",
+      "title": "Loop_Eclipse-Plum-04 Side 2",
+      "width": 3072
+     },
+     {
+      "bytes": 4504781,
+      "colourway": "Plum",
+      "filename": "Loop_Eclipse-Plum-05 Angle 1.png",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjo3OTgxMiwidHlwZSI6ImFzc2V0In0=",
+      "generate_roles": [
+       "render"
+      ],
+      "height": 3072,
+      "id": "eyJpZGVudGlmaWVyIjo3OTgxMiwidHlwZSI6ImFzc2V0In0=",
+      "kind": "positive",
+      "model_copy": "original",
+      "roles": [],
+      "set": "renders",
+      "sha256": "4364e1e6eec4477397097af376466b7dc2b104463cea60967146445ae34cdc25",
+      "source": "frontify",
+      "title": "Loop_Eclipse-Plum-05 Angle 1",
+      "width": 3072
+     },
+     {
+      "bytes": 3447279,
+      "colourway": "Plum",
+      "filename": "Loop_Eclipse-Plum-14 Flatlay Back-Open.png",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjo3OTg1OSwidHlwZSI6ImFzc2V0In0=",
+      "generate_roles": [
+       "render"
+      ],
+      "height": 2048,
+      "id": "eyJpZGVudGlmaWVyIjo3OTg1OSwidHlwZSI6ImFzc2V0In0=",
+      "kind": "reference",
+      "model_copy": "original",
+      "roles": [
+       "flat_lay"
+      ],
+      "set": "renders",
+      "sha256": "1e9b6b1c8fa06fdc9be3f4be9e8b8f08fec567c56dd373d9b42199d4fe34681f",
+      "source": "frontify",
+      "title": "Loop_Eclipse-Plum-14 Flatlay Back-Open",
+      "width": 5120
+     },
+     {
+      "bytes": 14362305,
+      "colourway": "Teal",
+      "filename": "Loop_Eclipse-Teal-Angle_1.png",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjoxMzU0ODIsInR5cGUiOiJhc3NldCJ9",
+      "generate_roles": [
+       "render"
+      ],
+      "height": 3072,
+      "id": "eyJpZGVudGlmaWVyIjoxMzU0ODIsInR5cGUiOiJhc3NldCJ9",
+      "kind": "reference",
+      "model_copy": "original",
+      "roles": [],
+      "set": "renders",
+      "sha256": "1e2617dd36a1c570990d5a10ab428f4a75d6df220b62240b18c939ff1dc9a759",
+      "source": "frontify",
+      "title": "Loop_Eclipse-Teal-Angle_1",
+      "width": 3072
+     },
+     {
+      "bytes": 8785353,
+      "colourway": "Teal",
+      "filename": "Loop_Eclipse-Teal-Flatlay_Back.png",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjoxMzU0OTEsInR5cGUiOiJhc3NldCJ9",
+      "generate_roles": [
+       "render"
+      ],
+      "height": 2048,
+      "id": "eyJpZGVudGlmaWVyIjoxMzU0OTEsInR5cGUiOiJhc3NldCJ9",
+      "kind": "reference",
+      "model_copy": "original",
+      "roles": [
+       "flat_lay"
+      ],
+      "set": "renders",
+      "sha256": "c2b2cca85d6caf1c3e1e293039156dafa108caf6090438ca58a1ac0cb8995d0b",
+      "source": "frontify",
+      "title": "Loop_Eclipse-Teal-Flatlay_Back",
+      "width": 5120
+     },
+     {
+      "bytes": 12633571,
+      "colourway": "Teal",
+      "filename": "Loop_Eclipse-Teal-Front.png",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjoxMzU0OTQsInR5cGUiOiJhc3NldCJ9",
+      "generate_roles": [
+       "render"
+      ],
+      "height": 3072,
+      "id": "eyJpZGVudGlmaWVyIjoxMzU0OTQsInR5cGUiOiJhc3NldCJ9",
+      "kind": "reference",
+      "model_copy": "original",
+      "roles": [],
+      "set": "renders",
+      "sha256": "573430d56cd81135d5c162c67f5119f3f98b2ae8f3ad21f155fda9d6760d2cfd",
+      "source": "frontify",
+      "title": "Loop_Eclipse-Teal-Front",
+      "width": 3072
+     },
+     {
+      "bytes": 9998134,
+      "colourway": "Teal",
+      "filename": "Loop_Eclipse-Teal-Side_2.png",
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjoxMzU0OTcsInR5cGUiOiJhc3NldCJ9",
+      "generate_roles": [
+       "render"
+      ],
+      "height": 3072,
+      "id": "eyJpZGVudGlmaWVyIjoxMzU0OTcsInR5cGUiOiJhc3NldCJ9",
+      "kind": "positive",
+      "model_copy": "original",
+      "roles": [
+       "side"
+      ],
+      "set": "renders",
+      "sha256": "562ee047a33d88e51d9327fb3776ef331d75dbf3cd7302e6387ed350d21ee1e3",
+      "source": "frontify",
+      "title": "Loop_Eclipse-Teal-Side_2",
+      "width": 3072
+     }
+    ],
+    "pins_file": {
+     "path": "products/eclipse/skill/references/pins.json",
+     "sha256": "ecb4ee53c063cea766810b2911b08a683b4ff492d398eaa0bee690b47ce740d2"
+    }
+   },
+   "rubric": {
+    "chat_families": [
+     "A",
+     "B",
+     "C",
+     "D"
+    ],
+    "checks": [
+     {
+      "caption": "not the Eclipse's shape, or a hard part on the band",
+      "check": "It is the Eclipse. One continuous wide curved band with two low eye pockets formed in its middle over a nose notch, the ear scoop, the hook-and-loop closure at the back. Not a generic sleep mask, not goggles, not a VR headset, not an eyeshade on an elastic cord.",
+      "fails_when": "The silhouette could be any sleep mask, or a thin elastic band; or any hard part appears on the band other than the black silicone patch, wherever it sits, including at the temple or above the ear: a buckle, slider, clip, dial, pod, second strap, zip or nose piece",
+      "family": "A",
+      "id": "A1",
+      "severity": "gate"
+     },
+     {
+      "caption": "the loop wordmark is missing or wrong",
+      "check": "The wordmark exists and is right. Wherever the outside of the mask is in view, a white lowercase \"loop\" wordmark is present, once per visible side, correctly spelled, as a flat print. No other lettering on the product. Where it sits is B8, not this check.",
+      "fails_when": "No wordmark visible on a view that shows the outside of the mask, or it is misspelled, capitalised, duplicated on one side, embossed or metallic, or any other lettering appears on the mask",
+      "family": "A",
+      "id": "A2",
+      "severity": "gate"
+     },
+     {
+      "caption": "not a real Eclipse colourway",
+      "check": "Real colourway. The textile is Black, Teal or Plum (or a named planned colourway on request), one colour for strap and cups; silicone parts black; wordmark white.",
+      "fails_when": "An invented colour, a two-tone textile, coloured silicone, a coloured wordmark",
+      "family": "A",
+      "id": "A3",
+      "severity": "gate"
+     },
+     {
+      "caption": "worn wrongly: strap, ears, forehead or hands",
+      "check": "Wearer anatomy. Eyes covered by the cups, nose in the notch, strap over the top of the ears and around the back of the head. Hands, ears, faces anatomically sound at viewing size.",
+      "fails_when": "Strap under the ear, through the ear, or floating; mask over the forehead or mouth; an extra hand or finger; a face that melts into the pillow",
+      "family": "A",
+      "id": "A4",
+      "severity": "gate"
+     },
+     {
+      "caption": "something invented in the frame",
+      "check": "Nothing invented around the product. Other Loop products, headlines, badges, price callouts and layout are normal in a finished channel deliverable. What must not appear is anything that is not Loop's or not real.",
+      "fails_when": "A competitor mark, a non-Loop product presented as ours, invented packaging, or gibberish lettering anywhere in frame",
+      "family": "A",
+      "id": "A5",
+      "severity": "gate"
+     },
+     {
+      "caption": "a stranger would call it something else",
+      "check": "Reads as the Eclipse to a stranger. Before the checks, a reader who saw only the candidate, with no references and no product sheet, named the object on the face in one phrase and described its eye section in one sentence; both are quoted under THIS CANDIDATE. Grade the object as that reader saw it.",
+      "fails_when": "The phrase, or the picture, reads as a bra or bra cups, a pastie, a padded or moulded-foam contoured sleep mask with ball-shaped cups, goggles, a VR headset or visor, an eyeshade on a cord, or a blindfold strip; or the phrase contains a word from the Object-class words list, in which case the harness records this check false whatever you answered",
+      "family": "A",
+      "id": "A6",
+      "severity": "advisory"
+     },
+     {
+      "caption": "the band is too thin or too rigid",
+      "check": "Band width. The strap is wide and flat, about twice as tall at the eye cups as at the temple, and still a broad band at the back.",
+      "fails_when": "Reads as a thin headband or elastic, or as a rigid goggle frame",
+      "family": "B",
+      "id": "B1",
+      "severity": "critical"
+     },
+     {
+      "caption": "the eye pockets are wrong: one dome, flat, or ball-shaped cups",
+      "check": "Two low pockets, not one dome and not two balls. Two shallow oblong pockets, each a wide oval in outline, much wider than it is tall and much wider than it is deep, formed in the band itself: the band pushed forward, not a cup fixed onto it. The top edge of each pocket runs on as the top edge of the band, with no step and no seam. The two pockets meet over the nose in a shallow saddle, and the outer face of the cup section is one smooth, low, continuous form: from the front, three-quarter or above, the top edge can run as a single unbroken arc and the surface between the pockets settles only slightly, and that is the product. What marks two pockets rather than one is the nose notch cut into the lower edge over the bridge of the nose, with the surface rising to either side of it. In profile the pocket stands off the face by a fraction of its width and its lower edge dips to the nose bridge rather than running straight across. In wear the pocket compresses, and on a side sleeper with the cup pressed into a pillow it can read almost flat; that too is the product. Flat fails only when there is no pocket at all: the fabric follows the eyelids and the brow with no raised outline anywhere.",
+      "fails_when": "A cup section with no nose notch in its lower edge and no rise to either side of the nose, one bulge from temple to temple; fabric that follows the eyelids with no pocket outline anywhere; or a cup drawn as a hemisphere or ball: round in outline, about as tall as it is wide, standing proud of a flat band like a padded cup stitched on, or so deep it reads as goggles",
+      "family": "B",
+      "id": "B2",
+      "severity": "critical"
+     },
+     {
+      "caption": "wrong size on the head, or the strap stops at the ear",
+      "check": "Scale on the head, and the strap goes round it. From just above the eyebrows to the top of the cheekbones, reaching past the temples. The strap continues behind the ear and round the back of the head, and the closure with its ridged silicone patch sits there, out of sight in most wear views. If the ridged patch is visible on, above or just in front of the ear, the strap has stopped at the ear and this check fails, whatever else is right.",
+      "fails_when": "Covers the forehead or the cheeks, stops short of the temples, the closure sits on the crown or the neck, or the ridged silicone patch is visible at the temple, on top of the ear or in front of it so that the strap ends at the ear instead of going round the head",
+      "family": "B",
+      "id": "B3",
+      "severity": "critical"
+     },
+     {
+      "caption": "the two cups do not match",
+      "check": "Symmetry. Both cups the same size and depth; the band the same height on both sides at the same point. Judge only when both sides are in view.",
+      "fails_when": "One cup visibly larger or deeper, or the band tapers on one side only",
+      "family": "B",
+      "id": "B4",
+      "severity": "minor"
+     },
+     {
+      "caption": "no ear scoop, or the strap covers the ear",
+      "check": "Ear scoop. The lower edge rises over the ear and the ear stays visible below the strap. Judge only when an ear is in view.",
+      "fails_when": "Strap covers the ear, cuts across it, or has no scoop at all",
+      "family": "B",
+      "id": "B5",
+      "severity": "minor"
+     },
+     {
+      "caption": "the closure end is wrong",
+      "check": "Closure end. Judge only when the back of the head or a strap end is in view. One overlap, a black silicone patch with curved ridges on the strap end, strap ends of plausible length. The round O-logo sits at the very tip of that same end and is hidden by the overlap in most views; its absence is never a failure.",
+      "fails_when": "A knot, a buckle, a bow, two overlaps, a strap end that trails, a strap end with no silicone patch at all, or a patch that reads as a hard clip, pod or dial rather than a soft ridged silicone patch",
+      "family": "B",
+      "id": "B6",
+      "severity": "minor"
+     },
+     {
+      "caption": "the fit is off: a gap, or the strap digs in",
+      "check": "Fit. Snug and face-hugging: no gap along the cheek or at the nose bridge, no skin bulging at the strap edge, no strap digging in. Wear shots only.",
+      "fails_when": "A visible gap under the cups, a strap pressing a crease into the skin, or a mask hovering off the face",
+      "family": "B",
+      "id": "B7",
+      "severity": "minor"
+     },
+     {
+      "caption": "the wordmark is in the wrong place",
+      "check": "Wordmark placement. Judge position on the mask, never in the frame: find the nose notch and the two temples first, then say where the wordmark sits between them. It belongs on the outer flank of the eye-cup section toward one temple, near the top edge, reading along the band. In wear its angle and its place in the picture follow the head: on a side sleeper it stands vertical in the frame, on a back sleeper shot from above the temple flank can land at the top centre of the picture, and both are right.",
+      "fails_when": "Relative to the mask itself: centred between the two cups over the nose notch, on the front face of a cup rather than its outer flank, on the strap behind the ear, on the closure, or on the inside of the band",
+      "family": "B",
+      "id": "B8",
+      "severity": "critical"
+     },
+     {
+      "caption": "the knit does not read as knit: smooth, shiny or the wrong fabric",
+      "check": "Knit reads as knit. Matte technical knit with a fine rib running along the band, showing as fine parallel lines wherever the mask is sharp and large in the frame. If the wordmark is legible, the rib is visible at the same scale; only where the mask is small or soft does the rib fall below what the image can show, and there only gloss can be judged. Matte is not enough: the surface must read as a textile, not as a moulded or coated one.",
+      "fails_when": "Satin, silk, velvet, leather, neoprene, canvas weave, plastic, or a glossy sheen anywhere on the textile; or a smooth moulded surface with no rib and no textile grain at a scale where the wordmark can be read, however matte. The absence of any knit is a failure, not a pass",
+      "family": "C",
+      "id": "C1",
+      "severity": "critical"
+     },
+     {
+      "caption": "the silicone does not read as silicone",
+      "check": "Silicone reads as silicone. The ridged patch, the O-logo and the anti-slip zones are matte black rubber with a faint satin edge highlight. Judge only the silicone parts that are in view.",
+      "fails_when": "Glossy plastic, metal, painted-on, or embossed fabric where a silicone part is shown",
+      "family": "C",
+      "id": "C2",
+      "severity": "minor"
+     },
+     {
+      "caption": "the wordmark print is wrong",
+      "check": "Wordmark finish. Flat white print sitting in the knit, crisp at its size.",
+      "fails_when": "Stitched, embossed, metallic, blurred, or floating above the surface",
+      "family": "C",
+      "id": "C3",
+      "severity": "minor"
+     },
+     {
+      "caption": "a seam or edge that the product does not have",
+      "check": "Edges and seams. Clean bound edges; the pocket rises out of the band with a soft transition in the knit and no stitched line around it; no stitching where the product has none.",
+      "fails_when": "Fraying, raw edges, decorative stitching, piping, a seam down the middle, or a circular seam, rim or ridge running around a cup that separates it from the band",
+      "family": "C",
+      "id": "C4",
+      "severity": "minor"
+     },
+     {
+      "caption": "stiff, not soft",
+      "check": "Softness. In wear shots the cups compress gently against the face and the band follows the head; the textile shows no rigid creases. Wear shots only.",
+      "fails_when": "Rigid shell behaviour, sharp folds, or a band that does not follow the skull",
+      "family": "C",
+      "id": "C5",
+      "severity": "minor"
+     },
+     {
+      "caption": "a shine on the fabric",
+      "check": "Light response. The textile absorbs light with no specular hotspot; only the silicone shows a small highlight.",
+      "fails_when": "A highlight streak on the fabric, a mirror-like cup, or a uniformly flat unlit surface with no shading at all",
+      "family": "C",
+      "id": "C6",
+      "severity": "minor"
+     },
+     {
+      "caption": "the wrong shade for the colourway",
+      "check": "Hue family. Black is neutral near-black; Teal is deep blue-green; Plum is deep purple-red. Judge against the pinned reference of the colourway in question (the trusted claim, else the one identified from the image).",
+      "fails_when": "Black goes navy or brown, Teal goes green, turquoise or navy, Plum goes magenta, burgundy or lilac",
+      "family": "D",
+      "id": "D1",
+      "severity": "critical"
+     },
+     {
+      "caption": "band and cups do not match, or colour on the silicone or wordmark",
+      "check": "One colour. Strap and cups the same colour; silicone black; wordmark white; interior dark where visible.",
+      "fails_when": "Cups a different shade from the band, colour bleeding into the silicone or wordmark, a light interior",
+      "family": "D",
+      "id": "D2",
+      "severity": "minor"
+     },
+     {
+      "caption": "the colour is off and the light does not explain it",
+      "check": "Scene light explains the shift. Warmer or darker under a lamp is the lamp; a hue change is not. The measurement block states in words whether the textile's hue sits over the line from its colourway band. When it says over, look for the coloured or warm light that would explain it, and say in the note whether you found one. Do not compare the numbers yourself.",
+      "fails_when": "The mask colour cannot be explained by the light on the face and pillow beside it, or the measurement block reports the hue over the line and nothing in the scene accounts for it",
+      "family": "D",
+      "id": "D3",
+      "severity": "minor"
+     },
+     {
+      "caption": "the colour is washed out",
+      "check": "Depth of tone. The colourways are dark and saturated, not pastel or washed out.",
+      "fails_when": "A pale, chalky or desaturated version of the colourway",
+      "family": "D",
+      "id": "D4",
+      "severity": "minor"
+     },
+     {
+      "caption": "an AI artefact in the scene",
+      "check": "The image is otherwise sound. No AI artefacts in the scene: doubled objects, melted bedding, broken furniture, impossible light.",
+      "fails_when": "Any artefact a viewer would notice before they notice the mask",
+      "family": "E",
+      "id": "E1",
+      "severity": "minor"
+     },
+     {
+      "caption": "the mask is cropped",
+      "check": "The product is whole. The mask is not cropped through the eye cups unless the crop is deliberate for the format.",
+      "fails_when": "A cup cut by the frame edge in a hero or PDP crop",
+      "family": "E",
+      "id": "E2",
+      "severity": "minor"
+     },
+     {
+      "caption": "the colourway is ambiguous",
+      "check": "Colourway identifiable. The textile reads unambiguously as one real colourway, and agrees with the trusted claim where one exists.",
+      "fails_when": "Ambiguous between two colourways, or a trusted claim that disagrees with the image",
+      "family": "E",
+      "id": "E3",
+      "severity": "minor"
+     }
+    ],
+    "families": [
+     {
+      "id": "A",
+      "name": "Identity",
+      "note": "Any failure here stops the asset."
+     },
+     {
+      "id": "B",
+      "name": "Proportions",
+      "note": ""
+     },
+     {
+      "id": "C",
+      "name": "Texture and material",
+      "note": ""
+     },
+     {
+      "id": "D",
+      "name": "Colour",
+      "note": ""
+     },
+     {
+      "id": "E",
+      "name": "Craft and delivery",
+      "note": ""
+     }
+    ],
+    "grading_rules": "The grader reads this section into its prompt verbatim.\n\n- **The stranger's read comes first.** Before the checks, a separate call that saw only the candidate, with no product name, no references and no product sheet, named the object on the face in one phrase and described its eye section in one sentence. Both are quoted under THIS CANDIDATE, and A6 is graded as that reader saw it, not as you know the product to be. A word from the Object-class words list in that phrase forces A6 in code, whatever you answer.\n- **Judge what the view shows.** A part hidden by the angle passes its check; a part shown wrongly fails it. A profile hides the far cup; a frontal hides the closure; a flat-lay hides the wear; the strap overlap hides the tip of the strap end.\n- **Know the asset class.** *Product*: the bare mask or render. *Wear*: a person wearing it. *Composite*: a finished channel deliverable with headline, badges, callouts, other Loop products. Loop's own products and typography are normal in a composite and never count as invented.\n- **The colourway claim.** A claim from library metadata is untrusted. A colourway token in the title or a reviewer's statement is trusted. With no trusted claim, identify the colourway from the image and say so.\n- **Absence is the usual miss.** Graders over-penalise excess and under-penalise absence. The likeliest misses on this product are flat fabric where the two eye pockets should be (B2), a missing ear scoop (B5), a missing wordmark (A2), a knit with no rib (C1). Look for what is not there.\n- **The numbers are evidence.** The measurement layer's textile lightness, chroma and hue distance to the colourway band are attached to every grade. They do not decide; they tell you where to look, and a note that ignores a large distance is an incomplete note.\n- **Fail when unsure**, and say in the note what you could not see.",
+    "object_class": {
+     "cup_form_forces": {
+      "hemispheres": "B2"
+     },
+     "forces": "A6",
+     "words": [
+      "bra",
+      "bra cup",
+      "bra cups",
+      "brassiere",
+      "pastie",
+      "pasties",
+      "hemisphere",
+      "hemispheres",
+      "ball",
+      "balls",
+      "sphere",
+      "bulb",
+      "bulbous",
+      "dome",
+      "domes",
+      "domed",
+      "dome-shaped",
+      "goggles",
+      "vr headset",
+      "headset",
+      "visor",
+      "eyeshade",
+      "eye shade",
+      "elastic cord",
+      "moulded foam",
+      "molded foam",
+      "memory foam",
+      "contoured foam",
+      "blindfold"
+     ]
+    },
+    "path": "products/eclipse/skill/references/rubric.md",
+    "problem": null,
+    "reporting_only": false,
+    "sha256": "d08efb6e029620ec9ab364cbccea8213794c9e587e09aba55ea9f5adaa1d0610",
+    "version": "0.5.3"
+   },
+   "sheet": {
+    "path": "products/eclipse/skill/references/product-sheet.md",
+    "sha256": "2b20c4ecd7d9d87807a0037ceff4af8e2d69435b3445df660f2124190634a6ad"
+   },
+   "skill": "eclipse",
+   "status": "pilot",
+   "verdicts": {
+    "route": "frontify-comment",
+    "tool": "record_verdict"
+   },
+   "vesper_product": "eclipse"
+  },
+  "packaging": {
+   "aliases": [
+    "Packaging",
+    "the box",
+    "retail box",
+    "the packaging",
+    "Coachella box",
+    "Coachella packaging"
+   ],
+   "boxes": {
+    "experience": "Experience 2, the square retail box",
+    "link": "Link, the same square retail box"
+   },
+   "chat_scope": "A to D: identity, geometry, artwork placement, colour and finish. E (craft) is out of scope in chat. The measured silhouette overlap (B1) and per-panel colour (D1) are the scripts' evidence; in chat they are read by eye with the render and the dieline beside the candidate",
+   "command": "/creative:packaging",
+   "deciders": [
+    {
+     "frontify_user_id": null,
+     "name": null,
+     "note": "Named by the product's owner. Until the id is filled in, no row in record/feedback counts as a decider's verdict.",
+     "role": "head of design"
+    }
+   ],
+   "description": "Loop's square retail box, closed and open, with a look's artwork applied to the white render: the box's geometry unchanged, every panel's artwork on the right face, the colours as the dieline has them. Coachella is the first look.",
+   "dielines": {
+    "coachella-pink-teal": {
+     "path": "products/packaging/references/dielines/coachella-pink-teal.json",
+     "sha256": "01138ac247c825179f56a5a53316241a7d40f8a366635159e5dbc9d53d6497c2"
+    },
+    "coachella-teal-plum": {
+     "path": "products/packaging/references/dielines/coachella-teal-plum.json",
+     "sha256": "2ad3291dbebcea803e416f3f202ac07df0e582423ac7aad620fa589ecacf6929"
+    }
+   },
+   "frontify": {
+    "approved_status": "Approved",
+    "approved_tags": [],
+    "library": "Assets",
+    "library_id": "eyJpZGVudGlmaWVyIjo1LCJ0eXBlIjoicHJvamVjdCJ9",
+    "review_statuses": [
+     "AI Image - QC",
+     "Assets to Review"
+    ]
+   },
+   "generation": {
+    "bind_order": [
+     "composite",
+     "render",
+     "dieline"
+    ],
+    "draws_per_call": 2,
+    "kind": "mockup-then-finish",
+    "max_references": 3,
+    "pipeline": [
+     "mockup",
+     "finish",
+     "surface"
+    ],
+    "router": {
+     "dated": "2026-09-24",
+     "rows": [
+      {
+       "lane": "surface",
+       "model": "gemini-3-pro-image",
+       "name": "Nano Banana Pro",
+       "when": "The paper grain only: `surface.py` keeps the draw's fine detail and lays it onto the composite. Round 2 kept four of four surfaced pictures on three reads"
+      },
+      {
+       "lane": "not a lane",
+       "model": "gpt-image-2",
+       "name": "GPT Image 2",
+       "when": "Round 1 reframed the padded picture on every draw and recoloured the mockup; not used for packaging"
+      }
+     ]
+    },
+    "rules": [
+     "mockup-first",
+     "small-type-in-code",
+     "pad-never-crop",
+     "never-chain",
+     "log-every-draw"
+    ],
+    "skeleton": {
+     "heading": "Prompt skeleton (v2, 2026-09-24, round 2)",
+     "slots": [
+      "[format]"
+     ],
+     "text": "Using the provided mockup of Loop's retail box (image 1) as the exact picture, the white render\n(image 2) for its light and shadow, and the flat dieline of this box (image 3) for the colour of\nevery panel, finish image 1 as a photograph of the printed box.\n\nKeep everything exactly where it is and exactly as printed: the silhouette of both boxes is a strict\nmask, every panel's artwork stays on its face at its size and angle, every word and every mark of\ntype is kept as printed on image 1 and never redrawn, the die-cut stays an empty round hole, the\ntray stays empty, the background stays the render's studio grey. Nothing is added: no object in\nthe tray, no hangtag, no label, no second product.\n\nAdd only the surface: matte printed card with a fine print grain; the lit and shadowed faces of\nimage 2 kept under the artwork; soft contact shadows where the render has them; a spot UV gloss\non the \"loop\" wordmark and nowhere else. Each panel's colour matches the same panel on image 3.\n\nPhotorealistic, [format], the boxes sharp. A photographed sample, not a render.",
+     "version": "v2"
+    },
+    "source": {
+     "path": "products/packaging/skill/references/finishing.md",
+     "sha256": "f846b83d9e9c0cd832537fc62726ef492da3920292ae096d3dd49a70b15e8622"
+    }
+   },
+   "grading": null,
+   "grading_prompt": null,
+   "kind": "packaging",
+   "looks": {
+    "coachella": {
+     "colourways": {
+      "pink-teal": "pink to teal gradient, pink inside",
+      "teal-plum": "dark teal to plum gradient, mint inside"
+     },
+     "dielines": {
+      "experience": [
+       "teal-plum",
+       "pink-teal"
+      ],
+      "link": [
+       "teal-plum",
+       "pink-teal"
+      ]
+     },
+     "name": "Coachella",
+     "references": "provisional: the agency's scenes from the Figma file and the one Frontify packaging render, none verdicted by the studio yet"
+    }
+   },
+   "name": "Packaging",
+   "panels": {
+    "white-closed": {
+     "path": "products/packaging/references/panels/white-closed.json",
+     "sha256": "652817b8b04ae3b5c113b09b5dbf072d9007fae105e5c60f50e6cee83fa7f297"
+    },
+    "white-open": {
+     "path": "products/packaging/references/panels/white-open.json",
+     "sha256": "4c5299e5f1c2db62331f8ac9530566bb746643038640bfb27baf9611762ae2ca"
+    }
+   },
+   "references": {
+    "attach": {
+     "coachella": {
+      "both": [
+       "white-closed",
+       "eyJpZGVudGlmaWVyIjozMTgxLCJ0eXBlIjoiYXNzZXQifQ==",
+       "front-teal-plum",
+       "front-pink-teal",
+       "white-open",
+       "agency-open-link-a",
+       "agency-open-experience-a",
+       "eyJpZGVudGlmaWVyIjozMTY1LCJ0eXBlIjoiYXNzZXQifQ=="
+      ],
+      "closed": [
+       "white-closed",
+       "eyJpZGVudGlmaWVyIjozMTgxLCJ0eXBlIjoiYXNzZXQifQ==",
+       "front-teal-plum",
+       "front-pink-teal"
+      ],
+      "open": [
+       "white-open",
+       "agency-open-link-a",
+       "agency-open-experience-a",
+       "eyJpZGVudGlmaWVyIjozMTY1LCJ0eXBlIjoiYXNzZXQifQ=="
+      ]
+     }
+    },
+    "not_attached": [
+     "agency-open-link-b, the same scene as agency-open-link-a from a second export, graded in the regression only",
+     "agency-open-experience-b, the same as -a, never attached",
+     "the twenty Coachella carry-case renders in references/frontify/coachella, pulled with the set and kept for a later case check"
+    ],
+    "pins": [
+     {
+      "boxes": null,
+      "bytes": 13312833,
+      "colourway": null,
+      "figma": {
+       "file": "uRV0X4VpTTWvVmsXfvM2Hn",
+       "node": "1:668",
+       "page": "01_Untextured Renders"
+      },
+      "frontify_asset_id": null,
+      "height": 2286,
+      "id": "white-closed",
+      "kind": "reference",
+      "local_path": "products/packaging/references/figma/white-closed.png",
+      "look": null,
+      "model_copy": "original",
+      "roles": [
+       "source_render"
+      ],
+      "scene": "closed",
+      "set": "figma",
+      "sha256": "bafbc1d438cdbb7ad79d940109539953c48966ba7c0f6bd7881120577215aca9",
+      "source": "upload",
+      "title": "white-closed",
+      "width": 4096
+     },
+     {
+      "boxes": null,
+      "bytes": 13300928,
+      "colourway": null,
+      "figma": {
+       "file": "uRV0X4VpTTWvVmsXfvM2Hn",
+       "node": "1:671",
+       "page": "01_Untextured Renders"
+      },
+      "frontify_asset_id": null,
+      "height": 2286,
+      "id": "white-open",
+      "kind": "reference",
+      "local_path": "products/packaging/references/figma/white-open.png",
+      "look": null,
+      "model_copy": "original",
+      "roles": [
+       "source_render"
+      ],
+      "scene": "open",
+      "set": "figma",
+      "sha256": "3f96d37bfd0d1c82a8cc8e5aa8c04b0be52acfa019055efdfc575bd5b0bb468e",
+      "source": "upload",
+      "title": "white-open",
+      "width": 4096
+     },
+     {
+      "boxes": [
+       "experience",
+       "link"
+      ],
+      "bytes": 1303290,
+      "colourway": "teal-plum",
+      "figma": {
+       "file": "uRV0X4VpTTWvVmsXfvM2Hn",
+       "node": "1:682",
+       "page": "02_Coachella (Final)"
+      },
+      "frontify_asset_id": null,
+      "height": 961,
+      "id": "dieline-teal-plum",
+      "kind": "reference",
+      "local_path": "products/packaging/references/figma/dieline-teal-plum.png",
+      "look": "coachella",
+      "model_copy": "original",
+      "roles": [
+       "dieline"
+      ],
+      "scene": null,
+      "set": "figma",
+      "sha256": "270bb87e5383d059b176022690e5e6e187d14caf99ebde5e4017300c5ec59f40",
+      "source": "upload",
+      "title": "dieline-teal-plum",
+      "width": 2452
+     },
+     {
+      "boxes": [
+       "experience",
+       "link"
+      ],
+      "bytes": 970639,
+      "colourway": "pink-teal",
+      "figma": {
+       "file": "uRV0X4VpTTWvVmsXfvM2Hn",
+       "node": "1:694",
+       "page": "02_Coachella (Final)"
+      },
+      "frontify_asset_id": null,
+      "height": 1072,
+      "id": "dieline-pink-teal",
+      "kind": "reference",
+      "local_path": "products/packaging/references/figma/dieline-pink-teal.png",
+      "look": "coachella",
+      "model_copy": "original",
+      "roles": [
+       "dieline"
+      ],
+      "scene": null,
+      "set": "figma",
+      "sha256": "447201239af793fa18c7868f2dd2e2d971e995350ad69b1c0555de7f13553d11",
+      "source": "upload",
+      "title": "dieline-pink-teal",
+      "width": 2444
+     },
+     {
+      "boxes": [
+       "experience",
+       "link"
+      ],
+      "bytes": 1748372,
+      "colourway": "teal-plum",
+      "figma": {
+       "file": "uRV0X4VpTTWvVmsXfvM2Hn",
+       "node": "1:679",
+       "page": "02_Coachella (Final)"
+      },
+      "frontify_asset_id": null,
+      "height": 862,
+      "id": "front-teal-plum",
+      "kind": "reference",
+      "local_path": "products/packaging/references/figma/front-teal-plum.png",
+      "look": "coachella",
+      "model_copy": "original",
+      "roles": [
+       "front_panel"
+      ],
+      "scene": null,
+      "set": "figma",
+      "sha256": "1d30a45370f381e2d7cb91487735fc1a10cb9d2d42adc801395ca53c99a25c10",
+      "source": "upload",
+      "title": "front-teal-plum",
+      "width": 1725
+     },
+     {
+      "boxes": [
+       "experience",
+       "link"
+      ],
+      "bytes": 1330557,
+      "colourway": "pink-teal",
+      "figma": {
+       "file": "uRV0X4VpTTWvVmsXfvM2Hn",
+       "node": "1:691",
+       "page": "02_Coachella (Final)"
+      },
+      "frontify_asset_id": null,
+      "height": 819,
+      "id": "front-pink-teal",
+      "kind": "reference",
+      "local_path": "products/packaging/references/figma/front-pink-teal.png",
+      "look": "coachella",
+      "model_copy": "original",
+      "roles": [
+       "front_panel"
+      ],
+      "scene": null,
+      "set": "figma",
+      "sha256": "0c7dcf658600f6e9bb299e4b0dac1ad3d3e91a7edd286cb636f9480cf0fb26b3",
+      "source": "upload",
+      "title": "front-pink-teal",
+      "width": 1694
+     },
+     {
+      "boxes": null,
+      "bytes": 2094247,
+      "colourway": null,
+      "figma": {
+       "file": "uRV0X4VpTTWvVmsXfvM2Hn",
+       "node": "1:688",
+       "page": "02_Coachella (Final)"
+      },
+      "frontify_asset_id": null,
+      "height": 1263,
+      "id": "agency-open-link-a",
+      "kind": "positive",
+      "local_path": "products/packaging/references/figma/agency-open-link-a.png",
+      "look": "coachella",
+      "model_copy": "original",
+      "roles": [
+       "look_finish"
+      ],
+      "scene": "open",
+      "set": "figma",
+      "sha256": "3fc8e982ff667d3531a55dd59bf50119ad337e4c4fca10223c67c48aa39f0efa",
+      "source": "upload",
+      "title": "agency-open-link-a",
+      "width": 2476
+     },
+     {
+      "boxes": null,
+      "bytes": 1813509,
+      "colourway": null,
+      "figma": {
+       "file": "uRV0X4VpTTWvVmsXfvM2Hn",
+       "node": "1:700",
+       "page": "02_Coachella (Final)"
+      },
+      "frontify_asset_id": null,
+      "height": 1260,
+      "id": "agency-open-link-b",
+      "kind": "positive",
+      "local_path": "products/packaging/references/figma/agency-open-link-b.png",
+      "look": "coachella",
+      "model_copy": "original",
+      "roles": [
+       "look_finish"
+      ],
+      "scene": "open",
+      "set": "figma",
+      "sha256": "9d20ceb1f31c7aa92000796e6d960381ded227dace9132d30f93f98847301b47",
+      "source": "upload",
+      "title": "agency-open-link-b",
+      "width": 2458
+     },
+     {
+      "boxes": null,
+      "bytes": 3177582,
+      "colourway": null,
+      "figma": {
+       "file": "uRV0X4VpTTWvVmsXfvM2Hn",
+       "node": "1:697",
+       "page": "02_Coachella (Final)"
+      },
+      "frontify_asset_id": null,
+      "height": 1203,
+      "id": "agency-open-experience-a",
+      "kind": "reference",
+      "local_path": "products/packaging/references/figma/agency-open-experience-a.png",
+      "look": "coachella",
+      "model_copy": "original",
+      "roles": [
+       "look_finish"
+      ],
+      "scene": "open",
+      "set": "figma",
+      "sha256": "f2d56acc7431fc563216ce0516cf39b7c31a117ff5f3ae30a65f65bbbc029077",
+      "source": "upload",
+      "title": "agency-open-experience-a",
+      "width": 2467
+     },
+     {
+      "boxes": null,
+      "bytes": null,
+      "colourway": null,
+      "figma": null,
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjozMTgxLCJ0eXBlIjoiYXNzZXQifQ==",
+      "height": null,
+      "id": "eyJpZGVudGlmaWVyIjozMTgxLCJ0eXBlIjoiYXNzZXQifQ==",
+      "kind": "positive",
+      "local_path": "products/packaging/references/frontify/coachella/Loop_Coachella-Packaging_0001.png",
+      "look": "coachella",
+      "model_copy": "original",
+      "roles": [
+       "look_finish"
+      ],
+      "scene": "closed",
+      "set": "coachella",
+      "sha256": null,
+      "source": "frontify",
+      "title": "Loop_Coachella-Packaging_0001",
+      "width": null
+     },
+     {
+      "boxes": null,
+      "bytes": null,
+      "colourway": null,
+      "figma": null,
+      "frontify_asset_id": "eyJpZGVudGlmaWVyIjozMTY1LCJ0eXBlIjoiYXNzZXQifQ==",
+      "height": null,
+      "id": "eyJpZGVudGlmaWVyIjozMTY1LCJ0eXBlIjoiYXNzZXQifQ==",
+      "kind": "reference",
+      "local_path": "products/packaging/references/frontify/coachella/Loop_Coachella-Elevated_MAIN-Carry_Case.jpg",
+      "look": "coachella",
+      "model_copy": "original",
+      "roles": [
+       "look_finish"
+      ],
+      "scene": null,
+      "set": "coachella",
+      "sha256": null,
+      "source": "frontify",
+      "title": "Loop_Coachella-Elevated_MAIN-Carry_Case",
+      "width": null
+     }
+    ],
+    "pins_file": {
+     "path": "products/packaging/skill/references/pins.json",
+     "sha256": "871996ab63fb0eea0bde30cb2c68df5c7f1e185bf3ae97bad2bea76f0b5d9257"
+    }
+   },
+   "renders": {
+    "by_box": {
+     "experience": "references/figma/white-open.png",
+     "link": "references/figma/white-closed.png"
+    },
+    "note": "one elevated scene, two white renders, each holding the closed box top-left and the open box beside it. The flap-down render is the Experience box (the agency's Experience scene shows the flap with the die-cut); the tray-cavity render is the Link box (the agency's Link scene has no flap, the case in the cavity). The scene's camera never moves; one composite textures both boxes."
+   },
+   "rubric": {
+    "chat_families": [
+     "A",
+     "B",
+     "C",
+     "D"
+    ],
+    "checks": [
+     {
+      "caption": "not the Loop box, or a part the render does not have",
+      "check": "It is the Loop box, as in the white render. The square retail box: a closed box with its lid, and an open box with the lid up, the inner tray and the front flap with its round die-cut, the objects in the attached white render and nothing else.",
+      "fails_when": "A box added, removed or reshaped; a second lid, an extra flap, a sleeve or a hangtag the render does not have; the die-cut missing, filled in, moved or no longer round",
+      "family": "A",
+      "id": "A1",
+      "severity": "gate"
+     },
+     {
+      "caption": "not the artwork asked for",
+      "check": "It is the artwork asked for. The panels carry the named look, box and colourway as on the attached dieline: the same graphic, the same type, the gradient running the same way.",
+      "fails_when": "Another look, another box's front, another colourway, an invented graphic, the gradient reversed or replaced by a flat colour",
+      "family": "A",
+      "id": "A2",
+      "severity": "gate"
+     },
+     {
+      "caption": "something invented on or around the box",
+      "check": "Nothing invented. No lettering, logo, badge, sticker, label, hangtag, ribbon, second product or hand that the dieline and the render do not have.",
+      "fails_when": "Any of those anywhere in the frame; type on a panel that is not on the dieline",
+      "family": "A",
+      "id": "A3",
+      "severity": "gate"
+     },
+     {
+      "caption": "a case added, or the case changed",
+      "check": "A case only where the render has one. Neither white render carries an earplug case: the die-cut and the tray cavity are empty in both, and stay empty on the candidate. When a later render does show a case, it is the plain black case, unprinted, untouched by the artwork, in the tray where the render has it.",
+      "fails_when": "A case, puck or disc set in the die-cut or the tray of a render that has none; a case recoloured, patterned, reshaped, moved out of the tray or replaced by something else",
+      "family": "A",
+      "id": "A4",
+      "severity": "critical"
+     },
+     {
+      "caption": "the box moved, grew, shrank or tilted",
+      "check": "Silhouette unchanged. Judge only when the candidate's own white render is attached. The outline of each box against the background is the render's: the same place, the same size, the same rotation, the lid open to the same angle. The scripts report the overlap of the two outlines; it is evidence, not the verdict.",
+      "fails_when": "A box moved, scaled, rotated or tilted; the closed box nearer or farther; the lid opened wider or narrower; the overlap reported under its line with nothing in the picture to explain it",
+      "family": "B",
+      "id": "B1",
+      "severity": "critical"
+     },
+     {
+      "caption": "the box's proportions are off",
+      "check": "Proportions. Lid, base and tray keep their relative heights and the lid its overhang; the box stays square in plan; the walls stay thin.",
+      "fails_when": "A taller or squatter box, a lid thicker or thinner than the render's, a tray deeper than the base, a rectangular box, a wall that has grown into a face",
+      "family": "B",
+      "id": "B2",
+      "severity": "critical"
+     },
+     {
+      "caption": "an edge, a corner or the die-cut is not clean",
+      "check": "Edges, corners and the die-cut. Every edge straight, every corner a crisp fold; the die-cut a clean round hole with what the render shows through it.",
+      "fails_when": "A bowed edge, a rounded or melted corner, a doubled edge, a die-cut with a soft or ragged rim or with something new behind it",
+      "family": "B",
+      "id": "B3",
+      "severity": "minor"
+     },
+     {
+      "caption": "the scene is not the render's",
+      "check": "The scene is the render's scene. Judge only when the render is attached. The camera, the floating height, the direction of the shadows and the backdrop are the render's; only the surfaces changed.",
+      "fails_when": "A new camera angle, a new backdrop, the boxes on a surface they were not on, shadows from a light the render did not have",
+      "family": "B",
+      "id": "B4",
+      "severity": "minor"
+     },
+     {
+      "caption": "the front artwork is not on the front",
+      "check": "Front on front. The dieline's front panel sits on the closed box's large face; the inside of the lid carries the dieline's inside-lid print; the tray carries the insert. The scripts report how well the front matches its dieline panel.",
+      "fails_when": "The front graphic on a wall, the inside-lid print on the outside, a face blank where the dieline prints, the match reported under its line with nothing in the picture to explain it",
+      "family": "C",
+      "id": "C1",
+      "severity": "critical"
+     },
+     {
+      "caption": "the walls carry the wrong panels",
+      "check": "Walls on the right walls. Each thin wall carries the dieline's panel for that wall, in the dieline's order round the box; the flap carries the flap print.",
+      "fails_when": "Left and right swapped, one wall's graphic repeated on both, a front panel wrapped onto a wall, the flap print on the tray",
+      "family": "C",
+      "id": "C2",
+      "severity": "critical"
+     },
+     {
+      "caption": "artwork rotated, mirrored or upside down",
+      "check": "Upright, not mirrored. Type reads left to right and upright on every face the scene shows upright; the wall text runs the way the dieline runs it; the gradient runs the dieline's way.",
+      "fails_when": "Rotated or mirrored type, a panel upside down, the gradient turned",
+      "family": "C",
+      "id": "C3",
+      "severity": "critical"
+     },
+     {
+      "caption": "artwork too big, too small or cut short",
+      "check": "Scale and crop. Each panel's artwork fills its face edge to edge as the dieline lays it out: nothing zoomed, tiled or cropped short of the fold, no margin the dieline does not have.",
+      "fails_when": "The graphic larger or smaller than its face, a repeat, a strip of bare board at a fold, the wordmark cut by an edge",
+      "family": "C",
+      "id": "C4",
+      "severity": "critical"
+     },
+     {
+      "caption": "the artwork is warped",
+      "check": "No distortion. Straight lines on the dieline stay straight on the face and follow its perspective; the loop rings stay round in that perspective; the artwork does not bulge, wave or swim.",
+      "fails_when": "A wavy edge on the graphic, a bent letter, a ring gone egg-shaped the wrong way, artwork sliding off the face at a corner",
+      "family": "C",
+      "id": "C5",
+      "severity": "critical"
+     },
+     {
+      "caption": "the type is wrong or unreadable",
+      "check": "Type legible and correct. Every word on a face large enough to read is spelled as on the dieline, in the dieline's typeface and weight: \"loop\", \"COACHELLA\", the product line, the use words.",
+      "fails_when": "A misspelled or reinvented word, a letter dropped or added, a different typeface, type melted into the paper",
+      "family": "C",
+      "id": "C6",
+      "severity": "critical"
+     },
+     {
+      "caption": "the artwork breaks at a fold",
+      "check": "Continuity across folds. Where the dieline's artwork continues over a fold it continues on the box; where it stops at the fold, it stops.",
+      "fails_when": "A gradient that jumps at an edge, a graphic that restarts on the next face",
+      "family": "C",
+      "id": "C7",
+      "severity": "minor"
+     },
+     {
+      "caption": "the wrong shade on a panel",
+      "check": "Per-panel hue. Each face's colour is its dieline panel's: the dark teal, the plum, the pink, the mint, each where the dieline puts it. The scripts report the hue distance per panel; by eye, hold the dieline beside the face.",
+      "fails_when": "A face shifted from its panel: teal gone green or navy, plum gone magenta or brown, pink gone orange or lilac, mint gone blue; a distance reported over its line with no light in the scene to explain it",
+      "family": "D",
+      "id": "D1",
+      "severity": "critical"
+     },
+     {
+      "caption": "something recoloured that should not be",
+      "check": "Nothing recoloured unasked. The backdrop, the shadows, the inside of the box, the tray and the case: what the finisher was not asked to colour keeps the render's neutral.",
+      "fails_when": "The whole box tinted one colour, the backdrop tinted, the tray or the inside turned to the artwork's colour, the case coloured",
+      "family": "D",
+      "id": "D2",
+      "severity": "critical"
+     },
+     {
+      "caption": "the gradient is wrong",
+      "check": "The gradient. Dark at the dieline's dark end, light at its light end, the transition as smooth and as placed as the dieline's.",
+      "fails_when": "Reversed, banded, compressed to one end, or turned into a flat fill",
+      "family": "D",
+      "id": "D3",
+      "severity": "minor"
+     },
+     {
+      "caption": "the finish is wrong: plastic, all-over gloss, or flat",
+      "check": "Paper and gloss. The faces read as printed card, matte with the fine grain of print; gloss only where the finisher named it; the render's lit and shadowed faces kept under the artwork.",
+      "fails_when": "A plastic, wet or metallic surface, gloss over a whole face, a face that lost its shading and reads flat, a face lit from a direction the render was not",
+      "family": "D",
+      "id": "D4",
+      "severity": "minor"
+     },
+     {
+      "caption": "an artefact in the picture",
+      "check": "The image is otherwise sound. No doubled boxes, no floating shadow, no melted backdrop, no seam where the composite was, no player bar or frame from a screenshot.",
+      "fails_when": "Any artefact a viewer notices before the box",
+      "family": "E",
+      "id": "E1",
+      "severity": "minor"
+     },
+     {
+      "caption": "a box cut off or a soft edge",
+      "check": "Whole and sharp. Both boxes whole in the frame, the type sharp at delivery size, no halo along the box edges.",
+      "fails_when": "A box cut by the frame, a soft edge, a halo round the silhouette",
+      "family": "E",
+      "id": "E2",
+      "severity": "minor"
+     }
+    ],
+    "families": [
+     {
+      "id": "A",
+      "name": "Identity",
+      "note": "Any failure here stops the asset."
+     },
+     {
+      "id": "B",
+      "name": "Geometry",
+      "note": ""
+     },
+     {
+      "id": "C",
+      "name": "Artwork placement",
+      "note": ""
+     },
+     {
+      "id": "D",
+      "name": "Colour and finish",
+      "note": ""
+     },
+     {
+      "id": "E",
+      "name": "Craft and delivery",
+      "note": ""
+     }
+    ],
+    "grading_rules": "- **Judge what the scene shows.** A panel hidden by the view passes its check; a panel shown wrongly\n  fails it. The closed box shows one large face and two thin walls; the open box shows the inside of\n  the lid, the tray, the front flap with its round die-cut, and its outer walls.\n- **The white render and the dieline are the truth.** When the candidate's own white render, composite\n  and dieline are attached, judge geometry against the render and the print against the dieline. When\n  they are not, say so in the note and judge against the pinned scene of the same look.\n- **The numbers are evidence, not the verdict.** Where the scripts report a silhouette overlap, an\n  artwork match or a per-panel colour distance, read the words in the measurement block and look for\n  what in the picture explains them. A number over its line with nothing in the picture to explain it\n  fails the check; a number under its line does not pass a check the eye can see failing.\n- **Absence is the usual miss.** Look for the panel that is blank, the die-cut that is filled, the\n  gradient that has become a flat colour, the inside print that is missing.\n- **Fail when unsure**, and say in the note what you could not see.",
+    "object_class": null,
+    "path": "products/packaging/skill/references/rubric.md",
+    "problem": null,
+    "reporting_only": false,
+    "sha256": "9527510ea655937aa5d00e285617f16e240143f140a4e724721e3de5b43fa3ca",
+    "version": "0.1.1"
+   },
+   "sheet": {
+    "path": "products/packaging/skill/references/product-sheet.md",
+    "sha256": "9ec82dd8d065f331c33b8354e5bff3e333015105918c00942509132b20b5be02"
+   },
+   "skill": "packaging",
+   "status": "pilot",
+   "verdicts": {
+    "route": "vesper",
+    "tool": "record_verdict"
+   },
+   "vesper_product": null
+  }
+ },
+ "prompting": {
+  "edition": "loop",
+  "lessons": [
+   {
+    "evidence": "Eclipse rounds 5 to 11 (2026-09-03 to 2026-09-23): every graded draw started from the render. Round 5: the render with the wear photograph kept 83 %, the render alone 56 %, so the render is necessary and not sufficient.",
+    "held_by": "code (Vesper): `generate_product_image` attaches it first and takes no reference argument",
+    "id": "render-first",
+    "lesson": "The product's real render, in the right colourway and view, is image 1. The words never describe the product from memory."
+   },
+   {
+    "evidence": "A rule, not a measured result, since 2026-09-02: nobody approved the second hop, and what drifts in one draw is copied into the next. Vesper's iteration attached the previous draw until the 2026-09 rebuild of its connector.",
+    "held_by": "code (Vesper): no reference parameter; an iteration starts again from the render",
+    "id": "never-chain",
+    "lesson": "A draw is never the reference for the next draw. Every new draw starts again from the approved render."
+   },
+   {
+    "evidence": "Every graded round ran two or three: Eclipse the render and a wear photograph, plus the flat-lay for colour (rounds 5 to 11); packaging the composite, the render and the dieline (rounds 1 and 2, 2026-09-24). Each extra image is one more thing to lend (see `second-image-lends-colour`). More has not been tried.",
+    "held_by": "code (Vesper): `max_references` from the creative kit",
+    "id": "max-three-references",
+    "lesson": "Two or three references at most, each with one job."
+   },
+   {
+    "evidence": "Skeleton v3, first sentence (Eclipse `generation.md`, 2026-09-23). Round 5: asked only for how the mask is worn, the wear photograph still supplied the whole picture on three-quarter views, so the clause is necessary and not sufficient.",
+    "held_by": "the skill; code (Vesper) fixes the order",
+    "id": "ask-each-reference-one-thing",
+    "lesson": "Say in one clause what each reference is for: \"image 1 as the exact object\", \"image 2 for how it is worn\". Position is safe when code fixes the order."
+   },
+   {
+    "evidence": "Round 5: all 8 three-quarter draws with the wear photograph were the reference man, 6 on his floral quilt. Round 6: cropped to the mask, 7 of 8 were still him. Round 8: 4 of 6 nap draws took his hair and face type when the prompt asked for a man. Draws with no wear photograph: no leak in 24 (round 6).",
+    "held_by": "the skill: the back render replaces the wear photograph when the prompt asks for someone the reference could be",
+    "id": "a-person-hands-themselves-over",
+    "lesson": "A photograph with a person in it hands that person over: face, hair, clothes, bedding, jewellery. Only removing the photograph stops it."
+   },
+   {
+    "evidence": "Packaging round 1 (2026-09-24): the whole dieline sheet lent the other box's inside print, A2 on 6 draws. Eclipse round 5: the wear photograph brought its warm lamp and quilt. The useful side: the Teal flat-lay, attached for colour, halved the blue drift (round 6).",
+    "held_by": "the skill: attach only the half or crop the job needs (packaging v2 sends the box's own dieline half)",
+    "id": "second-image-lends-colour",
+    "lesson": "A second image lends what is in it (colour, print, bedding, light), not only what it was asked for."
+   },
+   {
+    "evidence": "Round 8 (2026-09-03): profile asked on all 9 cells, three-quarter drawn on 17 of 18, and the grader was told they were profiles.",
+    "held_by": "code (repo): the measured view wins over the requested one; Vesper records when a view was assumed",
+    "id": "view-asked-is-not-view-got",
+    "lesson": "The scene sentence and the references decide the view, not a flag or a word. Read the view off the draw."
+   },
+   {
+    "evidence": "Skeleton v2 said \"a wide shallow oval\". The model traced an oval panel round each eye, and the grader, reading \"oval\" in the rubric and the sheet, passed it three runs of three. The studio failed it: \"so this one fails ... even though you said pass\" (round 10, 2026-09-23). \"A low oblong\" in the sheet moved three pinned grades and was reverted the same day.",
+    "held_by": "the skill; one change at a time",
+    "id": "one-word-moves-it",
+    "lesson": "One descriptive word can move every draw, and the same word in the grader's instructions makes it pass the result."
+   },
+   {
+    "evidence": "Packaging v1 said \"The earplug case in the tray is matte black\". The renders carry no case, and 13 of 14 draws set one in the tray (round 1, 2026-09-24). Eclipse P2 stated every part and carried one prohibition (round 5).",
+    "held_by": "the skill; every product skeleton is written this way",
+    "id": "say-what-is-there",
+    "lesson": "Describe what should be in the picture. A sentence about an object gets the object, and a list of forbidden things is a menu: one prohibition per idea at most."
+   },
+   {
+    "evidence": "Round 5: every Teal draw sat a median 23.5° bluer than the product. Round 6, the colour named at both ends with the flat-lay attached: 12.8° off, against 22.7° for the arm without them (prompt record), and 7.6° on the whole-mask read. Round 11: 9.2° median, GPT Image 2 within 0.4° on a sleep shot.",
+    "held_by": "the skill, in each product's skeleton",
+    "id": "name-both-ends",
+    "lesson": "Name a colour at both ends, what it is and what it must not drift into, and give the model a colour reference."
+   },
+   {
+    "evidence": "`generate.py` reads skeleton v3 from `generation.md` at run time (2026-09-23); each round's prompts sit in `prompts/<round>/`; the CMF template is read from `prompt-template.md` and copied into no script (2026-09-24).",
+    "held_by": "code (repo, and Vesper through the creative kit)",
+    "id": "prompt-in-a-file",
+    "lesson": "A product prompt lives in a versioned file that code reads at run time. A prompt typed into a box has no version."
+   },
+   {
+    "evidence": "Vesper's CMF rewrite turned Pantone 2160C into \"a vivid lime green\" in one attempt and \"a muted purple-grey\" in the next, and guessed the zones from the picture (CMF round 0, 2026-09-24).",
+    "held_by": "code (Vesper): `enhance_prompt` returns a product prompt unchanged",
+    "id": "no-model-rewrite",
+    "lesson": "A product prompt is never rewritten by a model before it is sent."
+   },
+   {
+    "evidence": "Damien's template rule (brief of 2026-09-23). The CMF round-1 draw, one colourway with the clown the only image, kept all three zones in the row's colour (2026-09-24). Eclipse has drawn one colourway per cell since round 5.",
+    "held_by": "code (Vesper): `cmf_render` and `generate_product_image` take one colourway",
+    "id": "one-colourway-per-call",
+    "lesson": "One colourway per call."
+   },
+   {
+    "evidence": "Round 5: every Teal draw 23.5° bluer than the product, invisible one frame at a time; the grader called every Teal a Teal and failed D1 on none.",
+    "held_by": "code (repo): the colour bands and D3's line",
+    "id": "measure-colour-in-code",
+    "lesson": "Colour is measured in code against the product's measured band, across the set. The eye and the grader each judge one frame."
+   },
+   {
+    "evidence": "Round 8: 6 of 18 draws read textile hues more than 10° apart across three runs on identical pixels, one by 156.9°. Round 2: a mask box one pixel wide read L* 58 on a black mask.",
+    "held_by": "code (repo)",
+    "id": "check-the-measurement",
+    "lesson": "Measure the measurement: run it more than once and look at what it sampled before trusting a number."
+   },
+   {
+    "evidence": "Vesper's CMF lighting line changed with the attempt number: \"clean studio\" on 1, \"warm bias\" on 2, \"catalogue-grade\" on 3, \"editorial-grade\" on 4, where Damien asked for the clown's light, unchanged (CMF round 0, 2026-09-24).",
+    "held_by": "code (Vesper): one lighting variant in CMF Studio and `cmf_render`",
+    "id": "hold-lighting-fixed",
+    "lesson": "Keep the light the same across a set. Never vary it by attempt."
+   },
+   {
+    "evidence": "The traced-oval draw passed three of three with only a back-sleeper frame in shadow to compare against. With the lit frames `1326-final` and `1345-final` attached, C4 named the ring (round 10 follow-up, 2026-09-23).",
+    "held_by": "code (repo, Vesper): the pinned references",
+    "id": "compare-with-a-lit-photograph",
+    "lesson": "The grader judges what it is shown beside what it is told. Give it a lit photograph of the real product in the same view."
+   },
+   {
+    "evidence": "Packaging round 2 (2026-09-24): the mockup built in code, with only the paper grain taken from a draw, read PASS on three reads; round 1's model draws kept none of 16.",
+    "held_by": "the skill, and each product's pipeline",
+    "id": "code-where-code-can",
+    "lesson": "Whatever code can place exactly, code places. The model gets only what code cannot make."
+   },
+   {
+    "evidence": "Round 1: 0 of 16 draws kept. Round 2: all four surface pictures PASS, three reads each, while the model's own draws still moved the box (0.71 to 0.93 overlap).",
+    "held_by": "code (repo `mockup.py`, `surface.py`; later Vesper `packaging_mockup`)",
+    "id": "mockup-first",
+    "lesson": "For packaging, the mockup in code comes first, and the model is kept to the surface."
+   },
+   {
+    "evidence": "Packaging round 1: C6 failed on 14 of 14 draws, \"Live music\" drawn as \"Oua music\" and \"hello@\" as \"hi@\".",
+    "held_by": "code",
+    "id": "small-type-in-code",
+    "lesson": "Small type is placed in code, never drawn by the model."
+   },
+   {
+    "evidence": "Round 5: `gpt-image-2` refused the 59.66 MiB wear photograph (its limit is 50 MiB); the cell stayed empty and the limit was the finding. Round 1: files over 80 megapixels were reported missing, then given recorded derived copies (round 2).",
+    "held_by": "code (repo, Vesper): the sha256 is checked before sending",
+    "id": "never-reencode-a-pin",
+    "lesson": "A pinned reference is sent byte for byte. A copy made for a model's limit is a separate file with its own recipe and hash, never a silent resize."
+   },
+   {
+    "evidence": "Packaging `finishing.md`, Frames (2026-09-24): the render is 4096×2286; Nano Banana Pro gets a 9 px pad, GPT Image 2 222 and 223 px. GPT Image 2 still reframed in round 1, the camera pushed in (overlap 0.30 to 0.67).",
+    "held_by": "code (repo `finish.py`)",
+    "id": "pad-never-crop",
+    "lesson": "When a model does not draw the product's frame, pad the input and cut the pad off. Never crop the product."
+   },
+   {
+    "evidence": "Round 5 changed one thing per arm. Round 11: one word in the product sheet moved three pinned grades and was reverted before any draw was graded (2026-09-23).",
+    "held_by": "the person, and the record",
+    "id": "one-change-at-a-time",
+    "lesson": "Change one thing per comparison, and write down which."
+   },
+   {
+    "evidence": "The router rule in Eclipse `generation.md` (2026-09-02). Round 11: on the same prompt GPT Image 2 kept 10 of 12 by both judges, Nano Banana Pro 5 of 12. It replaces the general skill's advice to plan for a long run of generations.",
+    "held_by": "the skill",
+    "id": "two-draws-then-switch",
+    "lesson": "If a defect survives two well-aimed draws, switch the model or fix it in code. A third rewrite of the prompt is the wrong move."
+   },
+   {
+    "evidence": "CMF round 0 (2026-09-24): Damien's refinement text could be traced to the right attempt only because Vesper kept the parent attempt; the brief had named the wrong one.",
+    "held_by": "code (repo manifest line; Vesper generation record)",
+    "id": "log-every-draw",
+    "lesson": "Every draw, kept or not, gets one record line: the full prompt sent, the model, the references in order, the settings, the time."
+   },
+   {
+    "evidence": "Round 11: the same prompt kept 10 of 12 on GPT Image 2 and 5 of 12 on Nano Banana Pro by both judges, so a rate across both measures the mix, not the prompt.",
+    "held_by": "the person",
+    "id": "one-model-per-arm",
+    "lesson": "Compare two ways of working on one model. A model is its own arm."
+   },
+   {
+    "evidence": "Round 7 (2026-09-03): re-grading the same draws moved an arm from 83 % to 61 %, twenty-two points, and inverted round 6's ranking.",
+    "held_by": "code (repo `qa.py`; Vesper `grade_image`)",
+    "id": "grade-three-times",
+    "lesson": "Grade every draw three times and take the majority per check. One grade is a coin."
+   },
+   {
+    "evidence": "Round 5: the Teal drift was \"a batch fact, invisible one frame at a time\".",
+    "held_by": "the skill: the contact sheet and the review page",
+    "id": "judge-the-set",
+    "lesson": "Look at the set side by side, never only one frame at a time."
+   },
+   {
+    "evidence": "Round 11 (2026-09-23): the scripts' grader kept 20 of 24, both judges together 15 of 24; the studio failed two draws the grader had passed three of three.",
+    "held_by": "code: every grade carries its judge label",
+    "id": "second-judge-never-pooled",
+    "lesson": "A second judge reads beside the first and is never averaged with it. Count what both keep."
+   },
+   {
+    "evidence": "Round 9 (2026-09-03): the closed `cup_form` read called the bra-shaped cups `hemispheres` ten runs in ten and no positive in 25, while the free phrase called both \"contoured sleep mask\".",
+    "held_by": "code (repo harness 0.7.0)",
+    "id": "stranger-read-first",
+    "lesson": "Before the checks, read the picture as a stranger would, with no product name, and ask closed questions."
+   },
+   {
+    "evidence": "Round 10 (2026-09-22): nine negatives from the renders; colour held on all six, and a knit with its rib removed passed C1 three of three. CMF round 1 (2026-09-24): A2 held on all five of its negatives; the grader was blind to gloss, a zone swap and an 8 % crop.",
+    "held_by": "code (repo `make_negatives.py`)",
+    "id": "known-bad-in-code",
+    "lesson": "Every check gets a known-bad picture made in code, one change each, before anyone trusts it."
+   },
+   {
+    "evidence": "The bar in the mother's `checks.md`. CMF rubric 0.1.0 is reporting only (2026-09-24); no Eclipse check has reached the bar yet.",
+    "held_by": "the person, from `tools/agreement.py`",
+    "id": "report-before-blocking",
+    "lesson": "A check reports until about thirty verdicts show it agrees with the person who decides, at least eight times in ten both ways. Firing on negatives proves only that it can fail."
+   },
+   {
+    "evidence": "The studio failed draws the grader had passed three of three, twice in one day (round 10 follow-up and round 11, 2026-09-23).",
+    "held_by": "the person",
+    "id": "the-studio-decides",
+    "lesson": "A grade is a floor. The person who decides for the product decides: the art director for Eclipse, the head of design for packaging, Damien for CMF."
+   },
+   {
+    "evidence": "\"It looks like a bra but you set it past\" and \"so this one fails ... even though you said pass\" (Eclipse `vocabulary.md`, 2026-09-23) each became a correction because the words were kept.",
+    "held_by": "the skill: each product's `vocabulary.md`",
+    "id": "quote-verbatim",
+    "lesson": "Record what the person who decides said, in their words, dated. Never a paraphrase."
+   },
+   {
+    "evidence": "Eclipse `corrections.md`: the closure on the ear (round 8, then round 10) became B3's clause; a knit with no rib, seen twice, became a rule.",
+    "held_by": "the person; the feedback triage opens a draft only on the second time",
+    "id": "once-a-row-twice-a-rule",
+    "lesson": "A remark heard once is a row. Heard twice, it becomes a rule or a check, written by a person."
+   }
+  ],
+  "never_enhance_fingerprints": [
+   "Use the attached image as the exact base. Keep g",
+   "Using the provided mockup of Loop's retail box (",
+   "Using the provided product render of the Loop Ec"
+  ],
+  "references": {
+   "corrections.md": {
+    "path": "skills/genai-prompting/references/corrections.md",
+    "sha256": "6f506ee31ea6be6a859e90c87b9e7c29d7283811496a293279096df27e31a381"
+   },
+   "craft.md": {
+    "path": "skills/genai-prompting/references/craft.md",
+    "sha256": "9a5e669304dac57308b907764cacfdb9cfb23b4dc1a0e8ab20120346ccfeea88"
+   },
+   "creative-diversification.md": {
+    "path": "skills/genai-prompting/references/creative-diversification.md",
+    "sha256": "85740ba7653b648ee5a23d08df97620df80ac67d2e71d97e0ef81e0a3483ab0f"
+   },
+   "models.md": {
+    "path": "skills/genai-prompting/references/models.md",
+    "sha256": "6aee838f294b187b466f0e954d039480cdc43c30f0f8f14d6251ebd6f1124d1c"
+   },
+   "record.md": {
+    "path": "skills/genai-prompting/references/record.md",
+    "sha256": "6fcef9a83ecb94533629984e41ba23c7ee84f9e5d313efb2194d790412351032"
+   },
+   "review.md": {
+    "path": "skills/genai-prompting/references/review.md",
+    "sha256": "f0a2b0d2fc6cd4aa08e7db6138b62ee645b898b86290bd26ddee9fe5a973da60"
+   }
+  },
+  "router": {
+   "dated": "2026-09-23",
+   "rows": [
+    {
+     "lane": "product stills and wear, first",
+     "model": "gpt-image-2",
+     "name": "GPT Image 2",
+     "when": "Eclipse stills and wear shots. Round 11 (2026-09-23): kept by both judges on 10 of 12, and the closest Teal on record (0.4° and 3.6° on sleep shots). Check the crop, and watch for a generic flat eyeshade: its sleep cups read `single_dome` twice and `flat` once"
+    },
+    {
+     "lane": "product stills and wear, second",
+     "model": "gemini-3-pro-image",
+     "name": "Nano Banana Pro",
+     "when": "When GPT Image 2 fails the same check twice. Round 11: kept by both judges on 5 of 12; the studio failed two of its sleep draws as a bra"
+    },
+    {
+     "lane": "drafts",
+     "model": "gemini-3.1-flash-image",
+     "name": "Nano Banana 2",
+     "when": "Exploration and cheap first looks; identity rescue when Pro loses the object (Eclipse router, 2026-09-02). Never a delivery lane on its own evidence"
+    },
+    {
+     "lane": "packaging finish",
+     "model": "gemini-3-pro-image",
+     "name": "Nano Banana Pro",
+     "when": "Only after the mockup is built in code, and only for the surface: the paper grain (packaging round 2, 2026-09-24). GPT Image 2 reframed the box in round 1 (overlap 0.30 to 0.67)"
+    },
+    {
+     "lane": "CMF recolour",
+     "model": "gemini-3-pro-image",
+     "name": "Nano Banana Pro",
+     "when": "The clown model as the only image, the template filled by code. Every one of Vesper's 266 CMF attempts ran on it (CMF round 0, 2026-09-24); the benchmark against Damien's own renders is pending, so this row is habit, not a result"
+    },
+    {
+     "lane": "CMF drafts",
+     "model": "gemini-3.1-flash-image",
+     "name": "Nano Banana 2",
+     "when": "One draw at 1K kept all three zones in the row's colour (CMF round 1, 2026-09-24). One draw, not a result"
+    }
+   ]
+  },
+  "settings": {
+   "max_tokens": 2000,
+   "temperature": 0.3
+  },
+  "sha256": "65ca799aa1243367dec949361beb5c0cacc579ea254ba5b3d3a8e82d5725ff0e",
+  "skill": "genai-prompting",
+  "skill_body": "# Prompting image and video models, the Loop way\n\nLoop makes a growing share of its product imagery with image models, and the graded rounds on the\nEclipse sleep mask, the retail packaging and the CMF renders taught what holds a product true and\nwhat does not. This skill carries those lessons. It is also the instruction Vesper's prompt tools\nrun on, so it is written to be read on its own.\n\nOne idea runs through all of it: **use the model for judgement, use code for data.** The product\ncomes from its real render, the words about it are filled in by code, and a person decides.\n\n## First: is a Loop product in the picture?\n\nAsk this before writing a word. The answer changes everything below it.\n\n**Yes: a Loop product is in the picture** (the Eclipse sleep mask, a Loop earplug or case, the\nretail box, a CMF colourway render of a clown model):\n\n- **Its real render is image 1**, in the right colourway and view. The words never describe the\n  product from memory.\n- **The prompt is the product's skeleton, with only its slots filled**: the scene, the light, the\n  format, the colourway. The product sentences are never rewritten, shortened or \"improved\", by you\n  or by any prompt tool. Asked to enhance a product prompt, return it unchanged and say why: a model\n  rewrite invents, and in Vesper's CMF history it turned Pantone 2160C into \"a vivid lime green\" in\n  one attempt and \"a muted purple-grey\" in the next.\n- **Never iterate from a draw.** The next draw starts again from the render, with one thing changed\n  in the words.\n- **The skeletons**: Eclipse's in its skill (skeleton v3); packaging's in its skill (v2, used only\n  after the mockup is built in code); CMF's is Damien's template, filled from the sheet row and the\n  clown's key, with the clown the only image.\n- **A Loop product with no skeleton yet**: its render is still image 1, the product is named and\n  never described, and only the scene is written. Say plainly that no rubric grades it yet.\n- **With Vesper connected**, `generate_product_image` does this in code: it picks the pinned\n  references in order, fills the skeleton, makes one call per image and records every draw. For a\n  CMF row, `cmf_prompt` and `cmf_render`; for packaging, `packaging_mockup` and then\n  `packaging_finish`. `enhance_prompt` returns a product prompt unchanged.\n\n**No: nothing of Loop's is in the picture** (a mood, a world, a texture, a person with no product):\nwrite it with full craft (below). Rewriting, enhancing and editing from a previous draw are all\nallowed here.\n\n## Job 1: you just want an image\n\n1. **Name it**: the product, the colourway and the view. For packaging, the look, the box and the\n   colourway; for CMF, the sheet's tab, column and clown.\n2. **The render is image 1.** At most two more references, and each is asked only for what it\n   shows: \"image 2 for how it is worn\". A photograph with a person in it hands that person over, so\n   when the prompt asks for someone the photograph's person could be, use a render in that slot.\n3. **Fill the slots**, one sentence each. Say what should be there. One prohibition per idea at\n   most. Name a colour at both ends: what it is, and what it must not drift into.\n4. **The model comes from the router** below. One model per round.\n5. **Two draws.**\n6. **One read**, labelled as one read (`chat x1`), and shown with the product rubric's\n   plain-language captions, never bare check ids.\n7. **Keep, redo, or change one thing.** A defect that survives two well-aimed draws means switching\n   the model or fixing it in code. A third rewrite of the prompt is the wrong move.\n8. **One record line**: the date, the product, the model, the skeleton version, the draws, which was\n   kept, and how it was read.\n\nThe person decides. A read is a floor, never an approval.\n\n## Job 2: taking work to the studio, or comparing two ways of working\n\n- **Three reads per draw**, the majority per check. With Vesper, `grade_image` does it and labels it\n  `vesper x3`.\n- **A second judge beside the first, never pooled.** Report what each keeps and what both keep.\n- **Judge the set**: the draws side by side, the colour measured in code against the product's band.\n  A drift invisible in one frame is obvious across twelve.\n- **The review page**, never loose files. The person who decides verdicts there.\n- **Verdicts in their words**, dated, never paraphrased.\n- **One change per comparison, one model per arm.** One grade per draw at these batch sizes is a\n  coin: a re-grade of untouched pixels once moved an arm by twenty-two points.\n- **The record**, in the same session.\n\n## Rules that hold everywhere\n\nEach rule is a lesson in `references/craft.md`, with the round that taught it.\n\n1. **The render is image 1.** A description from memory drifts; the render does not.\n2. **Never a draw as the next reference.** What drifts in one draw is copied into the next, and\n   nobody approved the second hop.\n3. **Three references at most, each with one job.** Every extra image is one more thing to lend.\n4. **A person in a reference hands themselves over**: face, hair, clothes, bedding. Cropping did not\n   stop it; only removing the photograph did.\n5. **A second image lends everything in it**, not only what it was asked for: its light, its print,\n   its colour.\n6. **The scene sets the view**, not a flag. Asked for profile on eighteen draws, a model drew\n   three-quarter on seventeen. Read the view off the draw.\n7. **One word can move every draw, and the grader with it.** \"A wide shallow oval\" drew a traced\n   oval on each eye, and a grader reading the same word passed it.\n8. **Say what is there.** A sentence about an object gets the object; a list of forbidden things is\n   a menu.\n9. **Name a colour at both ends and measure it in code.** Naming both ends halved Eclipse Teal's\n   blue drift; the eye and the grader never saw it one frame at a time.\n10. **No model rewrites a product prompt.** A rewrite invents colour words and guesses zones.\n11. **Hold the light fixed across a set.** Light that changes by attempt changes the colour.\n12. **What code can place, code places**: the packaging mockup, small type, a pad. Round 1 of\n    packaging kept no model draw; the mockup in code, with only the grain from a draw, passed.\n13. **A pinned reference is sent byte for byte.** A model that refuses its size is a finding, not a\n    reason to resize.\n14. **Pad, never crop**, when a model does not draw the product's frame.\n15. **Two draws, then switch.** Change one thing at a time, and log every draw, kept or not.\n16. **Grade three times; judges are never pooled; the person decides.**\n\n## Which model\n\nDated 2026-09-23. The full router, the per-model notes and the reference limits are in\n`references/models.md`.\n\n| Job | First | Then |\n|---|---|---|\n| Product stills and wear shots | GPT Image 2 (`gpt-image-2`): kept by both judges on 10 of 12 in round 11 | Nano Banana Pro (`gemini-3-pro-image`): 5 of 12 |\n| Drafts and first looks | Nano Banana 2 (`gemini-3.1-flash-image`) | |\n| Packaging finish, after the mockup | Nano Banana Pro, for the surface only | |\n| CMF recolour of a clown | Nano Banana Pro; the benchmark is pending | Nano Banana 2 for drafts |\n| Look development, no product | Midjourney, by hand | |\n| Video | no Loop round yet | |\n\nNever send `input_fidelity` to GPT Image 2: the API rejects it. Nano Banana Pro garbles small type,\nso type is placed in code.\n\n## When no Loop product is in the picture\n\n**Two kinds of model.** Semantic models (Nano Banana, GPT Image 2) understand intent: write to them\nlike a collaborator, in sentences. Descriptive models (Midjourney, most diffusion models) respond\nto the density and precision of description.\n\n**Describe the scene; do not list keywords.** A paragraph beats a pile of words. Cover, in natural\norder: the subject (physical detail, clothing, pose), the environment (place, props, time of day),\nthe camera (lens, angle, framing, depth of field), the light (source, direction, temperature,\nquality) and the look.\n\n    Photorealistic photograph of a middle-aged woman with greying brown hair tied back loosely,\n    wearing a faded olive apron over a cream linen shirt. She stands at a wooden kitchen counter,\n    hands resting on a cutting board with fresh herbs. Morning light from a window camera-left\n    makes soft shadows. 50mm lens at eye level, shallow depth of field. Natural skin texture,\n    unprocessed.\n\n**Name both ends** of what matters: a colour, a light, a mood, as what it is and what it must not\nbecome.\n\n**Say what you want, not what you do not.** Not \"no dramatic lighting\" but \"flat even light, matte\nsurfaces\". Describe actions, not emotions: not \"looks sad\" but \"the corners of her mouth turn\nslightly down\".\n\n**For a naturalistic look**, avoid cinematic, dramatic, epic, stunning, masterpiece; use\ndocumentary, naturalistic, candid, ungraded.\n\n**Label each reference's role** when there are several: a STYLE reference (match the look, never\nrecreate its scene), a CHARACTER reference (match this person), an OBJECT reference (reproduce this\nitem). Make a new scene deliberately different in its geometry from a style reference.\n\n**For a character across several prompts**, write the description once and reuse it word for word.\n\n**Offer two to four versions**, each in its own box, each labelled by what it tries, with a line on\nwhy the choices were made. A product prompt is one filled skeleton, not versions of it.\n\n## Slates of ads\n\nWhen the ask is a set of ads rather than one image, the prompts are necessary and not sufficient:\nthe set has to differ in ways that matter. Same theme, meaningfully different execution. Vary two or\nthree of the seven axes: **concept, format, aspect ratio, persona, visual treatment, copy style,\ngenerator**. Run the weak / strong test on every pair: if the same person would respond the same way\nto two ads, one of them is doing nothing. **Slate variation never varies the product**: a product\nin a slate still comes from its render and its skeleton. The method, the header and the handover\nformat are in `references/creative-diversification.md`.\n\n## Video\n\nFor image to video, the image is frame one: describe only what moves, the camera, the sound and\nthe pacing. A camera that must not move is said plainly, then escalated (\"fixed tripod, absolutely\nno camera movement\"). Name sounds by their source. One or two actions in a short clip. No Loop\nround has graded video yet. Details in `references/models.md`.\n\n## If Vesper is not connected\n\n**If Vesper is not connected.** Vesper is Loop's generation tool, and it holds the model keys: it draws, grades three times, records verdicts and files feedback. Without it this still works, in a smaller way. Claude reads a picture once itself and labels that read `chat x1`, never as Vesper's grade. It writes out the exact prompt, comment line or issue text for you to paste. It never asks you for a key or an `.env` file. To connect Vesper, open Claude's settings, go to Connectors, find Vesper, click Connect and sign in with your Vesper login. If Vesper is not in the list, or the sign-in says you have no access, ask whoever runs Vesper at Loop to turn on Claude access for you.\n\nFor a product image without Vesper: write out the filled skeleton and the references in their\norder, to paste into Vesper's web app, and read what comes back once, labelled as one read.\n\n## Files\n\n| File | What it holds |\n|---|---|\n| `references/craft.md` | Every lesson, with its id, the round that taught it and what holds it |\n| `references/models.md` | The dated router, the per-model notes, the reference limits, video |\n| `references/review.md` | How a draw is read: one read or three, judges, the set, comparing |\n| `references/record.md` | What is written down for every draw and verdict, and where |\n| `references/creative-diversification.md` | Slates: the axes, the test, the method, the handover |\n| `references/corrections.md` | What this skill got wrong since the Loop edition, once or twice |\n| `CHANGELOG.md` | What changed and why, including what the general skill said that the rounds ruled out |\n| `evals/` | The skill's own cases, their rubric and their log |\n",
+  "version": "1.0.0"
+ },
+ "repo": "tensalir/loop-asset-reviewer",
+ "schema": 1,
+ "tag": "creative-v0.2.0",
+ "version": "0.2.0"
+}

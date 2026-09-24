@@ -1,0 +1,2 @@
+# The creative kit fixtures are byte-for-byte copies of a release; their sha256 is tested.
+tests/fixtures/creative/* -text

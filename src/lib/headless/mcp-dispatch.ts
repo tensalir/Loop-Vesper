@@ -36,7 +36,8 @@ export const SERVER_INSTRUCTIONS =
   'generate_asset answers inline when the draw finishes within about 50 seconds, with JPEG previews you can read and links to the full-resolution files; ' +
   'a slower draw, or one called with async: true, returns a jobId to collect with get_generation_status. ' +
   'Every draw is saved in the caller\'s Vesper project "Claude". Set allowFallback: false to forbid Replicate routing. ' +
-  'A prompt filled from a Loop product skeleton is sent as it is: enhance_prompt returns it unchanged.'
+  'A prompt filled from a Loop product skeleton is sent as it is: enhance_prompt returns it unchanged. ' +
+  'list_creative_products, get_creative_kit and get_product_references read the Loop creative kit: the products, their rubrics, and the pinned references a grade or a draw attaches.'
 
 interface JsonRpcRequest {
   jsonrpc: '2.0'

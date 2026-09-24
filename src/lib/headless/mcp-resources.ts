@@ -1,11 +1,13 @@
 /**
  * MCP `resources/list` + `resources/read` for Vesper.
- * URI scheme: vesper://product-renders, vesper://models, vesper://skill/genai-prompting
+ * URI scheme: vesper://product-renders, vesper://models, vesper://skill/genai-prompting,
+ * vesper://creative/kit, vesper://creative/products, vesper://creative/products/<slug>/rubric
  */
 
 import { getAllModels } from '@/lib/models/registry'
 import { listProductRenders } from './list-product-renders'
 import { getGenAiSkillResourceText } from './mcp-prompts'
+import { githubAppConfigFromEnv } from '@/lib/github/app'
 
 export interface McpResourceDefinition {
   uri: string
@@ -33,10 +35,25 @@ export const MCP_RESOURCE_CATALOG: McpResourceDefinition[] = [
     uri: 'vesper://skill/genai-prompting',
     name: 'Gen-AI prompting skill',
     description:
-      'The Loop Gen-AI prompting skill substrate used by enhance_prompt and iterate_prompt.',
+      "The prompting skill enhance_prompt runs on: the Loop edition from the creative kit when Vesper can read it, else the bundled skill.",
     mimeType: 'text/markdown',
   },
+  {
+    uri: 'vesper://creative/kit',
+    name: 'Loop creative kit',
+    description: "The kit Vesper runs on: version, tag, commit, whether it is stale, and its products.",
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'vesper://creative/products',
+    name: 'Loop products Vesper serves',
+    description:
+      'Each product in the creative kit that Vesper serves, with its rubric version and who decides. Each rubric is at vesper://creative/products/<slug>/rubric.',
+    mimeType: 'application/json',
+  },
 ]
+
+const RUBRIC_URI = /^vesper:\/\/creative\/products\/([a-z0-9-]+)\/rubric$/
 
 export async function readMcpResource(
   uri: string,
@@ -85,16 +102,48 @@ export async function readMcpResource(
   }
 
   if (uri === 'vesper://skill/genai-prompting') {
+    const fromKit = await kitPromptingText()
     return {
       contents: [
         {
           uri,
           mimeType: 'text/markdown',
-          text: getGenAiSkillResourceText(),
+          text: fromKit ?? getGenAiSkillResourceText(),
         },
       ],
     }
   }
 
+  if (uri === 'vesper://creative/kit' || uri === 'vesper://creative/products' || RUBRIC_URI.test(uri)) {
+    const { getCreativeKit } = await import('@/lib/creative/kit-runtime')
+    const { kitHeader, kitSection, listProducts, rubricMarkdown } = await import('@/lib/creative/tool-views')
+    const { resolveProduct } = await import('@/lib/creative/products')
+    const loaded = await getCreativeKit()
+    if (uri === 'vesper://creative/kit') {
+      const { structured } = kitSection(loaded, 'summary', () => true)
+      return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(structured, null, 2) }] }
+    }
+    if (uri === 'vesper://creative/products') {
+      const products = listProducts(loaded.kit, () => true)
+      return {
+        contents: [{ uri, mimeType: 'application/json', text: JSON.stringify({ ...kitHeader(loaded), products }, null, 2) }],
+      }
+    }
+    const slug = RUBRIC_URI.exec(uri)![1]
+    const { product } = resolveProduct(loaded.kit, slug)
+    return { contents: [{ uri, mimeType: 'text/markdown', text: rubricMarkdown(slug, product) }] }
+  }
+
   throw new Error(`Unknown resource URI: ${uri}`)
+}
+
+/** The Loop edition's body from the kit, or null (no App, no kit, or a failure: the bundled skill is served). */
+async function kitPromptingText(): Promise<string | null> {
+  if (!githubAppConfigFromEnv()) return null
+  try {
+    const { loadKitPrompting } = await import('@/lib/creative/kit-runtime')
+    return (await loadKitPrompting())?.text ?? null
+  } catch {
+    return null
+  }
 }

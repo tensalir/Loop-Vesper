@@ -40,6 +40,10 @@
     {
       "path": "/api/cron/oauth-cleanup",
       "schedule": "17 4 * * *"
+    },
+    {
+      "path": "/api/cron/creative-pins",
+      "schedule": "23 5 * * *"
     }
   ]
 }
