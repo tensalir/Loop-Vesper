@@ -95,7 +95,7 @@ export async function gradeCandidate(req: GradeRequest, deps: GradeDeps): Promis
   const { product } = req
   if (product.kind === 'packaging') {
     throw new GradingPromptError(
-      "Vesper does not grade packaging yet: its grader's words are in the kit, and the packaging tools that attach the cell's composite, white render and dieline come in the next change. Read it with /creative:packaging, labelled as one read."
+      "a packaging picture is graded against its cell (look, box, colourway) and the cell's composite, through grade_image's packaging path"
     )
   }
   if (product.kind === 'cmf') {

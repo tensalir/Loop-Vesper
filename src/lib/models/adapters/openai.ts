@@ -19,6 +19,20 @@ const SIZE_TABLE: Record<string, Record<number, string>> = {
   '3:4':   { 1024: '1152x1536', 2048: '1536x2048', 4096: '2448x3264' },
 }
 
+/**
+ * The aspect ratio and resolution that make this adapter send exactly `size` (e.g. '1536x1024' →
+ * 3:2 at 1024), or null when no pair does. Lets a caller that knows the size it needs, such as
+ * packaging's finishing lane, reach it through the adapter without a second copy of the table.
+ */
+export function adapterSizeFor(size: string): { aspectRatio: string; resolution: number } | null {
+  for (const [aspectRatio, byRes] of Object.entries(SIZE_TABLE)) {
+    for (const [res, s] of Object.entries(byRes)) {
+      if (s === size) return { aspectRatio, resolution: Number(res) }
+    }
+  }
+  return null
+}
+
 function resolveSize(aspectRatio?: string, resolution?: number): string | undefined {
   if (!aspectRatio || aspectRatio === 'auto') return 'auto'
   const byRes = SIZE_TABLE[aspectRatio]
