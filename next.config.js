@@ -45,8 +45,12 @@ const nextConfig = {
     // src/lib/headless/mcp-prompts.ts). Without this the files were never traced
     // into the serverless bundle and every prompt rewrite ran on a generic fallback.
     outputFileTracingIncludes: {
-      '/api/**/*': ['./src/lib/skills/**/*.md'],
+      '/api/**/*': ['./src/lib/skills/**/*.md', './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'],
     },
+    // The CMF spec check reads a PDF's text with pdf.js's legacy build on the server
+    // (src/lib/creative/cmf/pdf-lines.ts); it is loaded from node_modules, not bundled, and its
+    // fake worker file is traced above.
+    serverComponentsExternalPackages: ['pdfjs-dist'],
   },
   webpack: (config, { isServer }) => {
     // Handle Node.js modules for server-side only (for Vertex AI SDK)

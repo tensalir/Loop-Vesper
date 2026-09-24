@@ -2,3 +2,5 @@
 tests/fixtures/creative/* -text
 # The golden feedback issue is compared byte for byte.
 tests/fixtures/feedback/* -text
+# The CMF parity fixture is what the plugin repository's own scripts answered; compared exactly.
+tests/fixtures/cmf/* -text
