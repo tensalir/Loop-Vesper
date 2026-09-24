@@ -181,7 +181,10 @@ test.describe('products and references', () => {
     expect(cmf.references.map((r) => r.pin_id)).toEqual(['case-experience2--front'])
     const box = referencePlan(kit, { product: 'packaging', purpose: 'grade', look: 'coachella', scene: 'closed' }, [])
     expect(box.references[0].pin_id).toBe('white-closed')
-    expect(box.missing.join()).toContain('not a pin with a sha256 in the kit')
+    // every packaging reference is a pin with a sha256 since the plugin's kit fix (3461873): what is
+    // missing here is only what has not been synced into creative-pins yet
+    expect(box.missing.length).toBeGreaterThan(0)
+    expect(box.missing.every((m) => m.includes('not pinned yet'))).toBe(true)
   })
 
   test('the product list names only tools the caller can call', () => {

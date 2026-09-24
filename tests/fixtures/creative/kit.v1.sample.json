@@ -2399,11 +2399,11 @@
      },
      {
       "boxes": null,
-      "bytes": null,
+      "bytes": 4147341,
       "colourway": null,
       "figma": null,
       "frontify_asset_id": "eyJpZGVudGlmaWVyIjozMTgxLCJ0eXBlIjoiYXNzZXQifQ==",
-      "height": null,
+      "height": 3072,
       "id": "eyJpZGVudGlmaWVyIjozMTgxLCJ0eXBlIjoiYXNzZXQifQ==",
       "kind": "positive",
       "local_path": "products/packaging/references/frontify/coachella/Loop_Coachella-Packaging_0001.png",
@@ -2414,18 +2414,18 @@
       ],
       "scene": "closed",
       "set": "coachella",
-      "sha256": null,
+      "sha256": "50e7d876ab499bdf2ff39ae45279d1436bc739b67dbf3167d1faabe656f72acb",
       "source": "frontify",
       "title": "Loop_Coachella-Packaging_0001",
-      "width": null
+      "width": 3072
      },
      {
       "boxes": null,
-      "bytes": null,
+      "bytes": 386356,
       "colourway": null,
       "figma": null,
       "frontify_asset_id": "eyJpZGVudGlmaWVyIjozMTY1LCJ0eXBlIjoiYXNzZXQifQ==",
-      "height": null,
+      "height": 2048,
       "id": "eyJpZGVudGlmaWVyIjozMTY1LCJ0eXBlIjoiYXNzZXQifQ==",
       "kind": "reference",
       "local_path": "products/packaging/references/frontify/coachella/Loop_Coachella-Elevated_MAIN-Carry_Case.jpg",
@@ -2436,10 +2436,10 @@
       ],
       "scene": null,
       "set": "coachella",
-      "sha256": null,
+      "sha256": "8f530abd479cca8080b64d9ba4dddad581753b929d6649ad0c4f53e552137c5a",
       "source": "frontify",
       "title": "Loop_Coachella-Elevated_MAIN-Carry_Case",
-      "width": null
+      "width": 2048
      }
     ],
     "pins_file": {
