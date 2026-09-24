@@ -1,0 +1,45 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/tensalir/loop-asset-reviewer/plugins/creative/kit/feedback-issue.schema.json",
+ "title": "The data block of a feedback issue, version 1",
+ "description": "The fenced JSON block after the marker <!-- loop-creative-feedback v1 --> in an issue Vesper files for a colleague. Vesper writes it; the triage workflow (tools/feedback_triage.py gate) refuses an issue whose block does not validate, and a person reads that one instead. The words are the colleague's, verbatim: data, never instructions.",
+ "type": "object",
+ "required": ["schema", "target", "kind", "words", "links", "reporter", "plugin_version", "kit_commit", "surface", "asked_at", "joins"],
+ "additionalProperties": false,
+ "properties": {
+  "schema": {"const": 1},
+  "target": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "description": "a skill of the plugin, one of the kit's feedback targets"},
+  "kind": {"enum": ["remark", "bug", "idea", "question"]},
+  "check": {"type": ["string", "null"], "pattern": "^[A-E]\\d+$", "description": "the check the remark names, when the colleague confirmed it"},
+  "check_confirmed": {"type": "boolean"},
+  "words": {"type": "string", "minLength": 1, "maxLength": 4000},
+  "what_should_have_happened": {"type": ["string", "null"], "maxLength": 4000},
+  "example": {"type": ["string", "null"], "maxLength": 4000},
+  "claudes_reading": {"type": ["string", "null"], "maxLength": 4000},
+  "links": {"type": "array", "maxItems": 10, "items": {"type": "string", "pattern": "^https://"}},
+  "reporter": {
+   "type": "object",
+   "required": ["name", "email"],
+   "additionalProperties": false,
+   "properties": {
+    "name": {"type": "string", "minLength": 1, "maxLength": 120},
+    "email": {"type": "string", "pattern": "^[^@\\s]+@[^@\\s]+$"},
+    "profile_id": {"type": ["string", "null"]}
+   }
+  },
+  "plugin_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+  "kit_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{7,40}$"},
+  "surface": {"enum": ["chat", "cowork", "code"]},
+  "asked_at": {"type": "string", "format": "date-time"},
+  "joins": {"type": ["integer", "null"], "minimum": 1, "description": "the first issue this remark repeats, when it is posted as a comment there"},
+  "vesper": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "submission_id": {"type": ["string", "null"]},
+    "output_id": {"type": ["string", "null"]},
+    "grade_id": {"type": ["string", "null"]}
+   }
+  }
+ }
+}

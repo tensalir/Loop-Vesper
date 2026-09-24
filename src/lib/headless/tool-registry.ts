@@ -32,6 +32,10 @@ export const HEADLESS_TOOLS = [
   'record_grade',
   'record_verdict',
   'export_creative_records',
+  'list_feedback_targets',
+  'list_feedback',
+  'preview_feedback',
+  'submit_feedback',
 ] as const
 
 export type HeadlessTool = (typeof HEADLESS_TOOLS)[number]
@@ -75,6 +79,12 @@ export const TOOL_META: Record<HeadlessTool, ToolMeta> = {
   record_verdict: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
   // The plugin repository's nightly read-back: only on a static credential an admin issues for it.
   export_creative_records: { group: 'creative', oauth: false, selfIssued: false, org: false, adminIssuable: true },
+  // Feedback on the Loop Creative plugin, filed as issues in its repository in the caller's own
+  // name. Off the org token: an issue needs to know who is filing it.
+  list_feedback_targets: { group: 'feedback', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  list_feedback: { group: 'feedback', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  preview_feedback: { group: 'feedback', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  submit_feedback: { group: 'feedback', oauth: true, selfIssued: true, org: false, adminIssuable: true },
 }
 
 export function isHeadlessTool(name: string): name is HeadlessTool {
