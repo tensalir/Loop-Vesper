@@ -26,7 +26,7 @@ const PREFERRED_PROTOCOL_VERSION = '2025-11-25'
 
 export const SERVER_INFO = {
   name: 'vesper-headless',
-  version: '1.2.0',
+  version: '2.0.0',
   description:
     'Vesper headless surface: Gen-AI prompting, Loop product renders, image and video generation — backed by the Loop Gen-AI prompting skill.',
 }
@@ -334,16 +334,19 @@ export async function dispatch(
 }
 
 /**
- * Shared MCP POST handler for `/api/mcp` (bearer header) and
- * `/api/mcp/[token]` (token in the URL, for Claude's custom-connector form).
+ * Shared MCP POST handler for `/api/mcp` (bearer header or a per-person
+ * sign-in token) and `/api/mcp/[token]` (a static token in the URL).
+ * `challenge` is set by the bare `/api/mcp` only: its 401s point the client
+ * at the sign-in, the URL-token route's never do.
  */
 export async function handleMcpPost(
   request: NextRequest,
-  options: { tokenFromPath?: string } = {}
+  options: { tokenFromPath?: string; challenge?: boolean } = {}
 ): Promise<NextResponse> {
   const verify = await verifyHeadlessRequest(request, {
     surface: 'mcp',
     tokenFromPath: options.tokenFromPath,
+    challenge: options.challenge ? { origin: new URL(request.url).origin } : undefined,
   })
   if (!verify.ok) return verify.response
 

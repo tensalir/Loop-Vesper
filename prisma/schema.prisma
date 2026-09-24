@@ -38,6 +38,9 @@ model Profile {
   packagingAccess Boolean  @default(false) @map("packaging_access")
   // Per-user toggle that grants CRUD on the Approved Materials library.
   packagingEngineerRole Boolean @default(false) @map("packaging_engineer_role")
+  // Per-user toggle that lets a person connect Claude to Vesper with their own sign-in
+  // (the MCP connector's OAuth flow). Admins pass without it.
+  mcpAccess      Boolean   @default(false) @map("mcp_access")
   pausedAt       DateTime? @map("paused_at")
   deletedAt      DateTime? @map("deleted_at")
   createdAt      DateTime  @default(now()) @map("created_at")
@@ -58,6 +61,7 @@ model Profile {
   timelineSequences   TimelineSequence[]
   timelineRenderJobs  TimelineRenderJob[]
   headlessCredentials HeadlessCredential[]
+  mcpOAuthCodes       McpOAuthCode[]
   cmfImports          CmfImport[]
   cmfPackets          CmfPacket[]
   cmfRenders          CmfRender[]
@@ -761,7 +765,9 @@ model HeadlessCredential {
   id                 String    @id @default(uuid()) @db.Uuid
   ownerId            String    @map("owner_id") @db.Uuid
   name               String // Human-readable label (e.g. "Damien — Cursor")
-  tokenHash          String    @unique @map("token_hash") // sha256 of raw token
+  // sha256 of the raw token. NULL for an OAuth credential, whose access and refresh
+  // tokens live in mcp_oauth_tokens.
+  tokenHash          String?   @unique @map("token_hash")
   tokenPrefix        String    @map("token_prefix") // e.g. "vsp_live_a1b2"
   // Allowed tools and models — empty arrays mean "no access".
   // Tools mirror the MCP/REST surface names: 'enhance_prompt', 'iterate_prompt',
@@ -776,6 +782,13 @@ model HeadlessCredential {
   expiresAt          DateTime? @map("expires_at")
   revokedAt          DateTime? @map("revoked_at")
   revokedReason      String?   @map("revoked_reason")
+  // 'static' (a vsp_live_ token issued by hand or from /headless) or 'oauth' (one person
+  // signed in through a client such as claude.ai; one row per person and client key).
+  kind               String    @default("static")
+  oauthClientId      String?   @map("oauth_client_id")
+  oauthClientName    String?   @map("oauth_client_name")
+  oauthClientKey     String?   @map("oauth_client_key")
+  subjectEmail       String?   @map("subject_email")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
@@ -783,6 +796,8 @@ model HeadlessCredential {
   usage   HeadlessUsageLog[]
   buckets HeadlessRateBucket[]
   mcpJobs  HeadlessMcpJob[]
+  oauthCodes  McpOAuthCode[]
+  oauthTokens McpOAuthToken[]
 
   @@index([ownerId])
   @@index([tokenPrefix])
@@ -1467,4 +1482,57 @@ model PackagingActivity {
 
   @@index([packetId, createdAt(sort: Desc)])
   @@map("packaging_activity")
+}
+
+// A single-use OAuth authorization code (5 minutes), stored hashed. Bound to the client, the
+// redirect URI, the PKCE challenge, the scope, the resource and the credential it mints for.
+model McpOAuthCode {
+  id            String    @id @default(uuid()) @db.Uuid
+  codeHash      String    @unique @map("code_hash")
+  profileId     String    @map("profile_id") @db.Uuid
+  credentialId  String    @map("credential_id") @db.Uuid
+  clientId      String    @map("client_id")
+  redirectUri   String    @map("redirect_uri")
+  codeChallenge String    @map("code_challenge")
+  scope         String
+  resource      String
+  expiresAt     DateTime  @map("expires_at")
+  usedAt        DateTime? @map("used_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  profile    Profile            @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  credential HeadlessCredential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  tokens     McpOAuthToken[]
+
+  @@index([expiresAt])
+  @@map("mcp_oauth_codes")
+}
+
+// An OAuth access token (vsp_oat_, 1 hour) or refresh token (vsp_ort_, rotating), stored hashed.
+// Every token issued from one code shares a family; reusing a spent refresh token past the grace
+// window revokes the whole family.
+model McpOAuthToken {
+  id              String    @id @default(uuid()) @db.Uuid
+  credentialId    String    @map("credential_id") @db.Uuid
+  kind            String // access | refresh
+  tokenHash       String    @unique @map("token_hash")
+  familyId        String    @map("family_id") @db.Uuid
+  parentId        String?   @map("parent_id") @db.Uuid
+  codeId          String?   @map("code_id") @db.Uuid
+  clientId        String    @map("client_id")
+  scope           String
+  resource        String
+  familyExpiresAt DateTime  @map("family_expires_at")
+  expiresAt       DateTime  @map("expires_at")
+  usedAt          DateTime? @map("used_at")
+  revokedAt       DateTime? @map("revoked_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  credential HeadlessCredential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  code       McpOAuthCode?      @relation(fields: [codeId], references: [id], onDelete: SetNull)
+
+  @@index([credentialId])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("mcp_oauth_tokens")
 }

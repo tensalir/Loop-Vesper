@@ -37,6 +37,10 @@
     {
       "path": "/api/cron/mcp-jobs",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/oauth-cleanup",
+      "schedule": "17 4 * * *"
     }
   ]
 }

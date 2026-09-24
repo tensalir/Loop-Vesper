@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { User, BarChart3, Sparkles, Image as ImageIcon, Users } from 'lucide-react'
 import { AccountSettings } from '@/components/settings/AccountSettings'
+import { ConnectedApps } from '@/components/settings/ConnectedApps'
 import { AnalyticsSettings } from '@/components/settings/AnalyticsSettings'
 import { PromptManagementSettings } from '@/components/settings/PromptManagementSettings'
 import { RendersManagementSettings } from '@/components/settings/RendersManagementSettings'
@@ -66,8 +67,9 @@ export default function SettingsPage() {
           )}
         </TabsList>
 
-        <TabsContent value="account" className="mt-6">
+        <TabsContent value="account" className="mt-6 space-y-6">
           <AccountSettings />
+          <ConnectedApps />
         </TabsContent>
 
         <TabsContent value="analytics" className="mt-6">
