@@ -251,12 +251,15 @@ test.describe('grading a picture', () => {
     expect(text).toContain('View frontal assumed')
   })
 
-  test('packaging and CMF are refused until their grader reaches the kit', async () => {
-    for (const slug of ['packaging', 'cmf']) {
-      await expect(
-        gradeCandidate({ kit, slug, product: kit.products[slug] as KitProduct, candidate, colourway: null, view: null, claim: null, claimSource: null }, fakeGradeDeps([{}]))
-      ).rejects.toThrow('carries no grader')
-    }
+  test('the product-imagery grader refuses packaging and CMF, which have graders of their own', async () => {
+    const run = (slug: string) =>
+      gradeCandidate({ kit, slug, product: kit.products[slug] as KitProduct, candidate, colourway: null, view: null, claim: null, claimSource: null }, fakeGradeDeps([{}]))
+    await expect(run('packaging')).rejects.toThrow('packaging')
+    await expect(run('cmf')).rejects.toThrow('tab, column and clown')
+    const stripped = { ...kit.products.eclipse, grading_prompt: null } as KitProduct
+    await expect(
+      gradeCandidate({ kit, slug: 'eclipse', product: stripped, candidate, colourway: null, view: null, claim: null, claimSource: null }, fakeGradeDeps([{}]))
+    ).rejects.toThrow('carries no grader')
   })
 
   test('the answer names the decider, the judge label, the plain-language captions and the grade id', async () => {

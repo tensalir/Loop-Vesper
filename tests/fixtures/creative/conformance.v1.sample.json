@@ -60,6 +60,64 @@
  ],
  "products": {
   "cmf": {
+   "grading_prompt": {
+    "example": {
+     "inputs": {
+      "column": "E",
+      "key": "case-experience2--front",
+      "spec": "experience-2-cc"
+     },
+     "prompt": "You are grading one CMF render for Loop's lead CMF designer: a recoloured render of a clown model, with the clown open beside it and the SKU's sheet row in hand. Read it as someone who has never seen the brief.\n\nImage 1 is the CANDIDATE. Image 2 is the CLOWN MODEL it was made from.\nGrade image 1, and only image 1, against image 2 and THE ROW. The clown is never under review: a difference in shape, light, camera or ground between the two is a fault in the candidate.\n\nTHE ROW: Experience 2 CC, column E (SKU 3), Ice blu classic matte. Every value as the sheet writes it; a line break inside a cell is shown as |.\n- Shell - Front: Material: ABS; Outer Shell: VDI 24 — Matte Pantone 544C; Inner Shell: VDI 24 — Matte Pantone 544C; Finish Logo: Matte; Artwork: /. Codes: Pantone 544C (no confirmed hex).\n- Shell - Back: Material: ABS; Outer Shell: VDI 24 — Matte Pantone 544C; Inner Shell: VDI 24 — Matte Pantone 544C; Color Artwork: White; Artwork: see artwork & TD. Codes: Pantone 544C (no confirmed hex).\n- Insert: Material: Silicone; Colour: Pantone 544C; Finishing: VDI 24; Finishing Technique: Antistatic Coating + Grinding; Artwork: /. Codes: Pantone 544C (no confirmed hex).\n- Cord: Material: TPE; Colour: VDI 24 — Pantone 2160C; Finishing: Matte; Finishing Technique: Antistatic Coating; Artwork: /. Codes: Pantone 2160C (no confirmed hex).\n- ARTWORK: Colour: White; Technique: Pad print. Codes: none in the row.\n\nTHE KEY: clown case-experience2--front, every zone named but not yet confirmed by the lead CMF designer. Use it as the map of which zone is which part; where the picture plainly disagrees with it, say so in the notes.\n- zone #D51C1B → Shell - Front (Outer Shell), Shell - Back (Outer Shell) (the outside of both shells, base and lid; the one red of the clown)\n- zone #C6B807 → Insert (the silicone insert with the two earplug cradles)\n- zone #206893 → Shell - Front (Inner Shell), Shell - Back (Inner Shell) (the lid interior and the hinge; which shell half is the lid is for the lead CMF designer to confirm)\n- not on this clown: Cord, ARTWORK\n\nMEASUREMENTS, made in code on the pixels: evidence, not verdict.\n- zones: not measured: no code measured this picture's pixels; the read was made in Vesper. Look for the clown's colours by eye, zone by zone, into the shadows and along the parting lines.\n\nGRADING RULES, from the rubric:\nThe grader reads this section into its prompt verbatim.\n\n- **Two images, named.** Image 1 is the candidate render. Image 2 is the clown model it was drawn\n  from: the same object with each component painted one flat colour, shaded, on its own ground.\n  Judge the candidate against the clown, side by side, never against what you think the product\n  looks like.\n- **THE ROW is the spec.** The sheet row for this SKU is quoted under THE ROW: each component with\n  its material, finish, colour name and code, as the sheet wrote them. A colour, material, finish or\n  effect the row does not hold is not in the spec, however plausible it looks.\n- **THE KEY is the map.** Quoted under THE KEY: each clown colour as a hex, the component or\n  components it marks, and the components that are not on this clown. A zone that serves two\n  components names both. A component the key says is not on this clown is absent by design, never\n  missing.\n- **The measurements are evidence, not verdict.** MEASUREMENTS states per zone, in words, how much of\n  it is still within reach of the clown's colour and, where the code has a confirmed hex, how far\n  the zone's colour sits from it. They tell you where to look; they do not decide. A note that\n  ignores a large leftover share is an incomplete note.\n- **What each finish word looks like.** Judge a finish by how the part takes the light:\n  - *matte*: diffuse, no specular hotspot, the light falls off softly across the form.\n  - *VDI 18 to VDI 27*: a spark-eroded grain that scatters the light evenly; near smooth-matte at\n    VDI 18, a fine visible grain at VDI 24, coarser at VDI 27; never glossy.\n  - *satin*: a soft sheen with broad, blurred highlights. *NCVM*: a metallic sheen on a plastic\n    part, highlights that follow the form like metal, no brushed grain unless the row says so.\n  - *gloss*, *high gloss*, *mirror*: sharp specular highlights and clear reflections of the light.\n  - *grinded*, *grinding*: an abraded, frosted surface, even, with the highlights broken up.\n  - *milky*, *frosted*, *see-through*, with or without a percentage: translucent, light passing\n    through the thin edges and a soft glow in the body, more the higher the percentage; never clear\n    like glass, never opaque.\n  - *opaque*: no light through the part at any edge.\n  - *holographic*, *iridescent*, *pearlescent*: the colour shifts with the angle, inside the\n    material, not a sticker on top.\n  - *anodised*: coloured metal with a fine metallic sheen and an even tone, brushed or polished as\n    the row says.\n  - *pad print*, *silk screen*: flat ink on the surface, crisp edges, no relief. *embossed*,\n    *debossed*: relief in the material itself, in the part's own colour unless the row names one.\n- **Absence and leftover are the usual misses.** Graders flag what is wrong and skip what is still\n  there. The likeliest misses on this work: a zone, or a rim of one along a parting line, still in\n  the clown's colour (the Experience 2 carry case shells came back red); a part given no finish; a\n  part that disappeared. Look for the clown's colours first.\n- **Judge what the view shows.** A component the key says is not on this clown, or one hidden by the\n  angle, passes its check; a component shown wrongly fails it.\n- **Fail when unsure**, and say in the note what you could not see.\n\nGrade every check strictly true (passes) or false (fails). When you are unsure, the check FAILS. Judge only what image 1 shows; do not credit it for anything you cannot see.\nIn the notes, name a zone by its clown hex and the component the key gives it, and quote the row's words and codes; never describe what a code looks like from memory.\n\nTHE CHECKS:\n- A1 [gate]: The clown's object, unchanged. The same parts, in the same number, with the same silhouette, the same parting lines and the same pose as the clown. Only the surfaces change. FAILS WHEN: A part reshaped, resized, moved, merged with another or split in two; a silhouette that no longer lies on the clown's; a parting line gone, moved or added\n- A2 [gate]: No clown colour left. Every zone the key maps has lost its clown colour and taken its row's colour, all the way to its edges and into its shadows. FAILS WHEN: Any zone, or part of one, still in the clown's flat colour or a near shade of it: a whole part, a patch in shadow, a rim along a parting line, a tint the new colour did not cover\n- A3 [gate]: Each zone is its component. The colour, material and finish of each row sit on the zone the key names for that component, and nowhere else. FAILS WHEN: Two components' specs swapped; a spec bleeding across a parting line onto the next part; a zone given a colour, material or finish its row does not hold\n- A4 [gate]: Nothing added, nothing removed. The render holds what the clown holds and nothing else. FAILS WHEN: Text, a logo, a marking or a label the clown does not carry and the row does not name; a hand, a prop, packaging, a second object; or a part, a marking or a component the key places on this clown gone missing\n- B1 [critical]: Reads as the code. Each zone's colour reads as its row's code: as the confirmed hex THE ROW carries for it where there is one, else as the colour name the sheet gives beside the code. FAILS WHEN: A hue, lightness or saturation that someone holding the Pantone chip would call another colour; or a code with neither a hex nor a name judged from memory instead of reported as not judged\n- B2 [critical]: One colour per zone, unless the row names a pattern. Each zone is one even colour, shaded only by the light, unless its row names a pattern or an effect (marble, speckle, two-tone). A named pattern is drawn in the row's own codes, in the proportion the row gives where it gives one. FAILS WHEN: A second colour, a gradient, a blotch or a stripe on a zone whose row names one colour; or a named pattern drawn in colours the row does not hold, reading as something else, or not drawn at all\n- B3 [minor]: Shared codes match. Components the row gives the same code read as the same colour, allowing for their different materials and finishes. FAILS WHEN: Two parts with one code that read as two colours under the same light\n- B4 [critical]: Translucency as specified. A part the row calls milky, frosted or see-through lets light through its thin edges, as much as the row's percentage says; a part the row does not call translucent is opaque. FAILS WHEN: A translucent part drawn opaque or clear as glass; an opaque part drawn see-through; the inside of the product showing through a part that should hide it\n- C1 [critical]: Finish family. Each part reads as its row's finish, as the Grading rules describe it: matte, a VDI grain, satin, NCVM, gloss, mirror, grinded. FAILS WHEN: Gloss for matte, matte for gloss, a mirror where the row says satin, a smooth surface where the row gives a VDI grain, or one finish laid over parts the row gives different finishes\n- C2 [critical]: Material behaviour. Each part behaves as its material: silicone soft, with a rubbery sheen; ABS, PC and POM moulded plastic; aluminium anodised metal; textile with a visible weave or knit; foam soft and open; a TPE cord supple and matte. FAILS WHEN: A silicone part that reads as hard plastic or glass; a plastic part that reads as bare metal with no NCVM or anodising in its row; a metal part that reads as painted plastic; a textile that reads as a moulded surface\n- C3 [minor]: Texture at the specified grade. A VDI or grain value in the row shows as that grade, the same on every part that shares the value. FAILS WHEN: A texture visibly coarser or finer than its grade, a texture on a part whose row gives none, or two parts with one grade drawn at two\n- C4 [minor]: Coatings and effects. NCVM, holographic, UV gloss, marble and every other effect the row names appear where it names them, embedded in the material, and nowhere else. FAILS WHEN: An effect missing, painted on top like a sticker, spread onto a part whose row does not give it, or an effect no row names\n- C5 [minor]: Artwork and logos where the row says. Where the key maps a zone to artwork, it carries the row's artwork colour and technique; where a component's artwork cell is a `/`, the part carries none. FAILS WHEN: Artwork missing where the row and the key place it, in the wrong colour or technique (printed where the row says embossed), or present on a part whose artwork cell is a `/`\n- D1 [minor]: Lighting unchanged. The light falls as it does on the clown: the same direction, the same softness, highlights and shadows in the same places. FAILS WHEN: The render relit: a key light moved, a rim light or a warm or cool cast added, shadows deepened, softened or removed, a studio mood the clown does not have\n- D2 [minor]: Background unchanged. The ground behind and under the product is the clown's, in tone and colour. FAILS WHEN: A new colour, gradient, texture, floor, reflection or shadow behind or under the product\n- D3 [minor]: Camera and framing unchanged. The same angle, lens, crop, position and size in the frame as the clown. FAILS WHEN: The product moved, rotated, zoomed, recropped or seen from another angle; a perspective that no longer matches the clown\n- E1 [minor]: Edges at parting lines. Where two components meet, the change of colour and finish runs along the parting line, crisp at the scale of the image. FAILS WHEN: A soft halo, a ragged or stepped edge, a gap, or a colour that stops short of the line or runs past it\n- E2 [minor]: The image is otherwise sound. No artefact a viewer would notice: banding, noise, smears, doubled edges, compression blocks. FAILS WHEN: Any artefact a viewer would notice before they notice the part\n- E3 [minor]: Whole and full size. The product is whole in the frame, and the image is at the size the payload asked for and at the clown's aspect. FAILS WHEN: A part cut by the frame edge, an image smaller than the size asked for, or an aspect other than the clown's\n\nReturn ONLY JSON, no fences, every check id present:\n{\"checks\": {\"A1\": true|false, \"A2\": true|false, \"A3\": true|false, \"A4\": true|false, \"B1\": true|false, \"B2\": true|false, \"B3\": true|false, \"B4\": true|false, \"C1\": true|false, \"C2\": true|false, \"C3\": true|false, \"C4\": true|false, \"C5\": true|false, \"D1\": true|false, \"D2\": true|false, \"D3\": true|false, \"E1\": true|false, \"E2\": true|false, \"E3\": true|false}, \"worst_issue\": \"<one short phrase>\", \"notes\": \"<at most three short sentences>\", \"zones_seen\": <how many of the clown's zones you could find in image 1>}",
+     "sha256": "70ee5039cb0080ce0ab3360bcf24c66c90588b11af6679fa7aa1e9fa2dd692dd"
+    },
+    "fixtures": [
+     {
+      "inputs": {
+       "column": "E",
+       "key": "case-experience2--front",
+       "spec": "experience-2-cc"
+      },
+      "length": 12850,
+      "sha256": "70ee5039cb0080ce0ab3360bcf24c66c90588b11af6679fa7aa1e9fa2dd692dd"
+     },
+     {
+      "inputs": {
+       "column": "D",
+       "key": "case-experience2--back",
+       "spec": "experience-2-cc"
+      },
+      "length": 12677,
+      "sha256": "b652d109215abb54434ce2568793d8958419900ab03c66cdfcdd67328d3f5af4"
+     },
+     {
+      "inputs": {
+       "column": "C",
+       "key": "case-aphrodite--7613-556",
+       "spec": "aphrodite-cc"
+      },
+      "length": 13584,
+      "sha256": "a921d2427ae997e53d3dac261c2315be76c8918eb9b30f65f831a7e3b875ed18"
+     },
+     {
+      "inputs": {
+       "column": "C",
+       "key": "switch2--motorsport-615",
+       "spec": "switch-2"
+      },
+      "length": 12461,
+      "sha256": "784c980c58ea537c2b233a8c7dbb3109fb6570d66b21919697407e884a3927ac"
+     },
+     {
+      "inputs": {
+       "column": "D",
+       "key": null,
+       "spec": "cocoon"
+      },
+      "length": 12593,
+      "sha256": "d216e10b271bd2204fc93ba4ab9c1c3386c0aa727d752229503205d562326947"
+     }
+    ]
+   },
    "ladder": [
     {
      "failed": [],
@@ -4600,6 +4658,135 @@
    ]
   },
   "packaging": {
+   "grading_prompt": {
+    "example": {
+     "inputs": {
+      "attached": [
+       {
+        "role": "composite"
+       },
+       {
+        "role": "source_render"
+       },
+       {
+        "role": "dieline"
+       },
+       {
+        "role": "front_panel"
+       }
+      ],
+      "box": "experience",
+      "colourway": "teal-plum",
+      "look": "coachella",
+      "missing": []
+     },
+     "prompt": "You are grading one candidate image of Loop's square retail box, with a look's artwork applied, for the Loop studio team, with the box's white render and its flat dieline on the desk beside you. Read the image as someone who has never seen the brief.\n\nImage 1 is the CANDIDATE under review. Grade image 1, and only image 1.\nImage 2 is a PINNED REFERENCE: the mockup of this cell, built in code: this look's artwork warped onto the white render, the render's shading kept. Every panel's artwork, where it sits and its colour are held to it; a finished picture may add only paper grain, light, shadow and gloss.\nImage 3 is a PINNED REFERENCE: the white render of this box in this scene: the geometry, the camera, the backdrop and the one light every candidate keeps.\nImage 4 is a PINNED REFERENCE: the flat dieline of this look and colourway: what every panel carries, which way up, and in which colour.\nImage 5 is a PINNED REFERENCE: the front panel of this look and colourway, larger than on the dieline: the rings, the wordmark and the type of the face the closed box shows.\nReferences are the real box and its print files. They are never under review, and a difference between the candidate and a reference is a fault in the CANDIDATE, except the paper grain, light, shadow and gloss a finished picture adds over the mockup.\n\nTHIS CELL: the coachella look, the experience box, the teal-plum colourway (dark teal to plum gradient, mint inside).\n\nTHE BOX, from the product sheet:\nWhat it is.\nOne square retail box, shared by Experience 2 and Link, in a lid-and-base construction with an inner\ntray. A look (Coachella first; Tomorrowland and McLaren to follow) prints its artwork on the outer box\nand its flat colour on the inner parts. The box is photographed in one elevated scene: the closed box\nfloating top-left, the open box to its right, a neutral grey studio backdrop, one soft light from the\nupper left (01_Untextured Renders, nodes 1:668 and 1:671, 4096×2286).\nAnatomy.\nThe names are the dieline's (02_Coachella (Final), nodes 1:682 and 1:694; each image holds the\nExperience net on the left and the Link net on the right):\n- Outer box. A net with the front at the bottom (the loop rings, the \"loop\" wordmark, the\n  product line \"Live music earplugs\" or \"Magnetic connector cord\", \"COACHELLA\" and the product name at\n  the foot), the back in the centre (specifications, icons, barcode), a side wall left and right\n  carrying rotated text and use icons, a thin front wall and back wall, and a tongue at the\n  top with the rounded end (the line \"Your life, your volume.\"), hidden when the box is closed.\n- Inner part. A second net in the look's flat colour (mint on the dark colourway, pink on the pink\n  one): the inside of the lid (the handle \"@loopearplugs\", a QR code, \"Scan for instructions…\"),\n  the underside of the tray (dense text, never visible), and the front flap (\"Questions or\n  feedback?\", the reach-out line) with the round die-cut near its foot.\n- Insert. A small square in the flat colour: the top of the tray, with the cavity the earplug\n  case sits in. Neither render carries a case: the cavity and the die-cut are empty, and a case on a\n  candidate is invented (A3, A4). The Coachella carry-case render\n  (Loop_Coachella-Elevated_MAIN-Carry_Case) shows the case in the Coachella print, the agency's finish\n  for the look; it is not what sits in this scene.\n- No hangtag on either white render. A hangtag on a candidate is invented (A1, A3).\nWhat each scene shows.\n- Closed box (both renders, top-left): one large face carrying the front artwork, and **two thin\n  walls**: the left side wall and the front wall (their text reads along the wall). The lid top, the\n  back and the tongue are hidden.\n- Open box, tray cavity (white-closed, node 1:668): the lid upright showing its inside, the\n  top of the tray with the round cavity, the front edge of the base with a thumb notch, and the\n  outer side walls. No flap is folded down.\n- Open box, flap down (white-open, node 1:671): the lid upright showing its inside, the tray top\n  flat with a small slot, the front flap folded down and out carrying the round die-cut, through\n  which the studio floor shows (as in the agency scene, node 1:697), and the outer side walls.\nFinish.\nMatte printed card with a fine print grain; a spot UV gloss on the \"loop\" wordmark on the front, as\nLoop_Coachella-Packaging_0001 shows it; soft contact shadows from the scene's one light; the die-cut's\nrim the bare board. No plastic sheen, no metallic surface, no gloss across a whole face.\nWhat a candidate must not add.\nA hangtag, a sleeve, a second flap, a label or sticker, a second product, a hand, any lettering the\ndieline does not carry, a new backdrop, a surface under the boxes, a light the render does not have.\n\nSTANDING RULES, from the rubric:\n- **Judge what the scene shows.** A panel hidden by the view passes its check; a panel shown wrongly\n  fails it. The closed box shows one large face and two thin walls; the open box shows the inside of\n  the lid, the tray, the front flap with its round die-cut, and its outer walls.\n- **The white render and the dieline are the truth.** When the candidate's own white render, composite\n  and dieline are attached, judge geometry against the render and the print against the dieline. When\n  they are not, say so in the note and judge against the pinned scene of the same look.\n- **The numbers are evidence, not the verdict.** Where the scripts report a silhouette overlap, an\n  artwork match or a per-panel colour distance, read the words in the measurement block and look for\n  what in the picture explains them. A number over its line with nothing in the picture to explain it\n  fails the check; a number under its line does not pass a check the eye can see failing.\n- **Absence is the usual miss.** Look for the panel that is blank, the die-cut that is filled, the\n  gradient that has become a flat colour, the inside print that is missing.\n- **Fail when unsure**, and say in the note what you could not see.\n\nNothing was measured in code for this read. The silhouette overlap (B1), the artwork match (C1) and each panel's colour distance (D1) are measured by the scripts in the repo; here judge them by eye against the white render and the dieline, and fail when unsure.\n\nGrade every check strictly true (passes) or false (fails). When you are unsure, the check FAILS. Judge only what this image shows; do not credit the candidate for anything you cannot see.\n\nTHE CHECKS:\n- A1 [gate]: It is the Loop box, as in the white render. The square retail box: a closed box with its lid, and an open box with the lid up, the inner tray and the front flap with its round die-cut, the objects in the attached white render and nothing else. FAILS WHEN: A box added, removed or reshaped; a second lid, an extra flap, a sleeve or a hangtag the render does not have; the die-cut missing, filled in, moved or no longer round\n- A2 [gate]: It is the artwork asked for. The panels carry the named look, box and colourway as on the attached dieline: the same graphic, the same type, the gradient running the same way. FAILS WHEN: Another look, another box's front, another colourway, an invented graphic, the gradient reversed or replaced by a flat colour\n- A3 [gate]: Nothing invented. No lettering, logo, badge, sticker, label, hangtag, ribbon, second product or hand that the dieline and the render do not have. FAILS WHEN: Any of those anywhere in the frame; type on a panel that is not on the dieline\n- A4 [critical]: A case only where the render has one. Neither white render carries an earplug case: the die-cut and the tray cavity are empty in both, and stay empty on the candidate. When a later render does show a case, it is the plain black case, unprinted, untouched by the artwork, in the tray where the render has it. FAILS WHEN: A case, puck or disc set in the die-cut or the tray of a render that has none; a case recoloured, patterned, reshaped, moved out of the tray or replaced by something else\n- B1 [critical]: Silhouette unchanged. Judge only when the candidate's own white render is attached. The outline of each box against the background is the render's: the same place, the same size, the same rotation, the lid open to the same angle. The scripts report the overlap of the two outlines; it is evidence, not the verdict. FAILS WHEN: A box moved, scaled, rotated or tilted; the closed box nearer or farther; the lid opened wider or narrower; the overlap reported under its line with nothing in the picture to explain it\n- B2 [critical]: Proportions. Lid, base and tray keep their relative heights and the lid its overhang; the box stays square in plan; the walls stay thin. FAILS WHEN: A taller or squatter box, a lid thicker or thinner than the render's, a tray deeper than the base, a rectangular box, a wall that has grown into a face\n- B3 [minor]: Edges, corners and the die-cut. Every edge straight, every corner a crisp fold; the die-cut a clean round hole with what the render shows through it. FAILS WHEN: A bowed edge, a rounded or melted corner, a doubled edge, a die-cut with a soft or ragged rim or with something new behind it\n- B4 [minor]: The scene is the render's scene. Judge only when the render is attached. The camera, the floating height, the direction of the shadows and the backdrop are the render's; only the surfaces changed. FAILS WHEN: A new camera angle, a new backdrop, the boxes on a surface they were not on, shadows from a light the render did not have\n- C1 [critical]: Front on front. The dieline's front panel sits on the closed box's large face; the inside of the lid carries the dieline's inside-lid print; the tray carries the insert. The scripts report how well the front matches its dieline panel. FAILS WHEN: The front graphic on a wall, the inside-lid print on the outside, a face blank where the dieline prints, the match reported under its line with nothing in the picture to explain it\n- C2 [critical]: Walls on the right walls. Each thin wall carries the dieline's panel for that wall, in the dieline's order round the box; the flap carries the flap print. FAILS WHEN: Left and right swapped, one wall's graphic repeated on both, a front panel wrapped onto a wall, the flap print on the tray\n- C3 [critical]: Upright, not mirrored. Type reads left to right and upright on every face the scene shows upright; the wall text runs the way the dieline runs it; the gradient runs the dieline's way. FAILS WHEN: Rotated or mirrored type, a panel upside down, the gradient turned\n- C4 [critical]: Scale and crop. Each panel's artwork fills its face edge to edge as the dieline lays it out: nothing zoomed, tiled or cropped short of the fold, no margin the dieline does not have. FAILS WHEN: The graphic larger or smaller than its face, a repeat, a strip of bare board at a fold, the wordmark cut by an edge\n- C5 [critical]: No distortion. Straight lines on the dieline stay straight on the face and follow its perspective; the loop rings stay round in that perspective; the artwork does not bulge, wave or swim. FAILS WHEN: A wavy edge on the graphic, a bent letter, a ring gone egg-shaped the wrong way, artwork sliding off the face at a corner\n- C6 [critical]: Type legible and correct. Every word on a face large enough to read is spelled as on the dieline, in the dieline's typeface and weight: \"loop\", \"COACHELLA\", the product line, the use words. FAILS WHEN: A misspelled or reinvented word, a letter dropped or added, a different typeface, type melted into the paper\n- C7 [minor]: Continuity across folds. Where the dieline's artwork continues over a fold it continues on the box; where it stops at the fold, it stops. FAILS WHEN: A gradient that jumps at an edge, a graphic that restarts on the next face\n- D1 [critical]: Per-panel hue. Each face's colour is its dieline panel's: the dark teal, the plum, the pink, the mint, each where the dieline puts it. The scripts report the hue distance per panel; by eye, hold the dieline beside the face. FAILS WHEN: A face shifted from its panel: teal gone green or navy, plum gone magenta or brown, pink gone orange or lilac, mint gone blue; a distance reported over its line with no light in the scene to explain it\n- D2 [critical]: Nothing recoloured unasked. The backdrop, the shadows, the inside of the box, the tray and the case: what the finisher was not asked to colour keeps the render's neutral. FAILS WHEN: The whole box tinted one colour, the backdrop tinted, the tray or the inside turned to the artwork's colour, the case coloured\n- D3 [minor]: The gradient. Dark at the dieline's dark end, light at its light end, the transition as smooth and as placed as the dieline's. FAILS WHEN: Reversed, banded, compressed to one end, or turned into a flat fill\n- D4 [minor]: Paper and gloss. The faces read as printed card, matte with the fine grain of print; gloss only where the finisher named it; the render's lit and shadowed faces kept under the artwork. FAILS WHEN: A plastic, wet or metallic surface, gloss over a whole face, a face that lost its shading and reads flat, a face lit from a direction the render was not\n- E1 [minor]: The image is otherwise sound. No doubled boxes, no floating shadow, no melted backdrop, no seam where the composite was, no player bar or frame from a screenshot. FAILS WHEN: Any artefact a viewer notices before the box\n- E2 [minor]: Whole and sharp. Both boxes whole in the frame, the type sharp at delivery size, no halo along the box edges. FAILS WHEN: A box cut by the frame, a soft edge, a halo round the silhouette\n\nReturn ONLY JSON, no fences, every check id present:\n{\"checks\": {\"A1\": true|false, \"A2\": true|false, \"A3\": true|false, \"A4\": true|false, \"B1\": true|false, \"B2\": true|false, \"B3\": true|false, \"B4\": true|false, \"C1\": true|false, \"C2\": true|false, \"C3\": true|false, \"C4\": true|false, \"C5\": true|false, \"C6\": true|false, \"C7\": true|false, \"D1\": true|false, \"D2\": true|false, \"D3\": true|false, \"D4\": true|false, \"E1\": true|false, \"E2\": true|false}, \"faces_read\": \"<which faces and walls of the two boxes you could read>\", \"worst_issue\": \"<one short phrase>\", \"notes\": \"<at most two short sentences>\"}",
+     "sha256": "d4d0815533a2bd5c3149bb8e88d5557463e30a841100cbeb28665407271a1736"
+    },
+    "fixtures": [
+     {
+      "inputs": {
+       "attached": [
+        {
+         "role": "composite"
+        },
+        {
+         "role": "source_render"
+        },
+        {
+         "role": "dieline"
+        },
+        {
+         "role": "front_panel"
+        }
+       ],
+       "box": "experience",
+       "colourway": "teal-plum",
+       "look": "coachella",
+       "missing": []
+      },
+      "length": 14167,
+      "sha256": "d4d0815533a2bd5c3149bb8e88d5557463e30a841100cbeb28665407271a1736"
+     },
+     {
+      "inputs": {
+       "attached": [
+        {
+         "role": "composite"
+        },
+        {
+         "role": "source_render"
+        },
+        {
+         "role": "dieline"
+        },
+        {
+         "role": "front_panel"
+        }
+       ],
+       "box": "link",
+       "colourway": "pink-teal",
+       "look": "coachella",
+       "missing": []
+      },
+      "length": 14156,
+      "sha256": "a5c6ebf0fccc5fe3e289976b7d59c24434c1857209af327a6f67b12d8e294c64"
+     },
+     {
+      "inputs": {
+       "attached": [
+        {
+         "role": "source_render"
+        },
+        {
+         "role": "dieline"
+        },
+        {
+         "role": "front_panel"
+        }
+       ],
+       "box": "experience",
+       "colourway": "pink-teal",
+       "look": "coachella",
+       "missing": [
+        {
+         "role": "composite",
+         "why": "the draw carries no composite"
+        }
+       ]
+      },
+      "length": 14004,
+      "sha256": "bce08b36eabd74656e3bca36305748bf484c901c0953f325da2906e2d35c9242"
+     },
+     {
+      "inputs": {
+       "attached": [
+        {
+         "role": "source_render"
+        },
+        {
+         "role": "dieline"
+        }
+       ],
+       "box": "link",
+       "colourway": "teal-plum",
+       "look": "coachella",
+       "missing": [
+        {
+         "role": "composite",
+         "why": "the draw carries no composite"
+        },
+        {
+         "role": "front_panel",
+         "why": "its sha256 is not the pinned one"
+        }
+       ]
+      },
+      "length": 13877,
+      "sha256": "f28e0412f3eb3aeb8aa9e22a14b1eaba883b580a469392869c003d5ecdd940a1"
+     }
+    ]
+   },
    "ladder": [
     {
      "failed": [],
@@ -6358,5 +6545,5 @@
   }
  },
  "schema": 1,
- "version": "0.2.0"
+ "version": "0.2.1"
 }

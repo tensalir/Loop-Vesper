@@ -83,18 +83,24 @@ export const KitProductSchema = z
     vesper_product: z.string().nullable().optional(),
     deciders: z.array(z.record(z.unknown())),
     rubric: KitRubricSchema,
+    // Every product's grader shares these; the rest are its own (Eclipse's colourways and
+    // views, CMF's parts order, packaging's calibration note) and are checked where they are read,
+    // so a kit that adds a grader for a new kind of product is not refused by this schema.
     grading: z
       .object({
         models: z.array(z.string()).min(1),
         runs: z.number().int().min(1),
         temperature: z.number(),
         inline_limit_bytes: z.number().int(),
-        max_model_pixels: z.number().int(),
-        derived_max_edge: z.number().int(),
-        colourways: z.array(z.string()),
-        default_colourway: z.string(),
-        views: z.array(z.string()),
-        trusted_claims: z.array(z.string()),
+        max_model_pixels: z.number().int().optional(),
+        derived_max_edge: z.number().int().optional(),
+        colourways: z.array(z.string()).optional(),
+        default_colourway: z.string().optional(),
+        views: z.array(z.string()).optional(),
+        trusted_claims: z.array(z.string()).optional(),
+        reporting_only: z.boolean().optional(),
+        parts_order: z.array(z.string()).optional(),
+        calibration: z.string().optional(),
       })
       .passthrough()
       .nullable(),
@@ -102,9 +108,11 @@ export const KitProductSchema = z
       .object({
         template_id: z.string(),
         text: z.record(z.unknown()),
-        anatomy: z.string(),
-        rules: z.string(),
-        first_reference_index: z.number().int(),
+        rules: z.string().optional(),
+        anatomy: z.string().optional(),
+        first_reference_index: z.number().int().optional(),
+        measurement_lines_without_code: z.array(z.string()).optional(),
+        parts_file: KitFileSchema.optional(),
       })
       .passthrough()
       .nullable(),

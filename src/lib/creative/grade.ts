@@ -93,6 +93,14 @@ export async function gradeCandidate(req: GradeRequest, deps: GradeDeps): Promis
   const now = deps.now ?? Date.now
   const started = now()
   const { product } = req
+  if (product.kind === 'packaging') {
+    throw new GradingPromptError(
+      "Vesper does not grade packaging yet: its grader's words are in the kit, and the packaging tools that attach the cell's composite, white render and dieline come in the next change. Read it with /creative:packaging, labelled as one read."
+    )
+  }
+  if (product.kind === 'cmf') {
+    throw new GradingPromptError('a CMF render is graded against its sheet row and its clown: name the tab, column and clown')
+  }
   if (!product.grading_prompt || !product.grading) {
     throw new GradingPromptError(`the kit carries no grader for ${product.name} yet, so Vesper cannot grade it`)
   }

@@ -197,7 +197,7 @@ test.describe('products and references', () => {
     const loaded = { kit, conformance: null as never, ref: 'creative-v0.2.0', commit: 'abc1234', blobSha: 'b', fetchedAt: new Date(), stale: false, staleReason: null }
     const { text, structured } = kitSection(loaded, 'rubric:eclipse', () => true)
     expect(text).toContain('| A1 | gate |')
-    expect(structured.kit_version).toBe('0.2.0')
+    expect(structured.kit_version).toBe('0.2.1')
     expect(() => kitSection(loaded, 'secrets', () => true)).toThrow('Unknown section')
   })
 })

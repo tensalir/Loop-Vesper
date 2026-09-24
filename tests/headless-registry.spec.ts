@@ -48,8 +48,8 @@ test.describe('the tool registry', () => {
     ])
   })
 
-  test('self-issued tokens get every tool but the repository export, admins may issue any', () => {
-    expect([...SELF_ISSUED_TOOLS].sort()).toEqual(HEADLESS_TOOLS.filter((t) => t !== 'export_creative_records').sort())
+  test('self-issued tokens get every tool but the repository export and the CMF tools, admins may issue any', () => {
+    expect([...SELF_ISSUED_TOOLS].sort()).toEqual(HEADLESS_TOOLS.filter((t) => t !== 'export_creative_records' && !t.startsWith('cmf_')).sort())
     expect([...ADMIN_ISSUABLE_TOOLS].sort()).toEqual([...HEADLESS_TOOLS].sort())
   })
 
@@ -79,9 +79,19 @@ test.describe('effectiveTools', () => {
 
   test("'*' expands to every OAuth tool the owner's flags allow", () => {
     const tools = effectiveTools({ allowedTools: ['*'] }, { role: 'user' })
-    // The repository's export is never carried by a person's connection.
-    expect([...tools].sort()).toEqual(HEADLESS_TOOLS.filter((t) => t !== 'export_creative_records').sort())
+    // The repository's export is never carried by a person's connection; CMF needs its flag.
+    expect([...tools].sort()).toEqual(HEADLESS_TOOLS.filter((t) => t !== 'export_creative_records' && !t.startsWith('cmf_')).sort())
     expect(canPollJobs(tools)).toBe(true)
+  })
+
+  test('the CMF tools need CMF access or an admin, and the creative switch hides them', () => {
+    const cmf = ['cmf_check_pdf', 'cmf_list', 'cmf_prompt', 'cmf_render']
+    const withFlag = effectiveTools({ allowedTools: ['*'] }, { role: 'user', cmfAccess: true })
+    expect(cmf.every((t) => (withFlag as string[]).includes(t))).toBe(true)
+    const admin = effectiveTools({ allowedTools: ['*'] }, { role: 'admin' })
+    expect(cmf.every((t) => (admin as string[]).includes(t))).toBe(true)
+    const off = effectiveTools({ allowedTools: ['*'] }, { role: 'admin' }, { CREATIVE_TOOLS_ENABLED: '0' } as unknown as NodeJS.ProcessEnv)
+    expect(cmf.some((t) => (off as string[]).includes(t))).toBe(false)
   })
 })
 

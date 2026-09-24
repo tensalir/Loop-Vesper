@@ -30,6 +30,9 @@ import type { KitProduct } from '@/lib/creative/kit-schema'
 import type { JobPayload } from '../jobs'
 import { runLongCall } from './long-call'
 import { ownerIsAdmin } from './creative-read'
+import { cmfKit, resolveTab, type CmfGradingParts, type CmfKit } from '@/lib/creative/cmf/kit-cmf'
+import { checkCmfTarget, gradeCmfCandidate } from '@/lib/creative/cmf/grading'
+import { assertCmfAccess, cmfGradingParts } from './cmf'
 import { invalidArguments, type ToolContext, type ToolHandler } from './types'
 
 const CHECK_ID = /^[A-E]\d+$/
@@ -47,7 +50,8 @@ export const GradeImageArgs = z
     colourway: z.string().max(40).optional(),
     view: z.string().max(40).optional(),
     runs: z.number().int().min(1).max(MAX_RUNS).optional(),
-    // CMF and packaging keys; refused with the kit's reason until their grader reaches the kit.
+    // CMF: the sheet's tab, the SKU column and the clown key the render was drawn through.
+    // Packaging's look and box are refused until Vesper's packaging tools arrive.
     tab: z.string().max(80).optional(),
     column: z.string().max(4).optional(),
     clown: z.string().max(120).optional(),
@@ -85,9 +89,11 @@ interface GradeExecution {
   gradeId: string | null
   storeError: string | null
   costUsd: number
+  /** A CMF grade: the row and the key it was read against. */
+  cmf?: { tab: string; spec: string; column: string; sku_name: string | null; key: string }
 }
 
-export function gradeText(x: Pick<GradeExecution, 'slug' | 'product' | 'outcome' | 'gradeId' | 'header'>): string {
+export function gradeText(x: Pick<GradeExecution, 'slug' | 'product' | 'outcome' | 'gradeId' | 'header' | 'cmf'>): string {
   const { outcome: o, product } = x
   const a = o.aggregate
   const checks = new Map(product.rubric.checks.map((c) => [c.id, c]))
@@ -114,6 +120,14 @@ export function gradeText(x: Pick<GradeExecution, 'slug' | 'product' | 'outcome'
     lines.push('No check failed in any read.')
   }
   if (a.failed_advisory.length) lines.push(`Advisory, reported and not counted: ${a.failed_advisory.join(', ')}.`)
+  if (x.cmf) {
+    lines.push(
+      `Read against ${x.cmf.tab} column ${x.cmf.column}${x.cmf.sku_name ? ` (${x.cmf.sku_name})` : ''} and its clown through the key ${x.cmf.key}, the clown attached second.`,
+      "Vesper measured nothing on the pixels; the repository's qa x3 measures leftover clown colour in code, so this read is the weaker of the two on that."
+    )
+    if (x.gradeId) lines.push(`grade_id ${x.gradeId}: record Damien's answer with record_verdict.`)
+    return lines.join('\n')
+  }
   lines.push(
     `Attached after the picture: ${o.references.map((r) => `${r.n}. ${r.title ?? r.pin_id} (${r.role})`).join('; ') || 'nothing'}.` +
       (o.missing.length ? ` Not attached: ${o.missing.map((m) => `${m.role} (${m.why})`).join('; ')}.` : '')
@@ -165,6 +179,7 @@ function payload(x: GradeExecution): JobPayload {
       modelId: x.outcome.judge_model ?? 'gemini',
       outputs: [],
       durationMs: x.outcome.latency_ms,
+      ...(x.cmf ? { cmf: x.cmf } : {}),
     },
     outputIds: [],
     costUsd: x.costUsd,
@@ -250,6 +265,72 @@ async function executeGrade(ctx: ToolContext, loaded: LoadedKit, slug: string, p
   return { header, slug, product, candidate: rest, outcome, gradeId, storeError, costUsd }
 }
 
+async function executeCmfGrade(
+  ctx: ToolContext,
+  loaded: LoadedKit,
+  cmf: CmfKit,
+  parts: CmfGradingParts,
+  target: { spec: string; column: string; key: string; tab: string; sku_name: string | null },
+  a: z.infer<typeof GradeImageArgs>
+): Promise<GradeExecution> {
+  const product = cmf.product
+  const candidate = await loadCandidate(a, ctx.principal.ownerId, productionCandidateDeps(ctx.env))
+  const rows = await prismaPinStore.list(cmf.slug)
+  const inlineLimit = product.grading?.inline_limit_bytes ?? 3_500_000
+  const partDeps = pinPartDeps(ctx.env, inlineLimit)
+  const outcome = await gradeCmfCandidate(
+    { kit: loaded.kit, cmf, parts, candidate, spec: target.spec, column: target.column, key: target.key, runs: a.runs },
+    {
+      pinRows: rows,
+      candidatePart: (c) => candidatePartFor(ctx.env, inlineLimit, c),
+      pinPart: (row, spec) => pinPart(row, spec, partDeps),
+      read: gradeReader(ctx.env, product.grading?.models ?? []),
+    }
+  )
+  const header = kitHeader(loaded)
+  const costUsd = GRADE_READ_USD * outcome.aggregate.reads
+  let gradeId: string | null = null
+  let storeError: string | null = null
+  try {
+    const stored = await prismaCreativeRecords.insertGrade({
+      product: cmf.slug,
+      ownerId: ctx.principal.ownerId,
+      credentialId: ctx.principal.credentialId,
+      outputId: candidate.outputId,
+      imageUrl: candidate.imageUrl,
+      frontifyAssetId: candidate.frontifyAssetId,
+      imageSha256: candidate.sha256,
+      colourway: `${target.tab} ${target.column}${target.sku_name ? ` ${target.sku_name}` : ''}`,
+      view: 'clown',
+      viewAssumed: false,
+      claimSource: null,
+      judge: 'vesper',
+      judgeModel: outcome.judge_model,
+      reads: outcome.aggregate.reads,
+      templateId: outcome.template_id,
+      kitVersion: loaded.kit.version,
+      kitCommit: loaded.commit,
+      rubricVersion: product.rubric.version ?? '?',
+      runs: outcome.reads,
+      fails: outcome.aggregate.fails,
+      failed: outcome.aggregate.failed,
+      failedAdvisory: outcome.aggregate.failed_advisory,
+      verdict: outcome.aggregate.verdict,
+      verdictMajority: outcome.aggregate.verdict_majority,
+      unstable: outcome.aggregate.unstable,
+      errors: outcome.aggregate.errors,
+      references: { attached: outcome.references, missing: outcome.missing, prompt_sha256: outcome.prompt_sha256, cmf: target },
+      latencyMs: outcome.latency_ms,
+      costUsd,
+    })
+    gradeId = stored.id
+  } catch (err) {
+    storeError = (err as Error)?.message || 'the grade could not be stored'
+  }
+  const { bytes: _bytes, ...rest } = candidate
+  return { header, slug: cmf.slug, product, candidate: rest, outcome, gradeId, storeError, costUsd, cmf: target }
+}
+
 export const gradeImageHandler: ToolHandler = {
   estimateCostUsd(args) {
     const runs = typeof args.runs === 'number' ? args.runs : 3
@@ -262,6 +343,34 @@ export const gradeImageHandler: ToolHandler = {
     const loaded = await getCreativeKit({ env: ctx.env })
     const isAdmin = await ownerIsAdmin(ctx.principal.ownerId)
     const { slug, product } = resolveProduct(loaded.kit, a.product, { isAdmin })
+    if (product.kind === 'cmf') {
+      if (!a.tab || !a.column || !a.clown) {
+        throw new GradingPromptError('a CMF render is graded against its sheet row and its clown: name the tab, the column and the clown key (cmf_list names them)')
+      }
+      await assertCmfAccess(ctx.principal.ownerId)
+      const cmf = cmfKit(loaded.kit)
+      const { slug: specSlug } = resolveTab(cmf, a.tab)
+      const column = a.column.toUpperCase()
+      const parts = await cmfGradingParts(loaded, cmf)
+      const { tab, skuName } = checkCmfTarget(cmf, parts, specSlug, column, a.clown)
+      const target = { spec: specSlug, column, key: a.clown, tab, sku_name: skuName }
+      return runLongCall<GradeExecution>({
+        ctx,
+        toolName: 'grade_image',
+        modelId: cmf.product.grading?.models[0] ?? 'gemini',
+        request: { ...a },
+        runAsync: a.async,
+        what: `the ${tab} ${column} grade`,
+        execute: () => executeCmfGrade(ctx, loaded, cmf, parts, target, a),
+        toPayload: payload,
+        toWire: async (x) => ({ content: [{ type: 'text', text: gradeText(x) }], structuredContent: payload(x).structuredContent }),
+      })
+    }
+    if (product.kind === 'packaging') {
+      throw new GradingPromptError(
+        "Vesper does not grade packaging yet: its grader's words are in the kit, and the packaging tools that attach the cell's composite, white render and dieline come in the next change. Read it with /creative:packaging, labelled as one read."
+      )
+    }
     if (!product.grading_prompt || !product.grading) {
       throw new GradingPromptError(
         `The creative kit ${loaded.kit.version} carries no grader for ${product.name} yet, so Vesper cannot grade it. Read it yourself with the product's skill, labelled as one read.`

@@ -27,7 +27,7 @@ import { loadKitPrompting } from '../src/lib/creative/kit-runtime'
 /**
  * The creative kit is the plugin repository's word, and Vesper must read it
  * the way the repository does. The fixtures are byte-for-byte copies of the
- * release creative-v0.2.0 (tensalir/loop-asset-reviewer#19).
+ * release creative-v0.2.1 (tensalir/loop-asset-reviewer#21, on #19).
  */
 
 const FIX = join(__dirname, 'fixtures', 'creative')
@@ -91,10 +91,10 @@ test.describe('a kit is refused when', () => {
   })
 
   test('plugin.json at the same commit has another version', () => {
-    const other = Buffer.from(JSON.stringify({ ...JSON.parse(PLUGIN_BYTES.toString('utf8')), version: '0.2.1' }))
+    const other = Buffer.from(JSON.stringify({ ...JSON.parse(PLUGIN_BYTES.toString('utf8')), version: '0.2.9' }))
     const check = checkKit(KIT_BYTES, other, CONF_BYTES)
     expect(check.ok).toBe(false)
-    expect(check.problems.join()).toContain('plugin.json says 0.2.1')
+    expect(check.problems.join()).toContain('plugin.json says 0.2.9')
   })
 
   test('the conformance file is not the one the kit names', () => {
@@ -169,7 +169,7 @@ test.describe('loading the kit', () => {
     const source = fixtureSource(KIT_BYTES)
     const loaded = await loadCreativeKit({ source, store })
     expect(loaded.stale).toBe(false)
-    expect(loaded.kit.version).toBe('0.2.0')
+    expect(loaded.kit.version).toBe('0.2.1')
     expect(store.kits).toHaveLength(1)
     expect(store.kits[0].valid).toBe(true)
     // A second read within a minute comes from memory, a later one by its blob without re-checking.
@@ -185,14 +185,14 @@ test.describe('loading the kit', () => {
     const store = memoryStore()
     await loadCreativeKit({ source: fixtureSource(KIT_BYTES), store }, { force: true })
     const bad = withKit((k) => {
-      k.version = '0.2.1'
-      k.tag = 'creative-v0.2.1'
+      k.version = '0.2.2'
+      k.tag = 'creative-v0.2.2'
     })
     const loaded = await loadCreativeKit({ source: fixtureSource(bad), store }, { force: true })
     expect(loaded.stale).toBe(true)
-    expect(loaded.kit.version).toBe('0.2.0')
-    expect(loaded.staleReason).toContain('plugin.json says 0.2.0, kit.json says 0.2.1')
-    expect(store.kits.find((k) => !k.valid)?.error).toContain('0.2.1')
+    expect(loaded.kit.version).toBe('0.2.1')
+    expect(loaded.staleReason).toContain('plugin.json says 0.2.1, kit.json says 0.2.2')
+    expect(store.kits.find((k) => !k.valid)?.error).toContain('0.2.2')
   })
 
   test('GitHub unreachable: the last good kit, stale; with none, a readable error', async () => {
