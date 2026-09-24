@@ -1,0 +1,218 @@
+{
+ "schema": 1,
+ "look": "coachella",
+ "colourway": "teal-plum",
+ "image": "references/figma/dieline-teal-plum.png",
+ "image_sha256": "270bb87e5383",
+ "image_size": [2452, 961],
+ "read": {
+  "on": "2026-09-24",
+  "by": "rectangles inside the crease lines, read off a gridded view; checked with mockup.py slice"
+ },
+ "up": "which way the printed panel's up points on the dieline image: top, left (rotate clockwise to bring it up), right, bottom",
+ "boxes": {
+  "experience": {
+   "flat": {
+    "inner": [127, 224, 200]
+   },
+   "panels": {
+    "front": {
+     "rect": [88, 85, 820, 820],
+     "up": "top",
+     "note": "the rings, the wordmark, COACHELLA, Experience: the lid top; from the larger front-panel image, not the dieline",
+     "image": "references/figma/front-teal-plum.png",
+     "inset": 4
+    },
+    "wall_lockup": {
+     "rect": [162, 337, 375, 387],
+     "up": "top",
+     "note": "the thin wall at the top of the centre panel: loop | COACHELLA, centred on the panel; the panel's creases bound it (round 2: the first rect sat off the creases and the lockup landed off-centre on the wall)",
+     "inset": 8
+    },
+    "specs": {
+     "rect": [162, 387, 375, 603],
+     "up": "top",
+     "visible": false,
+     "note": "the base bottom: specifications, barcode"
+    },
+    "wall_front": {
+     "rect": [162, 603, 375, 649],
+     "up": "bottom",
+     "note": "the thin wall below the specs, from the specs panel's bottom crease to the front's crease; the mirrored lockup sits at y 617-640, which the first rect (631-662) cut in half",
+     "inset": 8
+    },
+    "side_left": {
+     "rect": [49, 337, 162, 662],
+     "up": "left",
+     "note": "the left flap: use words and icons, text reading bottom to top",
+     "inset": 8
+    },
+    "side_right": {
+     "rect": [375, 337, 490, 662],
+     "up": "right",
+     "note": "the right flap: Loop Experience 2, text reading top to bottom; the flap's crease is at x 375 and the type sits at 394-405, which the first rect (from 399) cut in half",
+     "inset": 8
+    },
+    "tongue": {
+     "rect": [162, 96, 375, 337],
+     "up": "top",
+     "visible": false,
+     "note": "Your life, your volume.; hidden when closed"
+    },
+    "lid_inside": {
+     "rect": [570, 59, 873, 343],
+     "up": "top",
+     "note": "@loopearplugs, the QR, Scan for instructions",
+     "fill": "flat_plus_print",
+     "print_over": 0.35,
+     "inset": 6
+    },
+    "tray_under": {
+     "rect": [505, 343, 941, 662],
+     "up": "top",
+     "visible": false
+    },
+    "flap": {
+     "rect": [601, 662, 846, 889],
+     "up": "top",
+     "holes": [
+      {
+       "type": "circle",
+       "centre": [723, 858],
+       "r": 37
+      }
+     ],
+     "note": "Questions or feedback?; the die-cut near the foot; 10 rows of the flat colour above the print so the first line clears the fold's shadow",
+     "fill": "flat_plus_print",
+     "print_over": 0.35,
+     "inset": 6,
+     "pad_top": 10
+    },
+    "tray_top": {
+     "rect": [963, 392, 1165, 607],
+     "up": "top",
+     "fill": "flat",
+     "note": "the insert: the flat colour; the case sits on it"
+    },
+    "lid_edge": {
+     "image": "references/figma/front-teal-plum.png",
+     "rect": [776, 89, 816, 816],
+     "up": "top",
+     "note": "the rightmost strip of the front, for the lid's outer wall: the gradient continues round the edge",
+     "fill": "smooth"
+    },
+    "lid_edge_upper": {
+     "image": "references/figma/front-teal-plum.png",
+     "rect": [776, 89, 816, 452],
+     "up": "top",
+     "note": "the upper half of the lid_edge strip; the lid's outer right wall bows, so it is two quads",
+     "fill": "smooth"
+    },
+    "lid_edge_lower": {
+     "image": "references/figma/front-teal-plum.png",
+     "rect": [776, 452, 816, 816],
+     "up": "top",
+     "note": "the lower half of the lid_edge strip",
+     "fill": "smooth"
+    }
+   }
+  },
+  "link": {
+   "flat": {
+    "inner": [246, 140, 170]
+   },
+   "panels": {
+    "front": {
+     "rect": [948, 85, 1680, 820],
+     "up": "top",
+     "note": "the cord, the wordmark, COACHELLA, Link; from the larger front-panel image, not the dieline",
+     "image": "references/figma/front-teal-plum.png",
+     "inset": 4
+    },
+    "wall_lockup": {
+     "rect": [1342, 337, 1555, 385],
+     "up": "top",
+     "inset": 8,
+     "note": "the thin wall at the top of the centre panel: loop | COACHELLA, centred on the panel; the panel's creases bound it (round 2: the first rect sat off the creases and the lockup landed off-centre on the wall)"
+    },
+    "specs": {
+     "rect": [1342, 385, 1555, 603],
+     "up": "top",
+     "visible": false
+    },
+    "wall_front": {
+     "rect": [1342, 603, 1555, 646],
+     "up": "bottom",
+     "inset": 8,
+     "note": "the thin wall below the specs; the mirrored lockup at y 615-627, which the first rect (631-662) missed"
+    },
+    "side_left": {
+     "rect": [1232, 337, 1342, 662],
+     "up": "left",
+     "note": "Loop Link, reading bottom to top",
+     "inset": 8
+    },
+    "side_right": {
+     "rect": [1555, 337, 1670, 662],
+     "up": "right",
+     "note": "Loop Link, reading top to bottom; the flap's crease is at x 1555 and the type at 1575-1585, which the first rect (from 1582) cut",
+     "inset": 8
+    },
+    "tongue": {
+     "rect": [1342, 280, 1555, 337],
+     "up": "top",
+     "visible": false
+    },
+    "lid_inside": {
+     "rect": [1765, 59, 2072, 343],
+     "up": "top",
+     "note": "@loopearplugs, the QR, Scan for instructions, Questions or feedback?",
+     "fill": "flat_plus_print",
+     "print_over": 0.35,
+     "inset": 6
+    },
+    "tray_under": {
+     "rect": [1698, 343, 2139, 662],
+     "up": "top",
+     "visible": false
+    },
+    "flap": {
+     "rect": [1803, 662, 2035, 720],
+     "up": "top",
+     "note": "short on the Link net: the Link box has no folded-down flap",
+     "fill": "flat_plus_print",
+     "print_over": 0.35,
+     "inset": 6,
+     "pad_top": 10
+    },
+    "tray_top": {
+     "rect": [2150, 392, 2360, 607],
+     "up": "top",
+     "fill": "flat",
+     "note": "the insert with the cord and case illustration; the flat colour"
+    },
+    "lid_edge": {
+     "image": "references/figma/front-teal-plum.png",
+     "rect": [1636, 89, 1676, 816],
+     "up": "top",
+     "note": "the rightmost strip of the front, for the lid's outer wall: the gradient continues round the edge",
+     "fill": "smooth"
+    },
+    "lid_edge_upper": {
+     "image": "references/figma/front-teal-plum.png",
+     "rect": [1636, 89, 1676, 452],
+     "up": "top",
+     "note": "the upper half of the lid_edge strip; the lid's outer right wall bows, so it is two quads",
+     "fill": "smooth"
+    },
+    "lid_edge_lower": {
+     "image": "references/figma/front-teal-plum.png",
+     "rect": [1636, 452, 1676, 816],
+     "up": "top",
+     "note": "the lower half of the lid_edge strip",
+     "fill": "smooth"
+    }
+   }
+  }
+ }
+}
