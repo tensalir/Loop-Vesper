@@ -325,7 +325,10 @@ if (typeof window === 'undefined') {
       
       if (credentialsPath) {
         // Use file path (local development) - SDK will automatically use GOOGLE_APPLICATION_CREDENTIALS
-        console.log(`[Vertex AI] Using credentials file path: ${credentialsPath}`)
+        // Never log the value: it is meant to be a path, and when someone puts the service account's
+        // JSON in it instead, logging it prints the private key into the function logs.
+        const looksInline = credentialsPath.trim().startsWith('{')
+        console.log(`[Vertex AI] Using credentials from GOOGLE_APPLICATION_CREDENTIALS (${looksInline ? 'inline JSON, not a path: move it to GOOGLE_APPLICATION_CREDENTIALS_JSON' : `a file path, ${credentialsPath.length} chars`})`)
         if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
           process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath
         }
