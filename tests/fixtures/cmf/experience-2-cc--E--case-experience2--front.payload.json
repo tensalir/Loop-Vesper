@@ -1,0 +1,170 @@
+{
+  "schema": 1,
+  "built_at": null,
+  "tab": "Experience 2 CC",
+  "column": "E",
+  "sku_name": "Ice blu classic matte",
+  "sku_header": "SKU 3",
+  "sku_id": "experience-2-cc--E",
+  "product_slug": "case-experience2",
+  "spec": {
+    "file": "references/workbook/spec/experience-2-cc.json",
+    "sha256": "a43cefaf70d224c10e7525ac83e048c8cb4b395bc0625b567f2dbc1f49592e85",
+    "tab": "Experience 2 CC",
+    "column": "E",
+    "workbook": {
+      "file": "8b5140d2-aa0b-442e-a35c-c3f7778f954b.xlsx",
+      "sha256": "a13964bfc229d9a5f093a193c6aa5975f74376d38919e6e7ac552f2a0f431264",
+      "modified": "2026-09-22T09:20:42Z"
+    }
+  },
+  "key": {
+    "id": "case-experience2--front",
+    "file": "plugin/skills/review/references/clown-keys/case-experience2--front.json",
+    "sha256": "102bce0aff21a555fc7fa4e09e350c9885885ab0f6139f35b2b35ca747fdb9ae",
+    "confirmed_by": null,
+    "confirmed_at": null
+  },
+  "key_confirmed": false,
+  "clown": {
+    "id": "case-experience2--front",
+    "file": "references/clowns/case-experience2--front.png",
+    "sha256": "1d9dbbe86bf4cbaa29d6444e6b4d1e6e5ce0d3a54bdd5e4c8ee003f9cc9d9296",
+    "width": 1280,
+    "height": 1280,
+    "aspect": "1:1"
+  },
+  "template": {
+    "file": "plugin/skills/review/references/prompt-template.md",
+    "sha256": "34df61cda3ba23ec31c46e168bcd24b828173a652c1305b72c49e39caf856b1b"
+  },
+  "template_sha256": "34df61cda3ba23ec31c46e168bcd24b828173a652c1305b72c49e39caf856b1b",
+  "prompt": "Use the attached image as the exact base. Keep geometry, proportions, camera angle, framing, lighting and background unchanged.\nThe image is a clown model: each flat colour marks one component. Recolour ONLY these zones:\n- #D51C1B → Shell - Front: ABS, , VDI 24 — Matte (Pantone 544C)\n- #D51C1B → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\n- #C6B807 → Insert: Silicone, VDI 24, Antistatic Coating + Grinding,  (Pantone 544C)\n- #206893 → Shell - Front: ABS, , VDI 24 — Matte (Pantone 544C)\n- #206893 → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\nRender realistic material behaviour for each finish. Do not add, remove or reshape any part. No text, no logos, no extra objects.",
+  "prompt_sha256": "94e256a80c7bde698f185969144e14ef3e7e2e22c5fae67ffc14fad7fda3b648",
+  "lines": [
+    {
+      "n": 1,
+      "zone_hex": "#D51C1B",
+      "component": "Shell - Front",
+      "material": "ABS",
+      "finish": "",
+      "colour_name": "VDI 24 — Matte",
+      "colour_code": "Pantone 544C",
+      "field": "Outer Shell",
+      "cells": {
+        "colour": "Experience 2 CC!E14",
+        "material": "Experience 2 CC!B13",
+        "finish": []
+      },
+      "codes": [
+        "Pantone 544C"
+      ]
+    },
+    {
+      "n": 2,
+      "zone_hex": "#D51C1B",
+      "component": "Shell - Back",
+      "material": "ABS",
+      "finish": "",
+      "colour_name": "VDI 24 — Matte",
+      "colour_code": "Pantone 544C",
+      "field": "Outer Shell",
+      "cells": {
+        "colour": "Experience 2 CC!E20",
+        "material": "Experience 2 CC!B19",
+        "finish": []
+      },
+      "codes": [
+        "Pantone 544C"
+      ]
+    },
+    {
+      "n": 3,
+      "zone_hex": "#C6B807",
+      "component": "Insert",
+      "material": "Silicone",
+      "finish": "VDI 24, Antistatic Coating + Grinding",
+      "colour_name": "",
+      "colour_code": "Pantone 544C",
+      "field": "Colour",
+      "cells": {
+        "colour": "Experience 2 CC!E26",
+        "material": "Experience 2 CC!B25",
+        "finish": [
+          {
+            "field": "Finishing",
+            "cell": "Experience 2 CC!B27"
+          },
+          {
+            "field": "Finishing Technique",
+            "cell": "Experience 2 CC!B28"
+          }
+        ]
+      },
+      "codes": [
+        "Pantone 544C"
+      ]
+    },
+    {
+      "n": 4,
+      "zone_hex": "#206893",
+      "component": "Shell - Front",
+      "material": "ABS",
+      "finish": "",
+      "colour_name": "VDI 24 — Matte",
+      "colour_code": "Pantone 544C",
+      "field": "Inner Shell",
+      "cells": {
+        "colour": "Experience 2 CC!E15",
+        "material": "Experience 2 CC!B13",
+        "finish": []
+      },
+      "codes": [
+        "Pantone 544C"
+      ]
+    },
+    {
+      "n": 5,
+      "zone_hex": "#206893",
+      "component": "Shell - Back",
+      "material": "ABS",
+      "finish": "",
+      "colour_name": "VDI 24 — Matte",
+      "colour_code": "Pantone 544C",
+      "field": "Inner Shell",
+      "cells": {
+        "colour": "Experience 2 CC!E21",
+        "material": "Experience 2 CC!B19",
+        "finish": []
+      },
+      "codes": [
+        "Pantone 544C"
+      ]
+    }
+  ],
+  "omitted": [
+    {
+      "component": "Cord",
+      "why": "not on this clown (the key's not_on_clown)"
+    },
+    {
+      "component": "ARTWORK",
+      "why": "not on this clown (the key's not_on_clown)"
+    }
+  ],
+  "image": {
+    "file": "references/clowns/case-experience2--front.png",
+    "sha256": "1d9dbbe86bf4cbaa29d6444e6b4d1e6e5ce0d3a54bdd5e4c8ee003f9cc9d9296",
+    "count": 1
+  },
+  "lane": null,
+  "model": null,
+  "settings": null,
+  "draw": null,
+  "source": null,
+  "warnings": [
+    "case-experience2--front.json is not confirmed (confirmed_by is empty): the prompt is built from its mapping, and the payload records key_confirmed: false until the lead CMF designer confirms it"
+  ],
+  "prompt_file": null,
+  "payload_file": "references/payloads/experience-2-cc--E--case-experience2--front.payload.json"
+}

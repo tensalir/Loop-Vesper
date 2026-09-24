@@ -30,7 +30,7 @@
  "commit": null,
  "conformance": {
   "path": "kit/conformance.json",
-  "sha256": "37fe39d2ae3cbb7be597aad6dde9ed1c55d6b17c4f16e018355e64012d236e68"
+  "sha256": "798f1414d5b0f711d97c51d832bed5083cc9a21df9931b924a1c83829add81c8"
  },
  "feedback": {
   "bot_variable": "FEEDBACK_BOT",
@@ -227,8 +227,51 @@
      "never-reencode-a-pin"
     ]
    },
-   "grading": null,
-   "grading_prompt": null,
+   "grading": {
+    "inline_limit_bytes": 3500000,
+    "models": [
+     "gemini-flash-latest",
+     "gemini-3.6-flash",
+     "gemini-3.5-flash"
+    ],
+    "parts_order": [
+     "candidate",
+     "clown"
+    ],
+    "reporting_only": true,
+    "response_mime_type": "application/json",
+    "runs": 3,
+    "temperature": 0
+   },
+   "grading_prompt": {
+    "assembly": "qa.build_prompt with THE ROW and THE KEY from cmf-grading.json and the measurement lines below; the order is written out in docs/kit.md",
+    "measurement_lines_without_code": [
+     "zones: not measured: no code measured this picture's pixels; the read was made in Vesper. Look for the clown's colours by eye, zone by zone, into the shadows and along the parting lines."
+    ],
+    "parts_file": {
+     "path": "kit/cmf-grading.json",
+     "sha256": "80a4f26d9792211e4e3ca3ee1a51803f0583ea3d8b1b248caa725755819e45cb"
+    },
+    "rules": "The grader reads this section into its prompt verbatim.\n\n- **Two images, named.** Image 1 is the candidate render. Image 2 is the clown model it was drawn\n  from: the same object with each component painted one flat colour, shaded, on its own ground.\n  Judge the candidate against the clown, side by side, never against what you think the product\n  looks like.\n- **THE ROW is the spec.** The sheet row for this SKU is quoted under THE ROW: each component with\n  its material, finish, colour name and code, as the sheet wrote them. A colour, material, finish or\n  effect the row does not hold is not in the spec, however plausible it looks.\n- **THE KEY is the map.** Quoted under THE KEY: each clown colour as a hex, the component or\n  components it marks, and the components that are not on this clown. A zone that serves two\n  components names both. A component the key says is not on this clown is absent by design, never\n  missing.\n- **The measurements are evidence, not verdict.** MEASUREMENTS states per zone, in words, how much of\n  it is still within reach of the clown's colour and, where the code has a confirmed hex, how far\n  the zone's colour sits from it. They tell you where to look; they do not decide. A note that\n  ignores a large leftover share is an incomplete note.\n- **What each finish word looks like.** Judge a finish by how the part takes the light:\n  - *matte*: diffuse, no specular hotspot, the light falls off softly across the form.\n  - *VDI 18 to VDI 27*: a spark-eroded grain that scatters the light evenly; near smooth-matte at\n    VDI 18, a fine visible grain at VDI 24, coarser at VDI 27; never glossy.\n  - *satin*: a soft sheen with broad, blurred highlights. *NCVM*: a metallic sheen on a plastic\n    part, highlights that follow the form like metal, no brushed grain unless the row says so.\n  - *gloss*, *high gloss*, *mirror*: sharp specular highlights and clear reflections of the light.\n  - *grinded*, *grinding*: an abraded, frosted surface, even, with the highlights broken up.\n  - *milky*, *frosted*, *see-through*, with or without a percentage: translucent, light passing\n    through the thin edges and a soft glow in the body, more the higher the percentage; never clear\n    like glass, never opaque.\n  - *opaque*: no light through the part at any edge.\n  - *holographic*, *iridescent*, *pearlescent*: the colour shifts with the angle, inside the\n    material, not a sticker on top.\n  - *anodised*: coloured metal with a fine metallic sheen and an even tone, brushed or polished as\n    the row says.\n  - *pad print*, *silk screen*: flat ink on the surface, crisp edges, no relief. *embossed*,\n    *debossed*: relief in the material itself, in the part's own colour unless the row names one.\n- **Absence and leftover are the usual misses.** Graders flag what is wrong and skip what is still\n  there. The likeliest misses on this work: a zone, or a rim of one along a parting line, still in\n  the clown's colour (the Experience 2 carry case shells came back red); a part given no finish; a\n  part that disappeared. Look for the clown's colours first.\n- **Judge what the view shows.** A component the key says is not on this clown, or one hidden by the\n  angle, passes its check; a component shown wrongly fails it.\n- **Fail when unsure**, and say in the note what you could not see.",
+    "template_id": "cmf-grader-f53f81a28485",
+    "text": {
+     "check": "- {id} [{severity}]: {check} FAILS WHEN: {fails_when}",
+     "checks_heading": "THE CHECKS:",
+     "grade_only": "Grade image 1, and only image 1, against image 2 and THE ROW. The clown is never under review: a difference in shape, light, camera or ground between the two is a fault in the candidate.",
+     "intro": "You are grading one CMF render for Loop's lead CMF designer: a recoloured render of a clown model, with the clown open beside it and the SKU's sheet row in hand. Read it as someone who has never seen the brief.",
+     "json": "{\"checks\": {ids}, \"worst_issue\": \"<one short phrase>\", \"notes\": \"<at most three short sentences>\", \"zones_seen\": <how many of the clown's zones you could find in image 1>}",
+     "json_id": "\"{id}\": true|false",
+     "json_id_separator": ", ",
+     "json_intro": "Return ONLY JSON, no fences, every check id present:",
+     "measurement_item": "- {line}",
+     "measurements_heading": "MEASUREMENTS, made in code on the pixels: evidence, not verdict.",
+     "notes_rule": "In the notes, name a zone by its clown hex and the component the key gives it, and quote the row's words and codes; never describe what a code looks like from memory.",
+     "roles": "Image 1 is the CANDIDATE. Image 2 is the CLOWN MODEL it was made from.",
+     "rules_heading": "GRADING RULES, from the rubric:",
+     "strict": "Grade every check strictly true (passes) or false (fails). When you are unsure, the check FAILS. Judge only what image 1 shows; do not credit it for anything you cannot see.",
+     "zones_not_measured": "zones: not measured: {reason}. Look for the clown's colours by eye, zone by zone, into the shadows and along the parting lines."
+    }
+   },
    "keys": {
     "aphrodite--v38": {
      "clown": {
@@ -2084,8 +2127,144 @@
      "sha256": "f846b83d9e9c0cd832537fc62726ef492da3920292ae096d3dd49a70b15e8622"
     }
    },
-   "grading": null,
-   "grading_prompt": null,
+   "grading": {
+    "calibration": "uncalibrated: first Vesper grades are compared with the round 1 and 2 judge files before any is read as a verdict",
+    "inline_limit_bytes": 3500000,
+    "models": [
+     "gemini-flash-latest",
+     "gemini-3.6-flash",
+     "gemini-3.5-flash"
+    ],
+    "parts_order": [
+     "candidate",
+     "attached in grade_plan order"
+    ],
+    "reporting_only": false,
+    "response_mime_type": "application/json",
+    "runs": 3,
+    "temperature": 0
+   },
+   "grading_prompt": {
+    "assembly": "grader_text.build_grading_prompt; the order is written out in docs/kit.md",
+    "colourway_words": {
+     "coachella": {
+      "pink-teal": "pink to teal gradient, pink inside",
+      "teal-plum": "dark teal to plum gradient, mint inside"
+     }
+    },
+    "grade_plan": {
+     "coachella": {
+      "experience": {
+       "pink-teal": [
+        {
+         "pin": null,
+         "role": "composite"
+        },
+        {
+         "pin": "white-open",
+         "role": "source_render"
+        },
+        {
+         "pin": "dieline-pink-teal",
+         "role": "dieline"
+        },
+        {
+         "pin": "front-pink-teal",
+         "role": "front_panel"
+        }
+       ],
+       "teal-plum": [
+        {
+         "pin": null,
+         "role": "composite"
+        },
+        {
+         "pin": "white-open",
+         "role": "source_render"
+        },
+        {
+         "pin": "dieline-teal-plum",
+         "role": "dieline"
+        },
+        {
+         "pin": "front-teal-plum",
+         "role": "front_panel"
+        }
+       ]
+      },
+      "link": {
+       "pink-teal": [
+        {
+         "pin": null,
+         "role": "composite"
+        },
+        {
+         "pin": "white-closed",
+         "role": "source_render"
+        },
+        {
+         "pin": "dieline-pink-teal",
+         "role": "dieline"
+        },
+        {
+         "pin": "front-pink-teal",
+         "role": "front_panel"
+        }
+       ],
+       "teal-plum": [
+        {
+         "pin": null,
+         "role": "composite"
+        },
+        {
+         "pin": "white-closed",
+         "role": "source_render"
+        },
+        {
+         "pin": "dieline-teal-plum",
+         "role": "dieline"
+        },
+        {
+         "pin": "front-teal-plum",
+         "role": "front_panel"
+        }
+       ]
+      }
+     }
+    },
+    "rules": "- **Judge what the scene shows.** A panel hidden by the view passes its check; a panel shown wrongly\n  fails it. The closed box shows one large face and two thin walls; the open box shows the inside of\n  the lid, the tray, the front flap with its round die-cut, and its outer walls.\n- **The white render and the dieline are the truth.** When the candidate's own white render, composite\n  and dieline are attached, judge geometry against the render and the print against the dieline. When\n  they are not, say so in the note and judge against the pinned scene of the same look.\n- **The numbers are evidence, not the verdict.** Where the scripts report a silhouette overlap, an\n  artwork match or a per-panel colour distance, read the words in the measurement block and look for\n  what in the picture explains them. A number over its line with nothing in the picture to explain it\n  fails the check; a number under its line does not pass a check the eye can see failing.\n- **Absence is the usual miss.** Look for the panel that is blank, the die-cut that is filled, the\n  gradient that has become a flat colour, the inside print that is missing.\n- **Fail when unsure**, and say in the note what you could not see.",
+    "sheet": "What it is.\nOne square retail box, shared by Experience 2 and Link, in a lid-and-base construction with an inner\ntray. A look (Coachella first; Tomorrowland and McLaren to follow) prints its artwork on the outer box\nand its flat colour on the inner parts. The box is photographed in one elevated scene: the closed box\nfloating top-left, the open box to its right, a neutral grey studio backdrop, one soft light from the\nupper left (01_Untextured Renders, nodes 1:668 and 1:671, 4096×2286).\nAnatomy.\nThe names are the dieline's (02_Coachella (Final), nodes 1:682 and 1:694; each image holds the\nExperience net on the left and the Link net on the right):\n- Outer box. A net with the front at the bottom (the loop rings, the \"loop\" wordmark, the\n  product line \"Live music earplugs\" or \"Magnetic connector cord\", \"COACHELLA\" and the product name at\n  the foot), the back in the centre (specifications, icons, barcode), a side wall left and right\n  carrying rotated text and use icons, a thin front wall and back wall, and a tongue at the\n  top with the rounded end (the line \"Your life, your volume.\"), hidden when the box is closed.\n- Inner part. A second net in the look's flat colour (mint on the dark colourway, pink on the pink\n  one): the inside of the lid (the handle \"@loopearplugs\", a QR code, \"Scan for instructions…\"),\n  the underside of the tray (dense text, never visible), and the front flap (\"Questions or\n  feedback?\", the reach-out line) with the round die-cut near its foot.\n- Insert. A small square in the flat colour: the top of the tray, with the cavity the earplug\n  case sits in. Neither render carries a case: the cavity and the die-cut are empty, and a case on a\n  candidate is invented (A3, A4). The Coachella carry-case render\n  (Loop_Coachella-Elevated_MAIN-Carry_Case) shows the case in the Coachella print, the agency's finish\n  for the look; it is not what sits in this scene.\n- No hangtag on either white render. A hangtag on a candidate is invented (A1, A3).\nWhat each scene shows.\n- Closed box (both renders, top-left): one large face carrying the front artwork, and **two thin\n  walls**: the left side wall and the front wall (their text reads along the wall). The lid top, the\n  back and the tongue are hidden.\n- Open box, tray cavity (white-closed, node 1:668): the lid upright showing its inside, the\n  top of the tray with the round cavity, the front edge of the base with a thumb notch, and the\n  outer side walls. No flap is folded down.\n- Open box, flap down (white-open, node 1:671): the lid upright showing its inside, the tray top\n  flat with a small slot, the front flap folded down and out carrying the round die-cut, through\n  which the studio floor shows (as in the agency scene, node 1:697), and the outer side walls.\nFinish.\nMatte printed card with a fine print grain; a spot UV gloss on the \"loop\" wordmark on the front, as\nLoop_Coachella-Packaging_0001 shows it; soft contact shadows from the scene's one light; the die-cut's\nrim the bare board. No plastic sheen, no metallic surface, no gloss across a whole face.\nWhat a candidate must not add.\nA hangtag, a sleeve, a second flap, a label or sticker, a second product, a hand, any lettering the\ndieline does not carry, a new backdrop, a surface under the boxes, a light the render does not have.",
+    "template_id": "packaging-grader-571435ba225f",
+    "text": {
+     "candidate": "Image 1 is the CANDIDATE under review. Grade image 1, and only image 1.",
+     "cell": "THIS CELL: the {look} look, the {box} box, the {colourway} colourway ({colourway_words}).",
+     "check": "- {id} [{severity}]: {check} FAILS WHEN: {fails_when}",
+     "checks_heading": "THE CHECKS:",
+     "intro": "You are grading one candidate image of Loop's square retail box, with a look's artwork applied, for the Loop studio team, with the box's white render and its flat dieline on the desk beside you. Read the image as someone who has never seen the brief.",
+     "json": "{\"checks\": {ids}, \"faces_read\": \"<which faces and walls of the two boxes you could read>\", \"worst_issue\": \"<one short phrase>\", \"notes\": \"<at most two short sentences>\"}",
+     "json_id": "\"{id}\": true|false",
+     "json_id_separator": ", ",
+     "json_intro": "Return ONLY JSON, no fences, every check id present:",
+     "missing": "Some references are not attached: {items}. Grade without them and be correspondingly careful.",
+     "missing_item": "{role} ({why})",
+     "missing_separator": "; ",
+     "not_measured": "Nothing was measured in code for this read. The silhouette overlap (B1), the artwork match (C1) and each panel's colour distance (D1) are measured by the scripts in the repo; here judge them by eye against the white render and the dieline, and fail when unsure.",
+     "product_heading": "THE BOX, from the product sheet:",
+     "reference": "Image {n} is a PINNED REFERENCE: {role}",
+     "references_are_real": "References are the real box and its print files. They are never under review, and a difference between the candidate and a reference is a fault in the CANDIDATE, except the paper grain, light, shadow and gloss a finished picture adds over the mockup.",
+     "role_default": "a reference picture of the real box or its print.",
+     "roles": {
+      "case": "the neutral black carry case, as the real product is.",
+      "composite": "the mockup of this cell, built in code: this look's artwork warped onto the white render, the render's shading kept. Every panel's artwork, where it sits and its colour are held to it; a finished picture may add only paper grain, light, shadow and gloss.",
+      "dieline": "the flat dieline of this look and colourway: what every panel carries, which way up, and in which colour.",
+      "front_panel": "the front panel of this look and colourway, larger than on the dieline: the rings, the wordmark and the type of the face the closed box shows.",
+      "look_finish": "the agency's finished scene of this look: the finish to hold the surface against. It is not the geometry; the white render is.",
+      "source_render": "the white render of this box in this scene: the geometry, the camera, the backdrop and the one light every candidate keeps."
+     },
+     "rules_heading": "STANDING RULES, from the rubric:",
+     "strict": "Grade every check strictly true (passes) or false (fails). When you are unsure, the check FAILS. Judge only what this image shows; do not credit the candidate for anything you cannot see."
+    }
+   },
    "kind": "packaging",
    "looks": {
     "coachella": {
@@ -2976,6 +3155,6 @@
  },
  "repo": "tensalir/loop-asset-reviewer",
  "schema": 1,
- "tag": "creative-v0.2.0",
- "version": "0.2.0"
+ "tag": "creative-v0.2.1",
+ "version": "0.2.1"
 }

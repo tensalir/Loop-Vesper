@@ -19,6 +19,7 @@ import { gradeImageHandler, recordGradeHandler } from './creative-grade'
 import { recordVerdictHandler } from './creative-verdict'
 import { exportCreativeRecordsHandler } from './creative-export'
 import { listFeedbackTargetsHandler, listFeedbackHandler, previewFeedbackHandler, submitFeedbackHandler } from './feedback'
+import { cmfListHandler, cmfPromptHandler, cmfRenderHandler, cmfCheckPdfHandler } from './cmf'
 
 export const TOOL_HANDLERS: Record<HeadlessTool, ToolHandler> = {
   enhance_prompt: enhancePromptHandler,
@@ -41,6 +42,10 @@ export const TOOL_HANDLERS: Record<HeadlessTool, ToolHandler> = {
   list_feedback: listFeedbackHandler,
   preview_feedback: previewFeedbackHandler,
   submit_feedback: submitFeedbackHandler,
+  cmf_list: cmfListHandler,
+  cmf_prompt: cmfPromptHandler,
+  cmf_render: cmfRenderHandler,
+  cmf_check_pdf: cmfCheckPdfHandler,
 }
 
 export type { ToolContext, ToolHandler, ToolResult, ToolPrincipal, UsageEntry } from './types'

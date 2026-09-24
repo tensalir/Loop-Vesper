@@ -347,7 +347,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'grade_image',
     title: 'Grade a picture of a Loop product',
     description:
-      "Vesper's scripted read of one picture against its product's rubric: three reads with the product's grader words and pinned references from the creative kit, majority per check, the verdict ladder. Labelled judge <model> vesper x3; advisory, the product's decider decides; never pooled with your own read (record that with record_grade). Give exactly one picture: output_id (a draw of yours), frontify_asset_id or an https image_url. A draw of yours brings its colourway and view; otherwise name them, or the kit default is assumed and the answer says so. When most reads error the result is ERROR, not a verdict.",
+      "Vesper's scripted read of one picture against its product's rubric: three reads with the product's grader words and pinned references from the creative kit, majority per check, the verdict ladder. Labelled judge <model> vesper x3; advisory, the product's decider decides; never pooled with your own read (record that with record_grade). Give exactly one picture: output_id (a draw of yours), frontify_asset_id or an https image_url. A draw of yours brings its colourway and view; otherwise name them, or the kit default is assumed and the answer says so. When most reads error the result is ERROR, not a verdict. For a CMF render (product cmf) name the tab, column and clown key: it is read against its sheet row and its clown, the clown attached second, reporting only while the CMF rubric is; Vesper measures nothing on the pixels. Packaging is not graded here yet.",
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
@@ -361,9 +361,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         colourway: { type: 'string', maxLength: 40, description: 'a colourway you name is a trusted claim' },
         view: { type: 'string', maxLength: 40 },
         runs: { type: 'integer', minimum: 1, maximum: 5, default: 3 },
-        tab: { type: 'string', description: 'CMF: the sheet tab' },
-        column: { type: 'string', description: 'CMF: the SKU column letter' },
-        clown: { type: 'string', description: 'CMF: the clown key' },
+        tab: { type: 'string', description: 'CMF: the sheet tab, e.g. "Experience 2 CC" (needed for product cmf)' },
+        column: { type: 'string', description: 'CMF: the SKU column letter, e.g. E (needed for product cmf)' },
+        clown: { type: 'string', description: 'CMF: the clown key the render was drawn through, e.g. case-experience2--front (needed for product cmf)' },
         look: { type: 'string', description: 'packaging: the look' },
         box: { type: 'string', description: 'packaging: the box' },
         async: { type: 'boolean', default: false },
@@ -520,6 +520,77 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         plugin_version: { type: 'string', description: 'the plugin version they have, e.g. 0.2.0; the kit version when omitted' },
         mode: { type: 'string', enum: ['issue', 'comment'], default: 'issue', description: "'comment' joins an earlier issue with the same remark" },
         issue_number: { type: 'integer', description: "the earlier issue, for mode 'comment'" },
+      },
+    },
+  },
+  {
+    name: 'cmf_list',
+    title: 'What CMF renders can be made',
+    description:
+      "The CMF sheet's tabs as the creative kit carries them: per tab, the SKU columns in scope (Product Name filled), the clown keys of its product (draft, named, or confirmed by Damien), and which tab, column and key have a prompt ready or refused, with the reasons. Name a tab to list every SKU column, in scope or not, with why. Needs CMF access.",
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { tab: { type: 'string', description: 'a tab name or its slug, e.g. "Experience 2 CC" or experience-2-cc' } },
+    },
+  },
+  {
+    name: 'cmf_prompt',
+    title: "Damien's template, filled from a sheet row",
+    description:
+      "The prompt the plugin repository's prompt_build.py wrote for one tab, SKU column and clown key: Damien's template filled by code from the row and the key, verbatim, with the zone lines, what was left out and why, warnings (a key named but not confirmed), and the sha256s. Or prompt_build's refusal, word for word. Never rewrite it; cmf_render sends it as it is. Needs CMF access.",
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['tab', 'column', 'clown'],
+      properties: {
+        tab: { type: 'string', description: 'the sheet tab, e.g. "Experience 2 CC"' },
+        column: { type: 'string', description: 'the SKU column letter, e.g. E' },
+        clown: { type: 'string', description: 'the clown key, e.g. case-experience2--front' },
+      },
+    },
+  },
+  {
+    name: 'cmf_render',
+    title: 'Render a colourway on its clown',
+    description:
+      "Sends the payload for one tab, SKU column and clown key the way the repository's render.py sends it: the clown the only image, the prompt byte for byte (no rewrite, no lighting clause), the clown's aspect, 2K unless asked, one model call per image. Refuses before paying when the key is a draft, the template or the prompt is not the payload's, or the clown's bytes are not the ones the key was sampled from. Saved under Claude / CMF. Grade each render with grade_image next; Damien decides. Needs CMF access.",
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['tab', 'column', 'clown'],
+      properties: {
+        tab: { type: 'string' },
+        column: { type: 'string' },
+        clown: { type: 'string' },
+        lane: { type: 'string', enum: ['final', 'draft'], default: 'final', description: "final: Nano Banana Pro; draft: Nano Banana 2 (the kit's CMF models)" },
+        n: { type: 'integer', minimum: 1, maximum: 4, default: 1 },
+        image_size: { type: 'string', enum: ['1K', '2K', '4K'], default: '2K' },
+        async: { type: 'boolean', default: false, description: 'return a job id at once; collect with get_generation_status' },
+      },
+    },
+  },
+  {
+    name: 'cmf_check_pdf',
+    title: 'Check a CMF PDF against the sheet',
+    description:
+      "Every value printed on a CMF PDF against its sheet cell, per SKU, component and field, with the states and causes of the repository's spec_diff.py (match, mismatch, missing_in_pdf, empty_in_sheet, extra_in_pdf; truncated code, export date, words added, blank colour and the rest). clean is true only when every value matches: one mismatch or one empty required cell and the PDF does not go out. Name the PDF by pdf_url (on Vesper's storage) or cmf_packet_id. Runs in Vesper; engine worker runs the repository's own script on the creative worker. Needs CMF access.",
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['tab'],
+      properties: {
+        pdf_url: { type: 'string', description: 'the PDF, on a host Vesper may fetch' },
+        cmf_packet_id: { type: 'string', description: "a Vesper CMF packet whose exported PDF to check" },
+        tab: { type: 'string', description: 'the sheet tab the PDF is for' },
+        columns: { type: 'array', items: { type: 'string' }, description: 'column letters (or names one column has); every SKU page found when omitted' },
+        layout: { type: 'string', enum: ['vesper', 'ours'], default: 'vesper', description: "vesper: Vesper's export today; ours: a PDF made to spec-fields.md" },
+        clown: { type: 'string', description: "a clown key: the legend is checked in the key's order" },
+        engine: { type: 'string', enum: ['vesper', 'worker'], default: 'vesper' },
       },
     },
   },

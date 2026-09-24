@@ -11,6 +11,10 @@ test.describe('MCP_TOOLS catalog', () => {
   test('exposes the expected tool names', () => {
     const names = MCP_TOOLS.map((t) => t.name).sort()
     expect(names).toEqual([
+      'cmf_check_pdf',
+      'cmf_list',
+      'cmf_prompt',
+      'cmf_render',
       'enhance_prompt',
       'estimate_generation_cost',
       'export_creative_records',
