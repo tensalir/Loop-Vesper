@@ -7,8 +7,9 @@
  * or collects it later as a job, and a job runs this function directly, so a
  * stored request can never queue itself again.
  *
- * Results carry JPEG previews Claude can read (no `audience` annotation) and
- * links to the full-resolution files.
+ * Results carry JPEG previews and links to the full-resolution files. Each preview is marked for
+ * both the user and the assistant (`imageBlocks`): claude.ai draws inline only what is marked for
+ * the user, and Claude reads what is marked for the assistant.
  */
 
 import { createHash, randomUUID } from 'node:crypto'
@@ -55,6 +56,38 @@ type McpResourceLinkContent = {
   annotations?: McpContentAnnotations
 }
 export type McpContent = McpTextContent | McpImageContent | McpResourceLinkContent
+
+/**
+ * Who a picture is for. claude.ai draws an image inline in the chat only when it is marked for the
+ * user; before 2026-09-24 every preview was marked `['user']`, so the person saw it and Claude did
+ * not. The jobs fix (#9) removed the mark so Claude could read its draws, and the pictures fell back
+ * into the folded tool result. The default now marks each preview for both.
+ *
+ * `MCP_IMAGE_AUDIENCE` changes it without a code change: `both` (default), `user` (the mark from
+ * before #9: inline, and Claude may not see it), or `split` (each preview twice, one block for the
+ * user and one for the assistant, for a client that shows only one of the two).
+ */
+export type ImageAudienceMode = 'both' | 'user' | 'split'
+
+export function imageAudienceMode(): ImageAudienceMode {
+  const v = (process.env.MCP_IMAGE_AUDIENCE || '').trim().toLowerCase()
+  return v === 'user' || v === 'split' ? v : 'both'
+}
+
+export function imageBlocks(data: string, mimeType: string, mode: ImageAudienceMode = imageAudienceMode()): McpImageContent[] {
+  if (mode === 'split') {
+    return [
+      { type: 'image', data, mimeType, annotations: { audience: ['user'], priority: 0.95 } },
+      { type: 'image', data, mimeType, annotations: { audience: ['assistant'], priority: 0.95 } },
+    ]
+  }
+  const audience: Array<'user' | 'assistant'> = mode === 'user' ? ['user'] : ['user', 'assistant']
+  return [{ type: 'image', data, mimeType, annotations: { audience, priority: 0.95 } }]
+}
+
+function linkAudience(mode: ImageAudienceMode): McpContentAnnotations {
+  return { audience: mode === 'user' ? ['user'] : ['user', 'assistant'], priority: 0.85 }
+}
 
 export type GenerateAssetArgs = z.infer<typeof HeadlessGenerateAssetSchema>
 
@@ -440,6 +473,7 @@ export async function imageResultContent(input: {
 }): Promise<McpContent[]> {
   const content: McpContent[] = [{ type: 'text', text: input.summary }]
   const n = input.outputs.length
+  const mode = imageAudienceMode()
   input.outputs.forEach((out, idx) => {
     content.push({
       type: 'resource_link',
@@ -447,6 +481,7 @@ export async function imageResultContent(input: {
       name: `${input.modelId}-${out.width}x${out.height}-${idx}.${extensionForMime(out.mimeType)}`,
       mimeType: out.mimeType,
       description: `Image ${idx + 1} of ${n} from ${input.modelId}, full resolution`,
+      annotations: linkAudience(mode),
     })
   })
   if (!input.inline || n === 0) return content
@@ -468,7 +503,7 @@ export async function imageResultContent(input: {
       content.push({ type: 'text', text: `No preview for image ${idx + 1}; use its link.` })
       return
     }
-    content.push({ type: 'image', data: preview.data, mimeType: preview.mimeType })
+    content.push(...imageBlocks(preview.data, preview.mimeType, mode))
   })
   return content
 }
