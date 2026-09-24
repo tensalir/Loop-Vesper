@@ -7,6 +7,16 @@
  * external machine credentials live in their own table with their own
  * scoping and revocation primitives so a leak in one surface cannot
  * cascade into trusted internal paths.
+ *
+ * Two kinds of token reach here:
+ *   - `vsp_live_…`, a static token issued by an admin or from /headless,
+ *     in the header or in the `/api/mcp/<token>` URL; unchanged.
+ *   - `vsp_oat_…`, a one-hour access token from the per-person sign-in
+ *     (src/lib/oauth). Accepted in the header of `/api/mcp` only. Its
+ *     credential is the person's OAuth credential; the person must be active
+ *     and have Claude access (`profiles.mcp_access`) or be an admin.
+ * A 401 from the bare `/api/mcp` carries a `WWW-Authenticate` challenge that
+ * points the client at the sign-in (`options.challenge`).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -16,6 +26,10 @@ import {
   extractBearerToken,
   hashHeadlessToken,
 } from './tokens'
+import { ACCESS_TOKEN_PREFIX, oauthConfig } from '@/lib/oauth/config'
+import { acceptedResources, challengeHeader } from '@/lib/oauth/metadata'
+import { checkAccess } from '@/lib/oauth/tokens'
+import { findAccessToken } from '@/lib/oauth/store-prisma'
 import {
   checkAndIncrementHeadlessRate,
   rateLimitHeaders,
@@ -26,11 +40,11 @@ export type HeadlessSurface = 'rest' | 'mcp'
 
 // The tool names live in one registry; re-exported here so existing imports keep working.
 export type { HeadlessTool } from './tool-registry'
-import type { HeadlessTool } from './tool-registry'
+import { effectiveTools, type HeadlessTool } from './tool-registry'
 
 export interface HeadlessPrincipal {
   credential: HeadlessCredential
-  owner: Pick<Profile, 'id' | 'role' | 'pausedAt' | 'deletedAt' | 'cmfAccess' | 'packagingAccess'>
+  owner: Pick<Profile, 'id' | 'role' | 'pausedAt' | 'deletedAt' | 'cmfAccess' | 'packagingAccess' | 'mcpAccess'>
 }
 
 export interface VerifyOptions {
@@ -50,6 +64,11 @@ export interface VerifyOptions {
    * same way as a header bearer.
    */
   tokenFromPath?: string
+  /**
+   * Send the OAuth challenge on a 401 (RFC 9728 §5.1): set by the bare
+   * `/api/mcp` route only, never by the token-in-URL route or REST.
+   */
+  challenge?: { origin: string }
 }
 
 export interface VerifyFailure {
@@ -99,40 +118,82 @@ export async function verifyHeadlessRequest(
   // field, authenticate via a unique URL per partner. Falls back to the
   // standard `Authorization: Bearer ...` header for Cursor and direct
   // API clients.
-  let rawToken: string | null = options.tokenFromPath?.trim() || null
+  const cfg = oauthConfig()
+  const challenge = (invalid?: string): Record<string, string> | undefined =>
+    options.challenge && cfg.enabled
+      ? { 'WWW-Authenticate': challengeHeader(options.challenge.origin, invalid) }
+      : undefined
+
+  const fromPath = options.tokenFromPath?.trim() || null
+  let rawToken: string | null = fromPath
   if (!rawToken) {
     const headerValue = request.headers.get('authorization')
     rawToken = extractBearerToken(headerValue)
   }
   if (!rawToken) {
-    return deny(401, {
-      error: 'Missing or malformed Vesper API token. Provide `Authorization: Bearer vsp_live_...` or use a `/api/mcp/<token>` URL.',
-      errorCategory: 'auth',
-    })
+    return deny(
+      401,
+      {
+        error: options.challenge && cfg.enabled
+          ? 'Sign in to Vesper to use this connector, or send `Authorization: Bearer vsp_live_...`.'
+          : 'Missing or malformed Vesper API token. Provide `Authorization: Bearer vsp_live_...` or use a `/api/mcp/<token>` URL.',
+        errorCategory: 'auth',
+      },
+      challenge()
+    )
   }
 
-  const tokenHash = hashHeadlessToken(rawToken)
-  const credential = await prisma.headlessCredential.findUnique({
-    where: { tokenHash },
-    include: {
-      owner: {
-        select: {
-          id: true,
-          role: true,
-          pausedAt: true,
-          deletedAt: true,
-          cmfAccess: true,
-          packagingAccess: true,
+  let credential: HeadlessCredential & { owner: HeadlessPrincipal['owner'] }
+
+  if (rawToken.startsWith(ACCESS_TOKEN_PREFIX)) {
+    // A per-person sign-in token: the header of /api/mcp only.
+    if (fromPath || options.surface !== 'mcp') {
+      return deny(401, {
+        error: 'This token is from the Claude sign-in and works only in the Authorization header of /api/mcp.',
+        errorCategory: 'auth',
+      })
+    }
+    const origin = options.challenge?.origin ?? new URL(request.url).origin
+    const found = await findAccessToken(hashHeadlessToken(rawToken))
+    const check = checkAccess(found, { now: new Date(), resources: acceptedResources(origin, cfg) })
+    if (!check.ok) {
+      return deny(
+        check.status,
+        { error: check.message, errorCategory: 'auth' },
+        check.invalidToken ? challenge(check.message) : undefined
+      )
+    }
+    credential = { ...found!.credential, owner: found!.owner }
+  } else {
+    const tokenHash = hashHeadlessToken(rawToken)
+    const row = await prisma.headlessCredential.findUnique({
+      where: { tokenHash },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            role: true,
+            pausedAt: true,
+            deletedAt: true,
+            cmfAccess: true,
+            packagingAccess: true,
+            mcpAccess: true,
+          },
         },
       },
-    },
-  })
-
-  if (!credential) {
-    return deny(401, {
-      error: 'Invalid Vesper API token.',
-      errorCategory: 'auth',
     })
+
+    if (!row) {
+      return deny(
+        401,
+        {
+          error: 'Invalid Vesper API token.',
+          errorCategory: 'auth',
+        },
+        challenge('Invalid Vesper API token.')
+      )
+    }
+    credential = row
   }
 
   if (credential.revokedAt) {
@@ -163,7 +224,7 @@ export async function verifyHeadlessRequest(
     })
   }
 
-  if (options.requireTool && !credential.allowedTools.includes(options.requireTool)) {
+  if (options.requireTool && !effectiveTools(credential, credential.owner).includes(options.requireTool)) {
     return deny(403, {
       error: `This token is not permitted to call '${options.requireTool}'.`,
       errorCategory: 'auth',
@@ -171,7 +232,7 @@ export async function verifyHeadlessRequest(
   }
 
   if (options.requireModel && credential.allowedModels.length > 0) {
-    if (!credential.allowedModels.includes(options.requireModel)) {
+    if (!credential.allowedModels.includes('*') && !credential.allowedModels.includes(options.requireModel)) {
       return deny(403, {
         error: `This token is not permitted to use model '${options.requireModel}'.`,
         errorCategory: 'auth',
