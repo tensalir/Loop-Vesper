@@ -37,7 +37,10 @@ export const SERVER_INSTRUCTIONS =
   'a slower draw, or one called with async: true, returns a jobId to collect with get_generation_status. ' +
   'Every draw is saved in the caller\'s Vesper project "Claude". Set allowFallback: false to forbid Replicate routing. ' +
   'A prompt filled from a Loop product skeleton is sent as it is: enhance_prompt returns it unchanged. ' +
-  'list_creative_products, get_creative_kit and get_product_references read the Loop creative kit: the products, their rubrics, and the pinned references a grade or a draw attaches.'
+  'list_creative_products, get_creative_kit and get_product_references read the Loop creative kit: the products, their rubrics, and the pinned references a grade or a draw attaches. ' +
+  'generate_product_image draws a Loop product from its skeleton, filled by code, with the product render first and no reference parameter; ' +
+  "grade_image reads a picture three times with the product's grader (judge <model> vesper x3, advisory, never pooled with your own read, which record_grade keeps apart); " +
+  "record_verdict records the decider's answer and, for a Frontify asset, returns the comment line to post with the person's own Frontify connector."
 
 interface JsonRpcRequest {
   jsonrpc: '2.0'

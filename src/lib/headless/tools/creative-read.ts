@@ -17,7 +17,7 @@ import { invalidArguments, type ToolContext, type ToolHandler } from './types'
 
 const MAX_PREVIEWS = 5
 
-async function ownerIsAdmin(ownerId: string): Promise<boolean> {
+export async function ownerIsAdmin(ownerId: string): Promise<boolean> {
   try {
     const profile = await prisma.profile.findUnique({ where: { id: ownerId }, select: { role: true } })
     return profile?.role === 'admin'
