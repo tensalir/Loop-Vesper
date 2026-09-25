@@ -214,7 +214,7 @@ export const surfaces: Surface[] = [
       fields: [
         {
           label: 'Server URL',
-          value: 'https://vesper.loop.dev/api/mcp',
+          value: 'https://loopvesper-one.vercel.app/api/mcp',
           hint: 'No token in it: you sign in when you click Connect. Disconnect it any time in Settings, Connected apps.',
         },
       ],
@@ -235,6 +235,15 @@ export const surfaces: Surface[] = [
           detail:
             'Claude opens Vesper in a browser tab. After you allow it, Vesper appears in your Connectors list and its tools are yours to use.',
         },
+        {
+          main: 'Then use the Claude desktop app, and drag a folder in.',
+          detail:
+            'A chat for one picture, a Cowork task for a whole round. Every picture Vesper makes is saved into the folder and shows as a card you can open. In the browser it shows as a thumbnail above the reply instead.',
+        },
+        {
+          main: 'Ask in plain words, and name Vesper.',
+          detail: '"With Vesper, make one 1:1 image of a lemon on a white table with Nano Banana 2."',
+        },
       ],
     },
   },
@@ -254,7 +263,7 @@ export const surfaces: Surface[] = [
       fields: [
         {
           label: 'Endpoint',
-          value: 'POST https://vesper.loop.dev/api/headless/v1/prompts/enhance',
+          value: 'POST https://loopvesper-one.vercel.app/api/headless/v1/prompts/enhance',
         },
         {
           label: 'Authorization header',

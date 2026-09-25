@@ -35,7 +35,7 @@ interface IssuedToken {
   createdAt: string
 }
 
-const PLACEHOLDER_URL = 'https://vesper.loop.dev/api/mcp/<your-token>'
+const PLACEHOLDER_URL = 'https://loopvesper-one.vercel.app/api/mcp/<your-token>'
 
 function formatRelative(iso: string | null): string | null {
   if (!iso) return null
@@ -173,14 +173,14 @@ export function McpAccessControl({ initial }: { initial: McpAccessSummary }) {
         <>
           <div className="vh-field__value-wrap vh-field__value-wrap--standalone">
             <code className="vh-field__value vh-field__value--masked vh-field__value--has-inline-copy">
-              {`https://vesper.loop.dev/api/mcp/${existing.tokenPrefix}_\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022`}
+              {`https://loopvesper-one.vercel.app/api/mcp/${existing.tokenPrefix}_\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022`}
             </code>
             <button
               type="button"
               className={`vh-field__copy-inline${copied ? ' is-copied' : ''}`}
               onClick={() =>
                 copy(
-                  `https://vesper.loop.dev/api/mcp/${existing.tokenPrefix}_\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022`
+                  `https://loopvesper-one.vercel.app/api/mcp/${existing.tokenPrefix}_\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022`
                 )
               }
               aria-label={copied ? 'Copied displayed URL' : 'Copy displayed URL (token is masked — regenerate for the full URL)'}
@@ -217,7 +217,7 @@ export function McpAccessControl({ initial }: { initial: McpAccessSummary }) {
           <div className="vh-field__row">
             <code className="vh-field__value vh-field__value--masked">
               {existing
-                ? `https://vesper.loop.dev/api/mcp/${existing.tokenPrefix}_\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022`
+                ? `https://loopvesper-one.vercel.app/api/mcp/${existing.tokenPrefix}_\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022`
                 : PLACEHOLDER_URL}
             </code>
           </div>

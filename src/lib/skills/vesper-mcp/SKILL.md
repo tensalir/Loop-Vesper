@@ -16,7 +16,7 @@ Vesper is Loop's image and video workshop exposed as a remote MCP server.
 {
   "mcpServers": {
     "vesper": {
-      "url": "https://vesper.loop.dev/api/mcp/vsp_live_<prefix>_<secret>",
+      "url": "https://loopvesper-one.vercel.app/api/mcp/vsp_live_<prefix>_<secret>",
       "timeout": 120000
     }
   }
@@ -29,7 +29,7 @@ For Cursor with header auth:
 {
   "mcpServers": {
     "vesper": {
-      "url": "https://vesper.loop.dev/api/mcp",
+      "url": "https://loopvesper-one.vercel.app/api/mcp",
       "headers": { "Authorization": "Bearer vsp_live_..." },
       "timeout": 120000
     }
