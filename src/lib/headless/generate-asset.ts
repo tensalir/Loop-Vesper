@@ -513,8 +513,7 @@ export function saveToFolderText(
   const one = outputs.length === 1
   return [
     `Where a folder is connected (Cowork, Claude Code): save ${one ? 'the preview' : 'each preview'} into it as vesper/${day}/<name>, then open ${one ? 'it' : 'them'}; the app shows ${one ? 'it' : 'them'} as ${one ? 'a file card' : 'file cards'} with a preview. ${one ? 'Name' : 'Names'}, in order: ${names.join(', ')}. Save the preview URL${one ? '' : 's'} above as ${one ? 'it is' : 'they are'} (no re-encoding); the full-resolution link${one ? '' : 's'} stay${one ? 's' : ''} in the manifest line beside ${one ? 'it' : 'them'}.`,
-  ].join('
-')
+  ].join('\n')
 }
 
 export function showInReplyLines(
