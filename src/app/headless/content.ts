@@ -214,7 +214,7 @@ export const surfaces: Surface[] = [
       fields: [
         {
           label: 'Server URL',
-          value: 'https://vesper.loop.dev/api/mcp',
+          value: 'https://loopvesper-one.vercel.app/api/mcp',
           hint: 'No token in it: you sign in when you click Connect. Disconnect it any time in Settings, Connected apps.',
         },
       ],
@@ -263,7 +263,7 @@ export const surfaces: Surface[] = [
       fields: [
         {
           label: 'Endpoint',
-          value: 'POST https://vesper.loop.dev/api/headless/v1/prompts/enhance',
+          value: 'POST https://loopvesper-one.vercel.app/api/headless/v1/prompts/enhance',
         },
         {
           label: 'Authorization header',
