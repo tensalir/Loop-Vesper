@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import sharp from 'sharp'
 import { dispatch } from '../src/lib/headless/mcp-dispatch'
-import { imageAudienceMode, imageBlocks, imageResultContent, showInReplyLines } from '../src/lib/headless/generate-asset'
+import { imageAudienceMode, imageBlocks, imageResultContent, previewFilename, saveToFolderText, showInReplyLines } from '../src/lib/headless/generate-asset'
 import { PREVIEW_LONG_EDGE, PREVIEW_MAX_BYTES } from '../src/lib/images/preview'
 import { ORG_DEFAULT_TOOLS, HEADLESS_TOOLS } from '../src/lib/headless/tool-registry'
 import { TOOL_HANDLERS } from '../src/lib/headless/tools'
@@ -126,6 +126,21 @@ test.describe('dispatch', () => {
 })
 
 test.describe('image results Claude can see', () => {
+  test('every picture has a file name to save it as, and the result says where a folder gets it', () => {
+    expect(previewFilename('gemini-nano-banana-2', '7d54cc98-9724-47de-9ba2-5f042d7862a7', 0))
+      .toBe('gemini-nano-banana-2-7d54cc98-1-preview.jpg')
+    expect(previewFilename('openai/GPT Image 2', 'abcdefgh1234', 3)).toBe('openai-gpt-image-2-abcdefgh-4-preview.jpg')
+    const text = saveToFolderText(
+      [{ url: 'u1', previewUrl: 'p1', filename: 'a-1-preview.jpg' }, { url: 'u2', previewUrl: null, filename: 'a-2-preview.jpg' }],
+      'a'
+    )
+    expect(text).toContain('Cowork, Claude Code')
+    expect(text).toMatch(/vesper\/\d{4}-\d{2}-\d{2}\/<name>/)
+    expect(text).toContain('a-1-preview.jpg, a-2-preview.jpg')
+    expect(text).toContain('no re-encoding')
+    expect(saveToFolderText([{ url: 'u' }], 'm')).toContain('m-1-preview.jpg')
+  })
+
   test('every image result hands Claude the markdown line that shows the picture in its reply', async () => {
     const png = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#fff' } }).png().toBuffer()
     const preview = `data:image/jpeg;base64,${(await sharp(png).jpeg().toBuffer()).toString('base64')}`

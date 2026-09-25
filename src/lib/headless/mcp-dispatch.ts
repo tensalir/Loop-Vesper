@@ -35,6 +35,7 @@ export const SERVER_INSTRUCTIONS =
   'Use list_models or the vesper://models resource to discover models; enhance_prompt / iterate_prompt for prompt craft. ' +
   'generate_asset answers inline when the draw finishes within about 50 seconds, with JPEG previews you can read and links to the full-resolution files. ' +
   'claude.ai shows the person a picture only when your reply carries it as a markdown image; every image result gives you the exact lines to put in your reply, one per picture. Always put them in. ' +
+  'Where a folder is connected (Cowork, Claude Code), also save each preview into it under the file name the result gives, so it shows as a file card with a preview; Vesper cannot write to a disk, you do. ' +
   'a slower draw, or one called with async: true, returns a jobId to collect with get_generation_status. ' +
   'Every draw is saved in the caller\'s Vesper project "Claude". Set allowFallback: false to forbid Replicate routing. ' +
   'A prompt filled from a Loop product skeleton is sent as it is: enhance_prompt returns it unchanged.'

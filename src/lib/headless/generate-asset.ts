@@ -102,6 +102,8 @@ export interface GenerateAssetOutput {
   outputId: string | null
   /** A small public JPEG of the same picture, for showing in a reply; null when it could not be made. */
   previewUrl: string | null
+  /** The name to save the preview as in a connected folder, so the file card reads as the draw. */
+  filename: string
 }
 
 /** A product render or clown the draw was anchored on; iterating in the web app re-attaches it. */
@@ -415,6 +417,7 @@ export async function executeGenerateAsset(
       mimeType: p.mimeType,
       outputId: outputIds[idx] ?? null,
       previewUrl: p.previewUrl,
+      filename: previewFilename(modelId, generationId, idx),
     })),
     previewSources: persisted.map((p) => p.previewSource),
     durationMs: Date.now() - startedAt,
@@ -488,6 +491,32 @@ const PREVIEW_NOTE =
  * behind the "used the tool" line, whatever it is annotated with (tested 2026-09-24). The small
  * preview is what goes in the reply; the original stays behind its link.
  */
+/** `<model>-<draw>-<n>-preview.jpg`: one name per picture that reads as the draw in a folder. */
+export function previewFilename(modelId: string, generationId: string, idx: number): string {
+  const model = modelId.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'draw'
+  return `${model}-${generationId.slice(0, 8)}-${idx + 1}-preview.jpg`
+}
+
+/**
+ * Where files can be written (Cowork with a folder connected, Claude Code), the previews saved
+ * there show as file cards with a preview panel in the desktop app, and open in full in Claude
+ * Code. That is the only way a picture shows large beside the conversation; a picture in a tool
+ * result never does, and a picture in the reply is a click-to-load frame. Vesper cannot write to
+ * anyone's disk, so it names the files and Claude saves them.
+ */
+export function saveToFolderText(
+  outputs: Array<{ url: string; previewUrl?: string | null; filename?: string }>,
+  modelId: string
+): string {
+  const day = new Date().toISOString().slice(0, 10)
+  const names = outputs.map((out, idx) => out.filename ?? `${modelId}-${idx + 1}-preview.jpg`)
+  const one = outputs.length === 1
+  return [
+    `Where a folder is connected (Cowork, Claude Code): save ${one ? 'the preview' : 'each preview'} into it as vesper/${day}/<name>, then open ${one ? 'it' : 'them'}; the app shows ${one ? 'it' : 'them'} as ${one ? 'a file card' : 'file cards'} with a preview. ${one ? 'Name' : 'Names'}, in order: ${names.join(', ')}. Save the preview URL${one ? '' : 's'} above as ${one ? 'it is' : 'they are'} (no re-encoding); the full-resolution link${one ? '' : 's'} stay${one ? 's' : ''} in the manifest line beside ${one ? 'it' : 'them'}.`,
+  ].join('
+')
+}
+
 export function showInReplyLines(
   outputs: Array<{ url: string; previewUrl?: string | null }>,
   modelId: string
@@ -502,6 +531,7 @@ export function showInReplyText(outputs: Array<{ url: string; previewUrl?: strin
       ? 'To show the person the picture, put this line in your reply exactly as it is (claude.ai draws it there and nowhere else):'
       : 'To show the person the pictures, put these lines in your reply exactly as they are (claude.ai draws them there and nowhere else):',
     ...showInReplyLines(outputs, modelId),
+    saveToFolderText(outputs, modelId),
   ].join('\n')
 }
 
@@ -511,7 +541,7 @@ export function showInReplyText(outputs: Array<{ url: string; previewUrl?: strin
  */
 export async function imageResultContent(input: {
   summary: string
-  outputs: Array<{ url: string; width: number; height: number; mimeType: string; previewUrl?: string | null }>
+  outputs: Array<{ url: string; width: number; height: number; mimeType: string; previewUrl?: string | null; filename?: string }>
   modelId: string
   previewSources?: string[]
   inline: boolean
