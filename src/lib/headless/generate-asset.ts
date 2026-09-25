@@ -499,7 +499,8 @@ export function previewFilename(modelId: string, generationId: string, idx: numb
 
 /**
  * Where files can be written (Cowork with a folder connected, Claude Code), the previews saved
- * there show as file cards with a preview panel in the desktop app, and open in full in Claude
+ * there and attached to the reply show as file cards with a preview panel in the desktop app
+ * (tested 2026-09-25: saving alone shows nothing; sharing the file does), and open in full in Claude
  * Code. That is the only way a picture shows large beside the conversation; a picture in a tool
  * result never does, and a picture in the reply is a click-to-load frame. Vesper cannot write to
  * anyone's disk, so it names the files and Claude saves them.
@@ -512,7 +513,7 @@ export function saveToFolderText(
   const names = outputs.map((out, idx) => out.filename ?? `${modelId}-${idx + 1}-preview.jpg`)
   const one = outputs.length === 1
   return [
-    `Where a folder is connected (Cowork, Claude Code): save ${one ? 'the preview' : 'each preview'} into it as vesper/${day}/<name>, then open ${one ? 'it' : 'them'}; the app shows ${one ? 'it' : 'them'} as ${one ? 'a file card' : 'file cards'} with a preview. ${one ? 'Name' : 'Names'}, in order: ${names.join(', ')}. Save the preview URL${one ? '' : 's'} above as ${one ? 'it is' : 'they are'} (no re-encoding); the full-resolution link${one ? '' : 's'} stay${one ? 's' : ''} in the manifest line beside ${one ? 'it' : 'them'}.`,
+    `Where a folder is connected (Cowork, Claude Code): save ${one ? 'the preview' : 'each preview'} into it as vesper/${day}/<name>, then attach ${one ? 'it' : 'them'} to your reply (share the saved file${one ? '' : 's'}); the desktop app then shows ${one ? 'it' : 'them'} as ${one ? 'a file card' : 'file cards'} with a preview panel. Naming the path is not enough; the file has to be shared. ${one ? 'Name' : 'Names'}, in order: ${names.join(', ')}. Save the preview URL${one ? '' : 's'} above as ${one ? 'it is' : 'they are'} (no re-encoding); the full-resolution link${one ? '' : 's'} stay${one ? 's' : ''} in the manifest line beside ${one ? 'it' : 'them'}.`,
   ].join('\n')
 }
 

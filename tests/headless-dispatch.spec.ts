@@ -138,6 +138,8 @@ test.describe('image results Claude can see', () => {
     expect(text).toMatch(/vesper\/\d{4}-\d{2}-\d{2}\/<name>/)
     expect(text).toContain('a-1-preview.jpg, a-2-preview.jpg')
     expect(text).toContain('no re-encoding')
+    expect(text).toContain('attach them to your reply')
+    expect(saveToFolderText([{ url: 'u' }], 'm')).toContain('attach it to your reply')
     expect(saveToFolderText([{ url: 'u' }], 'm')).toContain('m-1-preview.jpg')
   })
 
