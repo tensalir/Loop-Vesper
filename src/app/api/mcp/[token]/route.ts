@@ -10,7 +10,7 @@ import { handleMcpPost } from '@/lib/headless/mcp-dispatch'
  * building OAuth is to encode the credential into the URL itself.
  *
  * Each Loop partner is emailed a unique URL like
- * `https://vesper.loop.dev/api/mcp/vsp_live_xxxx_yyyy`. The token is
+ * `https://loopvesper-one.vercel.app/api/mcp/vsp_live_xxxx_yyyy`. The token is
  * pulled out of `params.token`, hashed, and looked up via the same
  * `HeadlessCredential` model that backs the bearer-header surface; rate
  * limits, tool allowlists, model allowlists, audit logs, and revocation
