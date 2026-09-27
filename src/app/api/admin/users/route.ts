@@ -51,6 +51,8 @@ export async function GET(request: NextRequest) {
           cmfAccess: true,
           packagingAccess: true,
           mcpAccess: true,
+          mcpAccessDecidedAt: true,
+          mcpAccessAutoGrantedAt: true,
           packagingEngineerRole: true,
           pausedAt: true,
           deletedAt: true,
@@ -84,6 +86,10 @@ export async function GET(request: NextRequest) {
       cmfAccess: u.cmfAccess,
       packagingAccess: u.packagingAccess,
       mcpAccess: u.mcpAccess,
+      // How Claude access came about: an admin's decision (which automatic access never
+      // overrides), or Vesper on the person's first connect with a Loop account.
+      mcpAccessDecidedAt: u.mcpAccessDecidedAt,
+      mcpAccessAutoGrantedAt: u.mcpAccessAutoGrantedAt,
       packagingEngineerRole: u.packagingEngineerRole,
       pausedAt: u.pausedAt,
       deletedAt: u.deletedAt,

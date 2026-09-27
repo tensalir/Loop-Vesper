@@ -72,8 +72,11 @@ interface AdminUser {
   packagingAccess?: boolean
   packagingEngineerRole?: boolean
   // Per-user grant to connect Claude to Vesper with their own sign-in (OAuth).
-  // Admins pass without it.
+  // Admins pass without it. Loop accounts get it automatically on their first
+  // connect unless an admin has decided (mcpAccessDecidedAt), which always wins.
   mcpAccess?: boolean
+  mcpAccessDecidedAt?: string | null
+  mcpAccessAutoGrantedAt?: string | null
   pausedAt: string | null
   deletedAt: string | null
   createdAt: string
@@ -99,6 +102,22 @@ function formatRelativeTime(dateStr: string | null): string {
   if (diffHours < 24) return `${diffHours}h ago`
   if (diffDays < 30) return `${diffDays}d ago`
   return date.toLocaleDateString()
+}
+
+// How a person's Claude access came about, for the badge's tooltip.
+function claudeAccessNote(user: AdminUser): string {
+  const on = (dateStr: string) => new Date(dateStr).toLocaleDateString()
+  if (user.mcpAccess) {
+    if (user.mcpAccessDecidedAt) return `Can connect Claude: turned on by an admin (${on(user.mcpAccessDecidedAt)})`
+    if (user.mcpAccessAutoGrantedAt) {
+      return `Can connect Claude: granted automatically on their first connect with a Loop account (${on(user.mcpAccessAutoGrantedAt)})`
+    }
+    return 'Can connect Claude: turned on before Vesper recorded who decided'
+  }
+  if (user.mcpAccessDecidedAt) {
+    return `Claude access turned off by an admin (${on(user.mcpAccessDecidedAt)}); connecting will not turn it back on`
+  }
+  return 'No Claude access yet: a Loop account gets it on its first connect'
 }
 
 function getUserStatus(user: AdminUser): 'active' | 'paused' | 'deleted' {
@@ -267,13 +286,14 @@ export function UserManagementSettings() {
     }
   }
 
-  const handleToggleMcpAccess = async (user: AdminUser) => {
+  // Records an admin's decision, which automatic access for Loop accounts never overrides.
+  const handleSetMcpAccess = async (user: AdminUser, enabled: boolean) => {
     setActionLoading(user.id)
     try {
       const res = await fetch(`/api/admin/users/${user.id}/mcp-access`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !(user.mcpAccess ?? false) }),
+        body: JSON.stringify({ enabled }),
       })
       if (!res.ok) {
         const text = await res.text()
@@ -470,9 +490,18 @@ export function UserManagementSettings() {
                                 <Badge
                                   variant="outline"
                                   className="text-[10px] px-1.5 py-0 border-sky-500/40 text-sky-700 dark:text-sky-300"
-                                  title="Can connect Claude to Vesper with their own sign-in"
+                                  title={claudeAccessNote(user)}
                                 >
-                                  Claude
+                                  {!user.mcpAccessDecidedAt && user.mcpAccessAutoGrantedAt ? 'Claude (auto)' : 'Claude'}
+                                </Badge>
+                              )}
+                              {user.role !== 'admin' && !(user.mcpAccess ?? false) && user.mcpAccessDecidedAt && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] px-1.5 py-0 border-muted-foreground/40 text-muted-foreground"
+                                  title={claudeAccessNote(user)}
+                                >
+                                  Claude off
                                 </Badge>
                               )}
                               {user.role !== 'admin' && (user.packagingAccess ?? false) && (
@@ -543,12 +572,24 @@ export function UserManagementSettings() {
                                   ? 'Revoke Headless Access'
                                   : 'Grant Headless Access'}
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleToggleMcpAccess(user)}>
+                              <DropdownMenuItem
+                                onClick={() => handleSetMcpAccess(user, !(user.mcpAccess ?? false))}
+                                title={claudeAccessNote(user)}
+                              >
                                 <KeyRound className="h-4 w-4 mr-2" />
                                 {(user.mcpAccess ?? false)
                                   ? 'Revoke Claude Access'
                                   : 'Grant Claude Access'}
                               </DropdownMenuItem>
+                              {!(user.mcpAccess ?? false) && !user.mcpAccessDecidedAt && (
+                                <DropdownMenuItem
+                                  onClick={() => handleSetMcpAccess(user, false)}
+                                  title="Records an admin's decision, so connecting with a Loop account will not turn Claude access on"
+                                >
+                                  <KeyRound className="h-4 w-4 mr-2" />
+                                  Keep Claude Access Off
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem onClick={() => handleToggleCmfAccess(user)}>
                                 <Palette className="h-4 w-4 mr-2" />
                                 {user.cmfAccess

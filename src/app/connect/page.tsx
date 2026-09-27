@@ -3,6 +3,7 @@ import Image from 'next/image'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
+import { claudeAccessFor, type RefusalReason } from '@/lib/oauth/claude-access'
 import { oauthConfig } from '@/lib/oauth/config'
 import { redirectHostLabel } from '@/lib/oauth/redirects'
 import { verifyAuthRequest } from '@/lib/oauth/request'
@@ -18,7 +19,37 @@ export const dynamic = 'force-dynamic'
  * part that cannot be faked), the app's own name, and the Vesper account, and
  * lists what the connection can do. The answer is a plain form post to
  * /api/mcp/oauth/decision.
+ *
+ * A person with a confirmed email on a Claude access domain whom no admin has
+ * decided on sees the normal consent: their Allow turns Claude access on
+ * (src/lib/oauth/claude-access.ts). This page only reads; it never grants.
  */
+
+function refusalText(reason: RefusalReason, email: string | undefined): { title: string; body: string } {
+  const who = email ? `You are signed in to Vesper as ${email}.` : 'You are signed in to Vesper.'
+  if (reason === 'paused' || reason === 'deleted') {
+    return {
+      title: `This Vesper account is ${reason}`,
+      body: `${who} Claude cannot connect to a ${reason} account. Ask a Vesper admin.`,
+    }
+  }
+  if (reason === 'admin_decided') {
+    return {
+      title: 'Claude access is turned off for you',
+      body: `${who} An admin has turned Claude access off for this account. Ask a Vesper admin if you need it.`,
+    }
+  }
+  if (reason === 'email_unconfirmed') {
+    return {
+      title: 'Claude access is not turned on for you yet',
+      body: `${who} Your email address is not confirmed yet. Loop accounts get Claude access the first time they connect once the address is confirmed (signing in with Google confirms it); otherwise ask a Vesper admin to turn it on, then click Connect in Claude again.`,
+    }
+  }
+  return {
+    title: 'Claude access is not turned on for you yet',
+    body: `${who} Loop accounts get Claude access the first time they connect. For any other account, ask a Vesper admin to turn on Claude access, then click Connect in Claude again.`,
+  }
+}
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -59,21 +90,17 @@ export default async function ConnectPage({ searchParams }: { searchParams: { ar
 
   const profile = await prisma.profile.findUnique({
     where: { id: user.id },
-    select: { role: true, mcpAccess: true, pausedAt: true, deletedAt: true, displayName: true },
+    select: { id: true, role: true, mcpAccess: true, pausedAt: true, deletedAt: true, mcpAccessDecidedAt: true },
   })
-  const allowed = Boolean(
-    profile && !profile.deletedAt && !profile.pausedAt && (profile.mcpAccess || profile.role === 'admin')
-  )
+  const access = claudeAccessFor(profile, user)
   const who = redirectHostLabel(request.redirectUri)
 
-  if (!allowed) {
+  if (access.state === 'refused') {
+    const refusal = refusalText(access.reason, user.email)
     return (
       <Shell>
-        <h1 className="mb-3 text-lg font-semibold">Claude access is not turned on for you yet</h1>
-        <p className="mb-5 text-sm text-muted-foreground">
-          You are signed in to Vesper as {user.email}. Connecting Claude is turned on person by person. Ask
-          whoever runs Vesper at Loop to turn on Claude access for your account, then click Connect in Claude again.
-        </p>
+        <h1 className="mb-3 text-lg font-semibold">{refusal.title}</h1>
+        <p className="mb-5 text-sm text-muted-foreground">{refusal.body}</p>
         <form method="post" action="/api/mcp/oauth/decision">
           <input type="hidden" name="areq" value={areq} />
           <button
@@ -104,7 +131,10 @@ export default async function ConnectPage({ searchParams }: { searchParams: { ar
       </ul>
       <p className="mb-5 text-xs text-muted-foreground">
         What it makes is saved in your project &ldquo;Claude&rdquo;. You can disconnect it at any time in Settings,
-        under Connected apps.
+        under Connected apps. Images and grading through Claude have a daily allowance per person.
+        {access.state === 'grantable' && (
+          <> Your {access.domain} account gets Claude access when you click Allow.</>
+        )}
       </p>
       <form method="post" action="/api/mcp/oauth/decision" className="flex gap-3">
         <input type="hidden" name="areq" value={areq} />

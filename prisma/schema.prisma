@@ -39,8 +39,16 @@ model Profile {
   // Per-user toggle that grants CRUD on the Approved Materials library.
   packagingEngineerRole Boolean @default(false) @map("packaging_engineer_role")
   // Per-user toggle that lets a person connect Claude to Vesper with their own sign-in
-  // (the MCP connector's OAuth flow). Admins pass without it.
+  // (the MCP connector's OAuth flow). Admins pass without it. Turned on by Vesper itself the
+  // first time a person with a confirmed email on a CLAUDE_ACCESS_DOMAINS domain connects,
+  // unless an admin has decided it (src/lib/oauth/claude-access.ts).
   mcpAccess      Boolean   @default(false) @map("mcp_access")
+  // An admin's decision on Claude access, from the switch under Users: when and by whom.
+  // Automatic access never touches a profile with a decision here, so off stays off.
+  mcpAccessDecidedAt DateTime? @map("mcp_access_decided_at")
+  mcpAccessDecidedBy String?   @map("mcp_access_decided_by") @db.Uuid
+  // When Vesper turned Claude access on by itself, on the person's first connect.
+  mcpAccessAutoGrantedAt DateTime? @map("mcp_access_auto_granted_at")
   pausedAt       DateTime? @map("paused_at")
   deletedAt      DateTime? @map("deleted_at")
   createdAt      DateTime  @default(now()) @map("created_at")

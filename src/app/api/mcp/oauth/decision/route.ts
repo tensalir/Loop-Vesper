@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/api/auth'
-import { prisma } from '@/lib/prisma'
+import { ensureClaudeAccess } from '@/lib/oauth/claude-access'
 import { oauthConfig } from '@/lib/oauth/config'
 import { htmlPage } from '@/lib/oauth/http'
 import { clientKeyFor } from '@/lib/oauth/redirects'
@@ -19,6 +19,11 @@ export const dynamic = 'force-dynamic'
  * client (`kind = 'oauth'`, every tool their flags allow, every model),
  * issues a five-minute code and sends the browser back to the client. Deny
  * sends it back with `access_denied`. The browser follows a 303 with a GET.
+ *
+ * Allow is also where a person with a confirmed email on a Claude access
+ * domain gets Claude access, unless an admin has decided it
+ * (src/lib/oauth/claude-access.ts); anyone else without access is sent back
+ * with `access_denied`, as before.
  */
 function sameSite(request: NextRequest, origin: string): boolean {
   const from = request.headers.get('origin') || request.headers.get('referer')
@@ -62,11 +67,9 @@ export async function POST(request: NextRequest) {
     back.searchParams.set('next', `/connect?areq=${encodeURIComponent(String(areq))}`)
     return NextResponse.redirect(back.toString(), 303)
   }
-  const profile = await prisma.profile.findUnique({
-    where: { id: user.id },
-    select: { id: true, role: true, mcpAccess: true, pausedAt: true, deletedAt: true },
-  })
-  if (!profile || profile.deletedAt || profile.pausedAt || (!profile.mcpAccess && profile.role !== 'admin')) {
+  // A Loop account nobody has decided on gets Claude access here, at its own Allow.
+  const access = await ensureClaudeAccess(user)
+  if (!access.allowed) {
     return NextResponse.redirect(
       errorRedirect(
         req.redirectUri,
@@ -79,7 +82,7 @@ export async function POST(request: NextRequest) {
     )
   }
   const credential = await prismaOAuthStore.upsertCredential({
-    ownerId: profile.id,
+    ownerId: user.id,
     clientKey: clientKeyFor(req.redirectUri),
     clientId: req.clientId,
     clientName: req.clientName,
@@ -87,7 +90,7 @@ export async function POST(request: NextRequest) {
   })
   const code = await issueCode(prismaOAuthStore, {
     request: req,
-    profileId: profile.id,
+    profileId: user.id,
     credentialId: credential.id,
     now,
   })
