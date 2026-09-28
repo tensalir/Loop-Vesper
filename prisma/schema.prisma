@@ -1682,7 +1682,7 @@ model CreativeVerdict {
   @@map("creative_verdicts")
 }
 
-// A colleague's feedback on the Loop Creative plugin, per preview: the per-person limits count here,
+// A colleague's feedback on the Loop Studio Design plugin, per preview: the per-person limits count here,
 // and a preview is filed at most once (keyed on the rendered issue's sha256). The issue itself lives
 // in the plugin's repository, filed by Vesper's GitHub App in the person's name.
 model FeedbackSubmission {

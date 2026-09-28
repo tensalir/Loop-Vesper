@@ -1,8 +1,8 @@
 /**
  * The creative kit, schema 1, as Vesper reads it.
  *
- * Mirrors `plugins/creative/kit.schema.json` in the plugin repository
- * (`tensalir/loop-asset-reviewer`, contract in `docs/kit.md`). Strict on what
+ * Mirrors `plugins/studio-design/kit.schema.json` in the plugin repository
+ * (`tensalir/loop-ai-studio`, contract in `docs/kit.md`). Strict on what
  * Vesper acts on (the schema number, the ladder, severities, verdicts,
  * statuses, checks, pins, the prompting body); open on the rest, so a field
  * the plugin adds does not refuse a kit this code does not read yet. A new
@@ -147,9 +147,9 @@ export const KitPromptingSchema = z
 export const KitSchema = z
   .object({
     schema: z.literal(1),
-    plugin: z.literal('creative'),
+    plugin: z.literal('studio-design'),
     version: z.string().regex(/^\d+\.\d+\.\d+$/),
-    tag: z.string().regex(/^creative-v\d+\.\d+\.\d+$/),
+    tag: z.string().regex(/^studio-design-v\d+\.\d+\.\d+$/),
     repo: z.string(),
     commit: z.null(),
     built_at: z.null(),
@@ -165,7 +165,7 @@ export const KitSchema = z
       .passthrough(),
     comment_line: z
       .object({
-        prefix: z.literal('creative'),
+        prefix: z.literal('studio-design'),
         reads_also: z.array(z.string()),
         separator: z.string(),
         answers: z.array(z.string()),

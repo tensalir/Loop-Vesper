@@ -347,7 +347,7 @@ test.describe('grading a CMF render', () => {
 const loaded: LoadedKit = {
   kit,
   conformance,
-  ref: 'creative-v0.2.1',
+  ref: 'studio-design-v0.2.1',
   commit: 'd90c9bb',
   blobSha: 'blob',
   fetchedAt: new Date(),

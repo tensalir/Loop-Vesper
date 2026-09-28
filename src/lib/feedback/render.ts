@@ -1,7 +1,7 @@
 /**
  * The issue a colleague's remark becomes, exactly as the plugin describes it
  * (`plugin-src/skills/feedback/references/issue.md` in
- * tensalir/loop-asset-reviewer) and exactly as its triage reads it
+ * tensalir/loop-ai-studio) and exactly as its triage reads it
  * (`tools/feedback_triage.py`: the author is Vesper's app, the marker is
  * there, and the one fenced json block after it validates against
  * `kit/feedback-issue.schema.json`).
