@@ -14,7 +14,7 @@ Looks like B3, the strap position.
 Check: B3, wrong size on the head, or the strap stops at the ear (confirmed by the reporter).
 
 ### Where
-- Plugin: creative 0.2.0 (kit 0123456) · Skill: eclipse · Surface: chat · Date: 2026-09-24
+- Plugin: studio-design 0.2.0 (kit 0123456) · Skill: eclipse · Surface: chat · Date: 2026-09-24
 - Vesper: output out-123
 
 ### Reported by
