@@ -1,14 +1,14 @@
 /**
- * Vesper's GitHub App: the identity Vesper reads the creative kit with, and
- * later files feedback issues as.
+ * Vesper's GitHub App: the identity Vesper reads the plugin kits with.
  *
- * The App is installed on `tensalir/loop-ai-studio`, with Contents: read,
- * Issues: read and write, Metadata: read. An installation token is asked for
- * with exactly those permissions and that repository, so a token that leaks
- * can do nothing else, and it is cached until five minutes before GitHub
- * expires it (an hour after issue). The same installation also includes
- * `tensalir/loop-product-plugins`, the product kit's repository, read with a
- * token of its own that can only read files (`repositoryInstallationTokens`).
+ * The App ("Vesper Loop") has Contents: read and Metadata: read, and nothing else:
+ * feedback no longer goes through Vesper (2026-09-29), so it files no issues. It is
+ * installed on `tensalir/loop-ai-studio` (the studio kit) and
+ * `tensalir/loop-product-plugins` (the product kit, read through
+ * `repositoryInstallationTokens`). Each token is asked for with exactly those permissions
+ * and one repository, so a token that leaks can do nothing else; tokens are cached until
+ * five minutes before GitHub expires them (an hour after issue). Asking for a permission
+ * the App lacks makes GitHub refuse the whole token (422), which stops every kit read.
  *
  * Env: GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_B64 (the PEM, base64 on one line),
  * GITHUB_APP_INSTALLATION_ID. None of them is read at import time.
@@ -20,9 +20,9 @@ export const GITHUB_API = 'https://api.github.com'
 export const GITHUB_API_VERSION = '2022-11-28'
 
 /** What the installation token is scoped to; the App's own settings must allow at least this. */
-export const INSTALLATION_PERMISSIONS = { contents: 'read', issues: 'write', metadata: 'read' } as const
-/** A token that only reads a repository's files: the product kit's. */
-export const READ_PERMISSIONS = { contents: 'read', metadata: 'read' } as const
+export const INSTALLATION_PERMISSIONS = { contents: 'read', metadata: 'read' } as const
+/** A token that only reads a repository's files: both kits' tokens are read-only now. */
+export const READ_PERMISSIONS = INSTALLATION_PERMISSIONS
 /** Refresh this long before GitHub's expiry, so a call never starts on a token about to lapse. */
 export const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000
 

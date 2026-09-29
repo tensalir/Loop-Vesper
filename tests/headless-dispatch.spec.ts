@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import sharp from 'sharp'
 import { dispatch } from '../src/lib/headless/mcp-dispatch'
-import { imageResultContent } from '../src/lib/headless/generate-asset'
+import { imageAudienceMode, imageBlocks, imageResultContent, previewFilename, saveToFolderText, showInReplyLines } from '../src/lib/headless/generate-asset'
 import { PREVIEW_LONG_EDGE, PREVIEW_MAX_BYTES } from '../src/lib/images/preview'
 import { ORG_DEFAULT_TOOLS, HEADLESS_TOOLS } from '../src/lib/headless/tool-registry'
 import { TOOL_HANDLERS } from '../src/lib/headless/tools'
@@ -126,7 +126,69 @@ test.describe('dispatch', () => {
 })
 
 test.describe('image results Claude can see', () => {
-  test('previews are JPEG, under the inline cap, long edge capped, with no audience annotation', async () => {
+  test('every picture has a file name to save it as, and the result says where a folder gets it', () => {
+    expect(previewFilename('gemini-nano-banana-2', '7d54cc98-9724-47de-9ba2-5f042d7862a7', 0))
+      .toBe('gemini-nano-banana-2-7d54cc98-1-preview.jpg')
+    expect(previewFilename('openai/GPT Image 2', 'abcdefgh1234', 3)).toBe('openai-gpt-image-2-abcdefgh-4-preview.jpg')
+    const text = saveToFolderText(
+      [{ url: 'u1', previewUrl: 'p1', filename: 'a-1-preview.jpg' }, { url: 'u2', previewUrl: null, filename: 'a-2-preview.jpg' }],
+      'a'
+    )
+    expect(text).toContain('Cowork, Claude Code')
+    expect(text).toMatch(/vesper\/\d{4}-\d{2}-\d{2}\/<name>/)
+    expect(text).toContain('a-1-preview.jpg, a-2-preview.jpg')
+    expect(text).toContain('no re-encoding')
+    expect(text).toContain('attach them to your reply')
+    expect(saveToFolderText([{ url: 'u' }], 'm')).toContain('attach it to your reply')
+    expect(saveToFolderText([{ url: 'u' }], 'm')).toContain('m-1-preview.jpg')
+  })
+
+  test('every image result hands Claude the markdown line that shows the picture in its reply', async () => {
+    const png = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#fff' } }).png().toBuffer()
+    const preview = `data:image/jpeg;base64,${(await sharp(png).jpeg().toBuffer()).toString('base64')}`
+    const content = await imageResultContent({
+      summary: 's',
+      modelId: 'gemini-nano-banana-2',
+      outputs: [
+        { url: 'https://abcd.supabase.co/full-0.png', width: 8, height: 8, mimeType: 'image/png', previewUrl: preview },
+        { url: 'https://abcd.supabase.co/full-1.png', width: 8, height: 8, mimeType: 'image/png', previewUrl: null },
+      ],
+      inline: true,
+    })
+    const texts = content.filter((c) => c.type === 'text').map((c) => (c as { text: string }).text)
+    const show = texts.find((x) => x.includes('put these lines in your reply'))
+    expect(show).toBeDefined()
+    // the small preview when there is one, the original when there is not
+    expect(show).toContain(`![Image 1 from gemini-nano-banana-2](${preview})`)
+    expect(show).toContain('![Image 2 from gemini-nano-banana-2](https://abcd.supabase.co/full-1.png)')
+    expect(showInReplyLines([{ url: 'u', previewUrl: 'p' }], 'm')).toEqual(['![Image 1 from m](p)'])
+    // a preview that is already the small JPEG is sent as it is, not resized again; the second
+    // output's original cannot be fetched here, so it gets the "no preview" line instead
+    const images = content.filter((c) => c.type === 'image') as Array<{ data: string }>
+    expect(images.length).toBe(2)
+    expect(`data:image/jpeg;base64,${images[0].data}`).toBe(preview)
+    expect(texts.some((x) => x.startsWith('No preview for image 2'))).toBe(true)
+  })
+
+  test('the audience modes: one block for each by default, the old user mark, or one for both', () => {
+    const both = imageBlocks('AAAA', 'image/jpeg', 'both')
+    expect(both).toHaveLength(1)
+    expect(both[0].annotations?.audience).toEqual(['user', 'assistant'])
+    expect(imageBlocks('AAAA', 'image/jpeg', 'user')[0].annotations?.audience).toEqual(['user'])
+    const split = imageBlocks('AAAA', 'image/jpeg', 'split')
+    expect(split.map((b) => b.annotations?.audience)).toEqual([['user'], ['assistant']])
+    const was = process.env.MCP_IMAGE_AUDIENCE
+    process.env.MCP_IMAGE_AUDIENCE = 'nonsense'
+    expect(imageAudienceMode()).toBe('split')
+    process.env.MCP_IMAGE_AUDIENCE = 'both'
+    expect(imageAudienceMode()).toBe('both')
+    delete process.env.MCP_IMAGE_AUDIENCE
+    expect(imageAudienceMode()).toBe('split')
+    if (was === undefined) delete process.env.MCP_IMAGE_AUDIENCE
+    else process.env.MCP_IMAGE_AUDIENCE = was
+  })
+
+  test('previews are JPEG, under the inline cap, long edge capped, one for the user and one for Claude', async () => {
     // Noise does not compress: a worst case for the size loop.
     const width = 3000
     const height = 2000
@@ -143,10 +205,13 @@ test.describe('image results Claude can see', () => {
       inline: true,
     })
 
-    for (const block of content) {
-      expect((block as { annotations?: { audience?: string[] } }).annotations?.audience).toBeUndefined()
-    }
-    const image = content.find((c) => c.type === 'image') as { data: string; mimeType: string }
+    // claude.ai draws inline only a picture marked for the user alone; Claude reads the other copy.
+    const images = content.filter((c) => c.type === 'image')
+    expect(images).toHaveLength(2)
+    expect(images.map((i) => (i as { annotations?: { audience?: string[] } }).annotations?.audience))
+      .toEqual([['user'], ['assistant']])
+    expect((images[0] as { data: string }).data).toBe((images[1] as { data: string }).data)
+    const image = images[0] as { data: string; mimeType: string }
     expect(image.mimeType).toBe('image/jpeg')
     const bytes = Buffer.from(image.data, 'base64')
     expect(bytes.length).toBeLessThanOrEqual(PREVIEW_MAX_BYTES)
