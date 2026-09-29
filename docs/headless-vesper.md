@@ -267,6 +267,38 @@ Connect: Claude sends you to Vesper's sign-in (OAuth 2.1), you allow it on
   Claude for everyone, admins included. `MCP_DAILY_COST_CAP_USD` still applies
   on top when set.
 
+### CMF supplier PDFs come from `cmf_pdf`
+
+Supplier CMF PDFs are made by `cmf_pdf`, not by the web CMF Studio's export
+(which is left as it was). Claude passes identifiers only: a workbook upload
+(`import_id`, the file the CMF Studio keeps at `cmf/{owner}/imports/{id}.xlsx`),
+a `tab`, `sku_columns` and one approved render per SKU (`output_ids`). Vesper
+reads every value from that upload's cells.
+
+- **One parse, two uses.** `cmf_prompt` and `cmf_render` take the same
+  `import_id`, `tab`, `sku_column` and `clown`, fill Damien's template from the
+  upload's cells, and the render records the import, the workbook's sha256, the
+  SKU's cells as parsed, the prompt's sha256 and the clown's.
+- **What `cmf_pdf` accepts.** Renders made that way, each with a yes from the
+  CMF decider through `record_verdict` (matched by the email the product kit
+  gives the decider), through the same clown key, which Damien has confirmed.
+  A web Studio attempt is refused (its clown is not recorded), and so is a
+  render whose cells have changed since, naming the fields.
+- **The layout.** The retired CMF skill's document template: one render/spec
+  page per SKU, then one shared part-breakdown page (the clown, a legend from
+  the key, material, finish and technique per component, no per-colourway
+  Pantone). The values follow the product repository's `spec-fields.md`: every
+  printed value is its cell, the header's Edit date, Drawn and Checked
+  included. Every page's footer reads
+  `{workbook file} · modified {time} · sha256 {12}` and says where the time came
+  from: the file's own save time, else the stored upload's Last-Modified.
+- **The check before saving.** The built PDF is read back and compared with the
+  same upload (`src/lib/creative/cmf/supplier-pdf-check.ts`). Any difference or
+  empty required cell refuses, naming SKU, component, field, cell and both
+  values, and nothing is saved. A clean PDF is stored at
+  `cmf/{owner}/imports/{id}/pdf/{time}/{cmfCode}_{Product}_CMF_{Colorway}.pdf`
+  and its link returned.
+
 ### Configuring Cursor
 
 In Cursor's Settings → MCP → Add server:

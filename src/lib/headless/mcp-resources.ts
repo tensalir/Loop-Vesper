@@ -115,23 +115,28 @@ export async function readMcpResource(
   }
 
   if (uri === 'vesper://creative/kit' || uri === 'vesper://creative/products' || RUBRIC_URI.test(uri)) {
-    const { getCreativeKit } = await import('@/lib/creative/kit-runtime')
+    const { productionKitSet } = await import('@/lib/creative/kit-runtime')
+    const { loadKitSet, resolveInKits } = await import('@/lib/creative/kit-set')
     const { kitHeader, kitSection, listProducts, rubricMarkdown } = await import('@/lib/creative/tool-views')
-    const { resolveProduct } = await import('@/lib/creative/products')
-    const loaded = await getCreativeKit()
+    if (RUBRIC_URI.test(uri)) {
+      // CMF's rubric is the product kit's; every other product's the creative kit's.
+      const hit = await resolveInKits(productionKitSet(), RUBRIC_URI.exec(uri)![1])
+      return { contents: [{ uri, mimeType: 'text/markdown', text: rubricMarkdown(hit.slug, hit.product) }] }
+    }
+    const set = await loadKitSet(productionKitSet())
+    const loaded = set.studio ?? set.product!
+    const productKit = set.product ? kitHeader(set.product) : null
     if (uri === 'vesper://creative/kit') {
       const { structured } = kitSection(loaded, 'summary', () => true)
-      return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(structured, null, 2) }] }
+      return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify({ ...structured, product_kit: productKit }, null, 2) }] }
     }
-    if (uri === 'vesper://creative/products') {
-      const products = listProducts(loaded.kit, () => true)
-      return {
-        contents: [{ uri, mimeType: 'application/json', text: JSON.stringify({ ...kitHeader(loaded), products }, null, 2) }],
-      }
+    const products = [
+      ...(set.studio ? listProducts(set.studio.kit, () => true) : []),
+      ...(set.product ? listProducts(set.product.kit, () => true) : []),
+    ]
+    return {
+      contents: [{ uri, mimeType: 'application/json', text: JSON.stringify({ ...kitHeader(loaded), product_kit: productKit, products }, null, 2) }],
     }
-    const slug = RUBRIC_URI.exec(uri)![1]
-    const { product } = resolveProduct(loaded.kit, slug)
-    return { contents: [{ uri, mimeType: 'text/markdown', text: rubricMarkdown(slug, product) }] }
   }
 
   throw new Error(`Unknown resource URI: ${uri}`)

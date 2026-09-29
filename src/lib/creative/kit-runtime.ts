@@ -1,21 +1,39 @@
 /**
- * The creative kit in production: GitHub through Vesper's App, kept in the
+ * The Loop kits in production: GitHub through Vesper's GitHub App, kept in the
  * database. Everything that serves a kit to a tool goes through here.
  *
+ *   the creative kit   Loop Studio Design: Eclipse, packaging, prompting
+ *   the product kit    Loop Product Design: CMF, and only CMF is read from it
+ *
  * Env: GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_B64, GITHUB_APP_INSTALLATION_ID
- * (the App), CREATIVE_KIT_REPO (default tensalir/loop-ai-studio),
- * CREATIVE_KIT_REF (a tag, branch or commit; default: the newest
- * studio-design-v* tag), CREATIVE_TOOLS_ENABLED=0 (hide every creative tool).
+ * (the App, installed on both repositories), CREATIVE_KIT_REPO (default
+ * tensalir/loop-ai-studio), CREATIVE_KIT_REF (a tag, branch or commit;
+ * default: the newest studio-design-v* tag), PRODUCT_KIT_REPO (default
+ * tensalir/loop-product-plugins), PRODUCT_KIT_REF (default: the newest
+ * product-design-v* tag), CREATIVE_TOOLS_ENABLED=0 (hide every creative tool,
+ * CMF's included).
  */
 
-import { githubAppConfigFromEnv, missingGithubAppEnv, sharedInstallationTokens } from '@/lib/github/app'
+import { githubAppConfigFromEnv, missingGithubAppEnv, repositoryInstallationTokens, sharedInstallationTokens } from '@/lib/github/app'
 import { githubClient } from '@/lib/github/rest'
 import { githubKitSource } from './kit-github'
 import { prismaKitStore } from './kit-store'
-import { clearKitMemory, getKitFile, loadCreativeKit, type KitLoaderDeps, type LoadedKit } from './kit'
+import {
+  clearKitMemory,
+  getKitFile,
+  kitPaths,
+  loadCreativeKit,
+  PRODUCT_KIT,
+  STUDIO_KIT,
+  type KitLoaderDeps,
+  type LoadedKit,
+} from './kit'
+import type { AnyKit, Kit, ProductKit } from './kit-schema'
+import type { KitSetLoaders } from './kit-set'
 import type { KitPrompting } from '@/lib/prompts/prompting-source'
 
 export const DEFAULT_KIT_REPO = 'tensalir/loop-ai-studio'
+export const DEFAULT_PRODUCT_KIT_REPO = 'tensalir/loop-product-plugins'
 
 export class CreativeKitUnavailable extends Error {
   constructor(message: string) {
@@ -32,33 +50,79 @@ export function kitRepo(env: NodeJS.ProcessEnv = process.env): string {
   return (env.CREATIVE_KIT_REPO || DEFAULT_KIT_REPO).trim()
 }
 
-export function productionKitDeps(env: NodeJS.ProcessEnv = process.env): KitLoaderDeps {
+export function productKitRepo(env: NodeJS.ProcessEnv = process.env): string {
+  return (env.PRODUCT_KIT_REPO || DEFAULT_PRODUCT_KIT_REPO).trim()
+}
+
+function appMissing(env: NodeJS.ProcessEnv, what: string): CreativeKitUnavailable {
+  return new CreativeKitUnavailable(
+    `Vesper cannot read the ${what}: ${missingGithubAppEnv(env).join(', ')} not set. An admin sets up Vesper's GitHub App (docs in the pull request that added it).`
+  )
+}
+
+export function productionKitDeps(env: NodeJS.ProcessEnv = process.env): KitLoaderDeps<Kit> {
   const tokens = sharedInstallationTokens(env)
-  if (!tokens) {
-    throw new CreativeKitUnavailable(
-      `Vesper cannot read the creative kit: ${missingGithubAppEnv(env).join(', ')} not set. An admin sets up Vesper's GitHub App (docs in the pull request that added it).`
-    )
-  }
+  if (!tokens) throw appMissing(env, 'creative kit')
   return {
     source: githubKitSource(githubClient({ tokens }), kitRepo(env)),
     store: prismaKitStore,
     ref: env.CREATIVE_KIT_REF?.trim() || null,
+    kit: STUDIO_KIT,
   }
 }
 
-/** The kit to use now, or a readable error. */
-export async function getCreativeKit(opts: { force?: boolean; env?: NodeJS.ProcessEnv } = {}): Promise<LoadedKit> {
-  const env = opts.env ?? process.env
+export function productionProductKitDeps(env: NodeJS.ProcessEnv = process.env): KitLoaderDeps<ProductKit> {
+  const repo = productKitRepo(env)
+  const tokens = repositoryInstallationTokens(env, repo)
+  if (!tokens) throw appMissing(env, 'product kit')
+  return {
+    source: githubKitSource(githubClient({ tokens }), repo, kitPaths(PRODUCT_KIT.plugin).tagPrefix),
+    store: prismaKitStore,
+    ref: env.PRODUCT_KIT_REF?.trim() || null,
+    kit: PRODUCT_KIT,
+  }
+}
+
+function assertEnabled(env: NodeJS.ProcessEnv): void {
   if (!creativeToolsEnabled(env)) {
     throw new CreativeKitUnavailable('The creative tools are switched off on this Vesper (CREATIVE_TOOLS_ENABLED=0).')
   }
-  if (opts.force) clearKitMemory()
+}
+
+/** The creative kit (Loop Studio Design) to use now, or a readable error. */
+export async function getCreativeKit(opts: { force?: boolean; env?: NodeJS.ProcessEnv } = {}): Promise<LoadedKit> {
+  const env = opts.env ?? process.env
+  assertEnabled(env)
+  if (opts.force) clearKitMemory(STUDIO_KIT.plugin)
   return loadCreativeKit(productionKitDeps(env), { force: opts.force })
 }
 
-/** A file the kit names, verified. */
-export async function readKitFile(loaded: LoadedKit, file: { path: string; sha256: string }): Promise<Buffer> {
-  return getKitFile(loaded, file, productionKitDeps())
+/**
+ * The product kit (Loop Product Design, CMF) to use now, or a readable error naming where it is
+ * read from. There is no CMF without it: Vesper never falls back to a CMF the creative kit still
+ * carries.
+ */
+export async function getProductKit(opts: { force?: boolean; env?: NodeJS.ProcessEnv } = {}): Promise<LoadedKit<ProductKit>> {
+  const env = opts.env ?? process.env
+  assertEnabled(env)
+  if (opts.force) clearKitMemory(PRODUCT_KIT.plugin)
+  const where = `${productKitRepo(env)} at ${env.PRODUCT_KIT_REF?.trim() || `its newest ${kitPaths(PRODUCT_KIT.plugin).tagPrefix}* tag`} (PRODUCT_KIT_REPO, PRODUCT_KIT_REF)`
+  try {
+    return await loadCreativeKit(productionProductKitDeps(env), { force: opts.force })
+  } catch (err) {
+    throw new CreativeKitUnavailable(`CMF is read from Loop Product Design's kit, ${where}, and none can be read: ${(err as Error).message}`)
+  }
+}
+
+/** Both kits, loaded when asked for: what `./kit-set.ts` resolves a product name against. */
+export function productionKitSet(env: NodeJS.ProcessEnv = process.env): KitSetLoaders {
+  return { studio: () => getCreativeKit({ env }), product: () => getProductKit({ env }) }
+}
+
+/** A file a kit names, verified, read from that kit's own repository. */
+export async function readKitFile(loaded: LoadedKit<AnyKit>, file: { path: string; sha256: string }): Promise<Buffer> {
+  const deps = loaded.kit.plugin === PRODUCT_KIT.plugin ? productionProductKitDeps() : productionKitDeps()
+  return getKitFile(loaded, file, deps)
 }
 
 /**

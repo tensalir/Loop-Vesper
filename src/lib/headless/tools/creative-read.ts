@@ -1,16 +1,19 @@
 /**
- * The read-only creative tools: what the kit says, which products Vesper
+ * The read-only creative tools: what the kits say, which products Vesper
  * serves, and which pinned references a grade or a draw attaches.
  *
- * Every result carries the kit's version, tag and commit, and says when the
- * kit is stale (the newest could not be read or was refused, and this is the
- * last good one).
+ * Two kits serve the products (`src/lib/creative/kit-set.ts`): CMF comes from
+ * the product kit (Loop Product Design), everything else from the creative kit
+ * (Loop Studio Design). Every result carries the version, tag and commit of the
+ * kit it read, and says when that kit is stale (the newest could not be read or
+ * was refused, and this is the last good one).
  */
 
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { getCreativeKit } from '@/lib/creative/kit-runtime'
-import { kitHeader, kitSection, listProducts, referencePlan } from '@/lib/creative/tool-views'
+import { productionKitSet } from '@/lib/creative/kit-runtime'
+import { loadKitSet, resolveInKits, type KitSetState } from '@/lib/creative/kit-set'
+import { cap, kitHeader, kitSection, listProducts, referencePlan } from '@/lib/creative/tool-views'
 import { pinStorage, prismaPinStore } from '@/lib/creative/pins-runtime'
 import type { McpContent } from '../generate-asset'
 import { invalidArguments, type ToolContext, type ToolHandler } from './types'
@@ -38,38 +41,87 @@ const GetCreativeKitArgs = z.object({
     .default('summary'),
 })
 
+/** What the kit summary and product list add about the other kit: where CMF comes from, or why it cannot. */
+function otherKitNote(set: KitSetState): { text: string; structured: Record<string, unknown> } {
+  const notes: string[] = []
+  const structured: Record<string, unknown> = { product_kit: set.product ? kitHeader(set.product) : null }
+  if (set.product) {
+    notes.push(
+      `CMF comes from Loop Product Design's kit ${set.product.kit.version} (${set.product.ref}, commit ${set.product.commit.slice(0, 7)})${set.product.stale ? ` — STALE: ${set.product.staleReason}` : ''}.`
+    )
+  } else if (set.productError) {
+    notes.push(`CMF is unavailable: ${set.productError.message}`)
+    structured.product_kit_error = set.productError.message
+  }
+  if (set.studioError) {
+    notes.push(`The creative kit is unavailable: ${set.studioError.message}`)
+    structured.creative_kit_error = set.studioError.message
+  }
+  return { text: notes.join('\n'), structured }
+}
+
 export const getCreativeKitHandler: ToolHandler = {
   async run(args, ctx) {
     const parsed = GetCreativeKitArgs.safeParse(args)
     if (!parsed.success) throw invalidArguments(parsed.error.issues)
-    const loaded = await getCreativeKit({ env: ctx.env })
     const isAdmin = await ownerIsAdmin(ctx.principal.ownerId)
-    const { text, structured } = kitSection(loaded, parsed.data.section, callable(ctx), { isAdmin })
-    return { content: [{ type: 'text', text }], structuredContent: structured }
+    const section = parsed.data.section
+    if (section.startsWith('rubric:')) {
+      // A rubric is read from the kit that serves the product: CMF's from the product kit.
+      const hit = await resolveInKits(productionKitSet(ctx.env), section.slice('rubric:'.length), { isAdmin })
+      const { text, structured } = kitSection(hit.loaded, `rubric:${hit.slug}`, callable(ctx), { isAdmin })
+      return { content: [{ type: 'text', text }], structuredContent: structured }
+    }
+    const set = await loadKitSet(productionKitSet(ctx.env))
+    const primary = set.studio ?? set.product!
+    const { text, structured } = kitSection(primary, section, callable(ctx), { isAdmin })
+    if (section !== 'summary' && section !== 'products') {
+      return { content: [{ type: 'text', text }], structuredContent: structured }
+    }
+    const note = otherKitNote(set)
+    if (section === 'products' && set.studio && set.product) {
+      const products = [...listProducts(set.studio.kit, callable(ctx), { isAdmin }), ...listProducts(set.product.kit, callable(ctx), { isAdmin })]
+      return {
+        content: [{ type: 'text', text: `${cap(JSON.stringify(products, null, 2))}\n${note.text}` }],
+        structuredContent: { ...structured, products, ...note.structured },
+      }
+    }
+    return {
+      content: [{ type: 'text', text: note.text ? `${text}\n${note.text}` : text }],
+      structuredContent: { ...structured, ...note.structured },
+    }
   },
 }
 
 export const listCreativeProductsHandler: ToolHandler = {
   async run(_args, ctx) {
-    const loaded = await getCreativeKit({ env: ctx.env })
+    const set = await loadKitSet(productionKitSet(ctx.env))
     const isAdmin = await ownerIsAdmin(ctx.principal.ownerId)
-    const products = listProducts(loaded.kit, callable(ctx), { isAdmin })
+    const products = [
+      ...(set.studio ? listProducts(set.studio.kit, callable(ctx), { isAdmin }) : []),
+      ...(set.product ? listProducts(set.product.kit, callable(ctx), { isAdmin }) : []),
+    ]
     const lines = products.map(
       (p) =>
-        `- ${p.name} (${p.slug}, ${p.status}, ${p.command}): rubric ${p.rubric_version ?? '?'}${p.reporting_only ? ', reporting only' : ''}; ` +
+        `- ${p.name} (${p.slug}, ${p.status}, ${p.command}): rubric ${p.rubric_version ?? '?'}${p.reporting_only ? ', no check blocks yet' : ''}; ` +
         `${p.colourways.length ? `colourways ${p.colourways.join(', ')}; ` : ''}${p.looks.length ? `looks ${p.looks.join(', ')}; ` : ''}` +
         `decides: ${p.deciders.map((d) => d.name || d.role).join(', ') || 'to name'}; answers go to ${p.verdict_route === 'vesper' ? 'Vesper' : 'Frontify, as a comment line'}` +
         `${p.tools.length ? `; tools: ${p.tools.join(', ')}` : ''}.`
     )
-    const header = kitHeader(loaded)
+    const header = set.studio ? kitHeader(set.studio) : {}
+    const kits = [
+      set.studio ? `creative kit ${set.studio.kit.version}${set.studio.stale ? ' (stale)' : ''}` : null,
+      set.product ? `product kit ${set.product.kit.version}${set.product.stale ? ' (stale)' : ''}` : null,
+    ].filter(Boolean)
+    const note = otherKitNote(set)
     return {
       content: [
         {
           type: 'text',
-          text: `Loop products in creative kit ${loaded.kit.version}${loaded.stale ? ' (stale)' : ''}:\n${lines.join('\n')}`,
+          text: `Loop products in ${kits.join(' and ')}:\n${lines.join('\n')}${set.studioError || set.productError ? `\n${note.text}` : ''}`,
         },
       ],
-      structuredContent: { ...header, products },
+      structuredContent: { ...header, ...note.structured, products },
     }
   },
 }
@@ -90,8 +142,9 @@ export const getProductReferencesHandler: ToolHandler = {
     const parsed = GetProductReferencesArgs.safeParse(args)
     if (!parsed.success) throw invalidArguments(parsed.error.issues)
     const q = parsed.data
-    const loaded = await getCreativeKit({ env: ctx.env })
     const isAdmin = await ownerIsAdmin(ctx.principal.ownerId)
+    // The kit that serves the product: a CMF clown is the product kit's.
+    const { loaded } = await resolveInKits(productionKitSet(ctx.env), q.product, { isAdmin })
     const rows = await prismaPinStore.list()
     const plan = referencePlan(loaded.kit, q, rows, { isAdmin })
 

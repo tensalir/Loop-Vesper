@@ -19,7 +19,7 @@ import { gradeImageHandler, recordGradeHandler } from './creative-grade'
 import { recordVerdictHandler } from './creative-verdict'
 import { exportCreativeRecordsHandler } from './creative-export'
 import { listFeedbackTargetsHandler, listFeedbackHandler, previewFeedbackHandler, submitFeedbackHandler } from './feedback'
-import { cmfListHandler, cmfPromptHandler, cmfRenderHandler, cmfCheckPdfHandler } from './cmf'
+import { cmfListHandler, cmfPromptHandler, cmfRenderHandler, cmfCheckPdfHandler, cmfPdfHandler } from './cmf'
 import { packagingListLooksHandler, packagingMockupHandler, packagingFinishHandler } from './packaging'
 
 export const TOOL_HANDLERS: Record<HeadlessTool, ToolHandler> = {
@@ -47,6 +47,7 @@ export const TOOL_HANDLERS: Record<HeadlessTool, ToolHandler> = {
   cmf_prompt: cmfPromptHandler,
   cmf_render: cmfRenderHandler,
   cmf_check_pdf: cmfCheckPdfHandler,
+  cmf_pdf: cmfPdfHandler,
   packaging_list_looks: packagingListLooksHandler,
   packaging_mockup: packagingMockupHandler,
   packaging_finish: packagingFinishHandler,

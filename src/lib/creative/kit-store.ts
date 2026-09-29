@@ -1,14 +1,15 @@
 /**
- * Where read kits are kept: `creative_kits` and `creative_kit_files`.
+ * Where read kits are kept, both plugins' in the same tables: `creative_kits` (a row per kit blob,
+ * its plugin in `json.kit.plugin`) and `creative_kit_files`.
  */
 
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import type { Conformance, Kit } from './kit-schema'
+import type { AnyKit, Conformance } from './kit-schema'
 import type { KitStore, StoredKit } from './kit'
 
 interface KitRowJson {
-  kit: Kit | null
+  kit: AnyKit | null
   conformance: Conformance | null
 }
 
@@ -46,8 +47,12 @@ export const prismaKitStore: KitStore = {
     return row ? toStored(row) : null
   },
 
-  async latestValid() {
-    const row = await prisma.creativeKit.findFirst({ where: { valid: true }, orderBy: { fetchedAt: 'desc' } })
+  async latestValid(plugin) {
+    // One table holds both plugins' kits; a kit is only ever its own plugin's fallback.
+    const row = await prisma.creativeKit.findFirst({
+      where: { valid: true, ...(plugin ? { json: { path: ['kit', 'plugin'], equals: plugin } } : {}) },
+      orderBy: { fetchedAt: 'desc' },
+    })
     return row ? toStored(row) : null
   },
 

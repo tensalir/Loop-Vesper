@@ -11,7 +11,7 @@
  */
 
 import crypto from 'crypto'
-import type { Kit, KitProduct } from '../kit-schema'
+import { reportsOnly, type Kit, type KitProduct } from '../kit-schema'
 import type { PinRow, PinSpec } from '../pins'
 import { kitPins, usablePin } from '../pins'
 import { fillText, GradingPromptError, type MissingReference } from '../grading-prompt'
@@ -217,7 +217,7 @@ export async function gradePackagingCandidate(req: PackagingGradeRequest, deps: 
     ),
     judge_label: label,
     judge_model: model,
-    reporting_only: product.rubric.reporting_only || product.grading.reporting_only === true,
+    reporting_only: reportsOnly(product.rubric) || reportsOnly(product.grading),
     latency_ms: now() - started,
     calibration: req.pk.calibration,
     cell: req.cell,
