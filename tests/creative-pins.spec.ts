@@ -194,10 +194,10 @@ test.describe('products and references', () => {
   })
 
   test('the rubric section is the checks with their plain words', () => {
-    const loaded = { kit, conformance: null as never, ref: 'creative-v0.2.0', commit: 'abc1234', blobSha: 'b', fetchedAt: new Date(), stale: false, staleReason: null }
+    const loaded = { kit, conformance: null as never, ref: 'studio-design-v0.2.0', commit: 'abc1234', blobSha: 'b', fetchedAt: new Date(), stale: false, staleReason: null }
     const { text, structured } = kitSection(loaded, 'rubric:eclipse', () => true)
     expect(text).toContain('| A1 | gate |')
-    expect(structured.kit_version).toBe('0.2.0')
+    expect(structured.kit_version).toBe('0.2.1')
     expect(() => kitSection(loaded, 'secrets', () => true)).toThrow('Unknown section')
   })
 })
@@ -205,10 +205,22 @@ test.describe('products and references', () => {
 test.describe('the creative tools in the registry', () => {
   test('they are OAuth tools, off the org token, and hidden when switched off', () => {
     const creative = HEADLESS_TOOLS.filter((t) => TOOL_META[t].group === 'creative')
-    expect(creative).toEqual(['get_creative_kit', 'list_creative_products', 'get_product_references'])
-    expect(creative.every((t) => TOOL_META[t].oauth && !TOOL_META[t].org)).toBe(true)
+    expect(creative).toEqual([
+      'get_creative_kit',
+      'list_creative_products',
+      'get_product_references',
+      'generate_product_image',
+      'grade_image',
+      'record_grade',
+      'record_verdict',
+      'export_creative_records',
+    ])
+    // Every creative tool is off the org token; the repository's export is on no person's connection either.
+    expect(creative.every((t) => !TOOL_META[t].org)).toBe(true)
+    expect(creative.filter((t) => t !== 'export_creative_records').every((t) => TOOL_META[t].oauth)).toBe(true)
+    expect(TOOL_META.export_creative_records.oauth || TOOL_META.export_creative_records.selfIssued).toBe(false)
     const on = effectiveTools({ allowedTools: ['*'] }, { role: 'user' }, {} as NodeJS.ProcessEnv)
-    expect(on).toEqual(expect.arrayContaining(creative))
+    expect(on).toEqual(expect.arrayContaining(creative.filter((t) => t !== 'export_creative_records')))
     const off = effectiveTools({ allowedTools: ['*'] }, { role: 'user' }, { CREATIVE_TOOLS_ENABLED: '0' } as unknown as NodeJS.ProcessEnv)
     expect(off.some((t) => TOOL_META[t].group === 'creative')).toBe(false)
   })

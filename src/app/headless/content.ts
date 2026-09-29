@@ -210,7 +210,7 @@ export const surfaces: Surface[] = [
       title: 'Add Vesper to Claude',
       meta: 'One URL, your own sign-in',
       body:
-        'Vesper plugs into Claude as a custom connector. Add the server URL once, click Connect and sign in with your Vesper login: Claude then acts in Vesper as you, and what it makes lands in your project "Claude". Your Vesper account needs Claude access; ask whoever runs Vesper at Loop to turn it on. The token URL below still works for Cursor and scripts.',
+        'Vesper plugs into Claude as a custom connector. Add the server URL once, click Connect and sign in with your Vesper login: Claude then acts in Vesper as you, and what it makes lands in your project "Claude". Loop accounts get Claude access the first time they connect; for any other account, ask a Vesper admin to turn it on. The token URL below still works for Cursor and scripts.',
       fields: [
         {
           label: 'Server URL',

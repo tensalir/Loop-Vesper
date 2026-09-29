@@ -14,6 +14,13 @@ import { getGenerationStatusHandler } from './get-generation-status'
 import { generateVideoHandler } from './generate-video'
 import { estimateGenerationCostHandler } from './estimate-generation-cost'
 import { getCreativeKitHandler, listCreativeProductsHandler, getProductReferencesHandler } from './creative-read'
+import { generateProductImageHandler } from './creative-draw'
+import { gradeImageHandler, recordGradeHandler } from './creative-grade'
+import { recordVerdictHandler } from './creative-verdict'
+import { exportCreativeRecordsHandler } from './creative-export'
+import { listFeedbackTargetsHandler, listFeedbackHandler, previewFeedbackHandler, submitFeedbackHandler } from './feedback'
+import { cmfListHandler, cmfPromptHandler, cmfRenderHandler, cmfCheckPdfHandler } from './cmf'
+import { packagingListLooksHandler, packagingMockupHandler, packagingFinishHandler } from './packaging'
 
 export const TOOL_HANDLERS: Record<HeadlessTool, ToolHandler> = {
   enhance_prompt: enhancePromptHandler,
@@ -27,6 +34,22 @@ export const TOOL_HANDLERS: Record<HeadlessTool, ToolHandler> = {
   get_creative_kit: getCreativeKitHandler,
   list_creative_products: listCreativeProductsHandler,
   get_product_references: getProductReferencesHandler,
+  generate_product_image: generateProductImageHandler,
+  grade_image: gradeImageHandler,
+  record_grade: recordGradeHandler,
+  record_verdict: recordVerdictHandler,
+  export_creative_records: exportCreativeRecordsHandler,
+  list_feedback_targets: listFeedbackTargetsHandler,
+  list_feedback: listFeedbackHandler,
+  preview_feedback: previewFeedbackHandler,
+  submit_feedback: submitFeedbackHandler,
+  cmf_list: cmfListHandler,
+  cmf_prompt: cmfPromptHandler,
+  cmf_render: cmfRenderHandler,
+  cmf_check_pdf: cmfCheckPdfHandler,
+  packaging_list_looks: packagingListLooksHandler,
+  packaging_mockup: packagingMockupHandler,
+  packaging_finish: packagingFinishHandler,
 }
 
 export type { ToolContext, ToolHandler, ToolResult, ToolPrincipal, UsageEntry } from './types'

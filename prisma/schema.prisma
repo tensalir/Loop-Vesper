@@ -39,8 +39,16 @@ model Profile {
   // Per-user toggle that grants CRUD on the Approved Materials library.
   packagingEngineerRole Boolean @default(false) @map("packaging_engineer_role")
   // Per-user toggle that lets a person connect Claude to Vesper with their own sign-in
-  // (the MCP connector's OAuth flow). Admins pass without it.
+  // (the MCP connector's OAuth flow). Admins pass without it. Turned on by Vesper itself the
+  // first time a person with a confirmed email on a CLAUDE_ACCESS_DOMAINS domain connects,
+  // unless an admin has decided it (src/lib/oauth/claude-access.ts).
   mcpAccess      Boolean   @default(false) @map("mcp_access")
+  // An admin's decision on Claude access, from the switch under Users: when and by whom.
+  // Automatic access never touches a profile with a decision here, so off stays off.
+  mcpAccessDecidedAt DateTime? @map("mcp_access_decided_at")
+  mcpAccessDecidedBy String?   @map("mcp_access_decided_by") @db.Uuid
+  // When Vesper turned Claude access on by itself, on the person's first connect.
+  mcpAccessAutoGrantedAt DateTime? @map("mcp_access_auto_granted_at")
   pausedAt       DateTime? @map("paused_at")
   deletedAt      DateTime? @map("deleted_at")
   createdAt      DateTime  @default(now()) @map("created_at")
@@ -1599,4 +1607,105 @@ model CreativePin {
   @@index([product])
   @@index([geminiFileExpiresAt], map: "creative_pins_gemini_expiry_idx")
   @@map("creative_pins")
+}
+
+// ---------------------------------------------------------------------------
+// The creative work's record: grades (Vesper's reads or Claude's own look,
+// labelled by judge, never pooled) and the deciders' answers. See
+// src/lib/creative/records.ts. Foreign keys live in the migration only, so no
+// existing model gains a relation field.
+// ---------------------------------------------------------------------------
+
+model CreativeGrade {
+  id              String   @id @default(uuid()) @db.Uuid
+  product         String
+  ownerId         String   @map("owner_id") @db.Uuid
+  credentialId    String?  @map("credential_id") @db.Uuid
+  outputId        String?  @map("output_id") @db.Uuid
+  imageUrl        String?  @map("image_url")
+  frontifyAssetId String?  @map("frontify_asset_id")
+  imageSha256     String   @map("image_sha256")
+  colourway       String?
+  view            String?
+  viewAssumed     Boolean  @default(false) @map("view_assumed")
+  claimSource     String?  @map("claim_source")
+  judge           String // vesper | chat
+  judgeModel      String?  @map("judge_model")
+  reads           Int
+  templateId      String?  @map("template_id")
+  kitVersion      String   @map("kit_version")
+  kitCommit       String   @map("kit_commit")
+  rubricVersion   String   @map("rubric_version")
+  runs            Json
+  fails           Json
+  failed          String[] @default([])
+  failedAdvisory  String[] @default([]) @map("failed_advisory")
+  verdict         String
+  verdictMajority String?  @map("verdict_majority")
+  unstable        Boolean  @default(false)
+  errors          Int      @default(0)
+  references      Json     @default("[]")
+  latencyMs       Int?     @map("latency_ms")
+  costUsd         Decimal? @map("cost_usd") @db.Decimal(10, 6)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([outputId, createdAt(sort: Desc)], map: "creative_grades_output_idx")
+  @@index([product, createdAt(sort: Desc)], map: "creative_grades_product_idx")
+  @@index([imageSha256], map: "creative_grades_sha_idx")
+  @@index([frontifyAssetId], map: "creative_grades_frontify_idx")
+  @@index([createdAt], map: "creative_grades_created_idx")
+  @@map("creative_grades")
+}
+
+model CreativeVerdict {
+  id                 String   @id @default(uuid()) @db.Uuid
+  product            String
+  profileId          String   @map("profile_id") @db.Uuid
+  credentialId       String?  @map("credential_id") @db.Uuid
+  gradeId            String?  @map("grade_id") @db.Uuid
+  outputId           String?  @map("output_id") @db.Uuid
+  imageUrl           String?  @map("image_url")
+  frontifyAssetId    String?  @map("frontify_asset_id")
+  imageSha256        String?  @map("image_sha256")
+  answer             String // yes | no
+  remark             String?
+  decoded            String[] @default([])
+  decodedUnconfirmed String[] @default([]) @map("decoded_unconfirmed")
+  route              String // frontify-comment | vesper
+  commentLine        String?  @map("comment_line")
+  kitVersion         String   @map("kit_version")
+  rubricVersion      String?  @map("rubric_version")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@index([product, createdAt(sort: Desc)], map: "creative_verdicts_product_idx")
+  @@index([createdAt], map: "creative_verdicts_created_idx")
+  @@map("creative_verdicts")
+}
+
+// A colleague's feedback on the Loop Studio Design plugin, per preview: the per-person limits count here,
+// and a preview is filed at most once (keyed on the rendered issue's sha256). The issue itself lives
+// in the plugin's repository, filed by Vesper's GitHub App in the person's name.
+model FeedbackSubmission {
+  id           String    @id @default(uuid()) @db.Uuid
+  previewHash  String    @unique @map("preview_hash")
+  profileId    String    @map("profile_id") @db.Uuid
+  credentialId String?   @map("credential_id") @db.Uuid
+  repo         String
+  mode         String // issue | comment
+  issueNumber  Int?      @map("issue_number")
+  commentId    BigInt?   @map("comment_id")
+  title        String?
+  labels       String[]  @default([])
+  target       String
+  kind         String
+  surface      String
+  status       String    @default("previewed") // previewed | filing | filed | labels_failed | failed
+  error        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  filedAt      DateTime? @map("filed_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@index([profileId, createdAt], map: "feedback_submissions_profile_created_idx")
+  @@index([profileId, filedAt], map: "feedback_submissions_profile_filed_idx")
+  @@map("feedback_submissions")
 }
