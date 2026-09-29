@@ -1,17 +1,18 @@
 /**
  * The one line a review answer becomes, as a Frontify comment on the asset.
  *
- *   [creative eclipse 2026-10-02] no | decoded B3 | grade PASS_WITH_NOTES B3 | judge gemini-flash-latest vesper x3 | rubric 0.5.3 | the strap stops at the ear
+ *   [studio-design eclipse 2026-10-02] no | decoded B3 | grade PASS_WITH_NOTES B3 | judge gemini-flash-latest vesper x3 | rubric 0.5.3 | the strap stops at the ear
  *
  * A port of `tools/feedback_grammar.py` in the plugin repository, which the
  * nightly pull reads the answers back with. Lines are written with the
- * `creative` prefix; lines under the older `asset-review` prefix are ours too
- * and parse. The kit's comment-line vectors are run against `formatLine`
- * before a kit is used, so the two cannot drift apart.
+ * `studio-design` prefix (since 2026-09-28); lines under the older `creative`
+ * and `asset-review` prefixes are ours too and parse. The kit's comment-line
+ * vectors are run against `formatLine` before a kit is used, so the two
+ * cannot drift apart.
  */
 
-export const PREFIXES = ['creative', 'asset-review'] as const
-export const WRITE_PREFIX = 'creative'
+export const PREFIXES = ['studio-design', 'creative', 'asset-review'] as const
+export const WRITE_PREFIX = 'studio-design'
 export const GRAMMAR_VERDICTS = ['PASS', 'PASS_WITH_NOTES', 'RETRY', 'FAIL'] as const
 export const SURFACES = ['chat', 'cowork', 'code', 'qa', 'vesper'] as const
 export const ANSWERS = ['yes', 'no'] as const

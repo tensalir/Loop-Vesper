@@ -2,7 +2,7 @@
  * The decider's answer as the one comment line the repository's nightly pull reads
  * (`tools/feedback_grammar.py`, ported in `grammar.ts`):
  *
- *   [creative eclipse 2026-10-02] no | decoded B3 | grade PASS_WITH_NOTES B3 | judge gemini-flash-latest vesper x3 | rubric 0.5.3 | the strap stops at the ear
+ *   [studio-design eclipse 2026-10-02] no | decoded B3 | grade PASS_WITH_NOTES B3 | judge gemini-flash-latest vesper x3 | rubric 0.5.3 | the strap stops at the ear
  *
  * The date is the day the answer was given in Brussels, where the studio is. The grade is the one
  * the answer responds to (Vesper's `vesper x<reads>`, or Claude's own `chat x1`); an answer to a

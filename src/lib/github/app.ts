@@ -2,7 +2,7 @@
  * Vesper's GitHub App: the identity Vesper reads the creative kit with, and
  * later files feedback issues as.
  *
- * The App is installed on one repository, `tensalir/loop-asset-reviewer`,
+ * The App is installed on one repository, `tensalir/loop-ai-studio`,
  * with Contents: read, Issues: read and write, Metadata: read. An installation
  * token is asked for with exactly those permissions and that repository, so a
  * token that leaks can do nothing else, and it is cached until five minutes
@@ -43,7 +43,7 @@ export function githubAppConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Gi
   const keyB64 = env.GITHUB_APP_PRIVATE_KEY_B64?.trim()
   const installationId = env.GITHUB_APP_INSTALLATION_ID?.trim()
   if (!appId || !keyB64 || !installationId) return null
-  const repo = (env.CREATIVE_KIT_REPO || 'tensalir/loop-asset-reviewer').split('/').pop() || 'loop-asset-reviewer'
+  const repo = (env.CREATIVE_KIT_REPO || 'tensalir/loop-ai-studio').split('/').pop() || 'loop-ai-studio'
   return {
     appId,
     privateKeyPem: Buffer.from(keyB64, 'base64').toString('utf8'),

@@ -3,7 +3,7 @@
  *
  * Order, first available wins:
  *   1. the creative kit (the Loop edition of the prompting skill, released
- *      from the plugin repository at its creative-v* tag; null when Vesper's
+ *      from the plugin repository at its studio-design-v* tag; null when Vesper's
  *      GitHub App is not configured or no kit can be read);
  *   2. an active `prompt_enhancement_prompts` row for the model (the admin
  *      hot-patch, as before);

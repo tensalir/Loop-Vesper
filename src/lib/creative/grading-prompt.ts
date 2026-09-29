@@ -85,6 +85,9 @@ export function assembleGradingPrompt(product: KitProduct, inputs: GradingInputs
       .join(w(T, 'missing_separator'))
     p.push(fillText(w(T, 'missing'), { items }))
   }
+  if (typeof gp.anatomy !== 'string' || typeof gp.rules !== 'string') {
+    throw new GradingPromptError(`${product.name}'s grading words in the kit lack the product sheet or the rules`)
+  }
   p.push('', w(T, 'product_heading'), gp.anatomy, '', w(T, 'rules_heading'), gp.rules, '', w(T, 'candidate_heading'))
   p.push(
     fillText(w(T, 'view'), { view: inputs.view }) +

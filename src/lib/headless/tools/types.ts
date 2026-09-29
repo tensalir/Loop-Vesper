@@ -13,6 +13,8 @@ import type { HeadlessTool } from '../tool-registry'
 export interface ToolPrincipal {
   credentialId: string
   ownerId: string
+  /** The owner's role on this request; 'admin' is not limited by the daily allowance. */
+  ownerRole?: string | null
   /** Already expanded by `effectiveTools`. */
   allowedTools: HeadlessTool[]
   allowedModels: string[]

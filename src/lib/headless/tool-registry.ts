@@ -32,6 +32,17 @@ export const HEADLESS_TOOLS = [
   'record_grade',
   'record_verdict',
   'export_creative_records',
+  'list_feedback_targets',
+  'list_feedback',
+  'preview_feedback',
+  'submit_feedback',
+  'cmf_list',
+  'cmf_prompt',
+  'cmf_render',
+  'cmf_check_pdf',
+  'packaging_list_looks',
+  'packaging_mockup',
+  'packaging_finish',
 ] as const
 
 export type HeadlessTool = (typeof HEADLESS_TOOLS)[number]
@@ -75,6 +86,23 @@ export const TOOL_META: Record<HeadlessTool, ToolMeta> = {
   record_verdict: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
   // The plugin repository's nightly read-back: only on a static credential an admin issues for it.
   export_creative_records: { group: 'creative', oauth: false, selfIssued: false, org: false, adminIssuable: true },
+  // Feedback on the Loop Studio Design plugin, filed as issues in its repository in the caller's own
+  // name. Off the org token: an issue needs to know who is filing it.
+  list_feedback_targets: { group: 'feedback', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  list_feedback: { group: 'feedback', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  preview_feedback: { group: 'feedback', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  submit_feedback: { group: 'feedback', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  // CMF files through Claude: only for people with CMF access (or admins). Each handler checks
+  // again, because a static token carries the tool list it was issued with.
+  cmf_list: { group: 'cmf', needs: 'cmf', oauth: true, selfIssued: false, org: false, adminIssuable: true },
+  cmf_prompt: { group: 'cmf', needs: 'cmf', oauth: true, selfIssued: false, org: false, adminIssuable: true },
+  cmf_render: { group: 'cmf', needs: 'cmf', oauth: true, selfIssued: false, org: false, adminIssuable: true },
+  cmf_check_pdf: { group: 'cmf', needs: 'cmf', oauth: true, selfIssued: false, org: false, adminIssuable: true },
+  // Packaging looks through Claude: only for people with packaging access (or admins). The
+  // mockup and the finish run the plugin repository's own code on the creative worker.
+  packaging_list_looks: { group: 'packaging', needs: 'packaging', oauth: true, selfIssued: false, org: false, adminIssuable: true },
+  packaging_mockup: { group: 'packaging', needs: 'packaging', oauth: true, selfIssued: false, org: false, adminIssuable: true },
+  packaging_finish: { group: 'packaging', needs: 'packaging', oauth: true, selfIssued: false, org: false, adminIssuable: true },
 }
 
 export function isHeadlessTool(name: string): name is HeadlessTool {
@@ -117,7 +145,7 @@ export function effectiveTools(
   env: NodeJS.ProcessEnv = process.env
 ): HeadlessTool[] {
   const switchedOn = (tool: HeadlessTool) =>
-    TOOL_META[tool].group !== 'creative' || env.CREATIVE_TOOLS_ENABLED !== '0'
+    !['creative', 'cmf', 'packaging'].includes(TOOL_META[tool].group) || env.CREATIVE_TOOLS_ENABLED !== '0'
   if (credential.allowedTools.includes('*')) {
     return HEADLESS_TOOLS.filter(
       (tool) => TOOL_META[tool].oauth && ownerHasFlag(TOOL_META[tool].needs, profile) && switchedOn(tool)

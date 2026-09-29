@@ -213,7 +213,9 @@ export function checkAccess(
     return {
       ok: false,
       status: 403,
-      message: 'Claude access is not turned on for this Vesper account. Ask whoever runs Vesper at Loop to turn it on.',
+      // Normally reached when an admin turned access off after the person connected, a decision
+      // reconnecting does not undo (src/lib/oauth/claude-access.ts).
+      message: 'Claude access is turned off for this Vesper account. Ask a Vesper admin if you need it back.',
       invalidToken: false,
     }
   }
