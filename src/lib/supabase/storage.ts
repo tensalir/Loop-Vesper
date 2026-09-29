@@ -195,3 +195,16 @@ export async function deleteFromStorage(
   }
 }
 
+
+/**
+ * Download a file from Supabase Storage with the service role, byte for byte.
+ * @param bucket - Storage bucket name
+ * @param path - File path within bucket
+ */
+export async function downloadFromStorage(bucket: string, path: string): Promise<Buffer> {
+  const { data, error } = await supabaseAdmin.storage.from(bucket).download(path)
+  if (error || !data) {
+    throw new Error(`Storage download failed: ${error?.message ?? 'not found'}`)
+  }
+  return Buffer.from(await data.arrayBuffer())
+}
