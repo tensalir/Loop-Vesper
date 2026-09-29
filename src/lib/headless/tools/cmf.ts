@@ -1,6 +1,6 @@
 /**
  * CMF files through Claude, from the sheet row and the clown: `cmf_list`, `cmf_prompt`,
- * `cmf_render`, `cmf_check_pdf`. The judgement stays with Damien, the lead CMF designer; the data is
+ * `cmf_render`, `cmf_check_pdf`, `cmf_pdf`. The judgement stays with Damien, the lead CMF designer; the data is
  * code's (Damien's brief: "Use AI for judgement, use code for data").
  *
  *   cmf_list       tabs, SKUs, clown keys, which tab × column × key has a prompt ready, and the
@@ -12,6 +12,10 @@
  *                  upload, the manifest line records the import, the workbook's sha256 and the
  *                  SKU's cells as parsed
  *   cmf_check_pdf  every value on a CMF PDF against its sheet cell (`spec_diff.py`'s rows)
+ *   cmf_pdf        the supplier PDF, built by code from one upload and Damien's approved renders,
+ *                  read back and checked before it is saved (`supplier-pdf-run.ts`)
+ *
+ * Supplier PDFs come from cmf_pdf. The web CMF Studio's export is left as it was.
  *
  * All of them need CMF access (the profile's `cmf_access`, or an admin): the registry gates them
  * (`needs: 'cmf'`) and each handler checks again, because a static token carries its tool list as
@@ -61,6 +65,8 @@ import type { ClownKey, Spec } from '@/lib/creative/cmf/spec-diff'
 import { PromptRefusal } from '@/lib/creative/cmf/prompt-fill'
 import { buildWorkbookPayload, type WorkbookPayload } from '@/lib/creative/cmf/workbook-payload'
 import { loadStoredWorkbook, type WorkbookImportRow, type WorkbookSourceDeps } from '@/lib/creative/cmf/workbook-source'
+import { CmfPdfRefused, runCmfPdf, type CmfPdfDeps, type RenderOutputRow, type VerdictRow } from '@/lib/creative/cmf/supplier-pdf-run'
+import type { SupplierPdfImage } from '@/lib/creative/cmf/supplier-pdf'
 import { CMF_STORAGE_BUCKET } from '@/lib/cmf/storage'
 import { recordMcpGeneration, STREAM_SESSIONS } from '../record-generation'
 import { imageResultContent } from '../generate-asset'
@@ -87,8 +93,22 @@ export interface CmfToolDeps {
   workbook: WorkbookSourceDeps
   /** The newest uploads that kept their file, for cmf_list. */
   recentImports(limit: number): Promise<WorkbookImportRow[]>
+  /** What cmf_pdf reaches beyond the kit and the upload. */
+  pdf: Omit<CmfPdfDeps, 'loadWorkbook' | 'readKey' | 'clownBytes'>
 }
 
+async function emailFromAuth(profileId: string, env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
+  const url = env.NEXT_PUBLIC_SUPABASE_URL
+  const key = env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return null
+  try {
+    const { createClient } = await import('@supabase/supabase-js')
+    const { data } = await createClient(url, key, { auth: { persistSession: false } }).auth.admin.getUserById(profileId)
+    return data?.user?.email ?? null
+  } catch {
+    return null
+  }
+}
 
 export const productionCmfDeps: CmfToolDeps = {
   loadKit: (env) => getProductKit({ env }),
@@ -135,6 +155,43 @@ export const productionCmfDeps: CmfToolDeps = {
       take: limit,
       select: { id: true, ownerId: true, fileName: true, storagePath: true, createdAt: true },
     }),
+  pdf: {
+    async renderOutput(outputId) {
+      const out = await prisma.output.findUnique({
+        where: { id: outputId },
+        select: { id: true, fileUrl: true, generationId: true, generation: { select: { userId: true, parameters: true } } },
+      })
+      if (!out) return null
+      return { id: out.id, fileUrl: out.fileUrl, generationId: out.generationId, ownerId: out.generation.userId, parameters: (out.generation.parameters ?? null) as Record<string, unknown> | null } satisfies RenderOutputRow
+    },
+    async webAttempt(id) {
+      return !!(await prisma.cmfRenderAttempt.findUnique({ where: { id }, select: { id: true } }))
+    },
+    async verdicts(outputId, product) {
+      const rows = await prisma.creativeVerdict.findMany({
+        where: { outputId, product },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, profileId: true, credentialId: true, answer: true, remark: true, createdAt: true },
+      })
+      return rows satisfies VerdictRow[]
+    },
+    async verdictEmail(v) {
+      if (v.credentialId) {
+        const cred = await prisma.headlessCredential.findUnique({ where: { id: v.credentialId }, select: { subjectEmail: true } }).catch(() => null)
+        if (cred?.subjectEmail) return cred.subjectEmail
+      }
+      return emailFromAuth(v.profileId)
+    },
+    async imageBytes(url) {
+      const got = await fetchAllowlisted(url, { maxBytes: 40 * 1024 * 1024, timeoutMs: 30_000, contentTypes: ['image/png', 'image/jpeg', 'image/webp', 'application/octet-stream'] })
+      return { bytes: got.buffer, mimeType: got.contentType ?? null } satisfies SupplierPdfImage
+    },
+    async storePdf(path, bytes) {
+      const { uploadBase64ToStorage } = await import('@/lib/supabase/storage')
+      return uploadBase64ToStorage(`data:application/pdf;base64,${Buffer.from(bytes).toString('base64')}`, CMF_STORAGE_BUCKET, path)
+    },
+    now: () => new Date(),
+  },
 }
 
 let deps: CmfToolDeps = productionCmfDeps
@@ -755,6 +812,72 @@ export const cmfCheckPdfHandler: ToolHandler = {
     return {
       content: [{ type: 'text', text: specCheckText(result) }],
       structuredContent: { ...kitHeader(loaded), ...result, rows: result.rows },
+    }
+  },
+}
+
+// ------------------------------------------------------------------ cmf_pdf
+
+export const CmfPdfArgs = z
+  .object({
+    import_id: z.string().uuid(),
+    tab: z.string().min(1).max(80),
+    sku_columns: z.array(z.string().regex(/^[A-Za-z]{1,2}$/, 'a column letter')).min(1).max(20),
+    output_ids: z.array(z.string().uuid()).min(1).max(20),
+  })
+  .strict()
+const PDF_KEYS = ['import_id', 'tab', 'sku_columns', 'output_ids'] as const
+
+/** The pinned clown of a key, its bytes checked against the key's clown sha256. */
+async function clownOfKey(ctx: ToolContext, loaded: LoadedKit, cmf: CmfKit, keyId: string): Promise<SupplierPdfImage | null> {
+  const key = cmf.keys[keyId]
+  if (!key?.clown) return null
+  const spec = kitPins(loaded.kit).find((s) => s.product === cmf.slug && s.pinId === key.clown!.id && s.sha256 === key.clown!.sha256)
+  if (!spec) return null
+  const row = (await deps.pinRows(cmf.slug)).find((r) => r.pinId === spec.pinId && r.sha256 === spec.sha256)
+  if (!row || !usablePin(row, spec) || !row.storagePath) return null
+  const bytes = await deps.pinBytes(row.storagePath, ctx.env)
+  if (!bytes || sha256Hex(bytes) !== key.clown.sha256) return null
+  return { bytes, mimeType: 'image/png' }
+}
+
+export const cmfPdfHandler: ToolHandler = {
+  async run(args, ctx) {
+    identifiersOnly('cmf_pdf', args, PDF_KEYS)
+    const parsed = CmfPdfArgs.safeParse(args)
+    if (!parsed.success) throw invalidArguments(parsed.error.issues)
+    await requireCmf(ctx)
+    const { loaded, cmf } = await loadCmf(ctx)
+    try {
+      const r = await runCmfPdf(cmf, parsed.data, {
+        ...deps.pdf,
+        loadWorkbook: (id) => loadStoredWorkbook(deps.workbook, id),
+        readKey: (entry) => deps.readKitFile(loaded, { path: entry.path, sha256: entry.sha256 }),
+        clownBytes: ({ id }) => clownOfKey(ctx, loaded, cmf, id),
+      })
+      const text = [
+        `The supplier PDF is saved: ${r.file_name}`,
+        r.url,
+        `${r.tab}, ${r.columns.map((c) => `${c}${r.sku_names[c] ? ` (${r.sku_names[c]})` : ''}`).join(', ')}: one page per SKU, then one part-breakdown page. Read back and checked before it was saved: ${r.cells_compared} cell(s) and every other printed value, all equal to the workbook's cells.`,
+        `Workbook: ${r.workbook.file}, sha256 ${String(r.workbook.sha256).slice(0, 12)}, modified ${r.workbook.modified} (${r.workbook.modified_source}). Upload ${r.import_id}.`,
+        `Legend from the clown key ${r.key.id}, confirmed by ${r.key.confirmed_by}: ${r.legend.join(', ')}.`,
+        ...r.renders.map((x) => `- ${x.column}: render ${x.output_id}, answered yes by ${x.decided_by} on ${x.decided_at.slice(0, 10)}`),
+      ].join('\n')
+      return { content: [{ type: 'text', text }], structuredContent: { ...kitHeader(loaded), saved: true, ...r } }
+    } catch (err) {
+      if (err instanceof CmfPdfRefused) {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: err.message }],
+          structuredContent: {
+            ...kitHeader(loaded),
+            saved: false,
+            counts: err.check.counts,
+            rows: err.check.rows.filter((x) => x.state !== 'match'),
+          },
+        }
+      }
+      throw err
     }
   },
 }

@@ -599,6 +599,24 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   },
   {
+    name: 'cmf_pdf',
+    title: 'Make the supplier CMF PDF',
+    description:
+      "Builds the supplier CMF PDF by code from one workbook upload in Vesper: one render/spec page per SKU, then one shared part-breakdown page (the clown, a legend from the confirmed clown key, material, finish and technique per component; no per-colourway Pantone). Every value is printed as its cell holds it; the header's Edit date, Drawn and Checked are the sheet's cells; every page's footer names the workbook file, its modified time and sha256. Each output_id must be a cmf_render made from a workbook upload with Damien's yes through record_verdict; a web CMF Studio attempt is refused, and so is a render whose cells have changed since (the changed fields are named). Before saving, the PDF is read back and compared with the same upload; any difference or empty required cell refuses, naming SKU, component, field, cell and both values, and nothing is saved. On a clean check it is stored beside the upload and its link returned. Identifiers only: import_id, tab, sku_columns, output_ids. Needs CMF access.",
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['import_id', 'tab', 'sku_columns', 'output_ids'],
+      properties: {
+        import_id: { type: 'string', description: 'the workbook upload in Vesper (cmf_list names the newest)' },
+        tab: { type: 'string', description: 'the sheet tab, e.g. "Experience 2 CC"' },
+        sku_columns: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 20, description: 'the SKU column letters, one page each, e.g. ["D", "E"]' },
+        output_ids: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 20, description: 'one approved cmf_render output per SKU column' },
+      },
+    },
+  },
+  {
     name: 'packaging_list_looks',
     title: 'What packaging looks can be made',
     description:
