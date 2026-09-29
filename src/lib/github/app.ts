@@ -2,11 +2,13 @@
  * Vesper's GitHub App: the identity Vesper reads the creative kit with, and
  * later files feedback issues as.
  *
- * The App is installed on one repository, `tensalir/loop-ai-studio`,
- * with Contents: read, Issues: read and write, Metadata: read. An installation
- * token is asked for with exactly those permissions and that repository, so a
- * token that leaks can do nothing else, and it is cached until five minutes
- * before GitHub expires it (an hour after issue).
+ * The App is installed on `tensalir/loop-ai-studio`, with Contents: read,
+ * Issues: read and write, Metadata: read. An installation token is asked for
+ * with exactly those permissions and that repository, so a token that leaks
+ * can do nothing else, and it is cached until five minutes before GitHub
+ * expires it (an hour after issue). The same installation also includes
+ * `tensalir/loop-product-plugins`, the product kit's repository, read with a
+ * token of its own that can only read files (`repositoryInstallationTokens`).
  *
  * Env: GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_B64 (the PEM, base64 on one line),
  * GITHUB_APP_INSTALLATION_ID. None of them is read at import time.
@@ -19,6 +21,8 @@ export const GITHUB_API_VERSION = '2022-11-28'
 
 /** What the installation token is scoped to; the App's own settings must allow at least this. */
 export const INSTALLATION_PERMISSIONS = { contents: 'read', issues: 'write', metadata: 'read' } as const
+/** A token that only reads a repository's files: the product kit's. */
+export const READ_PERMISSIONS = { contents: 'read', metadata: 'read' } as const
 /** Refresh this long before GitHub's expiry, so a call never starts on a token about to lapse. */
 export const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000
 
@@ -28,6 +32,8 @@ export interface GithubAppConfig {
   installationId: string
   /** The repository names (not owner/name) the token is limited to. */
   repositories: string[]
+  /** The permissions asked for; `INSTALLATION_PERMISSIONS` when not given. */
+  permissions?: Readonly<Record<string, string>>
 }
 
 export class GithubAppNotConfigured extends Error {
@@ -118,7 +124,7 @@ export class InstallationTokenCache {
           'X-GitHub-Api-Version': GITHUB_API_VERSION,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ repositories: this.config.repositories, permissions: INSTALLATION_PERMISSIONS }),
+        body: JSON.stringify({ repositories: this.config.repositories, permissions: this.config.permissions ?? INSTALLATION_PERMISSIONS }),
       }
     )
     if (!res.ok) {
@@ -145,4 +151,29 @@ export function sharedInstallationTokens(env: NodeJS.ProcessEnv = process.env): 
     shared = { key, cache: new InstallationTokenCache(config) }
   }
   return shared.cache
+}
+
+const perRepository = new Map<string, InstallationTokenCache>()
+
+/**
+ * A token cache for one more repository the App is installed on, read-only unless other permissions
+ * are named: the product kit's repository (`PRODUCT_KIT_REPO`). Kept apart from the shared cache,
+ * so an installation that does not include that repository yet refuses only this token, never the
+ * creative kit's. Null when the App is not configured.
+ */
+export function repositoryInstallationTokens(
+  env: NodeJS.ProcessEnv,
+  repository: string,
+  permissions: Readonly<Record<string, string>> = READ_PERMISSIONS
+): InstallationTokenCache | null {
+  const base = githubAppConfigFromEnv(env)
+  if (!base) return null
+  const name = repository.split('/').pop() || repository
+  const key = `${base.appId}:${base.installationId}:${name}:${JSON.stringify(permissions)}`
+  let cache = perRepository.get(key)
+  if (!cache) {
+    cache = new InstallationTokenCache({ ...base, repositories: [name], permissions })
+    perRepository.set(key, cache)
+  }
+  return cache
 }

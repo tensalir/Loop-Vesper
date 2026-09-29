@@ -7,22 +7,28 @@ import {
   checkKit,
   clearKitMemory,
   getKitFile,
+  kitPaths,
   loadCreativeKit,
   newestTag,
+  PRODUCT_KIT,
   repoPathOf,
   sha256Hex,
+  STUDIO_KIT,
   type KitSource,
   type KitStore,
+  type LoadedKit,
   type StoredKit,
 } from '../src/lib/creative/kit'
-import { ConformanceSchema, KitSchema } from '../src/lib/creative/kit-schema'
+import { ConformanceSchema, KitSchema, ProductKitSchema, type Kit, type ProductKit } from '../src/lib/creative/kit-schema'
+import { kitSetPins, loadKitSet, resolveInKits, servedView, type KitSetLoaders } from '../src/lib/creative/kit-set'
+import { findSkeletonFingerprint } from '../src/lib/prompts/product-prompt-guard'
 import { runConformance } from '../src/lib/creative/conformance'
 import { verdictFromKit } from '../src/lib/creative/ladder'
 import { formatLine, isOurs, parseLine, GrammarError, type LineFields } from '../src/lib/creative/grammar'
 import { githubKitSource } from '../src/lib/creative/kit-github'
-import { appJwt, InstallationTokenCache, TOKEN_REFRESH_MARGIN_MS } from '../src/lib/github/app'
+import { appJwt, InstallationTokenCache, READ_PERMISSIONS, TOKEN_REFRESH_MARGIN_MS } from '../src/lib/github/app'
 import type { Gh, GhResponse } from '../src/lib/github/rest'
-import { loadKitPrompting } from '../src/lib/creative/kit-runtime'
+import { getProductKit, loadKitPrompting } from '../src/lib/creative/kit-runtime'
 
 /**
  * The creative kit is the plugin repository's word, and Vesper must read it
@@ -137,8 +143,12 @@ function memoryStore(seed: StoredKit[] = []): KitStore & { kits: StoredKit[]; fi
     async getByBlob(blobSha) {
       return kits.find((k) => k.blobSha === blobSha) ?? null
     },
-    async latestValid() {
-      return [...kits].filter((k) => k.valid).sort((a, b) => b.fetchedAt.getTime() - a.fetchedAt.getTime())[0] ?? null
+    async latestValid(plugin) {
+      return (
+        [...kits]
+          .filter((k) => k.valid && (!plugin || k.kit?.plugin === plugin))
+          .sort((a, b) => b.fetchedAt.getTime() - a.fetchedAt.getTime())[0] ?? null
+      )
     },
     async save(kit) {
       const i = kits.findIndex((k) => k.blobSha === kit.blobSha)
@@ -154,19 +164,23 @@ function memoryStore(seed: StoredKit[] = []): KitStore & { kits: StoredKit[]; fi
   }
 }
 
-function fixtureSource(kitBytes: Buffer, opts: { fail?: boolean; extra?: Record<string, Buffer> } = {}): KitSource & { calls: string[] } {
+function fixtureSource(
+  kitBytes: Buffer,
+  opts: { fail?: boolean; extra?: Record<string, Buffer>; plugin?: 'studio-design' | 'product-design'; pluginBytes?: Buffer; confBytes?: Buffer } = {}
+): KitSource & { calls: string[] } {
   const calls: string[] = []
+  const paths = kitPaths(opts.plugin ?? 'studio-design')
   const files: Record<string, Buffer> = {
-    'plugins/studio-design/kit.json': kitBytes,
-    'plugins/studio-design/.claude-plugin/plugin.json': PLUGIN_BYTES,
-    'plugins/studio-design/kit/conformance.json': CONF_BYTES,
+    [paths.kit]: kitBytes,
+    [paths.pluginJson]: opts.pluginBytes ?? PLUGIN_BYTES,
+    [paths.conformance]: opts.confBytes ?? CONF_BYTES,
     ...(opts.extra ?? {}),
   }
   return {
     calls,
     async resolve(ref) {
       if (opts.fail) throw new Error('GitHub is down')
-      return { ref: ref ?? 'studio-design-v0.2.0', commit: 'c0ffee0000000000000000000000000000000000' }
+      return { ref: ref ?? `${paths.tagPrefix}0.2.0`, commit: 'c0ffee0000000000000000000000000000000000' }
     },
     async getFile(path) {
       calls.push(path)
@@ -366,5 +380,260 @@ test.describe('the comment-line grammar', () => {
     expect(formatLine(base)).toBe('[studio-design eclipse 2026-10-02] yes | decoded - | grade - | judge m vesper x3 | rubric 0.5.3 | -')
     expect(() => formatLine({ ...base, surface: 'slack' })).toThrow(GrammarError)
     expect(() => formatLine({ ...base, decoded: ['b3'] })).toThrow(GrammarError)
+  })
+})
+
+// ------------------------------------------------------------------ the product kit
+
+/**
+ * Loop Product Design's kit, CMF only, read from tensalir/loop-product-plugins at its
+ * product-design-v* tag. The sample is the studio release's CMF parts moved into it: the command
+ * `/product-design:cmf-review`, the rubric under the plugin's `skills/`, CMF's own ladder (no
+ * one-minor verdict: one failed minor check is a PASS with that check listed), the ladder vectors
+ * recomputed with it, no prompting, no comment line, no feedback block.
+ */
+const P_KIT_BYTES = readFileSync(join(FIX, 'product-kit.v1.sample.json'))
+const P_CONF_BYTES = readFileSync(join(FIX, 'product-conformance.v1.sample.json'))
+const P_PLUGIN_BYTES = readFileSync(join(FIX, 'product-plugin.v1.sample.json'))
+const productJson = () => JSON.parse(P_KIT_BYTES.toString('utf8'))
+
+function withProductKit(mutate: (k: any) => void): Buffer {
+  const k = productJson()
+  mutate(k)
+  return Buffer.from(JSON.stringify(k))
+}
+
+test.describe('the product kit', () => {
+  test('validates as Loop Product Design, CMF only, and every CMF ladder vector reproduces', () => {
+    const check = checkKit(P_KIT_BYTES, P_PLUGIN_BYTES, P_CONF_BYTES, PRODUCT_KIT)
+    expect(check.problems).toEqual([])
+    expect(check.ok).toBe(true)
+    const kit = check.kit!
+    expect(kit.plugin).toBe('product-design')
+    expect(kit.tag).toBe('product-design-v0.2.0')
+    expect(Object.keys(kit.products)).toEqual(['cmf'])
+    expect(kit.products.cmf.command).toBe('/product-design:cmf-review')
+    expect(kit.prompting).toBeNull()
+    expect(kit.comment_line ?? null).toBeNull()
+    expect(kit.feedback ?? null).toBeNull()
+    const conf = check.conformance!
+    expect(conf.comment_lines).toEqual([])
+    expect(conf.products.cmf.ladder).toHaveLength(211)
+    expect(kit.ladder.rank).toEqual(['PASS', 'RETRY', 'FAIL'])
+    expect(new Set(conf.products.cmf.ladder.map((v) => v.verdict))).toEqual(new Set(['PASS', 'RETRY', 'FAIL']))
+  })
+
+  test('its CMF template is a prompt no model rewrites', () => {
+    const fp = (productJson().products.cmf.template.fingerprint as string)
+    expect(fp.length).toBeGreaterThanOrEqual(8)
+    expect(findSkeletonFingerprint(`${fp} and the rest of the filled template`)).not.toBeNull()
+  })
+
+  test("each kit is refused as the other, and with the other's tag", () => {
+    const asStudio = checkKit(P_KIT_BYTES, P_PLUGIN_BYTES, P_CONF_BYTES, STUDIO_KIT)
+    expect(asStudio.ok).toBe(false)
+    expect(asStudio.problems.join()).toContain('kit.json plugin')
+    const asProduct = checkKit(KIT_BYTES, PLUGIN_BYTES, CONF_BYTES, PRODUCT_KIT)
+    expect(asProduct.ok).toBe(false)
+    expect(asProduct.problems.join()).toContain('kit.json plugin')
+    const studioWithProductTag = checkKit(withKit((k) => (k.tag = 'product-design-v0.2.1')), PLUGIN_BYTES, CONF_BYTES)
+    expect(studioWithProductTag.ok).toBe(false)
+    expect(studioWithProductTag.problems.join()).toContain('kit.json tag')
+    const productWithStudioTag = checkKit(withProductKit((k) => (k.tag = 'studio-design-v0.2.0')), P_PLUGIN_BYTES, P_CONF_BYTES, PRODUCT_KIT)
+    expect(productWithStudioTag.ok).toBe(false)
+    expect(productWithStudioTag.problems.join()).toContain('kit.json tag')
+  })
+
+  test('a product kit writing a comment line, or conformance carrying comment lines, is refused', () => {
+    const line = checkKit(withProductKit((k) => (k.comment_line = kitJson().comment_line)), P_PLUGIN_BYTES, P_CONF_BYTES, PRODUCT_KIT)
+    expect(line.ok).toBe(false)
+    expect(line.problems.join()).toContain('kit.json comment_line')
+    const conf = JSON.parse(P_CONF_BYTES.toString('utf8'))
+    conf.comment_lines = JSON.parse(CONF_BYTES.toString('utf8')).comment_lines
+    const confBytes = Buffer.from(JSON.stringify(conf))
+    const withLines = checkKit(withProductKit((k) => (k.conformance.sha256 = sha256Hex(confBytes))), P_PLUGIN_BYTES, confBytes, PRODUCT_KIT)
+    expect(withLines.ok).toBe(false)
+    expect(withLines.problems.join()).toContain('and the kit writes none')
+  })
+
+  test('its release tags are product-design-v*, the newest by version', () => {
+    const refs = ['refs/tags/product-design-v0.2.0', 'refs/tags/product-design-v0.10.0', 'refs/tags/studio-design-v9.0.0']
+    expect(newestTag(refs, kitPaths('product-design').tagPrefix)).toBe('product-design-v0.10.0')
+    expect(newestTag(refs)).toBe('studio-design-v9.0.0')
+    expect(newestTag(['refs/tags/studio-design-v0.3.0'], 'product-design-v')).toBeNull()
+  })
+
+  test("a skills/ or kit/ path is read inside the kit's own plugin folder", async () => {
+    expect(repoPathOf('skills/cmf-review/references/pantone.json', kitPaths('product-design').root)).toBe(
+      'plugins/product-design/skills/cmf-review/references/pantone.json'
+    )
+    expect(repoPathOf('workstreams/cmf/references/workbook/spec/link.json', kitPaths('product-design').root)).toBe(
+      'workstreams/cmf/references/workbook/spec/link.json'
+    )
+    const bytes = Buffer.from('{"table":[]}\n')
+    const store = memoryStore()
+    const source = fixtureSource(P_KIT_BYTES, { plugin: 'product-design', extra: { 'plugins/product-design/skills/cmf-review/references/pantone.json': bytes } })
+    const file = { path: 'skills/cmf-review/references/pantone.json', sha256: sha256Hex(bytes) }
+    expect(await getKitFile({ commit: 'c0ffee', kit: { plugin: 'product-design' } }, file, { source, store })).toEqual(bytes)
+    // Read as the studio kit's, the same path is not there.
+    await expect(getKitFile({ commit: 'c0ffee' }, file, { source, store })).rejects.toThrow('plugins/studio-design/skills/cmf-review')
+  })
+
+  test('without the App, CMF says where it is read from', async () => {
+    await expect(getProductKit({ env: {} as NodeJS.ProcessEnv })).rejects.toThrow(
+      "CMF is read from Loop Product Design's kit, tensalir/loop-product-plugins at its newest product-design-v* tag (PRODUCT_KIT_REPO, PRODUCT_KIT_REF)"
+    )
+  })
+
+  test("the product kit's token only reads, and only its own repository", async () => {
+    const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 })
+    const pem = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString()
+    const bodies: any[] = []
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)))
+      return new Response(JSON.stringify({ token: 't', expires_at: new Date(Date.now() + 3600_000).toISOString() }), { status: 201 })
+    }) as unknown as typeof fetch
+    const cache = new InstallationTokenCache(
+      { appId: '1', privateKeyPem: pem, installationId: '99', repositories: ['loop-product-plugins'], permissions: READ_PERMISSIONS },
+      { fetchImpl }
+    )
+    await cache.getToken()
+    expect(bodies[0]).toEqual({ repositories: ['loop-product-plugins'], permissions: { contents: 'read', metadata: 'read' } })
+  })
+})
+
+test.describe('loading two kits', () => {
+  test.beforeEach(() => clearKitMemory())
+
+  test('each kit loads from its own paths and is kept in memory apart', async () => {
+    const store = memoryStore()
+    const studio = await loadCreativeKit({ source: fixtureSource(KIT_BYTES), store })
+    const product = await loadCreativeKit({
+      source: fixtureSource(P_KIT_BYTES, { plugin: 'product-design', pluginBytes: P_PLUGIN_BYTES, confBytes: P_CONF_BYTES }),
+      store,
+      kit: PRODUCT_KIT,
+    })
+    expect(studio.kit.plugin).toBe('studio-design')
+    expect(product.kit.plugin).toBe('product-design')
+    expect(product.ref).toBe('product-design-v0.2.0')
+    // Within the minute each is served from its own memory.
+    expect((await loadCreativeKit({ source: fixtureSource(KIT_BYTES, { fail: true }), store })).kit.plugin).toBe('studio-design')
+    expect(store.kits.map((k) => k.kit?.plugin).sort()).toEqual(['product-design', 'studio-design'])
+  })
+
+  test("one kit's last good copy is never the other's fallback", async () => {
+    const store = memoryStore()
+    await loadCreativeKit({ source: fixtureSource(KIT_BYTES), store }, { force: true })
+    const productDown = { source: fixtureSource(P_KIT_BYTES, { plugin: 'product-design', fail: true }), store, kit: PRODUCT_KIT }
+    await expect(loadCreativeKit(productDown, { force: true })).rejects.toThrow('No product kit is available')
+    // A store that ignores the plugin it is asked for still cannot hand over the other kit.
+    const careless: KitStore = { ...store, latestValid: async () => store.kits[0] }
+    await expect(loadCreativeKit({ ...productDown, store: careless }, { force: true })).rejects.toThrow('No product kit is available')
+
+    const store2 = memoryStore()
+    await loadCreativeKit(
+      { source: fixtureSource(P_KIT_BYTES, { plugin: 'product-design', pluginBytes: P_PLUGIN_BYTES, confBytes: P_CONF_BYTES }), store: store2, kit: PRODUCT_KIT },
+      { force: true }
+    )
+    await expect(loadCreativeKit({ source: fixtureSource(KIT_BYTES, { fail: true }), store: store2 }, { force: true })).rejects.toThrow(
+      'No creative kit is available'
+    )
+    const stale = await loadCreativeKit(
+      { source: fixtureSource(P_KIT_BYTES, { plugin: 'product-design', fail: true }), store: store2, kit: PRODUCT_KIT },
+      { force: true }
+    )
+    expect(stale.stale).toBe(true)
+    expect(stale.kit.plugin).toBe('product-design')
+  })
+
+  test('the studio kit validates and serves with no CMF in it', () => {
+    const conf = JSON.parse(CONF_BYTES.toString('utf8'))
+    delete conf.products.cmf
+    const confBytes = Buffer.from(JSON.stringify(conf))
+    const kitBytes = withKit((k) => {
+      delete k.products.cmf
+      k.conformance.sha256 = sha256Hex(confBytes)
+    })
+    const check = checkKit(kitBytes, PLUGIN_BYTES, confBytes)
+    expect(check.problems).toEqual([])
+    expect(Object.keys(check.kit!.products).sort()).toEqual(['eclipse', 'packaging'])
+  })
+})
+
+// ------------------------------------------------------------------ two kits, one list of products
+
+function loadedOf<K extends Kit | ProductKit>(kit: K, ref: string): LoadedKit<K> {
+  return { kit, conformance: null as never, ref, commit: 'c0ffee0000000000000000000000000000000000', blobSha: 'b', fetchedAt: new Date(), stale: false, staleReason: null }
+}
+
+const studioLoaded = loadedOf(KitSchema.parse(kitJson()), 'studio-design-v0.2.1')
+const productLoaded = loadedOf(ProductKitSchema.parse(productJson()), 'product-design-v0.2.0')
+
+function loaders(opts: { studio?: Error; product?: Error } = {}): KitSetLoaders & { productCalls: number } {
+  const l = {
+    productCalls: 0,
+    async studio() {
+      if (opts.studio) throw opts.studio
+      return studioLoaded
+    },
+    async product() {
+      l.productCalls += 1
+      if (opts.product) throw opts.product
+      return productLoaded
+    },
+  }
+  return l
+}
+
+test.describe('two kits, one list of products', () => {
+  test("CMF comes from the product kit even while the creative kit still carries it; the rest from the creative kit", async () => {
+    expect(Object.keys(studioLoaded.kit.products)).toContain('cmf') // studio-design 0.2.x still carries CMF
+    for (const name of ['cmf', 'CMF sheet', 'cmf-review']) {
+      const hit = await resolveInKits(loaders(), name)
+      expect(hit.source, name).toBe('product')
+      expect(hit.loaded.kit.plugin).toBe('product-design')
+      expect(hit.product.command).toBe('/product-design:cmf-review')
+    }
+    const l = loaders()
+    const eclipse = await resolveInKits(l, 'the sleep mask')
+    expect(eclipse.source).toBe('studio')
+    expect(eclipse.slug).toBe('eclipse')
+    expect(l.productCalls).toBe(0) // an Eclipse call never waits on the product kit
+    expect((await resolveInKits(loaders(), 'Coachella box')).slug).toBe('packaging')
+  })
+
+  test('no product kit: a CMF name gets its reason, never the creative kit\'s old CMF; the rest still works', async () => {
+    const down = new Error("CMF is read from Loop Product Design's kit, tensalir/loop-product-plugins at its newest product-design-v* tag (PRODUCT_KIT_REPO, PRODUCT_KIT_REF), and none can be read")
+    await expect(resolveInKits(loaders({ product: down }), 'cmf')).rejects.toThrow('PRODUCT_KIT_REPO')
+    await expect(resolveInKits(loaders({ product: down }), 'clown render')).rejects.toThrow('PRODUCT_KIT_REPO')
+    expect((await resolveInKits(loaders({ product: down }), 'eclipse')).source).toBe('studio')
+    await expect(resolveInKits(loaders({ product: down }), 'Loop Dream')).rejects.toThrow("No Loop product called 'Loop Dream'")
+  })
+
+  test('no creative kit: CMF still works, and an Eclipse name gets the creative kit\'s reason', async () => {
+    const down = new Error('No creative kit is available: GitHub is down')
+    expect((await resolveInKits(loaders({ studio: down }), 'cmf')).source).toBe('product')
+    await expect(resolveInKits(loaders({ studio: down }), 'eclipse')).rejects.toThrow('No creative kit is available')
+  })
+
+  test('an unknown name lists what both kits serve', async () => {
+    const err = await resolveInKits(loaders(), 'Loop Dream').catch((e: Error) => e)
+    expect((err as Error).message).toContain("No Loop product called 'Loop Dream' in Vesper's kits")
+    expect((err as Error).message).toContain('(eclipse)')
+    expect((err as Error).message).toContain('(cmf)')
+  })
+
+  test('the creative kit is served without its CMF; the pins are its own and CMF\'s clowns once', async () => {
+    expect(Object.keys(servedView(studioLoaded).kit.products).sort()).toEqual(['eclipse', 'packaging'])
+    expect(servedView(productLoaded)).toBe(productLoaded)
+    const set = await loadKitSet(loaders())
+    const pins = kitSetPins(set)
+    expect(pins.filter((p) => p.product === 'cmf')).toHaveLength(25)
+    expect(pins.filter((p) => p.product === 'eclipse')).toHaveLength(18)
+    const onlyStudio = await loadKitSet(loaders({ product: new Error('down') }))
+    expect(onlyStudio.product).toBeNull()
+    expect(onlyStudio.productError?.message).toBe('down')
+    expect(kitSetPins(onlyStudio).some((p) => p.product === 'cmf')).toBe(false)
+    await expect(loadKitSet(loaders({ studio: new Error('a'), product: new Error('b') }))).rejects.toThrow('a')
   })
 })

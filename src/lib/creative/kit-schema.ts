@@ -1,12 +1,17 @@
 /**
- * The creative kit, schema 1, as Vesper reads it.
+ * The Loop kits, schema 1, as Vesper reads them.
  *
- * Mirrors `plugins/studio-design/kit.schema.json` in the plugin repository
- * (`tensalir/loop-ai-studio`, contract in `docs/kit.md`). Strict on what
- * Vesper acts on (the schema number, the ladder, severities, verdicts,
- * statuses, checks, pins, the prompting body); open on the rest, so a field
- * the plugin adds does not refuse a kit this code does not read yet. A new
- * `schema` number is refused: the shape changed and this code has not.
+ * Two plugins publish a kit in the same shape:
+ *   - `studio-design` (Loop Studio Design, `tensalir/loop-ai-studio`): Eclipse, packaging and the
+ *     prompting skill; mirrors `plugins/studio-design/kit.schema.json` there (contract `docs/kit.md`).
+ *   - `product-design` (Loop Product Design, `tensalir/loop-product-plugins`): CMF, the only kit
+ *     Vesper reads CMF from since 2026-09-29. It carries no prompting skill, no Frontify comment
+ *     line and no feedback block: those three are null.
+ *
+ * Strict on what Vesper acts on (the schema number, the plugin and its tag, the ladder,
+ * severities, verdicts, statuses, checks, pins, the prompting body); open on the rest, so a field
+ * a plugin adds does not refuse a kit this code does not read yet. A new `schema` number is
+ * refused: the shape changed and this code has not.
  */
 
 import { z } from 'zod'
@@ -144,59 +149,85 @@ export const KitPromptingSchema = z
   })
   .passthrough()
 
+export const KitJudgesSchema = z
+  .object({
+    surfaces: z.array(z.string()).refine((s) => s.includes('vesper'), 'the surfaces must include vesper'),
+    vesper_surface: z.literal('vesper'),
+    label: z.string(),
+    never_pooled: z.literal(true),
+  })
+  .passthrough()
+
+export const KitCommentLineSchema = z
+  .object({
+    prefix: z.literal('studio-design'),
+    reads_also: z.array(z.string()),
+    separator: z.string(),
+    answers: z.array(z.string()),
+    verdicts: z.array(z.string()),
+    surfaces: z.array(z.string()),
+    example: z.string(),
+  })
+  .passthrough()
+
+export const KitFeedbackSchema = z
+  .object({
+    repo: z.string(),
+    marker: z.string(),
+    issue_schema: z.string(),
+    title: z.string(),
+    bot_variable: z.string(),
+    labels: z
+      .object({ all: z.string(), kind: z.array(z.string()), skill: z.array(z.string()), state: z.array(z.string()), new: z.string() })
+      .passthrough(),
+    kinds: z.array(z.enum(['remark', 'bug', 'idea', 'question'])),
+    surfaces: z.array(z.string()),
+    targets: z
+      .array(z.object({ id: z.string(), skill: z.string(), label: z.string(), kind: z.string(), command: z.string() }).passthrough())
+      .min(1),
+  })
+  .passthrough()
+
+/** What every kit carries, whichever plugin wrote it. */
+const kitShape = {
+  schema: z.literal(1),
+  version: z.string().regex(/^\d+\.\d+\.\d+$/),
+  repo: z.string(),
+  commit: z.null(),
+  built_at: z.null(),
+  prompting: KitPromptingSchema.nullable(),
+  ladder: KitLadderSchema,
+  judges: KitJudgesSchema,
+  products: z.record(KitProductSchema).refine((p) => Object.keys(p).length > 0, 'the kit names no product'),
+  conformance: KitFileSchema,
+}
+
+/** Loop Studio Design's kit: the one Vesper has read since 2026-09-24. */
 export const KitSchema = z
   .object({
-    schema: z.literal(1),
+    ...kitShape,
     plugin: z.literal('studio-design'),
-    version: z.string().regex(/^\d+\.\d+\.\d+$/),
     tag: z.string().regex(/^studio-design-v\d+\.\d+\.\d+$/),
-    repo: z.string(),
-    commit: z.null(),
-    built_at: z.null(),
-    prompting: KitPromptingSchema.nullable(),
-    ladder: KitLadderSchema,
-    judges: z
-      .object({
-        surfaces: z.array(z.string()).refine((s) => s.includes('vesper'), 'the surfaces must include vesper'),
-        vesper_surface: z.literal('vesper'),
-        label: z.string(),
-        never_pooled: z.literal(true),
-      })
-      .passthrough(),
-    comment_line: z
-      .object({
-        prefix: z.literal('studio-design'),
-        reads_also: z.array(z.string()),
-        separator: z.string(),
-        answers: z.array(z.string()),
-        verdicts: z.array(z.string()),
-        surfaces: z.array(z.string()),
-        example: z.string(),
-      })
-      .passthrough(),
-    products: z.record(KitProductSchema).refine((p) => Object.keys(p).length > 0, 'the kit names no product'),
-    feedback: z
-      .object({
-        repo: z.string(),
-        marker: z.string(),
-        issue_schema: z.string(),
-        title: z.string(),
-        bot_variable: z.string(),
-        labels: z
-          .object({ all: z.string(), kind: z.array(z.string()), skill: z.array(z.string()), state: z.array(z.string()), new: z.string() })
-          .passthrough(),
-        kinds: z.array(z.enum(['remark', 'bug', 'idea', 'question'])),
-        surfaces: z.array(z.string()),
-        targets: z
-          .array(z.object({ id: z.string(), skill: z.string(), label: z.string(), kind: z.string(), command: z.string() }).passthrough())
-          .min(1),
-      })
-      .passthrough(),
-    conformance: KitFileSchema,
+    comment_line: KitCommentLineSchema,
+    feedback: KitFeedbackSchema,
+  })
+  .passthrough()
+
+/** Loop Product Design's kit: CMF. No comment line and no feedback block of its own. */
+export const ProductKitSchema = z
+  .object({
+    ...kitShape,
+    plugin: z.literal('product-design'),
+    tag: z.string().regex(/^product-design-v\d+\.\d+\.\d+$/),
+    comment_line: z.null().optional(),
+    feedback: z.null().optional(),
   })
   .passthrough()
 
 export type Kit = z.infer<typeof KitSchema>
+export type ProductKit = z.infer<typeof ProductKitSchema>
+/** Either kit: what code that reads only the shared parts (products, ladder, version, tag) takes. */
+export type AnyKit = Kit | ProductKit
 export type KitProduct = z.infer<typeof KitProductSchema>
 export type KitPin = z.infer<typeof KitPinSchema>
 

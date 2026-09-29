@@ -10,14 +10,16 @@
  *
  * All four need CMF access (the profile's `cmf_access`, or an admin): the registry gates them
  * (`needs: 'cmf'`) and each handler checks again, because a static token carries its tool list as
- * issued. The creative kit supplies everything; Vesper holds no CMF wording or rule of its own.
+ * issued. The product kit (Loop Product Design, `tensalir/loop-product-plugins`) supplies
+ * everything; Vesper holds no CMF wording or rule of its own, and reads CMF from no other kit.
  */
 
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { getCreativeKit, readKitFile } from '@/lib/creative/kit-runtime'
-import type { LoadedKit } from '@/lib/creative/kit'
+import { getProductKit, readKitFile } from '@/lib/creative/kit-runtime'
+import type { LoadedKit as LoadedKitOf } from '@/lib/creative/kit'
+import type { AnyKit } from '@/lib/creative/kit-schema'
 import { kitHeader } from '@/lib/creative/tool-views'
 import { kitPins, usablePin, type PinRow, type PinSpec } from '@/lib/creative/pins'
 import { pinStorage, prismaPinStore } from '@/lib/creative/pins-runtime'
@@ -49,6 +51,9 @@ import { assertModelAllowed, invalidArguments, type ToolContext, type ToolHandle
 
 // ------------------------------------------------------------------ what the handlers reach
 
+/** The kit CMF is read from: the product kit in production; any kit carrying CMF in the tests. */
+type LoadedKit = LoadedKitOf<AnyKit>
+
 export interface CmfToolDeps {
   loadKit(env: NodeJS.ProcessEnv): Promise<LoadedKit>
   readKitFile(loaded: LoadedKit, file: { path: string; sha256: string }): Promise<Buffer>
@@ -62,7 +67,7 @@ export interface CmfToolDeps {
 }
 
 export const productionCmfDeps: CmfToolDeps = {
-  loadKit: (env) => getCreativeKit({ env }),
+  loadKit: (env) => getProductKit({ env }),
   readKitFile: (loaded, file) => readKitFile(loaded, file),
   async ownerAccess(ownerId) {
     const p = await prisma.profile.findUnique({ where: { id: ownerId }, select: { role: true, cmfAccess: true, pausedAt: true, deletedAt: true } })
@@ -125,7 +130,7 @@ const parsedParts = new Map<string, CmfGradingParts>()
 /** `kit/cmf-grading.json` at the kit's commit, checked by sha256; kept per sha. */
 export async function cmfGradingParts(loaded: LoadedKit, cmf: CmfKit, read: CmfToolDeps['readKitFile'] = deps.readKitFile): Promise<CmfGradingParts> {
   const file = cmf.product.grading_prompt?.parts_file
-  if (!file) throw new CmfError(`the creative kit ${loaded.kit.version} carries no CMF grading parts`)
+  if (!file) throw new CmfError(`the kit ${loaded.kit.tag} carries no CMF grading parts`)
   const hit = parsedParts.get(file.sha256)
   if (hit) return hit
   const parts = JSON.parse((await read(loaded, file)).toString('utf8')) as CmfGradingParts
@@ -147,7 +152,7 @@ export const cmfListHandler: ToolHandler = {
     const tabs = parsed.data.tab ? [resolveTab(cmf, parsed.data.tab)] : Object.entries(cmf.specs).map(([slug, spec]) => ({ slug, spec }))
     const out = []
     const lines: string[] = [
-      `CMF in creative kit ${loaded.kit.version}: rubric ${cmf.product.rubric.version ?? '?'}${cmf.product.rubric.reporting_only ? ' (reporting only)' : ''}. Damien decides every render and every PDF.`,
+      `CMF in ${loaded.kit.tag}: rubric ${cmf.product.rubric.version ?? '?'}${cmf.product.rubric.reporting_only ? ' (no check blocks yet)' : ''}. Damien decides every render and every PDF.`,
     ]
     for (const { slug, spec } of tabs) {
       const keys = keysForTab(cmf, spec).map(([id, k]) => ({ id, clown: k.clown?.id ?? null, draft: k.draft, confirmed: k.confirmed }))

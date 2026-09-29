@@ -3,7 +3,9 @@
  * repository's scripts and each refusing before anything is paid for.
  *
  *   - the CMF grading prompt: every CMF fixture in the kit's conformance file, by sha256, and its
- *     example byte for byte (`tools/kit.py`, `assemble_cmf_grading_prompt`)
+ *     example byte for byte (the plugin repository's kit builder, `assemble_cmf_grading_prompt`)
+ *   - the kit is the product kit (Loop Product Design, `product-design-v*`): the sample is the
+ *     studio release's CMF parts moved into it (`tests/fixtures/creative/product-*.v1.sample.json`)
  *   - cmf_render: every refusal `render.py` makes, one model call per image, the clown the only
  *     image and the payload's prompt sent as it is
  *   - the tools themselves, through their injected reach: CMF access, the payload verbatim, the
@@ -17,7 +19,7 @@ import fs from 'fs'
 import http from 'http'
 import type { AddressInfo } from 'net'
 import path from 'path'
-import { ConformanceSchema, KitSchema, type Conformance, type Kit } from '../src/lib/creative/kit-schema'
+import { ConformanceSchema, ProductKitSchema, type Conformance, type ProductKit } from '../src/lib/creative/kit-schema'
 import type { LoadedKit } from '../src/lib/creative/kit'
 import { kitPins, type PinRow } from '../src/lib/creative/pins'
 import type { GradeDeps } from '../src/lib/creative/grade'
@@ -28,17 +30,18 @@ import { checkClownBytes, cmfDrawRequest, cmfManifestLine, executeCmfDraws, plan
 import { checkPdfInVesper, checkPdfOnWorker, resolveSku } from '../src/lib/creative/cmf/check-pdf'
 import { signWorkerRequest, workerConfigFromEnv, WorkerError, type WorkerConfig } from '../src/lib/creative/cmf/worker-client'
 import type { Spec } from '../src/lib/creative/cmf/spec-diff'
-import { CmfAccessError, cmfCheckPdfHandler, cmfListHandler, cmfPromptHandler, cmfRenderHandler, setCmfToolDeps, type CmfToolDeps } from '../src/lib/headless/tools/cmf'
+import { CmfAccessError, cmfCheckPdfHandler, cmfListHandler, cmfPromptHandler, cmfRenderHandler, productionCmfDeps, setCmfToolDeps, type CmfToolDeps } from '../src/lib/headless/tools/cmf'
 import { McpProgressReporter } from '../src/lib/headless/mcp-progress'
 import type { ToolContext } from '../src/lib/headless/tools/types'
 import { MemoryJobStore } from './helpers/memory-job-store'
 
 const FIX = path.join(__dirname, 'fixtures')
 const read = (...p: string[]) => fs.readFileSync(path.join(FIX, ...p))
-const kit: Kit = KitSchema.parse(JSON.parse(read('creative', 'kit.v1.sample.json').toString('utf8')))
-const conformance: Conformance = ConformanceSchema.parse(JSON.parse(read('creative', 'conformance.v1.sample.json').toString('utf8')))
+type Kit = ProductKit
+const kit: Kit = ProductKitSchema.parse(JSON.parse(read('creative', 'product-kit.v1.sample.json').toString('utf8')))
+const conformance: Conformance = ConformanceSchema.parse(JSON.parse(read('creative', 'product-conformance.v1.sample.json').toString('utf8')))
 const conf = conformance as any
-const parts: CmfGradingParts = JSON.parse(read('creative', 'cmf-grading.v1.sample.json').toString('utf8'))
+const parts: CmfGradingParts = JSON.parse(read('creative', 'product-cmf-grading.v1.sample.json').toString('utf8'))
 const PAYLOAD_E = 'experience-2-cc--E--case-experience2--front'
 const payloadBytes = read('cmf', `${PAYLOAD_E}.payload.json`)
 const payloadE = JSON.parse(payloadBytes.toString('utf8'))
@@ -90,7 +93,7 @@ async function refusalOf(p: Promise<unknown>): Promise<Error> {
 
 // ------------------------------------------------------------------ the grading prompt
 
-test.describe('the CMF grading prompt, as kit.py assembles it', () => {
+test.describe("the CMF grading prompt, as the plugin repository's kit builder assembles it", () => {
   test('every CMF fixture in the conformance file, by sha256; the example byte for byte', () => {
     const fixtures = conf.products.cmf.grading_prompt.fixtures as Array<{ inputs: { spec: string; column: string; key: string | null }; sha256: string; length: number }>
     expect(fixtures.length).toBeGreaterThanOrEqual(5)
@@ -313,7 +316,7 @@ function gradeDeps(rows: PinRow[]): GradeDeps & { calls: GeminiPart[][] } {
 const candidate = { bytes: Buffer.from('a render'), mimeType: 'image/png', sha256: sha('a render') }
 
 test.describe('grading a CMF render', () => {
-  test('the render first, the clown second, the prompt last; three reads; reporting only', async () => {
+  test('the render first, the clown second, the prompt last; three reads; no check blocks yet', async () => {
     const deps = gradeDeps(cmfRows())
     const out = await gradeCmfCandidate({ kit, cmf, parts, candidate, spec: 'experience-2-cc', column: 'E', key: 'case-experience2--front' }, deps)
     expect(deps.calls).toHaveLength(3)
@@ -344,10 +347,10 @@ test.describe('grading a CMF render', () => {
 
 // ------------------------------------------------------------------ the tools
 
-const loaded: LoadedKit = {
+const loaded: LoadedKit<Kit> = {
   kit,
   conformance,
-  ref: 'studio-design-v0.2.1',
+  ref: 'product-design-v0.2.0',
   commit: 'd90c9bb',
   blobSha: 'blob',
   fetchedAt: new Date(),
@@ -368,7 +371,7 @@ function ctx(): ToolContext {
 function kitFiles(k: Kit = kit): CmfToolDeps['readKitFile'] {
   const c = cmfKit(k)
   return async (_loaded, file) => {
-    if (file.path === c.product.grading_prompt?.parts_file?.path) return read('creative', 'cmf-grading.v1.sample.json')
+    if (file.path === c.product.grading_prompt?.parts_file?.path) return read('creative', 'product-cmf-grading.v1.sample.json')
     if (file.path === c.payloads[PAYLOAD_E].path) return payloadBytes
     if (file.path === c.specs['experience-2-cc'].path) return Buffer.from(JSON.stringify(REAL.spec), 'utf8')
     throw new Error(`the test serves no ${file.path}`)
@@ -414,10 +417,20 @@ test.describe('the CMF tools', () => {
     expect(seen.kitLoads).toBe(0)
   })
 
+  test("in production the tools read CMF from Loop Product Design's kit, and say where when it cannot be read", async () => {
+    const err = await refusalOf(productionCmfDeps.loadKit({} as unknown as NodeJS.ProcessEnv))
+    expect(err.message).toContain("CMF is read from Loop Product Design's kit, tensalir/loop-product-plugins at its newest product-design-v* tag (PRODUCT_KIT_REPO, PRODUCT_KIT_REF)")
+    expect(err.message).toContain('GITHUB_APP_ID')
+    const pinned = await refusalOf(productionCmfDeps.loadKit({ PRODUCT_KIT_REF: 'product-design-v0.2.0', PRODUCT_KIT_REPO: 'o/r' } as unknown as NodeJS.ProcessEnv))
+    expect(pinned.message).toContain('o/r at product-design-v0.2.0')
+  })
+
   test('cmf_list names the tabs, their SKUs in scope, their keys and the prompts ready', async () => {
     useDeps()
     const res = await cmfListHandler.run({}, ctx())
     const text = (res.content[0] as { text: string }).text
+    expect(text).toContain('CMF in product-design-v0.2.0: rubric')
+    expect(res.structuredContent).toMatchObject({ kit_tag: 'product-design-v0.2.0', kit_ref: 'product-design-v0.2.0' })
     expect(text).toContain('Experience 2 CC (experience-2-cc): in scope C c, D Ice blu marble, E Ice blu classic matte, F Ice blu marble')
     expect(text).toContain('case-experience2--back (draft)')
     expect(text).toContain('case-experience2--front (named, not confirmed)')

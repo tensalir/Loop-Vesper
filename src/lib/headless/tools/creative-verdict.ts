@@ -10,9 +10,9 @@
  */
 
 import { z } from 'zod'
-import { getCreativeKit } from '@/lib/creative/kit-runtime'
+import { productionKitSet } from '@/lib/creative/kit-runtime'
+import { resolveInKits } from '@/lib/creative/kit-set'
 import { kitHeader } from '@/lib/creative/tool-views'
-import { resolveProduct } from '@/lib/creative/products'
 import { loadCandidate } from '@/lib/creative/candidate'
 import { prismaCreativeRecords, type GradeRecord } from '@/lib/creative/records'
 import { verdictLine } from '@/lib/creative/verdict-line'
@@ -45,9 +45,9 @@ export const recordVerdictHandler: ToolHandler = {
     if (!a.grade_id && !a.output_id && !a.frontify_asset_id && !a.image_url) {
       throw new Error('name the picture the answer is about: grade_id, output_id, frontify_asset_id or image_url')
     }
-    const loaded = await getCreativeKit({ env: ctx.env })
     const isAdmin = await ownerIsAdmin(ctx.principal.ownerId)
-    const { slug, product } = resolveProduct(loaded.kit, a.product, { isAdmin })
+    // CMF from the product kit, the rest from the creative kit (`src/lib/creative/kit-set.ts`).
+    const { loaded, slug, product } = await resolveInKits(productionKitSet(ctx.env), a.product, { isAdmin })
     const known = new Set(product.rubric.checks.map((c) => c.id))
     const unknown = [...a.decoded, ...a.decoded_unconfirmed].filter((id) => !known.has(id))
     if (unknown.length) throw new Error(`${product.name}'s rubric has no check ${unknown.join(', ')}`)

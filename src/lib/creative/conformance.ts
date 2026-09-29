@@ -3,16 +3,17 @@
  *
  * `kit/conformance.json` carries vectors the plugin's builder wrote with the
  * repository's own code: the verdict for every single and pair of failed
- * checks of every product, and comment lines written by the grammar. A kit
- * whose vectors this code cannot reproduce is refused, and the last good kit
- * stays in use.
+ * checks of every product, and comment lines written by the grammar (the
+ * studio kit's; the product kit writes no comment line and carries none). A
+ * kit whose vectors this code cannot reproduce is refused, and the last good
+ * kit stays in use.
  */
 
 import { formatLine, parseLine, type LineFields } from './grammar'
 import { verdictFromKit } from './ladder'
-import type { Conformance, Kit } from './kit-schema'
+import type { AnyKit, Conformance } from './kit-schema'
 
-export function runConformance(kit: Kit, conformance: Conformance): string[] {
+export function runConformance(kit: AnyKit, conformance: Conformance): string[] {
   const problems: string[] = []
   if (conformance.version !== kit.version) {
     problems.push(`conformance.json is for ${conformance.version}, the kit is ${kit.version}`)
@@ -36,13 +37,20 @@ export function runConformance(kit: Kit, conformance: Conformance): string[] {
     }
     if (wrong > 3) problems.push(`${slug}: ${wrong - 3} more ladder vectors differ`)
   }
+  const commentLine = kit.comment_line ?? null
+  if (!commentLine) {
+    if (conformance.comment_lines.length) {
+      problems.push(`conformance.json carries ${conformance.comment_lines.length} comment lines, and the kit writes none`)
+    }
+    return problems
+  }
   for (const v of conformance.comment_lines) {
     try {
       const line = formatLine(v.fields as unknown as LineFields)
       if (line !== v.line) problems.push(`comment line differs: wrote ${JSON.stringify(line)}, the repo wrote ${JSON.stringify(v.line)}`)
       const parsed = parseLine(v.line)
-      if (!parsed || parsed.prefix !== kit.comment_line.prefix) {
-        problems.push(`comment line ${JSON.stringify(v.line)} does not read back with the prefix ${kit.comment_line.prefix}`)
+      if (!parsed || parsed.prefix !== commentLine.prefix) {
+        problems.push(`comment line ${JSON.stringify(v.line)} does not read back with the prefix ${commentLine.prefix}`)
       }
     } catch (err) {
       problems.push(`comment line ${JSON.stringify(v.line)}: ${(err as Error).message}`)

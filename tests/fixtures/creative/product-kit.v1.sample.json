@@ -1,0 +1,871 @@
+{
+ "built_at": null,
+ "comment_line": null,
+ "commit": null,
+ "conformance": {
+  "path": "kit/conformance.json",
+  "sha256": "a75317eed973acd32e02abda561adcfd15784662f0b7aa8895da3c1035528bc5"
+ },
+ "feedback": null,
+ "judges": {
+  "label": "judge <model> <surface> x<reads>",
+  "never_pooled": true,
+  "surfaces": [
+   "chat",
+   "cowork",
+   "code",
+   "qa",
+   "vesper"
+  ],
+  "vesper_surface": "vesper"
+ },
+ "ladder": {
+  "ignore": [
+   "advisory"
+  ],
+  "otherwise": "PASS",
+  "rank": [
+   "PASS",
+   "RETRY",
+   "FAIL"
+  ],
+  "rules": [
+   {
+    "at_least": 1,
+    "severity": "gate",
+    "verdict": "FAIL"
+   },
+   {
+    "at_least": 1,
+    "severity": "critical",
+    "verdict": "RETRY"
+   },
+   {
+    "at_least": 2,
+    "severity": "minor",
+    "verdict": "RETRY"
+   }
+  ],
+  "unknown_severity": "minor"
+ },
+ "plugin": "product-design",
+ "products": {
+  "cmf": {
+   "aliases": [
+    "CMF",
+    "CMF files",
+    "CMF file",
+    "CMF sheet",
+    "CMF workbook",
+    "CMF PDF",
+    "colour material finish",
+    "clown model",
+    "clown render",
+    "colourway render",
+    "supplier PDF"
+   ],
+   "command": "/product-design:cmf-review",
+   "deciders": [
+    {
+     "github": null,
+     "name": "Damien",
+     "note": "Decides every render and every PDF. The GitHub handle is filled in when the ownership flow is set up; until then his verdicts arrive through the review page and the record.",
+     "role": "lead CMF designer"
+    }
+   ],
+   "description": "Colour, material and finish files for Loop products: a row of the CMF sheet and the clown model of its product become a recoloured render and a supplier PDF, each checked against the sheet before it goes out.",
+   "generation": {
+    "image_size": "2K",
+    "kind": "template",
+    "models": [
+     {
+      "lane": "final",
+      "model": "gemini-3-pro-image"
+     },
+     {
+      "lane": "draft",
+      "model": "gemini-3.1-flash-image"
+     }
+    ],
+    "only_image": "clown",
+    "rules": [
+     "no-model-rewrite",
+     "one-colourway-per-call",
+     "hold-lighting-fixed",
+     "never-reencode-a-pin"
+    ]
+   },
+   "grading": {
+    "inline_limit_bytes": 3500000,
+    "models": [
+     "gemini-flash-latest",
+     "gemini-3.6-flash",
+     "gemini-3.5-flash"
+    ],
+    "parts_order": [
+     "candidate",
+     "clown"
+    ],
+    "reporting_only": true,
+    "response_mime_type": "application/json",
+    "runs": 3,
+    "temperature": 0
+   },
+   "grading_prompt": {
+    "assembly": "qa.build_prompt with THE ROW and THE KEY from cmf-grading.json and the measurement lines below; the order is written out in docs/kit.md",
+    "measurement_lines_without_code": [
+     "zones: not measured: no code measured this picture's pixels; the read was made in Vesper. Look for the clown's colours by eye, zone by zone, into the shadows and along the parting lines."
+    ],
+    "parts_file": {
+     "path": "kit/cmf-grading.json",
+     "sha256": "80a4f26d9792211e4e3ca3ee1a51803f0583ea3d8b1b248caa725755819e45cb"
+    },
+    "rules": "The grader reads this section into its prompt verbatim.\n\n- **Two images, named.** Image 1 is the candidate render. Image 2 is the clown model it was drawn\n  from: the same object with each component painted one flat colour, shaded, on its own ground.\n  Judge the candidate against the clown, side by side, never against what you think the product\n  looks like.\n- **THE ROW is the spec.** The sheet row for this SKU is quoted under THE ROW: each component with\n  its material, finish, colour name and code, as the sheet wrote them. A colour, material, finish or\n  effect the row does not hold is not in the spec, however plausible it looks.\n- **THE KEY is the map.** Quoted under THE KEY: each clown colour as a hex, the component or\n  components it marks, and the components that are not on this clown. A zone that serves two\n  components names both. A component the key says is not on this clown is absent by design, never\n  missing.\n- **The measurements are evidence, not verdict.** MEASUREMENTS states per zone, in words, how much of\n  it is still within reach of the clown's colour and, where the code has a confirmed hex, how far\n  the zone's colour sits from it. They tell you where to look; they do not decide. A note that\n  ignores a large leftover share is an incomplete note.\n- **What each finish word looks like.** Judge a finish by how the part takes the light:\n  - *matte*: diffuse, no specular hotspot, the light falls off softly across the form.\n  - *VDI 18 to VDI 27*: a spark-eroded grain that scatters the light evenly; near smooth-matte at\n    VDI 18, a fine visible grain at VDI 24, coarser at VDI 27; never glossy.\n  - *satin*: a soft sheen with broad, blurred highlights. *NCVM*: a metallic sheen on a plastic\n    part, highlights that follow the form like metal, no brushed grain unless the row says so.\n  - *gloss*, *high gloss*, *mirror*: sharp specular highlights and clear reflections of the light.\n  - *grinded*, *grinding*: an abraded, frosted surface, even, with the highlights broken up.\n  - *milky*, *frosted*, *see-through*, with or without a percentage: translucent, light passing\n    through the thin edges and a soft glow in the body, more the higher the percentage; never clear\n    like glass, never opaque.\n  - *opaque*: no light through the part at any edge.\n  - *holographic*, *iridescent*, *pearlescent*: the colour shifts with the angle, inside the\n    material, not a sticker on top.\n  - *anodised*: coloured metal with a fine metallic sheen and an even tone, brushed or polished as\n    the row says.\n  - *pad print*, *silk screen*: flat ink on the surface, crisp edges, no relief. *embossed*,\n    *debossed*: relief in the material itself, in the part's own colour unless the row names one.\n- **Absence and leftover are the usual misses.** Graders flag what is wrong and skip what is still\n  there. The likeliest misses on this work: a zone, or a rim of one along a parting line, still in\n  the clown's colour (the Experience 2 carry case shells came back red); a part given no finish; a\n  part that disappeared. Look for the clown's colours first.\n- **Judge what the view shows.** A component the key says is not on this clown, or one hidden by the\n  angle, passes its check; a component shown wrongly fails it.\n- **Fail when unsure**, and say in the note what you could not see.",
+    "template_id": "cmf-grader-f53f81a28485",
+    "text": {
+     "check": "- {id} [{severity}]: {check} FAILS WHEN: {fails_when}",
+     "checks_heading": "THE CHECKS:",
+     "grade_only": "Grade image 1, and only image 1, against image 2 and THE ROW. The clown is never under review: a difference in shape, light, camera or ground between the two is a fault in the candidate.",
+     "intro": "You are grading one CMF render for Loop's lead CMF designer: a recoloured render of a clown model, with the clown open beside it and the SKU's sheet row in hand. Read it as someone who has never seen the brief.",
+     "json": "{\"checks\": {ids}, \"worst_issue\": \"<one short phrase>\", \"notes\": \"<at most three short sentences>\", \"zones_seen\": <how many of the clown's zones you could find in image 1>}",
+     "json_id": "\"{id}\": true|false",
+     "json_id_separator": ", ",
+     "json_intro": "Return ONLY JSON, no fences, every check id present:",
+     "measurement_item": "- {line}",
+     "measurements_heading": "MEASUREMENTS, made in code on the pixels: evidence, not verdict.",
+     "notes_rule": "In the notes, name a zone by its clown hex and the component the key gives it, and quote the row's words and codes; never describe what a code looks like from memory.",
+     "roles": "Image 1 is the CANDIDATE. Image 2 is the CLOWN MODEL it was made from.",
+     "rules_heading": "GRADING RULES, from the rubric:",
+     "strict": "Grade every check strictly true (passes) or false (fails). When you are unsure, the check FAILS. Judge only what image 1 shows; do not credit it for anything you cannot see.",
+     "zones_not_measured": "zones: not measured: {reason}. Look for the clown's colours by eye, zone by zone, into the shadows and along the parting lines."
+    }
+   },
+   "keys": {
+    "aphrodite--v38": {
+     "clown": {
+      "height": 1230,
+      "id": "aphrodite--v38",
+      "sha256": "527f8716d7ca1eaedcf7f8146de7b827dd191d7e90a96ce6e2cf46f3faf94f3b",
+      "width": 1190
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/aphrodite--v38.json",
+     "product": "aphrodite",
+     "sha256": "4118f5d1f156bcbbb912066c0fe5f5793a47d3bf8f539ed1a32871f6cc5f635d",
+     "variant": "v38"
+    },
+    "aphrodite--v40": {
+     "clown": {
+      "height": 1058,
+      "id": "aphrodite--v40",
+      "sha256": "9dec9804d44aecd1f3a96e68d597ceb51bbdb494a52d60c9f2b1f5a5049e36ea",
+      "width": 1062
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/aphrodite--v40.json",
+     "product": "aphrodite",
+     "sha256": "7e7f592899e52e1542a41720115465203af76795047cfa4808c6cfd0c59306a2",
+     "variant": "v40"
+    },
+    "case--v1": {
+     "clown": {
+      "height": 1280,
+      "id": "case--v1",
+      "sha256": "0e8748904f5a5e0c7bdcb0eecbaacd0fafdbe633e7254e84788d2c086a86b7b3",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case--v1.json",
+     "product": "case",
+     "sha256": "75024e0fa979862245753a2bea0cbbbe9b622dcfc9ea8ff6d4ab5e8691bcaf73",
+     "variant": "v1"
+    },
+    "case--v2": {
+     "clown": {
+      "height": 1280,
+      "id": "case--v2",
+      "sha256": "1d9dbbe86bf4cbaa29d6444e6b4d1e6e5ce0d3a54bdd5e4c8ee003f9cc9d9296",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case--v2.json",
+     "product": "case",
+     "sha256": "c4bc1671916ceee891fa802b6b29801fa9dabbafe984f06ee28973adb8530c58",
+     "variant": "v2"
+    },
+    "case-aphrodite--7613-555": {
+     "clown": {
+      "height": 1600,
+      "id": "case-aphrodite--7613-555",
+      "sha256": "9065b152f463be6ae59c8925673606d8e44c398bb80035261df2d9412b3c834c",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-aphrodite--7613-555.json",
+     "product": "case-aphrodite",
+     "sha256": "39fc694020dcac64a05f19ab50ca5eecd0320b2476b02d141a20b631bc596f89",
+     "variant": "7613-555"
+    },
+    "case-aphrodite--7613-556": {
+     "clown": {
+      "height": 1600,
+      "id": "case-aphrodite--7613-556",
+      "sha256": "2a41cffaeec80f5490fb682155f3948689bae2c6ea7afe09e953f7cc38800a80",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-aphrodite--7613-556.json",
+     "product": "case-aphrodite",
+     "sha256": "88fd55f7ec31d80b4a2a3b3b2e4bd6642b9035ca9b09d05aa0878803db51ac31",
+     "variant": "7613-556"
+    },
+    "case-aphrodite--7613-558": {
+     "clown": {
+      "height": 1600,
+      "id": "case-aphrodite--7613-558",
+      "sha256": "473cef25b604ccdd6cdef8d7b63c93ae64acb31903a6996685ed186a82730300",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-aphrodite--7613-558.json",
+     "product": "case-aphrodite",
+     "sha256": "47b63b4ba641141c0860c941ed9ebd530a7dac79d623a0f3fbced962c9fdaf4b",
+     "variant": "7613-558"
+    },
+    "case-aphrodite--7613-560": {
+     "clown": {
+      "height": 1600,
+      "id": "case-aphrodite--7613-560",
+      "sha256": "0c8ee39047ded95c093b8b05bdfc5472698feb6f293f0e28e72e9c34b862ee02",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-aphrodite--7613-560.json",
+     "product": "case-aphrodite",
+     "sha256": "e66739ba89eca04e7a84c29e317b3eaa52c2a5617f53c4461fffdc14e2dfe23e",
+     "variant": "7613-560"
+    },
+    "case-aphrodite--7613-562": {
+     "clown": {
+      "height": 1600,
+      "id": "case-aphrodite--7613-562",
+      "sha256": "31fd0f4889d3f9b1a0741e7dc5d66047d04b70e4414391794fa71577b19e6866",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-aphrodite--7613-562.json",
+     "product": "case-aphrodite",
+     "sha256": "cdc7ee200664f13e3ceddcbb5a6081e2fa71e5acd1a88f2a2ad31a085a3e1e1c",
+     "variant": "7613-562"
+    },
+    "case-dream--v603": {
+     "clown": {
+      "height": 1280,
+      "id": "case-dream--v603",
+      "sha256": "e03f10874bf9668d274aa4efea852d8011aa78d3dc91adaa9eda436952cb6c17",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-dream--v603.json",
+     "product": "case-dream",
+     "sha256": "f604f8ccab986c40001b33da54575fb6399e0d265d3bde19cf8ead43f7fc5dac",
+     "variant": "v603"
+    },
+    "case-dream--v604": {
+     "clown": {
+      "height": 1280,
+      "id": "case-dream--v604",
+      "sha256": "745ca7fb437542d792b87769ef20a54931d7ec7460269f41811854a510f55b2e",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-dream--v604.json",
+     "product": "case-dream",
+     "sha256": "8881d681be696c84bec515dd1993ac6dfffc079b2bbbb6bbfeae70add4b38c8e",
+     "variant": "v604"
+    },
+    "case-dream--v605": {
+     "clown": {
+      "height": 1280,
+      "id": "case-dream--v605",
+      "sha256": "5f91ba135b857fae20b01d8019aecc8a1db49db924d2d1deab9be239282d76ba",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-dream--v605.json",
+     "product": "case-dream",
+     "sha256": "ccfa5d682bb3b0b14f61e041a25a2c9878105ddab0a362f740ae4512a5a85ea5",
+     "variant": "v605"
+    },
+    "case-dream--v606": {
+     "clown": {
+      "height": 1280,
+      "id": "case-dream--v606",
+      "sha256": "0b667eef24279d96259bb867cea5a8c7750d8d53cf09646d097dc651f657e18d",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-dream--v606.json",
+     "product": "case-dream",
+     "sha256": "644c6cfe1d36a7657f51ac29db3a9da62f878deefb902068407dd575a10ce70a",
+     "variant": "v606"
+    },
+    "case-experience2--back": {
+     "clown": {
+      "height": 1280,
+      "id": "case-experience2--back",
+      "sha256": "0e8748904f5a5e0c7bdcb0eecbaacd0fafdbe633e7254e84788d2c086a86b7b3",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-experience2--back.json",
+     "product": "case-experience2",
+     "sha256": "1e052cad68dbdd463c55b32a37bccd113064a741197373fa5edc11ad79c15117",
+     "variant": "back"
+    },
+    "case-experience2--front": {
+     "clown": {
+      "height": 1280,
+      "id": "case-experience2--front",
+      "sha256": "1d9dbbe86bf4cbaa29d6444e6b4d1e6e5ce0d3a54bdd5e4c8ee003f9cc9d9296",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": false,
+     "path": "skills/cmf-review/references/clown-keys/case-experience2--front.json",
+     "product": "case-experience2",
+     "sha256": "102bce0aff21a555fc7fa4e09e350c9885885ab0f6139f35b2b35ca747fdb9ae",
+     "variant": "front"
+    },
+    "case-switch2--default": {
+     "clown": {
+      "height": 1280,
+      "id": "case-switch2--default",
+      "sha256": "1d9dbbe86bf4cbaa29d6444e6b4d1e6e5ce0d3a54bdd5e4c8ee003f9cc9d9296",
+      "width": 1280
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/case-switch2--default.json",
+     "product": "case-switch2",
+     "sha256": "0373d2da917e9e444990203d58d1233571243e98305cd6b94ea5ab376cf0fe3a",
+     "variant": "default"
+    },
+    "cocoon--default": {
+     "clown": {
+      "height": 1919,
+      "id": "cocoon--default",
+      "sha256": "97c78f14777dc664818b74e240684092e921ecc116d65a4a871909852b156056",
+      "width": 2559
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/cocoon--default.json",
+     "product": "cocoon",
+     "sha256": "5a087b7066906df197a95632b023fb9ecd2b0361ac90837947127071686962e9",
+     "variant": "default"
+    },
+    "dream--default": {
+     "clown": {
+      "height": 1024,
+      "id": "dream--default",
+      "sha256": "e446b09b7949cb7f925a3b651e2b3affbaf1d316feb7c97c79d5bb216a235751",
+      "width": 2088
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/dream--default.json",
+     "product": "dream",
+     "sha256": "834cfd82667fb5bec6df43baf4253d6549543ad7e8e4e35a8f8b16f6a5384ada",
+     "variant": "default"
+    },
+    "engage2--v602": {
+     "clown": {
+      "height": 1600,
+      "id": "engage2--v602",
+      "sha256": "53c57a9c8b553f4bce6489a05a7f67f9f0e38718e8031c2e6baf96e8ade9eae3",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/engage2--v602.json",
+     "product": "engage2",
+     "sha256": "3e25530592dedc3a7b73ebd98d492df5b14db5c077050042b35cdbfa33f042ad",
+     "variant": "v602"
+    },
+    "experience2--glossy": {
+     "clown": {
+      "height": 1600,
+      "id": "experience2--glossy",
+      "sha256": "eb696ff0a690d2dc6898131836d99f09b0cb966bc609500d92cbecfc18eb0b6c",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/experience2--glossy.json",
+     "product": "experience2",
+     "sha256": "2259358abd94e3eb887dae41b97e62cb656880d8f06a0f3f7796bddd218b6def",
+     "variant": "glossy"
+    },
+    "experience2--satin": {
+     "clown": {
+      "height": 1600,
+      "id": "experience2--satin",
+      "sha256": "c4d800ca946ad12e24bbce1540610b017e4178441ae286373866d7e24a5ae361",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/experience2--satin.json",
+     "product": "experience2",
+     "sha256": "e30d5b5568de2ad1cf636d8f1f295433ff8f37434e52b09c043bb7eeeadc3b91",
+     "variant": "satin"
+    },
+    "link--v609": {
+     "clown": {
+      "height": 998,
+      "id": "link--v609",
+      "sha256": "1db2a4ed83c1071d6be2e7c0ce6a94faebf705bb23b31ff77e168a180186cbe7",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/link--v609.json",
+     "product": "link",
+     "sha256": "40bee3081f21906abf18b07567d23d6e892048202d49b8d1b85b727987d07d81",
+     "variant": "v609"
+    },
+    "link--v610": {
+     "clown": {
+      "height": 998,
+      "id": "link--v610",
+      "sha256": "afbe9d4043d130587a2e2f9d385b8da2e92277cd7ede49033ab03fea829d69dc",
+      "width": 1600
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/link--v610.json",
+     "product": "link",
+     "sha256": "248c28fa69873d53ce640b99e2f02266f300dfbb18a409ef5aadc34327468da7",
+     "variant": "v610"
+    },
+    "pouch-link--default": {
+     "clown": {
+      "height": 1920,
+      "id": "pouch-link--default",
+      "sha256": "09252342898bb6e334efadf04a3eb890235678d870f6d5c6f7d2937f169d1363",
+      "width": 1920
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/pouch-link--default.json",
+     "product": "pouch-link",
+     "sha256": "e628cda2c1d540f0fd67a77f88ba89a19217cabc127040dc62106567aa3f55cb",
+     "variant": "default"
+    },
+    "switch2--motorsport-615": {
+     "clown": {
+      "height": 1024,
+      "id": "switch2--motorsport-615",
+      "sha256": "c8497dbd04fc9d88ac2cd8986223a8d8293ab33c859c5742430d9653b46ffd92",
+      "width": 1024
+     },
+     "confirmed": false,
+     "draft": true,
+     "path": "skills/cmf-review/references/clown-keys/switch2--motorsport-615.json",
+     "product": "switch2",
+     "sha256": "54af12b561f8b0ad18d0c7bb796ad9de8294045447f340d160a8e23f97dcd4db",
+     "variant": "motorsport-615"
+    }
+   },
+   "kind": "cmf",
+   "name": "CMF files",
+   "pantone": {
+    "path": "skills/cmf-review/references/pantone.json",
+    "sha256": "6aec3a2543728aed8b7995484fdc9beec2358eb17013224343f1103b6de665fb"
+   },
+   "payload_index": {
+    "path": "workstreams/cmf/references/payloads/INDEX.json",
+    "sha256": "af42101246b5de5d1fc37499ea23e068cb247b4b3b03d13c92d6fd641fbdff52"
+   },
+   "payloads": {
+    "experience-2-cc--C--case-experience2--front": {
+     "column": "C",
+     "key": "case-experience2--front",
+     "key_confirmed": false,
+     "path": "workstreams/cmf/references/payloads/experience-2-cc--C--case-experience2--front.payload.json",
+     "prompt_sha256": "88947526b793498dc50ec1fdac715149df8d51d64c0d352bf9d7b357b3a8aee8",
+     "sha256": "a5de85e418bdf4d36f214b5c390fb4c633afd5d2e331e2914d757da38cfa718e",
+     "sku_name": "c",
+     "spec": "experience-2-cc",
+     "status": "ready",
+     "tab": "Experience 2 CC"
+    },
+    "experience-2-cc--D--case-experience2--front": {
+     "column": "D",
+     "key": "case-experience2--front",
+     "key_confirmed": false,
+     "path": "workstreams/cmf/references/payloads/experience-2-cc--D--case-experience2--front.payload.json",
+     "prompt_sha256": "4dd741f0ed62ce276653b3ebb95681499e8fc78e4c42f2ab24d34ca41868cf2f",
+     "sha256": "c87cc6a753940462b73da10b471d6fe4dda93700f1e673186c93a65b4624570d",
+     "sku_name": "Ice blu marble",
+     "spec": "experience-2-cc",
+     "status": "ready",
+     "tab": "Experience 2 CC"
+    },
+    "experience-2-cc--E--case-experience2--front": {
+     "column": "E",
+     "key": "case-experience2--front",
+     "key_confirmed": false,
+     "path": "workstreams/cmf/references/payloads/experience-2-cc--E--case-experience2--front.payload.json",
+     "prompt_sha256": "94e256a80c7bde698f185969144e14ef3e7e2e22c5fae67ffc14fad7fda3b648",
+     "sha256": "7f342eb49d129c6b59e0cdf13db5868cd03a64ef1573bc3c1be234b4345711d6",
+     "sku_name": "Ice blu classic matte",
+     "spec": "experience-2-cc",
+     "status": "ready",
+     "tab": "Experience 2 CC"
+    },
+    "experience-2-cc--F--case-experience2--front": {
+     "column": "F",
+     "key": "case-experience2--front",
+     "key_confirmed": false,
+     "path": "workstreams/cmf/references/payloads/experience-2-cc--F--case-experience2--front.payload.json",
+     "prompt_sha256": "195d229ecab8aea9b1f87eb5cde62808c996ed9e107c99f0061d49591a738204",
+     "sha256": "fcd1b9ef685cde96a075db73c9721a154ac62dca51175ce3fa990fc16295575f",
+     "sku_name": "Ice blu marble",
+     "spec": "experience-2-cc",
+     "status": "ready",
+     "tab": "Experience 2 CC"
+    }
+   },
+   "rubric": {
+    "chat_families": [
+     "A",
+     "B",
+     "C",
+     "D"
+    ],
+    "checks": [
+     {
+      "caption": "the product's shape changed: a part reshaped, moved or merged",
+      "check": "The clown's object, unchanged. The same parts, in the same number, with the same silhouette, the same parting lines and the same pose as the clown. Only the surfaces change.",
+      "fails_when": "A part reshaped, resized, moved, merged with another or split in two; a silhouette that no longer lies on the clown's; a parting line gone, moved or added",
+      "family": "A",
+      "id": "A1",
+      "severity": "gate"
+     },
+     {
+      "caption": "a clown colour is still on the product",
+      "check": "No clown colour left. Every zone the key maps has lost its clown colour and taken its row's colour, all the way to its edges and into its shadows.",
+      "fails_when": "Any zone, or part of one, still in the clown's flat colour or a near shade of it: a whole part, a patch in shadow, a rim along a parting line, a tint the new colour did not cover",
+      "family": "A",
+      "id": "A2",
+      "severity": "gate"
+     },
+     {
+      "caption": "a colour or finish is on the wrong part",
+      "check": "Each zone is its component. The colour, material and finish of each row sit on the zone the key names for that component, and nowhere else.",
+      "fails_when": "Two components' specs swapped; a spec bleeding across a parting line onto the next part; a zone given a colour, material or finish its row does not hold",
+      "family": "A",
+      "id": "A3",
+      "severity": "gate"
+     },
+     {
+      "caption": "something added or missing: text, a logo, a part",
+      "check": "Nothing added, nothing removed. The render holds what the clown holds and nothing else.",
+      "fails_when": "Text, a logo, a marking or a label the clown does not carry and the row does not name; a hand, a prop, packaging, a second object; or a part, a marking or a component the key places on this clown gone missing",
+      "family": "A",
+      "id": "A4",
+      "severity": "gate"
+     },
+     {
+      "caption": "the colour does not read as its code",
+      "check": "Reads as the code. Each zone's colour reads as its row's code: as the confirmed hex THE ROW carries for it where there is one, else as the colour name the sheet gives beside the code.",
+      "fails_when": "A hue, lightness or saturation that someone holding the Pantone chip would call another colour; or a code with neither a hex nor a name judged from memory instead of reported as not judged",
+      "family": "B",
+      "id": "B1",
+      "severity": "critical"
+     },
+     {
+      "caption": "a part is not one colour, or its pattern is wrong",
+      "check": "One colour per zone, unless the row names a pattern. Each zone is one even colour, shaded only by the light, unless its row names a pattern or an effect (marble, speckle, two-tone). A named pattern is drawn in the row's own codes, in the proportion the row gives where it gives one.",
+      "fails_when": "A second colour, a gradient, a blotch or a stripe on a zone whose row names one colour; or a named pattern drawn in colours the row does not hold, reading as something else, or not drawn at all",
+      "family": "B",
+      "id": "B2",
+      "severity": "critical"
+     },
+     {
+      "caption": "parts with the same code do not match",
+      "check": "Shared codes match. Components the row gives the same code read as the same colour, allowing for their different materials and finishes.",
+      "fails_when": "Two parts with one code that read as two colours under the same light",
+      "family": "B",
+      "id": "B3",
+      "severity": "minor"
+     },
+     {
+      "caption": "the translucency is wrong: see-through where it should be opaque, or the reverse",
+      "check": "Translucency as specified. A part the row calls milky, frosted or see-through lets light through its thin edges, as much as the row's percentage says; a part the row does not call translucent is opaque.",
+      "fails_when": "A translucent part drawn opaque or clear as glass; an opaque part drawn see-through; the inside of the product showing through a part that should hide it",
+      "family": "B",
+      "id": "B4",
+      "severity": "critical"
+     },
+     {
+      "caption": "wrong finish: gloss for matte, matte for gloss",
+      "check": "Finish family. Each part reads as its row's finish, as the Grading rules describe it: matte, a VDI grain, satin, NCVM, gloss, mirror, grinded.",
+      "fails_when": "Gloss for matte, matte for gloss, a mirror where the row says satin, a smooth surface where the row gives a VDI grain, or one finish laid over parts the row gives different finishes",
+      "family": "C",
+      "id": "C1",
+      "severity": "critical"
+     },
+     {
+      "caption": "the material does not read as its material",
+      "check": "Material behaviour. Each part behaves as its material: silicone soft, with a rubbery sheen; ABS, PC and POM moulded plastic; aluminium anodised metal; textile with a visible weave or knit; foam soft and open; a TPE cord supple and matte.",
+      "fails_when": "A silicone part that reads as hard plastic or glass; a plastic part that reads as bare metal with no NCVM or anodising in its row; a metal part that reads as painted plastic; a textile that reads as a moulded surface",
+      "family": "C",
+      "id": "C2",
+      "severity": "critical"
+     },
+     {
+      "caption": "the texture is coarser or finer than specified",
+      "check": "Texture at the specified grade. A VDI or grain value in the row shows as that grade, the same on every part that shares the value.",
+      "fails_when": "A texture visibly coarser or finer than its grade, a texture on a part whose row gives none, or two parts with one grade drawn at two",
+      "family": "C",
+      "id": "C3",
+      "severity": "minor"
+     },
+     {
+      "caption": "a coating or effect is missing, wrong or in the wrong place",
+      "check": "Coatings and effects. NCVM, holographic, UV gloss, marble and every other effect the row names appear where it names them, embedded in the material, and nowhere else.",
+      "fails_when": "An effect missing, painted on top like a sticker, spread onto a part whose row does not give it, or an effect no row names",
+      "family": "C",
+      "id": "C4",
+      "severity": "minor"
+     },
+     {
+      "caption": "the artwork is missing, wrong or where it should not be",
+      "check": "Artwork and logos where the row says. Where the key maps a zone to artwork, it carries the row's artwork colour and technique; where a component's artwork cell is a `/`, the part carries none.",
+      "fails_when": "Artwork missing where the row and the key place it, in the wrong colour or technique (printed where the row says embossed), or present on a part whose artwork cell is a `/`",
+      "family": "C",
+      "id": "C5",
+      "severity": "minor"
+     },
+     {
+      "caption": "relit",
+      "check": "Lighting unchanged. The light falls as it does on the clown: the same direction, the same softness, highlights and shadows in the same places.",
+      "fails_when": "The render relit: a key light moved, a rim light or a warm or cool cast added, shadows deepened, softened or removed, a studio mood the clown does not have",
+      "family": "D",
+      "id": "D1",
+      "severity": "minor"
+     },
+     {
+      "caption": "the background changed",
+      "check": "Background unchanged. The ground behind and under the product is the clown's, in tone and colour.",
+      "fails_when": "A new colour, gradient, texture, floor, reflection or shadow behind or under the product",
+      "family": "D",
+      "id": "D2",
+      "severity": "minor"
+     },
+     {
+      "caption": "the camera moved or the crop changed",
+      "check": "Camera and framing unchanged. The same angle, lens, crop, position and size in the frame as the clown.",
+      "fails_when": "The product moved, rotated, zoomed, recropped or seen from another angle; a perspective that no longer matches the clown",
+      "family": "D",
+      "id": "D3",
+      "severity": "minor"
+     },
+     {
+      "caption": "soft or ragged edges where two parts meet",
+      "check": "Edges at parting lines. Where two components meet, the change of colour and finish runs along the parting line, crisp at the scale of the image.",
+      "fails_when": "A soft halo, a ragged or stepped edge, a gap, or a colour that stops short of the line or runs past it",
+      "family": "E",
+      "id": "E1",
+      "severity": "minor"
+     },
+     {
+      "caption": "an artefact in the image",
+      "check": "The image is otherwise sound. No artefact a viewer would notice: banding, noise, smears, doubled edges, compression blocks.",
+      "fails_when": "Any artefact a viewer would notice before they notice the part",
+      "family": "E",
+      "id": "E2",
+      "severity": "minor"
+     },
+     {
+      "caption": "cropped, too small or the wrong shape",
+      "check": "Whole and full size. The product is whole in the frame, and the image is at the size the payload asked for and at the clown's aspect.",
+      "fails_when": "A part cut by the frame edge, an image smaller than the size asked for, or an aspect other than the clown's",
+      "family": "E",
+      "id": "E3",
+      "severity": "minor"
+     }
+    ],
+    "families": [
+     {
+      "id": "A",
+      "name": "Identity and geometry",
+      "note": "Any failure here stops the render."
+     },
+     {
+      "id": "B",
+      "name": "Colour per component",
+      "note": ""
+     },
+     {
+      "id": "C",
+      "name": "Material and finish",
+      "note": ""
+     },
+     {
+      "id": "D",
+      "name": "The clown's scene",
+      "note": ""
+     },
+     {
+      "id": "E",
+      "name": "Craft and delivery",
+      "note": ""
+     }
+    ],
+    "grading_rules": "The grader reads this section into its prompt verbatim.\n\n- **Two images, named.** Image 1 is the candidate render. Image 2 is the clown model it was drawn\n  from: the same object with each component painted one flat colour, shaded, on its own ground.\n  Judge the candidate against the clown, side by side, never against what you think the product\n  looks like.\n- **THE ROW is the spec.** The sheet row for this SKU is quoted under THE ROW: each component with\n  its material, finish, colour name and code, as the sheet wrote them. A colour, material, finish or\n  effect the row does not hold is not in the spec, however plausible it looks.\n- **THE KEY is the map.** Quoted under THE KEY: each clown colour as a hex, the component or\n  components it marks, and the components that are not on this clown. A zone that serves two\n  components names both. A component the key says is not on this clown is absent by design, never\n  missing.\n- **The measurements are evidence, not verdict.** MEASUREMENTS states per zone, in words, how much of\n  it is still within reach of the clown's colour and, where the code has a confirmed hex, how far\n  the zone's colour sits from it. They tell you where to look; they do not decide. A note that\n  ignores a large leftover share is an incomplete note.\n- **What each finish word looks like.** Judge a finish by how the part takes the light:\n  - *matte*: diffuse, no specular hotspot, the light falls off softly across the form.\n  - *VDI 18 to VDI 27*: a spark-eroded grain that scatters the light evenly; near smooth-matte at\n    VDI 18, a fine visible grain at VDI 24, coarser at VDI 27; never glossy.\n  - *satin*: a soft sheen with broad, blurred highlights. *NCVM*: a metallic sheen on a plastic\n    part, highlights that follow the form like metal, no brushed grain unless the row says so.\n  - *gloss*, *high gloss*, *mirror*: sharp specular highlights and clear reflections of the light.\n  - *grinded*, *grinding*: an abraded, frosted surface, even, with the highlights broken up.\n  - *milky*, *frosted*, *see-through*, with or without a percentage: translucent, light passing\n    through the thin edges and a soft glow in the body, more the higher the percentage; never clear\n    like glass, never opaque.\n  - *opaque*: no light through the part at any edge.\n  - *holographic*, *iridescent*, *pearlescent*: the colour shifts with the angle, inside the\n    material, not a sticker on top.\n  - *anodised*: coloured metal with a fine metallic sheen and an even tone, brushed or polished as\n    the row says.\n  - *pad print*, *silk screen*: flat ink on the surface, crisp edges, no relief. *embossed*,\n    *debossed*: relief in the material itself, in the part's own colour unless the row names one.\n- **Absence and leftover are the usual misses.** Graders flag what is wrong and skip what is still\n  there. The likeliest misses on this work: a zone, or a rim of one along a parting line, still in\n  the clown's colour (the Experience 2 carry case shells came back red); a part given no finish; a\n  part that disappeared. Look for the clown's colours first.\n- **Judge what the view shows.** A component the key says is not on this clown, or one hidden by the\n  angle, passes its check; a component shown wrongly fails it.\n- **Fail when unsure**, and say in the note what you could not see.",
+    "object_class": null,
+    "path": "skills/cmf-review/references/rubric.md",
+    "problem": null,
+    "reporting_only": true,
+    "sha256": "dbc10715a31ae189f964722048889ea32bbc65f05738b3e4f3f81e60dc178035",
+    "version": "0.1.0"
+   },
+   "skill": "cmf-review",
+   "spec_check": {
+    "cases": "workstreams/cmf/evals/spec-cases/",
+    "script": "workstreams/cmf/scripts/spec_diff.py"
+   },
+   "specs": {
+    "aphrodite-cc": {
+     "path": "workstreams/cmf/references/workbook/spec/aphrodite-cc.json",
+     "sha256": "355751b619fca3a41e05eacfe7c2e3730145a84da1718f6d9d26b3959fd567ee",
+     "tab": "Aphrodite CC",
+     "vesper_product": "case-aphrodite"
+    },
+    "aphrodite-earplug": {
+     "path": "workstreams/cmf/references/workbook/spec/aphrodite-earplug.json",
+     "sha256": "401e560c23756b4232803170da1875a80cf49403ed26bd6c941f92fc6968cce4",
+     "tab": "Aphrodite Earplug",
+     "vesper_product": "aphrodite"
+    },
+    "cocoon": {
+     "path": "workstreams/cmf/references/workbook/spec/cocoon.json",
+     "sha256": "5df6e76e9dc5c3fb915d05b8b82ae0a8b7324d57b647eaeaccefb76003742d03",
+     "tab": "Cocoon",
+     "vesper_product": "cocoon"
+    },
+    "dream": {
+     "path": "workstreams/cmf/references/workbook/spec/dream.json",
+     "sha256": "78c61333035f8a2108ac2ab5b3c36dd4cd7d613476ad81842c2714624bb57e4b",
+     "tab": "Dream",
+     "vesper_product": "dream"
+    },
+    "dream-cc": {
+     "path": "workstreams/cmf/references/workbook/spec/dream-cc.json",
+     "sha256": "b022c26101597ce37db20a3e093fb8f704b76def58ea016045b1ebefae16ec17",
+     "tab": "Dream CC",
+     "vesper_product": "case-dream"
+    },
+    "eclipse": {
+     "path": "workstreams/cmf/references/workbook/spec/eclipse.json",
+     "sha256": "577f92768884700b7da413aaaf742d77d1541248e69b467f476e7b048321ecd3",
+     "tab": "Eclipse",
+     "vesper_product": "eclipse"
+    },
+    "engage-2": {
+     "path": "workstreams/cmf/references/workbook/spec/engage-2.json",
+     "sha256": "c63f467bfa63669fe52d7ed04c43b4f9db4156c256c1225a40b3ec7c6cb26661",
+     "tab": "Engage 2",
+     "vesper_product": "engage2"
+    },
+    "engage-2-cc": {
+     "path": "workstreams/cmf/references/workbook/spec/engage-2-cc.json",
+     "sha256": "e6f37da4200fa09d2a598ca91049f609c54b4c6de3e8f50df6ce0e8319469f5e",
+     "tab": "Engage 2 CC",
+     "vesper_product": "case-engage2"
+    },
+    "experience-2": {
+     "path": "workstreams/cmf/references/workbook/spec/experience-2.json",
+     "sha256": "5b35b5843063bd43399117c496792fdfe70f845f55311e87d90e7d8d072a2c20",
+     "tab": "Experience 2",
+     "vesper_product": "experience2"
+    },
+    "experience-2-cc": {
+     "path": "workstreams/cmf/references/workbook/spec/experience-2-cc.json",
+     "sha256": "a43cefaf70d224c10e7525ac83e048c8cb4b395bc0625b567f2dbc1f49592e85",
+     "tab": "Experience 2 CC",
+     "vesper_product": "case-experience2"
+    },
+    "link": {
+     "path": "workstreams/cmf/references/workbook/spec/link.json",
+     "sha256": "f7a815e4b70f04b37129cfb739358e1a0d9601f5cd46d007fa49d0e93c69f39f",
+     "tab": "Link",
+     "vesper_product": "link"
+    },
+    "quiet-2": {
+     "path": "workstreams/cmf/references/workbook/spec/quiet-2.json",
+     "sha256": "201b1afd04ab9c9bc26107bd369a67b005a69789c8a763ef073f9bdaa877724e",
+     "tab": "Quiet 2",
+     "vesper_product": "quiet2"
+    },
+    "quiet-2-cc": {
+     "path": "workstreams/cmf/references/workbook/spec/quiet-2-cc.json",
+     "sha256": "7cb8f56fa9db058c7519ee80b07596c180fdaf8761960c3b7275cb1beb14ade1",
+     "tab": "Quiet 2 CC",
+     "vesper_product": "case-quiet2"
+    },
+    "switch-2": {
+     "path": "workstreams/cmf/references/workbook/spec/switch-2.json",
+     "sha256": "bcfcfc73d227acf8102b63e46f215149dd3ed0651bc22b1eecdd37c465ce3af2",
+     "tab": "Switch 2",
+     "vesper_product": "switch2"
+    },
+    "switch-2-cc": {
+     "path": "workstreams/cmf/references/workbook/spec/switch-2-cc.json",
+     "sha256": "88c3de72257f28fd7025cfbd4d9ca73df4668e96b7444e65b09fede0f74acf93",
+     "tab": "Switch 2 CC",
+     "vesper_product": "case-switch2"
+    }
+   },
+   "status": "pilot",
+   "template": {
+    "block": "Use the attached image as the exact base. Keep geometry, proportions, camera angle, framing, lighting and background unchanged.\nThe image is a clown model: each flat colour marks one component. Recolour ONLY these zones:\n- {zone_hex_1} → {component_1}: {material_1}, {finish_1}, {colour_name_1} ({colour_code_1})\n- {zone_hex_2} → {component_2}: {material_2}, {finish_2}, {colour_name_2} ({colour_code_2})\n- {zone_hex_3} → {component_3}: {material_3}, {finish_3}, {colour_name_3} ({colour_code_3})\nRender realistic material behaviour for each finish. Do not add, remove or reshape any part. No text, no logos, no extra objects.",
+    "block_sha256": "34df61cda3ba23ec31c46e168bcd24b828173a652c1305b72c49e39caf856b1b",
+    "fingerprint": "Use the attached image as the exact base. Keep g",
+    "path": "skills/cmf-review/references/prompt-template.md",
+    "sha256": "dfe8968f8c2267f4e6835feb32075f20616115b8ed572657e318f1e3804b8539"
+   },
+   "textile_library": {
+    "path": "workstreams/cmf/references/workbook/spec/_textile-library.json",
+    "sha256": "2abbc3a9dccb34a075ed18a8c626136179b8165f90eed88aaa6705be6e2d1396"
+   },
+   "verdicts": {
+    "route": "vesper",
+    "tool": "record_verdict"
+   }
+  }
+ },
+ "prompting": null,
+ "repo": "tensalir/loop-product-plugins",
+ "schema": 1,
+ "tag": "product-design-v0.2.0",
+ "version": "0.2.0"
+}

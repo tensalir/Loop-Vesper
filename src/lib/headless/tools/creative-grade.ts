@@ -1,6 +1,7 @@
 /**
  * `grade_image`: Vesper's scripted read of one picture of a Loop product, three reads with the
- * product's grader words from the creative kit (`src/lib/creative/grade.ts`), labelled
+ * product's grader words from the kit that serves it (`src/lib/creative/grade.ts`; CMF's from the
+ * product kit, the rest from the creative kit, `src/lib/creative/kit-set.ts`), labelled
  * `judge <model> vesper x<reads>`: advisory, the product's decider decides, never pooled with any
  * other judge. Stored in `creative_grades`.
  *
@@ -9,10 +10,10 @@
  */
 
 import { z } from 'zod'
-import { getCreativeKit } from '@/lib/creative/kit-runtime'
-import type { LoadedKit } from '@/lib/creative/kit'
+import { productionKitSet } from '@/lib/creative/kit-runtime'
+import { resolveInKits } from '@/lib/creative/kit-set'
+import type { LoadedKit as LoadedKitOf } from '@/lib/creative/kit'
 import { kitHeader } from '@/lib/creative/tool-views'
-import { resolveProduct } from '@/lib/creative/products'
 import { prismaPinStore } from '@/lib/creative/pins-runtime'
 import { pinPart } from '@/lib/creative/pin-parts'
 import { gradeCandidate, MAX_RUNS, type GradeOutcome } from '@/lib/creative/grade'
@@ -26,7 +27,7 @@ import {
   pinPartDeps,
   productionCandidateDeps,
 } from '@/lib/creative/work-runtime'
-import type { KitProduct } from '@/lib/creative/kit-schema'
+import type { AnyKit, KitProduct } from '@/lib/creative/kit-schema'
 import type { JobPayload } from '../jobs'
 import { runLongCall } from './long-call'
 import { ownerIsAdmin } from './creative-read'
@@ -35,6 +36,8 @@ import { checkCmfTarget, gradeCmfCandidate } from '@/lib/creative/cmf/grading'
 import { assertCmfAccess, cmfGradingParts } from './cmf'
 import { assertPackagingAccess, executePackagingGrade, packagingGradeLines, packagingGradeStructured } from './packaging'
 import { invalidArguments, type ToolContext, type ToolHandler } from './types'
+
+type LoadedKit = LoadedKitOf<AnyKit>
 
 const CHECK_ID = /^[A-E]\d+$/
 
@@ -109,7 +112,7 @@ export function gradeText(x: Pick<GradeExecution, 'slug' | 'product' | 'outcome'
     lines.push(`${a.verdict}${a.unstable || a.verdict_majority !== a.verdict ? ` (the reads' own verdicts: ${a.per_read_verdicts.join(', ')}; majority ${a.verdict_majority}${a.unstable ? ', unsettled' : ''})` : ''}`)
   }
   lines.push(
-    `${o.judge_label}; rubric ${product.rubric.version ?? '?'}${o.reporting_only ? ' (reporting only: no check blocks yet)' : ''}; creative kit ${x.header.kit_version}${x.header.kit_commit ? ` (${String(x.header.kit_commit).slice(0, 7)})` : ''}${x.header.kit_stale ? ', stale' : ''}.`
+    `${o.judge_label}; rubric ${product.rubric.version ?? '?'}${o.reporting_only ? ' (no check blocks yet)' : ''}; kit ${x.header.kit_tag ?? x.header.kit_version}${x.header.kit_commit ? ` (${String(x.header.kit_commit).slice(0, 7)})` : ''}${x.header.kit_stale ? ', stale' : ''}.`
   )
   const any = product.rubric.checks.filter((c) => a.fails[c.id] > 0 && a.errors < a.reads)
   if (any.length) {
@@ -349,10 +352,12 @@ export const gradeImageHandler: ToolHandler = {
     const parsed = GradeImageArgs.safeParse(args)
     if (!parsed.success) throw invalidArguments(parsed.error.issues)
     const a = parsed.data
-    const loaded = await getCreativeKit({ env: ctx.env })
     const isAdmin = await ownerIsAdmin(ctx.principal.ownerId)
-    const { slug, product } = resolveProduct(loaded.kit, a.product, { isAdmin })
-    if (product.kind === 'cmf') {
+    const hit = await resolveInKits(productionKitSet(ctx.env), a.product, { isAdmin })
+    const { slug, product } = hit
+    if (hit.source === 'product') {
+      if (product.kind !== 'cmf') throw new GradingPromptError(`${product.name} is not CMF; the product kit serves only CMF`)
+      const loaded = hit.loaded
       if (!a.tab || !a.column || !a.clown) {
         throw new GradingPromptError('a CMF render is graded against its sheet row and its clown: name the tab, the column and the clown key (cmf_list names them)')
       }
@@ -375,6 +380,7 @@ export const gradeImageHandler: ToolHandler = {
         toWire: async (x) => ({ content: [{ type: 'text', text: gradeText(x) }], structuredContent: payload(x).structuredContent }),
       })
     }
+    const loaded = hit.loaded
     if (product.kind === 'packaging') {
       await assertPackagingAccess(ctx.principal.ownerId)
       if (!product.grading_prompt || !product.grading) {
@@ -429,9 +435,8 @@ export const recordGradeHandler: ToolHandler = {
     const parsed = RecordGradeArgs.safeParse(args)
     if (!parsed.success) throw invalidArguments(parsed.error.issues)
     const a = parsed.data
-    const loaded = await getCreativeKit({ env: ctx.env })
     const isAdmin = await ownerIsAdmin(ctx.principal.ownerId)
-    const { slug, product } = resolveProduct(loaded.kit, a.product, { isAdmin })
+    const { loaded, slug, product } = await resolveInKits(productionKitSet(ctx.env), a.product, { isAdmin })
     const known = new Set(product.rubric.checks.map((c) => c.id))
     const unknown = a.failed.filter((id) => !known.has(id))
     if (unknown.length) throw new Error(`${product.name}'s rubric has no check ${unknown.join(', ')}`)

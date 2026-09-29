@@ -10,7 +10,7 @@
  */
 
 import crypto from 'crypto'
-import type { Kit, KitProduct } from './kit-schema'
+import type { AnyKit, KitProduct } from './kit-schema'
 import type { PinRow, PinSpec } from './pins'
 import { kitPins, usablePin } from './pins'
 import { referencePlan } from './tool-views'
@@ -29,7 +29,7 @@ export interface Candidate {
 }
 
 export interface GradeRequest {
-  kit: Kit
+  kit: AnyKit
   slug: string
   product: KitProduct
   candidate: Candidate
