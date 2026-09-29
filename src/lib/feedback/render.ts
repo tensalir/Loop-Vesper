@@ -1,7 +1,7 @@
 /**
  * The issue a colleague's remark becomes, exactly as the plugin describes it
  * (`plugin-src/skills/feedback/references/issue.md` in
- * tensalir/loop-asset-reviewer) and exactly as its triage reads it
+ * tensalir/loop-ai-studio) and exactly as its triage reads it
  * (`tools/feedback_triage.py`: the author is Vesper's app, the marker is
  * there, and the one fenced json block after it validates against
  * `kit/feedback-issue.schema.json`).
@@ -139,7 +139,7 @@ export function renderFeedback(kit: Kit, fields: FeedbackFields, reporter: Repor
   ]
   const commit7 = pinned.kitCommit ? pinned.kitCommit.slice(0, 7) : 'unknown'
   const where = [
-    `- Plugin: creative ${pinned.pluginVersion} (kit ${commit7}) · Skill: ${target.skill} · Surface: ${fields.surface} · Date: ${pinned.askedAt.slice(0, 10)}`,
+    `- Plugin: studio-design ${pinned.pluginVersion} (kit ${commit7}) · Skill: ${target.skill} · Surface: ${fields.surface} · Date: ${pinned.askedAt.slice(0, 10)}`,
     ...(fields.output_id || fields.grade_id
       ? [`- Vesper: ${[fields.output_id ? `output ${neutralise(fields.output_id)}` : '', fields.grade_id ? `grade ${neutralise(fields.grade_id)}` : ''].filter(Boolean).join(', ')}`]
       : []),

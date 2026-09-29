@@ -3,9 +3,9 @@
  * database. Everything that serves a kit to a tool goes through here.
  *
  * Env: GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_B64, GITHUB_APP_INSTALLATION_ID
- * (the App), CREATIVE_KIT_REPO (default tensalir/loop-asset-reviewer),
+ * (the App), CREATIVE_KIT_REPO (default tensalir/loop-ai-studio),
  * CREATIVE_KIT_REF (a tag, branch or commit; default: the newest
- * creative-v* tag), CREATIVE_TOOLS_ENABLED=0 (hide every creative tool).
+ * studio-design-v* tag), CREATIVE_TOOLS_ENABLED=0 (hide every creative tool).
  */
 
 import { githubAppConfigFromEnv, missingGithubAppEnv, sharedInstallationTokens } from '@/lib/github/app'
@@ -15,7 +15,7 @@ import { prismaKitStore } from './kit-store'
 import { clearKitMemory, getKitFile, loadCreativeKit, type KitLoaderDeps, type LoadedKit } from './kit'
 import type { KitPrompting } from '@/lib/prompts/prompting-source'
 
-export const DEFAULT_KIT_REPO = 'tensalir/loop-asset-reviewer'
+export const DEFAULT_KIT_REPO = 'tensalir/loop-ai-studio'
 
 export class CreativeKitUnavailable extends Error {
   constructor(message: string) {

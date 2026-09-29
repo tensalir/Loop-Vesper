@@ -274,7 +274,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'get_creative_kit',
     title: 'Read the Loop creative kit',
     description:
-      "What Vesper is running on: the Loop Creative plugin's kit at its release tag. section 'summary' (the default) names the version, commit and products; 'products' lists them in full; 'prompting' returns the Loop edition of the prompting skill; 'feedback' the feedback targets and labels; 'rubric:<product>' a product's checks with their plain-language captions. Says when the kit is stale.",
+      "What Vesper is running on: the Loop Studio Design plugin's kit at its release tag. section 'summary' (the default) names the version, commit and products; 'products' lists them in full; 'prompting' returns the Loop edition of the prompting skill; 'feedback' the feedback targets and labels; 'rubric:<product>' a product's checks with their plain-language captions. Says when the kit is stale.",
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: 'object',
@@ -441,7 +441,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'list_feedback_targets',
     title: 'What feedback can be about',
     description:
-      "The skills and products of the Loop Creative plugin a colleague's remark can be about, each with its command and, for a product, its checks and their plain-language captions; the kinds of feedback (remark, bug, idea, question).",
+      "The skills and products of the Loop Studio Design plugin a colleague's remark can be about, each with its command and, for a product, its checks and their plain-language captions; the kinds of feedback (remark, bug, idea, question).",
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', additionalProperties: false, properties: {} },
   },
@@ -449,7 +449,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'list_feedback',
     title: 'See feedback already filed',
     description:
-      "Feedback issues in the Loop Creative plugin's repository, newest first, at most 15: number, title, state, triage labels and the first lines of the triage's answer. target narrows to one skill; query searches the words; mine keeps the ones the caller filed. Use it to find the same remark before filing, and to answer 'what happened to my feedback'.",
+      "Feedback issues in the Loop Studio Design plugin's repository, newest first, at most 15: number, title, state, triage labels and the first lines of the triage's answer. target narrows to one skill; query searches the words; mine keeps the ones the caller filed. Use it to find the same remark before filing, and to answer 'what happened to my feedback'.",
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
