@@ -93,6 +93,14 @@ export async function gradeCandidate(req: GradeRequest, deps: GradeDeps): Promis
   const now = deps.now ?? Date.now
   const started = now()
   const { product } = req
+  if (product.kind === 'packaging') {
+    throw new GradingPromptError(
+      "a packaging picture is graded against its cell (look, box, colourway) and the cell's composite, through grade_image's packaging path"
+    )
+  }
+  if (product.kind === 'cmf') {
+    throw new GradingPromptError('a CMF render is graded against its sheet row and its clown: name the tab, column and clown')
+  }
   if (!product.grading_prompt || !product.grading) {
     throw new GradingPromptError(`the kit carries no grader for ${product.name} yet, so Vesper cannot grade it`)
   }

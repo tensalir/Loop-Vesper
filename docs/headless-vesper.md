@@ -234,6 +234,39 @@ Constraints from Anthropic's docs that we already satisfy:
   `initialize`, `notifications/initialized`, `ping`, `tools/list`, `tools/call`.
 - Bearer token is passed by the connector as `authorization_token`.
 
+### Connecting Claude with your own sign-in
+
+Add `https://<vesper-host>/api/mcp` as a custom connector in Claude and click
+Connect: Claude sends you to Vesper's sign-in (OAuth 2.1), you allow it on
+`/connect`, and Claude then acts in Vesper as you.
+
+- **Who can connect.** A person whose Vesper sign-in has a confirmed email on
+  one of `CLAUDE_ACCESS_DOMAINS` (default `loopearplugs.com`; signing in with
+  Google confirms it) gets Claude access the first time they click Allow, with
+  no admin step. Everyone else asks an admin to turn on Claude access under
+  Settings, Users. Admins always pass.
+- **An admin's decision wins.** Granting or revoking Claude access under Users
+  records who decided and when (`profiles.mcp_access_decided_at`, `_by`), and
+  the automatic grant never touches a profile with a decision, so someone an
+  admin turned off stays off. Users shows whether access came automatically
+  (`Claude (auto)`) or from an admin, and `Keep Claude Access Off` blocks a
+  Loop account before it ever connects. The grant is logged as one
+  `[claude-access]` line with the profile id and the domain, never the email.
+- **A daily allowance instead of a switch.** Per person, over any rolling 24
+  hours: `CLAUDE_DAILY_IMAGE_LIMIT` (default 40) images from `generate_asset`,
+  `generate_product_image`, `cmf_render` and `packaging_finish` (a video from
+  `generate_video` counts as one), and `CLAUDE_DAILY_GRADE_LIMIT` (default
+  120) model reads by `grade_image` (three per grade by default). It is
+  counted from what Vesper already records: MCP generations
+  (`parameters.source = 'mcp'`, one per output, not the code-built packaging
+  mockup), Vesper's own grades in `creative_grades`, and calls still running
+  in `headless_mcp_jobs`. The check runs before anything is paid for; a
+  refusal is an ordinary tool result (`isError`) saying how many were used,
+  the limit and roughly when the next one frees up. Admins are not limited,
+  the web app is not affected, and `0` turns that kind of work off through
+  Claude for everyone, admins included. `MCP_DAILY_COST_CAP_USD` still applies
+  on top when set.
+
 ### Configuring Cursor
 
 In Cursor's Settings → MCP → Add server:
@@ -302,6 +335,11 @@ radius small:
 
 ## 6. Operational notes
 
+- Claude access decisions are recorded from migration
+  `20260927120000_claude_access_decisions` on. Anyone an admin switched off
+  before it has no decision on record, so a Loop account among them would get
+  access again on its next connect: use `Keep Claude Access Off` under Users
+  for those people.
 - Rotate Damien's token by issuing a new credential, swapping it in his
   tooling, and revoking the old one. There's no in-place rotation API.
 - Audit `HeadlessUsageLog` for unexpected spikes — every request is one

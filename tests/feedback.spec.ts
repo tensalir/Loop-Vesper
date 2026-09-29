@@ -66,7 +66,7 @@ function fakeGithub(opts: { issues?: GhIssue[]; comments?: Record<number, Array<
   let next = 100
   let labelFailures = opts.labelsFail ?? 0
   const gh: FeedbackGithub = {
-    repo: 'tensalir/loop-asset-reviewer',
+    repo: 'tensalir/loop-ai-studio',
     async listIssues(q) {
       calls.push({ op: 'listIssues', args: [q] })
       return (opts.issues ?? []).filter((i) => q.labels.every((l) => i.labels.includes(l)) && (q.state === 'all' || i.state === q.state))

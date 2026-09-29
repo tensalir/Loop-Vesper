@@ -251,12 +251,15 @@ test.describe('grading a picture', () => {
     expect(text).toContain('View frontal assumed')
   })
 
-  test('packaging and CMF are refused until their grader reaches the kit', async () => {
-    for (const slug of ['packaging', 'cmf']) {
-      await expect(
-        gradeCandidate({ kit, slug, product: kit.products[slug] as KitProduct, candidate, colourway: null, view: null, claim: null, claimSource: null }, fakeGradeDeps([{}]))
-      ).rejects.toThrow('carries no grader')
-    }
+  test('the product-imagery grader refuses packaging and CMF, which have graders of their own', async () => {
+    const run = (slug: string) =>
+      gradeCandidate({ kit, slug, product: kit.products[slug] as KitProduct, candidate, colourway: null, view: null, claim: null, claimSource: null }, fakeGradeDeps([{}]))
+    await expect(run('packaging')).rejects.toThrow('packaging')
+    await expect(run('cmf')).rejects.toThrow('tab, column and clown')
+    const stripped = { ...kit.products.eclipse, grading_prompt: null } as KitProduct
+    await expect(
+      gradeCandidate({ kit, slug: 'eclipse', product: stripped, candidate, colourway: null, view: null, claim: null, claimSource: null }, fakeGradeDeps([{}]))
+    ).rejects.toThrow('carries no grader')
   })
 
   test('the answer names the decider, the judge label, the plain-language captions and the grade id', async () => {
@@ -474,7 +477,7 @@ test.describe("the decider's answer as a comment line", () => {
       rubricVersion: '0.5.3',
       at: new Date('2026-10-02T09:00:00Z'),
     })
-    expect(line).toBe('[creative eclipse 2026-10-02] no | decoded B3,C4? | grade PASS_WITH_NOTES B3 | judge gemini-flash-latest vesper x3 | rubric 0.5.3 | the strap stops | at the ear')
+    expect(line).toBe('[studio-design eclipse 2026-10-02] no | decoded B3,C4? | grade PASS_WITH_NOTES B3 | judge gemini-flash-latest vesper x3 | rubric 0.5.3 | the strap stops | at the ear')
     const back = parseLine(line)!
     expect(back.surface).toBe('vesper')
     expect(back.remark).toBe('the strap stops | at the ear')
@@ -482,7 +485,7 @@ test.describe("the decider's answer as a comment line", () => {
 
   test('an answer to a picture nobody graded says grade - and names who read it', () => {
     const line = verdictLine({ product: 'eclipse', answer: 'yes', remark: '', decoded: [], decodedUnconfirmed: [], grade: null, rubricVersion: '0.5.3', fallbackJudge: 'claude-opus-5-5', at: new Date('2026-10-02T09:00:00Z') })
-    expect(line).toBe('[creative eclipse 2026-10-02] yes | decoded - | grade - | judge claude-opus-5-5 chat x1 | rubric 0.5.3 | -')
+    expect(line).toBe('[studio-design eclipse 2026-10-02] yes | decoded - | grade - | judge claude-opus-5-5 chat x1 | rubric 0.5.3 | -')
     const errored = verdictLine({ product: 'eclipse', answer: 'no', remark: 'x', decoded: [], decodedUnconfirmed: [], grade: { verdict: 'ERROR', failed: [], judgeModel: null, surface: 'vesper', reads: 3, rubricVersion: '0.5.3' }, rubricVersion: '0.5.3', at: new Date() })
     expect(errored).toContain('| grade - |')
   })
