@@ -66,7 +66,7 @@ export async function validateAuthorize(
       kind: 'page',
       status: 503,
       title: 'Sign-in is off',
-      message: 'Connecting Claude to Vesper is switched off on this server right now. Ask whoever runs Vesper at Loop.',
+      message: 'Connecting Claude to Vesper is switched off on this server right now. Ask a Vesper admin.',
     }
   }
   const client = await resolveClient(params.get('client_id'), cfg, { fetcher: ctx.fetcher, nowMs: ctx.nowSeconds * 1000 })

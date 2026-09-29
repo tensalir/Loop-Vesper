@@ -24,6 +24,25 @@ export const HEADLESS_TOOLS = [
   'get_generation_status',
   'generate_video',
   'estimate_generation_cost',
+  'get_creative_kit',
+  'list_creative_products',
+  'get_product_references',
+  'generate_product_image',
+  'grade_image',
+  'record_grade',
+  'record_verdict',
+  'export_creative_records',
+  'list_feedback_targets',
+  'list_feedback',
+  'preview_feedback',
+  'submit_feedback',
+  'cmf_list',
+  'cmf_prompt',
+  'cmf_render',
+  'cmf_check_pdf',
+  'packaging_list_looks',
+  'packaging_mockup',
+  'packaging_finish',
 ] as const
 
 export type HeadlessTool = (typeof HEADLESS_TOOLS)[number]
@@ -56,6 +75,34 @@ export const TOOL_META: Record<HeadlessTool, ToolMeta> = {
   get_generation_status: { group: 'core', oauth: true, selfIssued: true, org: false, adminIssuable: true },
   generate_video: { group: 'core', oauth: true, selfIssued: true, org: false, adminIssuable: true },
   estimate_generation_cost: { group: 'core', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  // The creative kit, read-only. Hidden everywhere while CREATIVE_TOOLS_ENABLED=0.
+  get_creative_kit: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  list_creative_products: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  get_product_references: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  // Drawing, grading and answers for Loop products (paid calls go through the daily cap).
+  generate_product_image: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  grade_image: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  record_grade: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  record_verdict: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  // The plugin repository's nightly read-back: only on a static credential an admin issues for it.
+  export_creative_records: { group: 'creative', oauth: false, selfIssued: false, org: false, adminIssuable: true },
+  // Feedback on the Loop Studio Design plugin, filed as issues in its repository in the caller's own
+  // name. Off the org token: an issue needs to know who is filing it.
+  list_feedback_targets: { group: 'feedback', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  list_feedback: { group: 'feedback', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  preview_feedback: { group: 'feedback', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  submit_feedback: { group: 'feedback', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  // CMF files through Claude: only for people with CMF access (or admins). Each handler checks
+  // again, because a static token carries the tool list it was issued with.
+  cmf_list: { group: 'cmf', needs: 'cmf', oauth: true, selfIssued: false, org: false, adminIssuable: true },
+  cmf_prompt: { group: 'cmf', needs: 'cmf', oauth: true, selfIssued: false, org: false, adminIssuable: true },
+  cmf_render: { group: 'cmf', needs: 'cmf', oauth: true, selfIssued: false, org: false, adminIssuable: true },
+  cmf_check_pdf: { group: 'cmf', needs: 'cmf', oauth: true, selfIssued: false, org: false, adminIssuable: true },
+  // Packaging looks through Claude: only for people with packaging access (or admins). The
+  // mockup and the finish run the plugin repository's own code on the creative worker.
+  packaging_list_looks: { group: 'packaging', needs: 'packaging', oauth: true, selfIssued: false, org: false, adminIssuable: true },
+  packaging_mockup: { group: 'packaging', needs: 'packaging', oauth: true, selfIssued: false, org: false, adminIssuable: true },
+  packaging_finish: { group: 'packaging', needs: 'packaging', oauth: true, selfIssued: false, org: false, adminIssuable: true },
 }
 
 export function isHeadlessTool(name: string): name is HeadlessTool {
@@ -94,14 +141,17 @@ function ownerHasFlag(needs: ToolMeta['needs'], profile: ToolPolicyProfile | nul
  */
 export function effectiveTools(
   credential: { allowedTools: readonly string[] },
-  profile?: ToolPolicyProfile | null
+  profile?: ToolPolicyProfile | null,
+  env: NodeJS.ProcessEnv = process.env
 ): HeadlessTool[] {
+  const switchedOn = (tool: HeadlessTool) =>
+    !['creative', 'cmf', 'packaging'].includes(TOOL_META[tool].group) || env.CREATIVE_TOOLS_ENABLED !== '0'
   if (credential.allowedTools.includes('*')) {
     return HEADLESS_TOOLS.filter(
-      (tool) => TOOL_META[tool].oauth && ownerHasFlag(TOOL_META[tool].needs, profile)
+      (tool) => TOOL_META[tool].oauth && ownerHasFlag(TOOL_META[tool].needs, profile) && switchedOn(tool)
     )
   }
-  return HEADLESS_TOOLS.filter((tool) => credential.allowedTools.includes(tool))
+  return HEADLESS_TOOLS.filter((tool) => credential.allowedTools.includes(tool) && switchedOn(tool))
 }
 
 /**

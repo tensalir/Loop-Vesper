@@ -1,0 +1,106 @@
+{
+ "schema": 1,
+ "render": "references/figma/white-closed.png",
+ "render_sha256": "bafbc1d438cd",
+ "image_size": [4096, 2286],
+ "box": "link",
+ "picked": {
+  "on": "2026-09-24",
+  "by": "the flap-down render's snapped quads carried over where the geometry is shared, the cavity and the front wall read off a gridded view, then snapped",
+  "snapped": "2026-09-24"
+ },
+ "corner_order": "TL, TR, BR, BL of the flat panel with the panel's own up pointing up, clockwise as seen on the render; quad[k] is where the dieline rectangle's corner k lands",
+ "panels": {
+  "closed.front": {
+   "quad": [[1335.5, 611.9], [1750.5, 405.5], [2096.4, 918.8], [1690.4, 1140.6]],
+   "source": "front",
+   "snap_moved_px": [2.8, 1.4, 1.9, 2.0]
+  },
+  "closed.wall_left": {
+   "quad": [[1337.4, 614.8], [1690.2, 1140.3], [1617.1, 1180.9], [1281.4, 675.4]],
+   "source": "side_left",
+   "snap_moved_px": [9.3, 1.9, 3.5, 5.0]
+  },
+  "closed.wall_front": {
+   "quad": [[1664.0, 1133.0], [2105.3, 883.9], [2051.6, 943.1], [1669.9, 1152.2]],
+   "source": "wall_lockup",
+   "snap_moved_px": [82.2, 28.1, 8.0, 28.0]
+  },
+  "open.lid_wall_top": {
+   "source": "flat",
+   "colour_from": "lid_inside",
+   "quad": [[2300, 303], [2752, 516], [2733, 531], [2328, 340]],
+   "note": "the inner face of the lid's top wall, a wedge from the top-left corner to the rim",
+   "picked": "read off gridded 2x crops, round 2; the flat inner colour, no print"
+  },
+  "open.lid_wall_left": {
+   "source": "flat",
+   "colour_from": "lid_inside",
+   "quad": [[2272, 306], [2340, 298], [2236, 880], [2138, 862]],
+   "note": "the inner face of the lid's left wall; its inner edge overlaps the inside, composed after",
+   "picked": "read off gridded 2x crops, round 2; the flat inner colour, no print"
+  },
+  "open.lid_ear_left": {
+   "source": "flat",
+   "colour_from": "lid_inside",
+   "quad": [[2262, 318], [2298, 302], [2282, 400], [2247, 440]],
+   "note": "the folded tuck ear at the lid's top-left corner",
+   "picked": "read off gridded 2x crops, round 2; the flat inner colour, no print"
+  },
+  "open.lid_inside": {
+   "quad": [[2328, 333], [2735, 527], [2575.7, 1076.7], [2208.9, 893.2]],
+   "source": "lid_inside",
+   "snap_moved_px": [2.2, 25.7, 13.1, 9.2]
+  },
+  "open.wall_front": {
+   "quad": [[1797, 1203], [2246, 1438], [2247, 1502], [1800, 1288]],
+   "source": "wall_front",
+   "note": "the base's front wall below the tray's front edge, the whole wall down to the floor edge; the thumb notch shows the render, and the tray top composed after covers the notch's upper half (round 1 marked a 25 px strip; a round-2 rewrite moved the panel but kept that strip)",
+   "snap_moved_px": [22.0, 5.9, 30.6, 20.2],
+   "holes": [
+    {
+     "type": "ellipse",
+     "centre": [2015, 1312],
+     "axes": [42, 30],
+     "angle": 28,
+     "fill": "render"
+    }
+   ]
+  },
+  "open.tray_top": {
+   "quad": [[2202.8, 890.7], [2627.1, 1101.9], [2232.8, 1432.6], [1812.2, 1208.6]],
+   "source": "tray_top",
+   "note": "the top of the tray with the round cavity for the case; the cavity keeps the tray's colour and the render's own shadow makes it a recess",
+   "snap_moved_px": [7.0, 15.1, 15.6, 17.2]
+  },
+  "open.wall_right": {
+   "quad": [[2242.6, 1424.4], [2645, 1096], [2660, 1130], [2253.1, 1515.9]],
+   "source": "side_right",
+   "snap_moved_px": [21.6, 14.0, 43.1, 15.5],
+   "note": "the outer face of the near right wall; round 2: the top-right corner brought down to the box's corner, it had poked 12 px past the hinge"
+  },
+  "open.wall_far": {
+   "quad": [[2210.2, 885.0], [1817.8, 1203.8], [1799, 1202], [2128, 851]],
+   "source": "flat",
+   "colour_from": "tray_under",
+   "snap_moved_px": [10.8, 20.6, 7.3, 6.2],
+   "note": "the inner face of the far left wall, seen from above the tray, from the tray's edge to the wall's rim; the inner flat colour, no print (round 2: the outer corner had sat 50 px past the base's front-left corner and printed a pink tongue over the backdrop)"
+  },
+  "open.lid_wall_right_upper": {
+   "source": "lid_edge_upper",
+   "quad": [[2742, 520], [2806, 535], [2735, 800], [2652, 800]],
+   "note": "the lid's outer right wall, upper half, from the rim; the front's gradient continues round the edge"
+  },
+  "open.lid_wall_right_lower": {
+   "source": "lid_edge_lower",
+   "quad": [[2652, 800], [2735, 800], [2636, 1094], [2576, 1077]],
+   "note": "the lid's outer right wall, lower half, to the lid's bottom-right corner; the wall bows, read off a 2x crop"
+  }
+ },
+ "box_mask": {
+  "how": "union of every panel quad, dilated 2 px"
+ },
+ "background": {
+  "how": "outside the box mask dilated 40 px; the far ring outside 300 px"
+ }
+}
