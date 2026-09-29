@@ -5,7 +5,7 @@
  * how the triage reads the issue).
  *
  * The secret patterns are the plugin's own (`tools/feedback_triage.py`
- * `_SECRETS` in tensalir/loop-asset-reviewer): the triage withholds the same
+ * `_SECRETS` in tensalir/loop-ai-studio): the triage withholds the same
  * shapes before its model reads an issue, so a secret Vesper let through would
  * still stop there, and one Vesper refuses never reaches the repository at all.
  */

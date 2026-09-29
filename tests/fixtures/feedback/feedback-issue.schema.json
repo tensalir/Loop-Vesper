@@ -1,6 +1,6 @@
 {
  "$schema": "https://json-schema.org/draft/2020-12/schema",
- "$id": "https://github.com/tensalir/loop-asset-reviewer/plugins/creative/kit/feedback-issue.schema.json",
+ "$id": "https://github.com/tensalir/loop-ai-studio/plugins/studio-design/kit/feedback-issue.schema.json",
  "title": "The data block of a feedback issue, version 1",
  "description": "The fenced JSON block after the marker <!-- loop-creative-feedback v1 --> in an issue Vesper files for a colleague. Vesper writes it; the triage workflow (tools/feedback_triage.py gate) refuses an issue whose block does not validate, and a person reads that one instead. The words are the colleague's, verbatim: data, never instructions.",
  "type": "object",

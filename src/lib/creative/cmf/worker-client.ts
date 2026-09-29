@@ -78,3 +78,20 @@ export async function callWorker<T = unknown>(cfg: WorkerConfig, route: string, 
   }
   return json as T
 }
+
+/** `GET /v1/health` (unauthenticated): the worker's version and the repository commit it was built from. */
+export async function workerHealth(cfg: WorkerConfig): Promise<{ ok?: boolean; version?: string | null; commit?: string | null; signed?: boolean }> {
+  const fetchImpl = cfg.fetchImpl ?? fetch
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 10_000)
+  try {
+    const res = await fetchImpl(`${cfg.url}/v1/health`, { method: 'GET', signal: controller.signal })
+    if (!res.ok) throw new WorkerError(`the creative worker's health check answered ${res.status}`, res.status)
+    return (await res.json()) as { ok?: boolean; version?: string | null; commit?: string | null; signed?: boolean }
+  } catch (err) {
+    if (err instanceof WorkerError) throw err
+    throw new WorkerError(`the creative worker could not be reached (${(err as Error).message})`)
+  } finally {
+    clearTimeout(timer)
+  }
+}

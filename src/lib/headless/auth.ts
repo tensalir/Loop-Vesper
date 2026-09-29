@@ -14,7 +14,9 @@
  *   - `vsp_oat_…`, a one-hour access token from the per-person sign-in
  *     (src/lib/oauth). Accepted in the header of `/api/mcp` only. Its
  *     credential is the person's OAuth credential; the person must be active
- *     and have Claude access (`profiles.mcp_access`) or be an admin.
+ *     and have Claude access (`profiles.mcp_access`) or be an admin. Loop
+ *     accounts get that access when they first connect, unless an admin has
+ *     decided it (src/lib/oauth/claude-access.ts).
  * A 401 from the bare `/api/mcp` carries a `WWW-Authenticate` challenge that
  * points the client at the sign-in (`options.challenge`).
  */

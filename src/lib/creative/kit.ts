@@ -1,11 +1,14 @@
 /**
  * The creative kit: what Vesper reads from the plugin repository.
  *
- * The Loop Creative plugin's builder writes `plugins/creative/kit.json` and
- * `plugins/creative/kit/conformance.json`; a merge that raises the plugin's
- * version is tagged `creative-v<version>`. Vesper reads the kit at the newest
- * such tag (or at `CREATIVE_KIT_REF`, for a preview or a rollback) and never
- * parses the repository's markdown. The contract is `docs/kit.md` there.
+ * The Loop Studio Design plugin's builder writes `plugins/studio-design/kit.json`
+ * and `plugins/studio-design/kit/conformance.json`; a merge that raises the
+ * plugin's version is tagged `studio-design-v<version>` (the plugin was
+ * `creative`, tagged `creative-v*`, until 2026-09-28; those tags are no
+ * longer read, and a kit still naming `creative` is refused). Vesper reads
+ * the kit at the newest such tag (or at `CREATIVE_KIT_REF`, for a preview or
+ * a rollback) and never parses the repository's markdown. The contract is
+ * `docs/kit.md` there.
  *
  * Before a kit is used:
  *   1. its `plugin.json` at the same commit has the kit's version;
@@ -24,10 +27,10 @@ import crypto from 'crypto'
 import { ConformanceSchema, KitSchema, type Conformance, type Kit } from './kit-schema'
 import { runConformance } from './conformance'
 
-export const KIT_PATH = 'plugins/creative/kit.json'
-export const PLUGIN_JSON_PATH = 'plugins/creative/.claude-plugin/plugin.json'
-export const PLUGIN_ROOT = 'plugins/creative/'
-export const TAG_PREFIX = 'creative-v'
+export const KIT_PATH = 'plugins/studio-design/kit.json'
+export const PLUGIN_JSON_PATH = 'plugins/studio-design/.claude-plugin/plugin.json'
+export const PLUGIN_ROOT = 'plugins/studio-design/'
+export const TAG_PREFIX = 'studio-design-v'
 export const MEMORY_TTL_MS = 60_000
 
 export function sha256Hex(bytes: Buffer | string): string {
@@ -42,7 +45,7 @@ export function repoPathOf(kitPath: string): string {
 // ------------------------------------------------------------------ what the kit is read from
 
 export interface KitRef {
-  /** The tag or ref asked for, e.g. `creative-v0.2.0` or a branch. */
+  /** The tag or ref asked for, e.g. `studio-design-v0.3.0` or a branch. */
   ref: string
   commit: string
 }
@@ -54,7 +57,7 @@ export interface KitSourceFile {
 
 /** The GitHub side, injected so the tests run on fixtures. */
 export interface KitSource {
-  /** The newest `creative-v*` tag, or `ref` when given, as a commit. */
+  /** The newest `studio-design-v*` tag, or `ref` when given, as a commit. */
   resolve(ref: string | null): Promise<KitRef>
   /** A file at a commit, or null when the commit has no such file. */
   getFile(path: string, commit: string): Promise<KitSourceFile | null>
@@ -281,11 +284,11 @@ export async function getKitFile(
 // ------------------------------------------------------------------ tags
 
 export function parseTagVersion(ref: string): number[] | null {
-  const m = /^(?:refs\/tags\/)?creative-v(\d+)\.(\d+)\.(\d+)$/.exec(ref)
+  const m = /^(?:refs\/tags\/)?studio-design-v(\d+)\.(\d+)\.(\d+)$/.exec(ref)
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null
 }
 
-/** The newest `creative-vX.Y.Z` among refs, by version number (not by name or date). */
+/** The newest `studio-design-vX.Y.Z` among refs, by version number (not by name or date). */
 export function newestTag(refs: readonly string[]): string | null {
   let best: { ref: string; v: number[] } | null = null
   for (const ref of refs) {

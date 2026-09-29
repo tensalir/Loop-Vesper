@@ -33,6 +33,7 @@ import { ownerIsAdmin } from './creative-read'
 import { cmfKit, resolveTab, type CmfGradingParts, type CmfKit } from '@/lib/creative/cmf/kit-cmf'
 import { checkCmfTarget, gradeCmfCandidate } from '@/lib/creative/cmf/grading'
 import { assertCmfAccess, cmfGradingParts } from './cmf'
+import { assertPackagingAccess, executePackagingGrade, packagingGradeLines, packagingGradeStructured } from './packaging'
 import { invalidArguments, type ToolContext, type ToolHandler } from './types'
 
 const CHECK_ID = /^[A-E]\d+$/
@@ -51,7 +52,8 @@ export const GradeImageArgs = z
     view: z.string().max(40).optional(),
     runs: z.number().int().min(1).max(MAX_RUNS).optional(),
     // CMF: the sheet's tab, the SKU column and the clown key the render was drawn through.
-    // Packaging's look and box are refused until Vesper's packaging tools arrive.
+    // Packaging: the look, the box and the colourway (read from the picture's own record when it
+    // is a Vesper packaging draw).
     tab: z.string().max(80).optional(),
     column: z.string().max(4).optional(),
     clown: z.string().max(120).optional(),
@@ -91,9 +93,11 @@ interface GradeExecution {
   costUsd: number
   /** A CMF grade: the row and the key it was read against. */
   cmf?: { tab: string; spec: string; column: string; sku_name: string | null; key: string }
+  /** A packaging grade: the lines and fields its path adds (the cell, the composite, the calibration note). */
+  packaging?: { lines: string[]; structured: Record<string, unknown> }
 }
 
-export function gradeText(x: Pick<GradeExecution, 'slug' | 'product' | 'outcome' | 'gradeId' | 'header' | 'cmf'>): string {
+export function gradeText(x: Pick<GradeExecution, 'slug' | 'product' | 'outcome' | 'gradeId' | 'header' | 'cmf' | 'packaging'>): string {
   const { outcome: o, product } = x
   const a = o.aggregate
   const checks = new Map(product.rubric.checks.map((c) => [c.id, c]))
@@ -120,6 +124,10 @@ export function gradeText(x: Pick<GradeExecution, 'slug' | 'product' | 'outcome'
     lines.push('No check failed in any read.')
   }
   if (a.failed_advisory.length) lines.push(`Advisory, reported and not counted: ${a.failed_advisory.join(', ')}.`)
+  if (x.packaging) {
+    lines.push(...x.packaging.lines)
+    return lines.join('\n')
+  }
   if (x.cmf) {
     lines.push(
       `Read against ${x.cmf.tab} column ${x.cmf.column}${x.cmf.sku_name ? ` (${x.cmf.sku_name})` : ''} and its clown through the key ${x.cmf.key}, the clown attached second.`,
@@ -180,6 +188,7 @@ function payload(x: GradeExecution): JobPayload {
       outputs: [],
       durationMs: x.outcome.latency_ms,
       ...(x.cmf ? { cmf: x.cmf } : {}),
+      ...(x.packaging ? x.packaging.structured : {}),
     },
     outputIds: [],
     costUsd: x.costUsd,
@@ -367,9 +376,34 @@ export const gradeImageHandler: ToolHandler = {
       })
     }
     if (product.kind === 'packaging') {
-      throw new GradingPromptError(
-        "Vesper does not grade packaging yet: its grader's words are in the kit, and the packaging tools that attach the cell's composite, white render and dieline come in the next change. Read it with /creative:packaging, labelled as one read."
-      )
+      await assertPackagingAccess(ctx.principal.ownerId)
+      if (!product.grading_prompt || !product.grading) {
+        throw new GradingPromptError(`The creative kit ${loaded.kit.version} carries no packaging grader yet, so Vesper cannot grade it.`)
+      }
+      return runLongCall<GradeExecution>({
+        ctx,
+        toolName: 'grade_image',
+        modelId: product.grading.models[0] ?? 'gemini',
+        request: { ...a },
+        runAsync: a.async,
+        what: 'the packaging grade',
+        execute: async () => {
+          const x = await executePackagingGrade(ctx, loaded, a)
+          return {
+            header: x.header,
+            slug: x.slug,
+            product: x.pk.product,
+            candidate: x.candidate,
+            outcome: x.outcome,
+            gradeId: x.gradeId,
+            storeError: x.storeError,
+            costUsd: x.costUsd,
+            packaging: { lines: packagingGradeLines(x), structured: packagingGradeStructured(x) },
+          }
+        },
+        toPayload: payload,
+        toWire: async (x) => ({ content: [{ type: 'text', text: gradeText(x) }], structuredContent: payload(x).structuredContent }),
+      })
     }
     if (!product.grading_prompt || !product.grading) {
       throw new GradingPromptError(

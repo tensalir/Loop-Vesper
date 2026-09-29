@@ -18,7 +18,7 @@
     "surface": "vesper",
     "verdict": "PASS_WITH_NOTES"
    },
-   "line": "[creative eclipse 2026-10-02] no | decoded B3 | grade PASS_WITH_NOTES B3 | judge gemini-flash-latest vesper x3 | rubric 0.5.3 | the strap stops at the ear"
+   "line": "[studio-design eclipse 2026-10-02] no | decoded B3 | grade PASS_WITH_NOTES B3 | judge gemini-flash-latest vesper x3 | rubric 0.5.3 | the strap stops at the ear"
   },
   {
    "fields": {
@@ -31,7 +31,7 @@
     "rubric": "0.5.3",
     "surface": "chat"
    },
-   "line": "[creative eclipse 2026-10-02] yes | decoded - | grade - | judge claude-opus-5-5 chat x1 | rubric 0.5.3 | -"
+   "line": "[studio-design eclipse 2026-10-02] yes | decoded - | grade - | judge claude-opus-5-5 chat x1 | rubric 0.5.3 | -"
   },
   {
    "fields": {
@@ -55,7 +55,7 @@
     "surface": "vesper",
     "verdict": "RETRY"
    },
-   "line": "[creative packaging 2026-10-03] no | decoded D1,C2? | grade RETRY C2,D1 | judge gemini-flash-latest vesper x3 | rubric 0.1.1 | the lid inside | is pink"
+   "line": "[studio-design packaging 2026-10-03] no | decoded D1,C2? | grade RETRY C2,D1 | judge gemini-flash-latest vesper x3 | rubric 0.1.1 | the lid inside | is pink"
   }
  ],
  "products": {
