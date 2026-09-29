@@ -1,0 +1,2808 @@
+{
+ "schema": 1,
+ "made_from": "tensalir/loop-product-plugins at 5473bf39a56fc0f25c353fc5c64afe42f4948c7f: every ready entry of workstreams/cmf/references/payloads/INDEX.json, the spec and key files they were built from, and the first fenced block of the cmf-review skill's references/prompt-template.md",
+ "index_template_sha256": "34df61cda3ba23ec31c46e168bcd24b828173a652c1305b72c49e39caf856b1b",
+ "template_block": "Use the attached image as the exact base. Keep geometry, proportions, camera angle, framing, lighting and background unchanged.\nThe image is a clown model: each flat colour marks one component. Recolour ONLY these zones:\n- {zone_hex_1} → {component_1}: {material_1}, {finish_1}, {colour_name_1} ({colour_code_1})\n- {zone_hex_2} → {component_2}: {material_2}, {finish_2}, {colour_name_2} ({colour_code_2})\n- {zone_hex_3} → {component_3}: {material_3}, {finish_3}, {colour_name_3} ({colour_code_3})\nRender realistic material behaviour for each finish. Do not add, remove or reshape any part. No text, no logos, no extra objects.",
+ "specs": {
+  "references/workbook/spec/experience-2-cc.json": {
+   "schema": 1,
+   "workbook": {
+    "file": "8b5140d2-aa0b-442e-a35c-c3f7778f954b.xlsx",
+    "sha256": "a13964bfc229d9a5f093a193c6aa5975f74376d38919e6e7ac552f2a0f431264",
+    "modified": "2026-09-22T09:20:42Z",
+    "modified_source": "http Last-Modified of the upload, from MANIFEST.csv: the file carries no save time of its own, so this is when it was uploaded, not when it was edited",
+    "fetched_at": "2026-09-24T06:37:07Z"
+   },
+   "tab": "Experience 2 CC",
+   "slug": "experience-2-cc",
+   "vesper_product": "case-experience2",
+   "collection": "Experience 2 Carry Case",
+   "header_row": 1,
+   "common_header": "Common specs",
+   "skus": [
+    {
+     "column": "C",
+     "header": "SKU 1",
+     "name": "c",
+     "in_scope": true,
+     "scope_reason": "header not renamed; Product Name filled",
+     "required": 16,
+     "pending_banner": 5,
+     "pending_components": 0,
+     "not_applicable": 0
+    },
+    {
+     "column": "D",
+     "header": "SKU 2",
+     "name": "Ice blu marble",
+     "in_scope": true,
+     "scope_reason": "header not renamed; Product Name filled",
+     "required": 16,
+     "pending_banner": 5,
+     "pending_components": 0,
+     "not_applicable": 0
+    },
+    {
+     "column": "E",
+     "header": "SKU 3",
+     "name": "Ice blu classic matte",
+     "in_scope": true,
+     "scope_reason": "header not renamed; Product Name filled",
+     "required": 16,
+     "pending_banner": 5,
+     "pending_components": 0,
+     "not_applicable": 0
+    },
+    {
+     "column": "F",
+     "header": "SKU 4",
+     "name": "Ice blu marble",
+     "in_scope": true,
+     "scope_reason": "header not renamed; Product Name filled",
+     "required": 16,
+     "pending_banner": 5,
+     "pending_components": 0,
+     "not_applicable": 0
+    }
+   ],
+   "banner": {
+    "CMF number": {
+     "row": 3,
+     "common": null,
+     "C": {
+      "raw": "CMF-xxxxxx rev x",
+      "value": "CMF-xxxxxx rev x",
+      "placeholder": "cmf_rev_x",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "D": {
+      "raw": "CMF-xxxxxx rev x",
+      "value": "CMF-xxxxxx rev x",
+      "placeholder": "cmf_rev_x",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "E": {
+      "raw": "CMF-xxxxxx rev x",
+      "value": "CMF-xxxxxx rev x",
+      "placeholder": "cmf_rev_x",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "F": {
+      "raw": "CMF-xxxxxx rev x",
+      "value": "CMF-xxxxxx rev x",
+      "placeholder": "cmf_rev_x",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     }
+    },
+    "Collection": {
+     "row": 4,
+     "common": {
+      "raw": "Experience 2 Carry Case",
+      "value": "Experience 2 Carry Case",
+      "placeholder": null,
+      "required": false,
+      "fill": "FFFFFFFF",
+      "flags": []
+     },
+     "C": {
+      "raw": null,
+      "value": null,
+      "placeholder": null,
+      "required": false,
+      "fill": "FFFFFFFF",
+      "flags": []
+     },
+     "D": {
+      "raw": null,
+      "value": null,
+      "placeholder": null,
+      "required": false,
+      "fill": "FFFFFFFF",
+      "flags": []
+     },
+     "E": {
+      "raw": null,
+      "value": null,
+      "placeholder": null,
+      "required": false,
+      "fill": "FFFFFFFF",
+      "flags": []
+     },
+     "F": {
+      "raw": null,
+      "value": null,
+      "placeholder": null,
+      "required": false,
+      "fill": "FFFFFFFF",
+      "flags": []
+     }
+    },
+    "Product Name": {
+     "row": 5,
+     "common": null,
+     "C": {
+      "raw": "c",
+      "value": "c",
+      "placeholder": null,
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "D": {
+      "raw": "Ice blu marble",
+      "value": "Ice blu marble",
+      "placeholder": null,
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "E": {
+      "raw": "Ice blu classic matte",
+      "value": "Ice blu classic matte",
+      "placeholder": null,
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "F": {
+      "raw": "Ice blu marble",
+      "value": "Ice blu marble",
+      "placeholder": null,
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     }
+    },
+    "Product Code": {
+     "row": 6,
+     "common": null,
+     "C": {
+      "raw": "xxxxxxxxxxx",
+      "value": "xxxxxxxxxxx",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "D": {
+      "raw": "xxxxxxxxxxx",
+      "value": "xxxxxxxxxxx",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "E": {
+      "raw": "xxxxxxxxxxx",
+      "value": "xxxxxxxxxxx",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "F": {
+      "raw": "xxxxxxxxxxx",
+      "value": "xxxxxxxxxxx",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     }
+    },
+    "EAN code": {
+     "row": 7,
+     "common": null,
+     "C": {
+      "raw": "xxxxxxxxxxx",
+      "value": "xxxxxxxxxxx",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "D": {
+      "raw": "xxxxxxxxxxx",
+      "value": "xxxxxxxxxxx",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "E": {
+      "raw": "xxxxxxxxxxx",
+      "value": "xxxxxxxxxxx",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "F": {
+      "raw": "xxxxxxxxxxx",
+      "value": "xxxxxxxxxxx",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     }
+    },
+    "Edit Date": {
+     "row": 8,
+     "common": null,
+     "C": {
+      "raw": "2026-07-07 00:00:00",
+      "value": "2026-07-07",
+      "placeholder": null,
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": [
+       "date_typed"
+      ]
+     },
+     "D": {
+      "raw": "2026-07-08 00:00:00",
+      "value": "2026-07-08",
+      "placeholder": null,
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": [
+       "date_typed"
+      ]
+     },
+     "E": {
+      "raw": "2026-07-07 00:00:00",
+      "value": "2026-07-07",
+      "placeholder": null,
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": [
+       "date_typed"
+      ]
+     },
+     "F": {
+      "raw": "2026-07-08 00:00:00",
+      "value": "2026-07-08",
+      "placeholder": null,
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": [
+       "date_typed"
+      ]
+     }
+    },
+    "Drawn by": {
+     "row": 9,
+     "common": {
+      "raw": "Damien",
+      "value": "Damien",
+      "placeholder": null,
+      "required": false,
+      "fill": "FFFFFFFF",
+      "flags": []
+     },
+     "C": {
+      "raw": null,
+      "value": null,
+      "placeholder": null,
+      "required": false,
+      "fill": "FFFFFFFF",
+      "flags": []
+     },
+     "D": {
+      "raw": null,
+      "value": null,
+      "placeholder": null,
+      "required": false,
+      "fill": "FFFFFFFF",
+      "flags": []
+     },
+     "E": {
+      "raw": null,
+      "value": null,
+      "placeholder": null,
+      "required": false,
+      "fill": "FFFFFFFF",
+      "flags": []
+     },
+     "F": {
+      "raw": null,
+      "value": null,
+      "placeholder": null,
+      "required": false,
+      "fill": "FFFFFFFF",
+      "flags": []
+     }
+    },
+    "Checked by 1": {
+     "row": 10,
+     "common": null,
+     "C": {
+      "raw": "XX",
+      "value": "XX",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "D": {
+      "raw": "XX",
+      "value": "XX",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "E": {
+      "raw": "XX",
+      "value": "XX",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "F": {
+      "raw": "XX",
+      "value": "XX",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     }
+    },
+    "Checked by 2": {
+     "row": 11,
+     "common": null,
+     "C": {
+      "raw": "XX",
+      "value": "XX",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "D": {
+      "raw": "XX",
+      "value": "XX",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "E": {
+      "raw": "XX",
+      "value": "XX",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     },
+     "F": {
+      "raw": "XX",
+      "value": "XX",
+      "placeholder": "x_run",
+      "required": true,
+      "fill": "FFFFF2CC",
+      "flags": []
+     }
+    }
+   },
+   "sections": [],
+   "components": [
+    {
+     "header": "Shell - Front",
+     "section": null,
+     "row": 12,
+     "region_vesper": "shell_front",
+     "region_importer": "shell_front",
+     "fields": [
+      {
+       "name": "Material",
+       "row": 13,
+       "common": {
+        "raw": "ABS",
+        "value": "ABS",
+        "placeholder": null,
+        "required": false,
+        "fill": "FFFFFFFF",
+        "flags": [],
+        "codes": [],
+        "colour_name": null
+       },
+       "by_sku": {
+        "C": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      },
+      {
+       "name": "Outer Shell",
+       "row": 14,
+       "common": null,
+       "by_sku": {
+        "C": {
+         "raw": "VDI 24 — ABS frosted milky see through Pantone 544C",
+         "value": "VDI 24 — ABS frosted milky see through Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            39,
+            51
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — ABS frosted milky see through"
+        },
+        "D": {
+         "raw": "VDI 24 — ABS frosted milky see through Pantone 544C",
+         "value": "VDI 24 — ABS frosted milky see through Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            39,
+            51
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — ABS frosted milky see through"
+        },
+        "E": {
+         "raw": "VDI 24 — Matte Pantone 544C",
+         "value": "VDI 24 — Matte Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            15,
+            27
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — Matte"
+        },
+        "F": {
+         "raw": "VDI 24 — ABS frosted milky see through Pantone 544C",
+         "value": "VDI 24 — ABS frosted milky see through Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            39,
+            51
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — ABS frosted milky see through"
+        }
+       }
+      },
+      {
+       "name": "Inner Shell",
+       "row": 15,
+       "common": null,
+       "by_sku": {
+        "C": {
+         "raw": "VDI 24 — ABS frosted milky see through Pantone 544C",
+         "value": "VDI 24 — ABS frosted milky see through Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            39,
+            51
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — ABS frosted milky see through"
+        },
+        "D": {
+         "raw": "VDI 24 — ABS frosted milky see through Pantone 544C",
+         "value": "VDI 24 — ABS frosted milky see through Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            39,
+            51
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — ABS frosted milky see through"
+        },
+        "E": {
+         "raw": "VDI 24 — Matte Pantone 544C",
+         "value": "VDI 24 — Matte Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            15,
+            27
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — Matte"
+        },
+        "F": {
+         "raw": "VDI 24 — ABS frosted milky see through Pantone 544C",
+         "value": "VDI 24 — ABS frosted milky see through Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            39,
+            51
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — ABS frosted milky see through"
+        }
+       }
+      },
+      {
+       "name": "Finish Logo",
+       "row": 16,
+       "common": {
+        "raw": "Matte",
+        "value": "Matte",
+        "placeholder": null,
+        "required": false,
+        "fill": "FFFFFFFF",
+        "flags": [],
+        "codes": [],
+        "colour_name": null
+       },
+       "by_sku": {
+        "C": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      },
+      {
+       "name": "Artwork",
+       "row": 17,
+       "common": {
+        "raw": "/",
+        "value": "/",
+        "placeholder": "slash",
+        "required": false,
+        "fill": "FFFFFFFF",
+        "flags": [],
+        "codes": [],
+        "colour_name": null
+       },
+       "by_sku": {
+        "C": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      }
+     ]
+    },
+    {
+     "header": "Shell - Back",
+     "section": null,
+     "row": 18,
+     "region_vesper": "shell_back",
+     "region_importer": "shell_back",
+     "fields": [
+      {
+       "name": "Material",
+       "row": 19,
+       "common": {
+        "raw": "ABS",
+        "value": "ABS",
+        "placeholder": null,
+        "required": false,
+        "fill": "FFFFFFFF",
+        "flags": [],
+        "codes": [],
+        "colour_name": null
+       },
+       "by_sku": {
+        "C": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      },
+      {
+       "name": "Outer Shell",
+       "row": 20,
+       "common": null,
+       "by_sku": {
+        "C": {
+         "raw": "VDI 24 — Matte Pantone 544C",
+         "value": "VDI 24 — Matte Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            15,
+            27
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — Matte"
+        },
+        "D": {
+         "raw": "VDI 24 — Matte Pantone 544C",
+         "value": "VDI 24 — Matte Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            15,
+            27
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — Matte"
+        },
+        "E": {
+         "raw": "VDI 24 — Matte Pantone 544C",
+         "value": "VDI 24 — Matte Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            15,
+            27
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — Matte"
+        },
+        "F": {
+         "raw": "VDI 24 — Matte Pantone 544C",
+         "value": "VDI 24 — Matte Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            15,
+            27
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — Matte"
+        }
+       }
+      },
+      {
+       "name": "Inner Shell",
+       "row": 21,
+       "common": null,
+       "by_sku": {
+        "C": {
+         "raw": "VDI 24 — Matte Pantone 544C",
+         "value": "VDI 24 — Matte Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            15,
+            27
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — Matte"
+        },
+        "D": {
+         "raw": "VDI 24 — Matte Pantone 544C",
+         "value": "VDI 24 — Matte Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            15,
+            27
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — Matte"
+        },
+        "E": {
+         "raw": "VDI 24 — Matte Pantone 544C",
+         "value": "VDI 24 — Matte Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            15,
+            27
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — Matte"
+        },
+        "F": {
+         "raw": "VDI 24 — Matte Pantone 544C",
+         "value": "VDI 24 — Matte Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            15,
+            27
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24 — Matte"
+        }
+       }
+      },
+      {
+       "name": "Color Artwork",
+       "row": 22,
+       "common": null,
+       "by_sku": {
+        "C": {
+         "raw": "Silver",
+         "value": "Silver",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [],
+         "colour_name": "Silver"
+        },
+        "D": {
+         "raw": "Silver",
+         "value": "Silver",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [],
+         "colour_name": "Silver"
+        },
+        "E": {
+         "raw": "White",
+         "value": "White",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [],
+         "colour_name": "White"
+        },
+        "F": {
+         "raw": "White",
+         "value": "White",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [],
+         "colour_name": "White"
+        }
+       }
+      },
+      {
+       "name": "Artwork",
+       "row": 23,
+       "common": {
+        "raw": "see artwork & TD",
+        "value": "see artwork & TD",
+        "placeholder": null,
+        "required": false,
+        "fill": "FFFFFFFF",
+        "flags": [],
+        "codes": [],
+        "colour_name": null
+       },
+       "by_sku": {
+        "C": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      }
+     ]
+    },
+    {
+     "header": "Insert",
+     "section": null,
+     "row": 24,
+     "region_vesper": "insert",
+     "region_importer": "insert",
+     "fields": [
+      {
+       "name": "Material",
+       "row": 25,
+       "common": {
+        "raw": "Silicone",
+        "value": "Silicone",
+        "placeholder": null,
+        "required": false,
+        "fill": "FFFFFFFF",
+        "flags": [],
+        "codes": [],
+        "colour_name": null
+       },
+       "by_sku": {
+        "C": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      },
+      {
+       "name": "Colour",
+       "row": 26,
+       "common": null,
+       "by_sku": {
+        "C": {
+         "raw": "Pantone 544C",
+         "value": "Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            0,
+            12
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": null
+        },
+        "D": {
+         "raw": "Silicon mix marble imitation Pantone 544C + 427C + 5405 + white",
+         "value": "Silicon mix marble imitation Pantone 544C + 427C + 5405 + white",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            29,
+            41
+           ],
+           "flags": []
+          },
+          {
+           "raw": "427C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "427",
+           "suffix": "C",
+           "key": "pantone 427 c",
+           "span": [
+            44,
+            48
+           ],
+           "flags": [
+            "inherited_prefix"
+           ]
+          },
+          {
+           "raw": "5405",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "5405",
+           "suffix": null,
+           "key": "pantone 5405",
+           "span": [
+            51,
+            55
+           ],
+           "flags": [
+            "inherited_prefix",
+            "missing_suffix"
+           ]
+          }
+         ],
+         "colour_name": "Silicon mix marble imitation white"
+        },
+        "E": {
+         "raw": "Pantone 544C",
+         "value": "Pantone 544C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            0,
+            12
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": null
+        },
+        "F": {
+         "raw": "Silicon mix marble imitation Pantone 544C + 1328-07 TCX+ 5405 + white",
+         "value": "Silicon mix marble imitation Pantone 544C + 1328-07 TCX+ 5405 + white",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 544C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "544",
+           "suffix": "C",
+           "key": "pantone 544 c",
+           "span": [
+            29,
+            41
+           ],
+           "flags": []
+          },
+          {
+           "raw": "1328-07 TCX",
+           "system": "pantone",
+           "family": "textile",
+           "name": null,
+           "number": "1328-07",
+           "suffix": "TCX",
+           "key": "pantone 1328-07 tcx",
+           "span": [
+            44,
+            55
+           ],
+           "flags": [
+            "inherited_prefix",
+            "malformed_number"
+           ]
+          },
+          {
+           "raw": "5405",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "5405",
+           "suffix": null,
+           "key": "pantone 5405",
+           "span": [
+            57,
+            61
+           ],
+           "flags": [
+            "inherited_prefix",
+            "missing_suffix"
+           ]
+          }
+         ],
+         "colour_name": "Silicon mix marble imitation white"
+        }
+       }
+      },
+      {
+       "name": "Finishing",
+       "row": 27,
+       "common": {
+        "raw": "VDI 24",
+        "value": "VDI 24",
+        "placeholder": null,
+        "required": false,
+        "fill": "FFFFFFFF",
+        "flags": [],
+        "codes": [],
+        "colour_name": null
+       },
+       "by_sku": {
+        "C": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      },
+      {
+       "name": "Finishing Technique",
+       "row": 28,
+       "common": {
+        "raw": "Antistatic Coating + Grinding",
+        "value": "Antistatic Coating + Grinding",
+        "placeholder": null,
+        "required": false,
+        "fill": "FFFFFFFF",
+        "flags": [],
+        "codes": [],
+        "colour_name": null
+       },
+       "by_sku": {
+        "C": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      },
+      {
+       "name": "Artwork",
+       "row": 29,
+       "common": {
+        "raw": "/",
+        "value": "/",
+        "placeholder": "slash",
+        "required": false,
+        "fill": "FFFFFFFF",
+        "flags": [],
+        "codes": [],
+        "colour_name": null
+       },
+       "by_sku": {
+        "C": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      }
+     ]
+    },
+    {
+     "header": "Cord",
+     "section": null,
+     "row": 30,
+     "region_vesper": "cord",
+     "region_importer": "cord",
+     "fields": [
+      {
+       "name": "Material",
+       "row": 31,
+       "common": {
+        "raw": "TPE",
+        "value": "TPE",
+        "placeholder": null,
+        "required": false,
+        "fill": "FFFFFFFF",
+        "flags": [],
+        "codes": [],
+        "colour_name": null
+       },
+       "by_sku": {
+        "C": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      },
+      {
+       "name": "Colour",
+       "row": 32,
+       "common": null,
+       "by_sku": {
+        "C": {
+         "raw": "Pantone 2026C",
+         "value": "Pantone 2026C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 2026C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "2026",
+           "suffix": "C",
+           "key": "pantone 2026 c",
+           "span": [
+            0,
+            13
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": null
+        },
+        "D": {
+         "raw": "VDI 24 — Pantone 337C",
+         "value": "VDI 24 — Pantone 337C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 337C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "337",
+           "suffix": "C",
+           "key": "pantone 337 c",
+           "span": [
+            9,
+            21
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24"
+        },
+        "E": {
+         "raw": "VDI 24 — Pantone 2160C",
+         "value": "VDI 24 — Pantone 2160C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 2160C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "2160",
+           "suffix": "C",
+           "key": "pantone 2160 c",
+           "span": [
+            9,
+            22
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24"
+        },
+        "F": {
+         "raw": "VDI 24 — Pantone 337C",
+         "value": "VDI 24 — Pantone 337C",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [
+          {
+           "raw": "Pantone 337C",
+           "system": "pantone",
+           "family": "solid",
+           "name": null,
+           "number": "337",
+           "suffix": "C",
+           "key": "pantone 337 c",
+           "span": [
+            9,
+            21
+           ],
+           "flags": []
+          }
+         ],
+         "colour_name": "VDI 24"
+        }
+       }
+      },
+      {
+       "name": "Finishing",
+       "row": 33,
+       "common": {
+        "raw": "Matte",
+        "value": "Matte",
+        "placeholder": null,
+        "required": false,
+        "fill": "FFFFFFFF",
+        "flags": [],
+        "codes": [],
+        "colour_name": null
+       },
+       "by_sku": {
+        "C": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      },
+      {
+       "name": "Finishing Technique",
+       "row": 34,
+       "common": {
+        "raw": "Antistatic Coating",
+        "value": "Antistatic Coating",
+        "placeholder": null,
+        "required": false,
+        "fill": "FFFFFFFF",
+        "flags": [],
+        "codes": [],
+        "colour_name": null
+       },
+       "by_sku": {
+        "C": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      },
+      {
+       "name": "Artwork",
+       "row": 35,
+       "common": {
+        "raw": "/",
+        "value": "/",
+        "placeholder": "slash",
+        "required": false,
+        "fill": "FFFFFFFF",
+        "flags": [],
+        "codes": [],
+        "colour_name": null
+       },
+       "by_sku": {
+        "C": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      }
+     ]
+    },
+    {
+     "header": "ARTWORK",
+     "section": null,
+     "row": 36,
+     "region_vesper": "artwork",
+     "region_importer": "artwork",
+     "fields": [
+      {
+       "name": "Colour",
+       "row": 37,
+       "common": null,
+       "by_sku": {
+        "C": {
+         "raw": "Silver",
+         "value": "Silver",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [],
+         "colour_name": "Silver"
+        },
+        "D": {
+         "raw": "Silver",
+         "value": "Silver",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [],
+         "colour_name": "Silver"
+        },
+        "E": {
+         "raw": "White",
+         "value": "White",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [],
+         "colour_name": "White"
+        },
+        "F": {
+         "raw": "White",
+         "value": "White",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [],
+         "colour_name": "White"
+        }
+       }
+      },
+      {
+       "name": "Technique",
+       "row": 38,
+       "common": null,
+       "by_sku": {
+        "C": {
+         "raw": "Pad print",
+         "value": "Pad print",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": "Pad print",
+         "value": "Pad print",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": "Pad print",
+         "value": "Pad print",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": "Pad print",
+         "value": "Pad print",
+         "placeholder": null,
+         "required": true,
+         "fill": "FFFFF2CC",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      },
+      {
+       "name": "Mock-up",
+       "row": 39,
+       "common": null,
+       "by_sku": {
+        "C": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "D": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "E": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        },
+        "F": {
+         "raw": null,
+         "value": null,
+         "placeholder": null,
+         "required": false,
+         "fill": "FFFFFFFF",
+         "flags": [],
+         "codes": [],
+         "colour_name": null
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "problems": [
+    {
+     "where": "Experience 2 CC!C1",
+     "what": "no SKU header is renamed (SKU 1, SKU 2, SKU 3, SKU 4); SKUs are named by their Product Name, and a column whose Product Name is pending is out of scope",
+     "kind": "scope"
+    },
+    {
+     "where": "Experience 2 CC!C5",
+     "what": "Product Name of SKU 1 is 'c', 1 character(s): a stray keystroke? Vesper prints it as the page title",
+     "kind": "suspect"
+    },
+    {
+     "where": "Experience 2 CC!F5",
+     "what": "Product Name 'Ice blu marble' is also column D: --sku by this name is refused (exit 1); key the SKU on tab + column",
+     "kind": "duplicate"
+    },
+    {
+     "where": "Experience 2 CC!A8",
+     "what": "Edit Date is a date in this tab; the value is read as an ISO date and the raw text is kept",
+     "kind": "typed"
+    },
+    {
+     "where": "Experience 2 CC!D26",
+     "what": "Insert · Colour: code '5405' in 'Silicon mix marble imitation Pantone 544C + 427C + 5405 + white': missing_suffix",
+     "kind": "code"
+    },
+    {
+     "where": "Experience 2 CC!F26",
+     "what": "Insert · Colour: code '1328-07 TCX' in 'Silicon mix marble imitation Pantone 544C + 1328-07 TCX+ 5405 + white': malformed_number",
+     "kind": "code"
+    },
+    {
+     "where": "Experience 2 CC!F26",
+     "what": "Insert · Colour: code '5405' in 'Silicon mix marble imitation Pantone 544C + 1328-07 TCX+ 5405 + white': missing_suffix",
+     "kind": "code"
+    }
+   ]
+  }
+ },
+ "keys": {
+  "case-experience2--front": {
+   "schema": 1,
+   "product": "case-experience2",
+   "variant": "front",
+   "clown": {
+    "id": "case-experience2--front",
+    "sha256": "1d9dbbe86bf4cbaa29d6444e6b4d1e6e5ce0d3a54bdd5e4c8ee003f9cc9d9296",
+    "width": 1280,
+    "height": 1280
+   },
+   "sampled_at": "2026-09-24T07:10:04Z",
+   "sample": {
+    "k": 8,
+    "floor": 0.005,
+    "bin": 4,
+    "merge_de": 6,
+    "ground_tolerance": 8,
+    "ground_lab": [
+     87.41,
+     0,
+     0
+    ],
+    "foreground_share": 0.2546
+   },
+   "confirmed_by": null,
+   "confirmed_at": null,
+   "zones": [
+    {
+     "hex": "#D51C1B",
+     "share": 0.241,
+     "components": [
+      {
+       "component": "Shell - Front",
+       "field": "Outer Shell"
+      },
+      {
+       "component": "Shell - Back",
+       "field": "Outer Shell"
+      }
+     ],
+     "note": "the outside of both shells, base and lid; the one red of the clown",
+     "bbox": [
+      272,
+      100,
+      1047,
+      971
+     ],
+     "lab": [
+      45.34,
+      60.92,
+      43.96
+     ],
+     "mask": "references/clowns/_derived/case-experience2--front/zone-3-D51C1B.png"
+    },
+    {
+     "hex": "#C6B807",
+     "share": 0.3621,
+     "components": [
+      "Insert"
+     ],
+     "note": "the silicone insert with the two earplug cradles",
+     "bbox": [
+      306,
+      547,
+      885,
+      917
+     ],
+     "lab": [
+      76.34,
+      -11.61,
+      74.93
+     ],
+     "mask": "references/clowns/_derived/case-experience2--front/zone-1-C6B807.png"
+    },
+    {
+     "hex": "#206893",
+     "share": 0.3602,
+     "components": [
+      {
+       "component": "Shell - Front",
+       "field": "Inner Shell"
+      },
+      {
+       "component": "Shell - Back",
+       "field": "Inner Shell"
+      }
+     ],
+     "note": "the lid interior and the hinge; which shell half is the lid is for the lead CMF designer to confirm",
+     "bbox": [
+      529,
+      127,
+      1020,
+      648
+     ],
+     "lab": [
+      38.96,
+      -3.61,
+      -32.18
+     ],
+     "mask": "references/clowns/_derived/case-experience2--front/zone-2-206893.png"
+    }
+   ],
+   "not_on_clown": [
+    "Cord",
+    "ARTWORK"
+   ],
+   "note": "zones named from the 2026-09-22 renders and the sheet; awaiting the lead CMF designer's confirmation",
+   "named_at": "2026-09-24",
+   "named_from": "Damien's refinement of 2026-09-22 on Ice blu marble attempt 1 ('all red elements should be ice blue 544C matte'), the Experience 2 CC tab of the TML2027 workbook, and the clown itself"
+  }
+ },
+ "payloads": [
+  {
+   "payload_file": "references/payloads/experience-2-cc--C--case-experience2--front.payload.json",
+   "spec_file": "references/workbook/spec/experience-2-cc.json",
+   "key": "case-experience2--front",
+   "tab": "Experience 2 CC",
+   "column": "C",
+   "prompt": "Use the attached image as the exact base. Keep geometry, proportions, camera angle, framing, lighting and background unchanged.\nThe image is a clown model: each flat colour marks one component. Recolour ONLY these zones:\n- #D51C1B → Shell - Front: ABS, , VDI 24 — ABS frosted milky see through (Pantone 544C)\n- #D51C1B → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\n- #C6B807 → Insert: Silicone, VDI 24, Antistatic Coating + Grinding,  (Pantone 544C)\n- #206893 → Shell - Front: ABS, , VDI 24 — ABS frosted milky see through (Pantone 544C)\n- #206893 → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\nRender realistic material behaviour for each finish. Do not add, remove or reshape any part. No text, no logos, no extra objects.",
+   "prompt_sha256": "88947526b793498dc50ec1fdac715149df8d51d64c0d352bf9d7b357b3a8aee8",
+   "template_sha256": "34df61cda3ba23ec31c46e168bcd24b828173a652c1305b72c49e39caf856b1b",
+   "key_confirmed": false,
+   "clown": {
+    "id": "case-experience2--front",
+    "file": "references/clowns/case-experience2--front.png",
+    "sha256": "1d9dbbe86bf4cbaa29d6444e6b4d1e6e5ce0d3a54bdd5e4c8ee003f9cc9d9296",
+    "width": 1280,
+    "height": 1280,
+    "aspect": "1:1"
+   },
+   "lines": [
+    {
+     "n": 1,
+     "zone_hex": "#D51C1B",
+     "component": "Shell - Front",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — ABS frosted milky see through",
+     "colour_code": "Pantone 544C",
+     "field": "Outer Shell",
+     "cells": {
+      "colour": "Experience 2 CC!C14",
+      "material": "Experience 2 CC!B13",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 2,
+     "zone_hex": "#D51C1B",
+     "component": "Shell - Back",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Outer Shell",
+     "cells": {
+      "colour": "Experience 2 CC!C20",
+      "material": "Experience 2 CC!B19",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 3,
+     "zone_hex": "#C6B807",
+     "component": "Insert",
+     "material": "Silicone",
+     "finish": "VDI 24, Antistatic Coating + Grinding",
+     "colour_name": "",
+     "colour_code": "Pantone 544C",
+     "field": "Colour",
+     "cells": {
+      "colour": "Experience 2 CC!C26",
+      "material": "Experience 2 CC!B25",
+      "finish": [
+       {
+        "field": "Finishing",
+        "cell": "Experience 2 CC!B27"
+       },
+       {
+        "field": "Finishing Technique",
+        "cell": "Experience 2 CC!B28"
+       }
+      ]
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 4,
+     "zone_hex": "#206893",
+     "component": "Shell - Front",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — ABS frosted milky see through",
+     "colour_code": "Pantone 544C",
+     "field": "Inner Shell",
+     "cells": {
+      "colour": "Experience 2 CC!C15",
+      "material": "Experience 2 CC!B13",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 5,
+     "zone_hex": "#206893",
+     "component": "Shell - Back",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Inner Shell",
+     "cells": {
+      "colour": "Experience 2 CC!C21",
+      "material": "Experience 2 CC!B19",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    }
+   ],
+   "omitted": [
+    {
+     "component": "Cord",
+     "why": "not on this clown (the key's not_on_clown)"
+    },
+    {
+     "component": "ARTWORK",
+     "why": "not on this clown (the key's not_on_clown)"
+    }
+   ],
+   "warnings": [
+    "case-experience2--front.json is not confirmed (confirmed_by is empty): the prompt is built from its mapping, and the payload records key_confirmed: false until the lead CMF designer confirms it"
+   ],
+   "sku_id": "experience-2-cc--C"
+  },
+  {
+   "payload_file": "references/payloads/experience-2-cc--D--case-experience2--front.payload.json",
+   "spec_file": "references/workbook/spec/experience-2-cc.json",
+   "key": "case-experience2--front",
+   "tab": "Experience 2 CC",
+   "column": "D",
+   "prompt": "Use the attached image as the exact base. Keep geometry, proportions, camera angle, framing, lighting and background unchanged.\nThe image is a clown model: each flat colour marks one component. Recolour ONLY these zones:\n- #D51C1B → Shell - Front: ABS, , VDI 24 — ABS frosted milky see through (Pantone 544C)\n- #D51C1B → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\n- #C6B807 → Insert: Silicone, VDI 24, Antistatic Coating + Grinding, Silicon mix marble imitation white (Pantone 544C + 427C + 5405)\n- #206893 → Shell - Front: ABS, , VDI 24 — ABS frosted milky see through (Pantone 544C)\n- #206893 → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\nRender realistic material behaviour for each finish. Do not add, remove or reshape any part. No text, no logos, no extra objects.",
+   "prompt_sha256": "4dd741f0ed62ce276653b3ebb95681499e8fc78e4c42f2ab24d34ca41868cf2f",
+   "template_sha256": "34df61cda3ba23ec31c46e168bcd24b828173a652c1305b72c49e39caf856b1b",
+   "key_confirmed": false,
+   "clown": {
+    "id": "case-experience2--front",
+    "file": "references/clowns/case-experience2--front.png",
+    "sha256": "1d9dbbe86bf4cbaa29d6444e6b4d1e6e5ce0d3a54bdd5e4c8ee003f9cc9d9296",
+    "width": 1280,
+    "height": 1280,
+    "aspect": "1:1"
+   },
+   "lines": [
+    {
+     "n": 1,
+     "zone_hex": "#D51C1B",
+     "component": "Shell - Front",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — ABS frosted milky see through",
+     "colour_code": "Pantone 544C",
+     "field": "Outer Shell",
+     "cells": {
+      "colour": "Experience 2 CC!D14",
+      "material": "Experience 2 CC!B13",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 2,
+     "zone_hex": "#D51C1B",
+     "component": "Shell - Back",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Outer Shell",
+     "cells": {
+      "colour": "Experience 2 CC!D20",
+      "material": "Experience 2 CC!B19",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 3,
+     "zone_hex": "#C6B807",
+     "component": "Insert",
+     "material": "Silicone",
+     "finish": "VDI 24, Antistatic Coating + Grinding",
+     "colour_name": "Silicon mix marble imitation white",
+     "colour_code": "Pantone 544C + 427C + 5405",
+     "field": "Colour",
+     "cells": {
+      "colour": "Experience 2 CC!D26",
+      "material": "Experience 2 CC!B25",
+      "finish": [
+       {
+        "field": "Finishing",
+        "cell": "Experience 2 CC!B27"
+       },
+       {
+        "field": "Finishing Technique",
+        "cell": "Experience 2 CC!B28"
+       }
+      ]
+     },
+     "codes": [
+      "Pantone 544C",
+      "427C",
+      "5405"
+     ]
+    },
+    {
+     "n": 4,
+     "zone_hex": "#206893",
+     "component": "Shell - Front",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — ABS frosted milky see through",
+     "colour_code": "Pantone 544C",
+     "field": "Inner Shell",
+     "cells": {
+      "colour": "Experience 2 CC!D15",
+      "material": "Experience 2 CC!B13",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 5,
+     "zone_hex": "#206893",
+     "component": "Shell - Back",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Inner Shell",
+     "cells": {
+      "colour": "Experience 2 CC!D21",
+      "material": "Experience 2 CC!B19",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    }
+   ],
+   "omitted": [
+    {
+     "component": "Cord",
+     "why": "not on this clown (the key's not_on_clown)"
+    },
+    {
+     "component": "ARTWORK",
+     "why": "not on this clown (the key's not_on_clown)"
+    }
+   ],
+   "warnings": [
+    "case-experience2--front.json is not confirmed (confirmed_by is empty): the prompt is built from its mapping, and the payload records key_confirmed: false until the lead CMF designer confirms it"
+   ],
+   "sku_id": "experience-2-cc--D"
+  },
+  {
+   "payload_file": "references/payloads/experience-2-cc--E--case-experience2--front.payload.json",
+   "spec_file": "references/workbook/spec/experience-2-cc.json",
+   "key": "case-experience2--front",
+   "tab": "Experience 2 CC",
+   "column": "E",
+   "prompt": "Use the attached image as the exact base. Keep geometry, proportions, camera angle, framing, lighting and background unchanged.\nThe image is a clown model: each flat colour marks one component. Recolour ONLY these zones:\n- #D51C1B → Shell - Front: ABS, , VDI 24 — Matte (Pantone 544C)\n- #D51C1B → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\n- #C6B807 → Insert: Silicone, VDI 24, Antistatic Coating + Grinding,  (Pantone 544C)\n- #206893 → Shell - Front: ABS, , VDI 24 — Matte (Pantone 544C)\n- #206893 → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\nRender realistic material behaviour for each finish. Do not add, remove or reshape any part. No text, no logos, no extra objects.",
+   "prompt_sha256": "94e256a80c7bde698f185969144e14ef3e7e2e22c5fae67ffc14fad7fda3b648",
+   "template_sha256": "34df61cda3ba23ec31c46e168bcd24b828173a652c1305b72c49e39caf856b1b",
+   "key_confirmed": false,
+   "clown": {
+    "id": "case-experience2--front",
+    "file": "references/clowns/case-experience2--front.png",
+    "sha256": "1d9dbbe86bf4cbaa29d6444e6b4d1e6e5ce0d3a54bdd5e4c8ee003f9cc9d9296",
+    "width": 1280,
+    "height": 1280,
+    "aspect": "1:1"
+   },
+   "lines": [
+    {
+     "n": 1,
+     "zone_hex": "#D51C1B",
+     "component": "Shell - Front",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Outer Shell",
+     "cells": {
+      "colour": "Experience 2 CC!E14",
+      "material": "Experience 2 CC!B13",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 2,
+     "zone_hex": "#D51C1B",
+     "component": "Shell - Back",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Outer Shell",
+     "cells": {
+      "colour": "Experience 2 CC!E20",
+      "material": "Experience 2 CC!B19",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 3,
+     "zone_hex": "#C6B807",
+     "component": "Insert",
+     "material": "Silicone",
+     "finish": "VDI 24, Antistatic Coating + Grinding",
+     "colour_name": "",
+     "colour_code": "Pantone 544C",
+     "field": "Colour",
+     "cells": {
+      "colour": "Experience 2 CC!E26",
+      "material": "Experience 2 CC!B25",
+      "finish": [
+       {
+        "field": "Finishing",
+        "cell": "Experience 2 CC!B27"
+       },
+       {
+        "field": "Finishing Technique",
+        "cell": "Experience 2 CC!B28"
+       }
+      ]
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 4,
+     "zone_hex": "#206893",
+     "component": "Shell - Front",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Inner Shell",
+     "cells": {
+      "colour": "Experience 2 CC!E15",
+      "material": "Experience 2 CC!B13",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 5,
+     "zone_hex": "#206893",
+     "component": "Shell - Back",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Inner Shell",
+     "cells": {
+      "colour": "Experience 2 CC!E21",
+      "material": "Experience 2 CC!B19",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    }
+   ],
+   "omitted": [
+    {
+     "component": "Cord",
+     "why": "not on this clown (the key's not_on_clown)"
+    },
+    {
+     "component": "ARTWORK",
+     "why": "not on this clown (the key's not_on_clown)"
+    }
+   ],
+   "warnings": [
+    "case-experience2--front.json is not confirmed (confirmed_by is empty): the prompt is built from its mapping, and the payload records key_confirmed: false until the lead CMF designer confirms it"
+   ],
+   "sku_id": "experience-2-cc--E"
+  },
+  {
+   "payload_file": "references/payloads/experience-2-cc--F--case-experience2--front.payload.json",
+   "spec_file": "references/workbook/spec/experience-2-cc.json",
+   "key": "case-experience2--front",
+   "tab": "Experience 2 CC",
+   "column": "F",
+   "prompt": "Use the attached image as the exact base. Keep geometry, proportions, camera angle, framing, lighting and background unchanged.\nThe image is a clown model: each flat colour marks one component. Recolour ONLY these zones:\n- #D51C1B → Shell - Front: ABS, , VDI 24 — ABS frosted milky see through (Pantone 544C)\n- #D51C1B → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\n- #C6B807 → Insert: Silicone, VDI 24, Antistatic Coating + Grinding, Silicon mix marble imitation white (Pantone 544C + 1328-07 TCX+ 5405)\n- #206893 → Shell - Front: ABS, , VDI 24 — ABS frosted milky see through (Pantone 544C)\n- #206893 → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\nRender realistic material behaviour for each finish. Do not add, remove or reshape any part. No text, no logos, no extra objects.",
+   "prompt_sha256": "195d229ecab8aea9b1f87eb5cde62808c996ed9e107c99f0061d49591a738204",
+   "template_sha256": "34df61cda3ba23ec31c46e168bcd24b828173a652c1305b72c49e39caf856b1b",
+   "key_confirmed": false,
+   "clown": {
+    "id": "case-experience2--front",
+    "file": "references/clowns/case-experience2--front.png",
+    "sha256": "1d9dbbe86bf4cbaa29d6444e6b4d1e6e5ce0d3a54bdd5e4c8ee003f9cc9d9296",
+    "width": 1280,
+    "height": 1280,
+    "aspect": "1:1"
+   },
+   "lines": [
+    {
+     "n": 1,
+     "zone_hex": "#D51C1B",
+     "component": "Shell - Front",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — ABS frosted milky see through",
+     "colour_code": "Pantone 544C",
+     "field": "Outer Shell",
+     "cells": {
+      "colour": "Experience 2 CC!F14",
+      "material": "Experience 2 CC!B13",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 2,
+     "zone_hex": "#D51C1B",
+     "component": "Shell - Back",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Outer Shell",
+     "cells": {
+      "colour": "Experience 2 CC!F20",
+      "material": "Experience 2 CC!B19",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 3,
+     "zone_hex": "#C6B807",
+     "component": "Insert",
+     "material": "Silicone",
+     "finish": "VDI 24, Antistatic Coating + Grinding",
+     "colour_name": "Silicon mix marble imitation white",
+     "colour_code": "Pantone 544C + 1328-07 TCX+ 5405",
+     "field": "Colour",
+     "cells": {
+      "colour": "Experience 2 CC!F26",
+      "material": "Experience 2 CC!B25",
+      "finish": [
+       {
+        "field": "Finishing",
+        "cell": "Experience 2 CC!B27"
+       },
+       {
+        "field": "Finishing Technique",
+        "cell": "Experience 2 CC!B28"
+       }
+      ]
+     },
+     "codes": [
+      "Pantone 544C",
+      "1328-07 TCX",
+      "5405"
+     ]
+    },
+    {
+     "n": 4,
+     "zone_hex": "#206893",
+     "component": "Shell - Front",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — ABS frosted milky see through",
+     "colour_code": "Pantone 544C",
+     "field": "Inner Shell",
+     "cells": {
+      "colour": "Experience 2 CC!F15",
+      "material": "Experience 2 CC!B13",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 5,
+     "zone_hex": "#206893",
+     "component": "Shell - Back",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Inner Shell",
+     "cells": {
+      "colour": "Experience 2 CC!F21",
+      "material": "Experience 2 CC!B19",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    }
+   ],
+   "omitted": [
+    {
+     "component": "Cord",
+     "why": "not on this clown (the key's not_on_clown)"
+    },
+    {
+     "component": "ARTWORK",
+     "why": "not on this clown (the key's not_on_clown)"
+    }
+   ],
+   "warnings": [
+    "case-experience2--front.json is not confirmed (confirmed_by is empty): the prompt is built from its mapping, and the payload records key_confirmed: false until the lead CMF designer confirms it"
+   ],
+   "sku_id": "experience-2-cc--F"
+  }
+ ],
+ "draft_keys": [
+  "aphrodite--v38",
+  "aphrodite--v40",
+  "case--v1",
+  "case--v2",
+  "case-aphrodite--7613-555",
+  "case-aphrodite--7613-556",
+  "case-aphrodite--7613-558",
+  "case-aphrodite--7613-560",
+  "case-aphrodite--7613-562",
+  "case-dream--v603",
+  "case-dream--v604",
+  "case-dream--v605",
+  "case-dream--v606",
+  "case-experience2--back",
+  "case-switch2--default",
+  "cocoon--default",
+  "dream--default",
+  "engage2--v602",
+  "experience2--glossy",
+  "experience2--satin",
+  "link--v609",
+  "link--v610",
+  "pouch-link--default",
+  "switch2--motorsport-615"
+ ]
+}

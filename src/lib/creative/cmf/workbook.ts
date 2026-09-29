@@ -16,9 +16,10 @@
  * committed specs on the real workbook, where that workbook is on the machine.
  */
 
+import crypto from 'crypto'
 import * as XLSX from 'xlsx'
-import { colourName, extractCodes, isPlaceholder } from './codes'
-import type { Cell, Spec, SpecComponent, SpecField } from './spec-diff'
+import { colourName, extractCodes, hasColourWord, isPlaceholder, NOT_APPLICABLE } from './codes'
+import { effective, type Cell, type Spec, type SpecComponent, type SpecField } from './spec-diff'
 
 export const FILL_HEADER_ROW = 'FF595959'
 export const FILL_COMPONENT = 'FF404040'
@@ -387,6 +388,119 @@ export function gridFromSheet(ws: XLSX.WorkSheet, title: string): SheetGrid {
       return { raw: rawOf(c), fill: fillOf(c) }
     },
   }
+}
+
+// ------------------------------------------------------------------ the workbook's own identity
+
+/** workbook.py's core_modified: the save time the file itself records (docProps/core.xml), or null. */
+export function coreModified(bytes: Buffer | Uint8Array): string | null {
+  let cfb: ReturnType<typeof XLSX.CFB.read>
+  try {
+    cfb = XLSX.CFB.read(Buffer.from(bytes), { type: 'buffer' })
+  } catch {
+    return null
+  }
+  const at = cfb.FullPaths.findIndex((p: string) => p.toLowerCase().endsWith('/docprops/core.xml'))
+  if (at < 0) return null
+  const content = cfb.FileIndex[at]?.content
+  if (!content) return null
+  const xml = Buffer.from(content as Uint8Array).toString('utf8')
+  const m = /<dcterms:modified[^>]*>([^<]+)</.exec(xml)
+  return m ? m[1].trim() : null
+}
+
+/** An ISO time to the second in UTC, as workbook.py writes an upload's Last-Modified. */
+export function isoSeconds(at: Date): string {
+  return at.toISOString().replace(/\.\d{3}Z$/, 'Z')
+}
+
+export const MODIFIED_FROM_FILE = "docProps/core.xml: the file's last save"
+export const MODIFIED_FROM_UPLOAD =
+  "the upload's Last-Modified in Vesper's storage: the file carries no save time of its own, so this is when it was uploaded, not when it was edited"
+
+/**
+ * workbook.py's workbook_info for an upload kept in Vesper: the file name, the sha256 of its
+ * bytes, and the modified time with where it came from. The spec-fields.md contract: "The
+ * modified time is the workbook's own property as read. For a downloaded workbook that is the
+ * download or re-save time, not Damien's last edit, so the footer names where the time came
+ * from." So: the file's own save time (docProps/core.xml) when it has one, else the stored
+ * upload's own Last-Modified, the time workbook.py reads from the same upload. Never the import
+ * row's clock, and never the export time. With neither, the time is null and a PDF refuses.
+ */
+export function workbookInfoForUpload(args: { bytes: Buffer | Uint8Array; fileName: string; storedLastModified: Date | null }): WorkbookInfo {
+  const sha256 = crypto.createHash('sha256').update(args.bytes).digest('hex')
+  const own = coreModified(args.bytes)
+  if (own) return { file: args.fileName, sha256, modified: own, modified_source: MODIFIED_FROM_FILE }
+  if (args.storedLastModified && !Number.isNaN(args.storedLastModified.getTime())) {
+    return { file: args.fileName, sha256, modified: isoSeconds(args.storedLastModified), modified_source: MODIFIED_FROM_UPLOAD }
+  }
+  return { file: args.fileName, sha256, modified: null, modified_source: 'none: the file carries no save time and the stored upload has no Last-Modified' }
+}
+
+// ------------------------------------------------------------------ one SKU's cells
+
+export interface SkuFailure {
+  row: number
+  where: string
+  what: string
+  raw: unknown
+  why: string
+}
+
+function hasValueRec(rec: Cell | null | undefined): rec is Cell {
+  return !!rec && rec.value !== null && rec.value !== undefined
+}
+
+/** workbook.py's _pending: empty, or a placeholder that means pending. */
+function pendingRec(rec: Cell | null | undefined): boolean {
+  if (!rec || rec.value === null || rec.value === undefined) return true
+  const rule = rec.placeholder
+  return rule !== null && rule !== undefined && !NOT_APPLICABLE.has(rule)
+}
+
+/**
+ * workbook.py's check_sku: (failures, notes) for one SKU column. A failure blocks: a yellow cell
+ * that is empty or holds a pending placeholder, or a component with no code in any field and no
+ * not-applicable marker. A component whose only colour is a colour word is a note, and a failure
+ * under `strict`.
+ */
+export function checkSku(spec: Spec, col: string, part: 'all' | 'banner' | 'components' = 'all', strict = false): { fails: SkuFailure[]; notes: SkuFailure[] } {
+  const fails: SkuFailure[] = []
+  const notes: SkuFailure[] = []
+  const tab = spec.tab
+  if (part === 'all' || part === 'banner') {
+    for (const [fname, entry] of Object.entries(spec.banner ?? {})) {
+      const rec = (entry as Record<string, unknown>)[col] as Cell | null | undefined
+      if (rec && rec.required && pendingRec(rec)) {
+        const why = rec.value === null || rec.value === undefined ? 'empty' : `pending (${rec.placeholder})`
+        fails.push({ row: entry.row, where: `${tab}!${col}${entry.row}`, what: `BANNER · ${fname}`, raw: rec.raw ?? null, why })
+      }
+    }
+  }
+  if (part === 'all' || part === 'components') {
+    for (const comp of spec.components) {
+      for (const f of comp.fields) {
+        const rec = f.by_sku[col]
+        if (rec && rec.required && pendingRec(rec)) {
+          const why = rec.value === null || rec.value === undefined ? 'empty' : `pending (${rec.placeholder})`
+          fails.push({ row: f.row, where: `${tab}!${col}${f.row}`, what: `${comp.header} · ${f.name}`, raw: rec.raw ?? null, why })
+        }
+      }
+      const recs = comp.fields.map((f) => effective(f, col)).filter((r): r is Cell => r !== null)
+      if (recs.some((r) => (r.codes ?? []).length > 0)) continue
+      if (recs.some((r) => r.placeholder !== null && r.placeholder !== undefined && NOT_APPLICABLE.has(r.placeholder))) continue
+      const named = recs.filter((r) => !r.placeholder && hasValueRec(r) && hasColourWord(r.value)).map((r) => String(r.value))
+      const entry: SkuFailure = { row: comp.row, where: `${tab}!A${comp.row}`, what: comp.header, raw: null, why: '' }
+      if (named.length) {
+        entry.why = 'no code in any field; a colour in words only: ' + named.join('; ')
+        ;(strict ? fails : notes).push(entry)
+      } else {
+        entry.why = "no code in any field and no ' / ' or 'N/A' to say none applies"
+        fails.push(entry)
+      }
+    }
+  }
+  return { fails, notes }
 }
 
 /**
