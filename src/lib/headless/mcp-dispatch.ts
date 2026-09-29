@@ -20,6 +20,7 @@ import { effectiveTools, type HeadlessTool } from './tool-registry'
 import { TOOL_HANDLERS, type ToolContext, type ToolPrincipal } from './tools'
 import { prismaJobStore } from './mcp-jobs'
 import { checkDailyCostCap } from './cost-cap'
+import { allowanceNeed, checkClaudeAllowance } from './claude-allowance'
 
 export const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26']
 const PREFERRED_PROTOCOL_VERSION = '2025-11-25'
@@ -43,7 +44,8 @@ export const SERVER_INSTRUCTIONS =
   'generate_product_image draws a Loop product from its skeleton, filled by code, with the product render first and no reference parameter; ' +
   "grade_image reads a picture three times with the product's grader (judge <model> vesper x3, advisory, never pooled with your own read, which record_grade keeps apart); " +
   "record_verdict records the decider's answer and, for a Frontify asset, returns the comment line to post with the person's own Frontify connector. " +
-  "Feedback on the Loop Creative plugin: list_feedback_targets, list_feedback to find the same remark, preview_feedback to show the exact issue, submit_feedback only after the colleague says yes; it is filed in the signed-in person's name."
+  "Feedback on the Loop Studio Design plugin: list_feedback_targets, list_feedback to find the same remark, preview_feedback to show the exact issue, submit_feedback only after the colleague says yes; it is filed in the signed-in person's name. " +
+  'Images and grading reads made through Claude count against a daily allowance per person; a refusal says how many were used and when the next one frees up, and nothing is paid for.'
 
 interface JsonRpcRequest {
   jsonrpc: '2.0'
@@ -121,6 +123,7 @@ export interface DispatchDeps {
   jobs?: ToolContext['jobs']
   recordUsage?: typeof recordHeadlessUsage
   checkCostCap?: typeof checkDailyCostCap
+  checkAllowance?: typeof checkClaudeAllowance
   env?: NodeJS.ProcessEnv
 }
 
@@ -271,6 +274,48 @@ export async function dispatch(
         }
       }
 
+      // Work Claude pays for (images, grading reads) counts against the person's daily allowance.
+      const need = allowanceNeed(tool.name, args)
+      if (need) {
+        let refusal: { text: string; metadata: Record<string, unknown> } | null = null
+        try {
+          const allowance = await (deps.checkAllowance ?? checkClaudeAllowance)({
+            ownerId: principal.ownerId,
+            isAdmin: principal.ownerRole === 'admin',
+            need,
+            env,
+          })
+          if (!allowance.ok) {
+            refusal = {
+              text: allowance.message,
+              metadata: { kind: allowance.kind, used: allowance.used, limit: allowance.limit, requested: allowance.requested },
+            }
+          }
+        } catch (err) {
+          console.warn('[mcp] daily allowance check failed', (err as Error)?.message)
+          refusal = {
+            text: 'Vesper could not check your daily allowance just now, so nothing was run or paid for. Try again in a minute.',
+            metadata: { kind: need.kind, checkFailed: true },
+          }
+        }
+        if (refusal) {
+          recordUsage({
+            credentialId: principal.credentialId,
+            ownerId: principal.ownerId,
+            surface: 'mcp',
+            route: '/api/mcp',
+            toolName: tool.name,
+            modelId,
+            status: 'forbidden',
+            httpStatus: 429,
+            errorCategory: 'claude_allowance',
+            durationMs: Date.now() - startedAt,
+            metadata: { rpcMethod: 'tools/call', ...refusal.metadata },
+          }).catch(() => undefined)
+          return rpcSuccess(id, { isError: true, content: [{ type: 'text', text: refusal.text }] })
+        }
+      }
+
       const progress = new McpProgressReporter()
       progress.step('Tool accepted')
       const ctx: ToolContext = {
@@ -360,6 +405,7 @@ export async function handleMcpPost(
   const principal: ToolPrincipal = {
     credentialId: verify.principal.credential.id,
     ownerId: verify.principal.owner.id,
+    ownerRole: verify.principal.owner.role,
     allowedTools: effectiveTools(verify.principal.credential, verify.principal.owner),
     allowedModels: verify.principal.credential.allowedModels,
   }

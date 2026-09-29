@@ -206,7 +206,7 @@ test.describe('the packaging grade', () => {
 const loaded: LoadedKit = {
   kit: testKit,
   conformance,
-  ref: 'creative-v0.2.1',
+  ref: 'studio-design-v0.2.1',
   commit: 'd90c9bb',
   blobSha: 'blob',
   fetchedAt: new Date(),
