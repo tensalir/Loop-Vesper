@@ -303,3 +303,9 @@ export function isPlaceholder(text: unknown): string | null {
   for (const [name, rule] of PLACEHOLDER_RULES) if (rule.test(s)) return name
   return null
 }
+
+/** True when the cell names a colour in words (`Silver`, `Green holographic`): codes.py's has_colour_word. */
+export function hasColourWord(text: unknown): boolean {
+  if (isEmpty(text)) return false
+  return (String(text).toLowerCase().match(/[a-z]+/g) ?? []).some((w) => COLOUR_WORDS.has(w))
+}

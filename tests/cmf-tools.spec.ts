@@ -392,6 +392,7 @@ function useDeps(over: Partial<CmfToolDeps> = {}): { kitLoads: number } {
     fetchPdf: async () => Buffer.from('%PDF-1.7 not read'),
     packetPdf: async () => null,
     worker: () => null,
+    recentImports: async () => [],
     ...over,
   })
   return seen

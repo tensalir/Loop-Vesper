@@ -539,15 +539,17 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'cmf_prompt',
     title: "Damien's template, filled from a sheet row",
     description:
-      "The prompt the plugin repository's prompt_build.py wrote for one tab, SKU column and clown key: Damien's template filled by code from the row and the key, verbatim, with the zone lines, what was left out and why, warnings (a key named but not confirmed), and the sha256s. Or prompt_build's refusal, word for word. Never rewrite it; cmf_render sends it as it is. Needs CMF access.",
+      "Damien's template filled by code for one tab, SKU column and clown key, verbatim, with the zone lines, what was left out and why, warnings (a key named but not confirmed), and the sha256s; or the refusal, word for word. Two sources: import_id with sku_column fills it from a workbook upload kept in Vesper (the same upload cmf_pdf builds the supplier PDF from; prefer it); column alone serves the payload the plugin repository's prompt_build.py pre-built. Pass identifiers only, never a cell value. Never rewrite the prompt; cmf_render sends it as it is. Needs CMF access.",
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: 'object',
       additionalProperties: false,
-      required: ['tab', 'column', 'clown'],
+      required: ['tab', 'clown'],
       properties: {
+        import_id: { type: 'string', description: 'a workbook upload in Vesper (cmf_list names the newest); with sku_column' },
         tab: { type: 'string', description: 'the sheet tab, e.g. "Experience 2 CC"' },
-        column: { type: 'string', description: 'the SKU column letter, e.g. E' },
+        sku_column: { type: 'string', description: 'with import_id: the SKU column letter, e.g. E' },
+        column: { type: 'string', description: "without import_id: the SKU column letter of the kit's pre-built payload" },
         clown: { type: 'string', description: 'the clown key, e.g. case-experience2--front' },
       },
     },
@@ -556,15 +558,17 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'cmf_render',
     title: 'Render a colourway on its clown',
     description:
-      "Sends the payload for one tab, SKU column and clown key the way the repository's render.py sends it: the clown the only image, the prompt byte for byte (no rewrite, no lighting clause), the clown's aspect, 2K unless asked, one model call per image. Refuses before paying when the key is a draft, the template or the prompt is not the payload's, or the clown's bytes are not the ones the key was sampled from. Saved under Claude / CMF. Grade each render with grade_image next; Damien decides. Needs CMF access.",
+      "Sends the payload for one tab, SKU column and clown key the way the repository's render.py sends it: the clown the only image, the prompt byte for byte (no rewrite, no lighting clause), the clown's aspect, 2K unless asked, one model call per image. With import_id and sku_column the prompt is filled by code from that workbook upload, and the render records the upload, the workbook's sha256 and the SKU's cells, so cmf_pdf can put it on a supplier PDF; without, it sends the kit's pre-built payload. Refuses before paying when the key is a draft, a cell is missing, the template or the prompt is not the payload's, or the clown's bytes are not the ones the key was sampled from. Identifiers only, never a cell value. Saved under Claude / CMF. Grade each render with grade_image next; Damien decides. Needs CMF access.",
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
       additionalProperties: false,
-      required: ['tab', 'column', 'clown'],
+      required: ['tab', 'clown'],
       properties: {
+        import_id: { type: 'string', description: 'a workbook upload in Vesper; with sku_column' },
         tab: { type: 'string' },
-        column: { type: 'string' },
+        sku_column: { type: 'string', description: 'with import_id: the SKU column letter' },
+        column: { type: 'string', description: "without import_id: the SKU column letter of the kit's pre-built payload" },
         clown: { type: 'string' },
         lane: { type: 'string', enum: ['final', 'draft'], default: 'final', description: "final: Nano Banana Pro; draft: Nano Banana 2 (the kit's CMF models)" },
         n: { type: 'integer', minimum: 1, maximum: 4, default: 1 },
@@ -591,6 +595,24 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         layout: { type: 'string', enum: ['vesper', 'ours'], default: 'vesper', description: "vesper: Vesper's export today; ours: a PDF made to spec-fields.md" },
         clown: { type: 'string', description: "a clown key: the legend is checked in the key's order" },
         engine: { type: 'string', enum: ['vesper', 'worker'], default: 'vesper' },
+      },
+    },
+  },
+  {
+    name: 'cmf_pdf',
+    title: 'Make the supplier CMF PDF',
+    description:
+      "Builds the supplier CMF PDF by code from one workbook upload in Vesper: one render/spec page per SKU, then one shared part-breakdown page (the clown, a legend from the confirmed clown key, material, finish and technique per component; no per-colourway Pantone). Every value is printed as its cell holds it; the header's Edit date, Drawn and Checked are the sheet's cells; every page's footer names the workbook file, its modified time and sha256. Each output_id must be a cmf_render made from a workbook upload with Damien's yes through record_verdict; a web CMF Studio attempt is refused, and so is a render whose cells have changed since (the changed fields are named). Before saving, the PDF is read back and compared with the same upload; any difference or empty required cell refuses, naming SKU, component, field, cell and both values, and nothing is saved. On a clean check it is stored beside the upload and its link returned. Identifiers only: import_id, tab, sku_columns, output_ids. Needs CMF access.",
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['import_id', 'tab', 'sku_columns', 'output_ids'],
+      properties: {
+        import_id: { type: 'string', description: 'the workbook upload in Vesper (cmf_list names the newest)' },
+        tab: { type: 'string', description: 'the sheet tab, e.g. "Experience 2 CC"' },
+        sku_columns: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 20, description: 'the SKU column letters, one page each, e.g. ["D", "E"]' },
+        output_ids: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 20, description: 'one approved cmf_render output per SKU column' },
       },
     },
   },

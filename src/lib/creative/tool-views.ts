@@ -15,7 +15,7 @@ export const TEXT_CAP = 20_000
 export const TOOLS_BY_KIND: Record<KitProduct['kind'], string[]> = {
   'product-imagery': ['get_product_references', 'generate_product_image', 'grade_image', 'record_grade', 'record_verdict'],
   packaging: ['get_product_references', 'packaging_list_looks', 'packaging_mockup', 'packaging_finish', 'grade_image', 'record_verdict'],
-  cmf: ['get_product_references', 'cmf_list', 'cmf_prompt', 'cmf_render', 'grade_image', 'cmf_check_pdf', 'record_verdict'],
+  cmf: ['get_product_references', 'cmf_list', 'cmf_prompt', 'cmf_render', 'grade_image', 'cmf_check_pdf', 'record_verdict', 'cmf_pdf'],
 }
 
 export function cap(text: string, max: number = TEXT_CAP): string {

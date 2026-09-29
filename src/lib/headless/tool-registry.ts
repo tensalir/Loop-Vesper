@@ -40,6 +40,7 @@ export const HEADLESS_TOOLS = [
   'cmf_prompt',
   'cmf_render',
   'cmf_check_pdf',
+  'cmf_pdf',
   'packaging_list_looks',
   'packaging_mockup',
   'packaging_finish',
@@ -98,6 +99,8 @@ export const TOOL_META: Record<HeadlessTool, ToolMeta> = {
   cmf_prompt: { group: 'cmf', needs: 'cmf', oauth: true, selfIssued: false, org: false, adminIssuable: true },
   cmf_render: { group: 'cmf', needs: 'cmf', oauth: true, selfIssued: false, org: false, adminIssuable: true },
   cmf_check_pdf: { group: 'cmf', needs: 'cmf', oauth: true, selfIssued: false, org: false, adminIssuable: true },
+  // The supplier PDF, built by code from a workbook upload and approved renders; spends no model call.
+  cmf_pdf: { group: 'cmf', needs: 'cmf', oauth: true, selfIssued: false, org: false, adminIssuable: true },
   // Packaging looks through Claude: only for people with packaging access (or admins). The
   // mockup and the finish run the plugin repository's own code on the creative worker.
   packaging_list_looks: { group: 'packaging', needs: 'packaging', oauth: true, selfIssued: false, org: false, adminIssuable: true },

@@ -635,7 +635,18 @@ export function parseVesperPage(lines: string[]): ParsedPage {
   return page
 }
 
-/** A page made to spec-fields.md (our own PDF, which does not exist yet). */
+/**
+ * The line cmf_pdf's part-breakdown page sets between the legend and the cells every SKU shares.
+ * The legend's entries are component headers, so the legend cannot end at the first component
+ * header, as `spec_diff.py --layout ours` has it (there, every legend reads empty): it ends here.
+ */
+export const OURS_SHARED_TITLE = 'Shared by every SKU'
+
+/**
+ * A page made to spec-fields.md: cmf_pdf's PDF since 2026-09-29 (`supplier-pdf.ts`). The same
+ * reading as spec_diff.py's parse_ours_page, but for the legend, which runs to
+ * `OURS_SHARED_TITLE` when the page has it.
+ */
 export function parseOursPage(lines: string[], spec: Spec): ParsedPage {
   const page: ParsedPage = { header: {}, components: {}, footer: null, legend: null, kind: 'sku', title: null }
   const text = lines.join('\n')
@@ -659,7 +670,9 @@ export function parseOursPage(lines: string[], spec: Spec): ParsedPage {
     if (body.includes('Legend') || lowered.includes('legend')) {
       let j = lowered.indexOf('legend') + 1
       const legend: string[] = []
-      while (j < body.length && !headers.includes(body[j])) {
+      const shared = body.indexOf(OURS_SHARED_TITLE, j)
+      const ends = shared >= 0 ? (ln: string) => ln === OURS_SHARED_TITLE : (ln: string) => headers.includes(ln)
+      while (j < body.length && !ends(body[j])) {
         legend.push(body[j])
         j++
       }

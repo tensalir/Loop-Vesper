@@ -13,11 +13,16 @@
  * Then: the aspect the payload names, 2K unless asked, one model call per image, no rewrite and no
  * lighting clause (the prompt is sent as it is, byte for byte). Pure except `executeCmfDraws`,
  * whose model call is injected.
+ *
+ * Since 2026-09-29 the payload can also be built by code from a workbook upload
+ * (`workbook-payload.ts`); its plan and manifest line then record the import id, the workbook's
+ * sha256, the SKU's cells as parsed and the key's sha256, which cmf_pdf holds the render to.
  */
 
 import crypto from 'crypto'
 import type { CmfKit, CmfPayloadEntry } from './kit-cmf'
 import { CmfError } from './kit-cmf'
+import type { WorkbookProvenance } from './workbook-payload'
 
 export const CMF_DRAW_DEADLINE_MS = 280_000
 export const CMF_MAX_DRAWS = 4
@@ -61,6 +66,10 @@ export interface CmfRenderPlan {
   imageSize: string
   warnings: string[]
   omitted: Array<{ component: string; why: string }>
+  /** For a render built from a workbook upload: where its values came from (null for a kit payload). */
+  workbook: WorkbookProvenance | null
+  /** The clown key file's sha256, when the payload names it. */
+  keySha256: string | null
 }
 
 function sha256(text: string | Buffer): string {
@@ -87,6 +96,34 @@ export function planCmfRender(
     throw new CmfError(`no prompt for ${entry.tab} column ${entry.column} through '${entry.key}': ${(entry.reasons ?? []).join('; ') || 'refused'}`)
   }
   const payload = JSON.parse(payloadBytes.toString('utf8')) as CmfPayload
+  return planFromPayload(cmf, entry.key, payload, id, entry.prompt_sha256 ?? null, args, null)
+}
+
+/**
+ * The same checks and plan for a payload built by code from a workbook upload
+ * (`workbook-payload.ts`): the prompt was filled in Vesper a moment ago from the upload's cells,
+ * so there is no kit entry to hold it to; the template, key, clown and prompt checks are the same.
+ */
+export function planCmfRenderFromWorkbook(
+  cmf: CmfKit,
+  payload: CmfPayload & { workbook: WorkbookProvenance },
+  payloadId: string,
+  keyId: string,
+  args: { lane?: CmfLane; n?: number; image_size?: '1K' | '2K' | '4K' }
+): CmfRenderPlan {
+  return planFromPayload(cmf, keyId, payload, payloadId, null, args, payload.workbook)
+}
+
+function planFromPayload(
+  cmf: CmfKit,
+  keyId: string,
+  payload: CmfPayload,
+  id: string,
+  kitPromptSha: string | null,
+  args: { lane?: CmfLane; n?: number; image_size?: '1K' | '2K' | '4K' },
+  workbook: WorkbookProvenance | null
+): CmfRenderPlan {
+  const entry = { key: keyId, prompt_sha256: kitPromptSha }
   const reasons: string[] = []
   const key = cmf.keys[entry.key]
   if (!key) reasons.push(`the key '${entry.key}' is not in the kit`)
@@ -123,6 +160,8 @@ export function planCmfRender(
     imageSize: args.image_size ?? (((cmf.product.generation ?? {}) as { image_size?: string }).image_size || '2K'),
     warnings: payload.warnings ?? [],
     omitted: payload.omitted ?? [],
+    workbook,
+    keySha256: payload.key?.sha256 ?? null,
   }
 }
 
@@ -179,6 +218,19 @@ export function cmfManifestLine(plan: CmfRenderPlan, draw: { index: number; file
     settings: draw.settings,
     prompt: plan.prompt,
     prompt_sha256: plan.promptSha256,
+    ...(plan.workbook
+      ? {
+          key_sha256: plan.keySha256,
+          workbook: {
+            import_id: plan.workbook.import_id,
+            file: plan.workbook.file,
+            sha256: plan.workbook.sha256,
+            modified: plan.workbook.modified,
+          },
+          sku_spec: plan.workbook.sku_spec,
+          sku_spec_sha256: plan.workbook.sku_spec_sha256,
+        }
+      : {}),
     timestamp: draw.timestamp,
   }
 }

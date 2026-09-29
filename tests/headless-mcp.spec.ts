@@ -13,6 +13,7 @@ test.describe('MCP_TOOLS catalog', () => {
     expect(names).toEqual([
       'cmf_check_pdf',
       'cmf_list',
+      'cmf_pdf',
       'cmf_prompt',
       'cmf_render',
       'enhance_prompt',

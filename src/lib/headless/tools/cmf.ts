@@ -1,14 +1,23 @@
 /**
  * CMF files through Claude, from the sheet row and the clown: `cmf_list`, `cmf_prompt`,
- * `cmf_render`, `cmf_check_pdf`. The judgement stays with Damien, the lead CMF designer; the data is
+ * `cmf_render`, `cmf_check_pdf`, `cmf_pdf`. The judgement stays with Damien, the lead CMF designer; the data is
  * code's (Damien's brief: "Use AI for judgement, use code for data").
  *
- *   cmf_list       tabs, SKUs, clown keys, and which tab × column × key has a prompt ready
- *   cmf_prompt     the payload the repository's `prompt_build.py` wrote, verbatim, or its refusal
- *   cmf_render     that payload sent the way `render.py` sends it, after the same refusals
+ *   cmf_list       tabs, SKUs, clown keys, which tab × column × key has a prompt ready, and the
+ *                  newest workbook uploads
+ *   cmf_prompt     the payload the repository's `prompt_build.py` wrote, verbatim, or its refusal;
+ *                  or, given an upload (`import_id`, `tab`, `sku_column`), the same template filled
+ *                  by code from that upload's cells (`prompt-fill.ts`)
+ *   cmf_render     that payload sent the way `render.py` sends it, after the same refusals; from an
+ *                  upload, the manifest line records the import, the workbook's sha256 and the
+ *                  SKU's cells as parsed
  *   cmf_check_pdf  every value on a CMF PDF against its sheet cell (`spec_diff.py`'s rows)
+ *   cmf_pdf        the supplier PDF, built by code from one upload and Damien's approved renders,
+ *                  read back and checked before it is saved (`supplier-pdf-run.ts`)
  *
- * All four need CMF access (the profile's `cmf_access`, or an admin): the registry gates them
+ * Supplier PDFs come from cmf_pdf. The web CMF Studio's export is left as it was.
+ *
+ * All of them need CMF access (the profile's `cmf_access`, or an admin): the registry gates them
  * (`needs: 'cmf'`) and each handler checks again, because a static token carries its tool list as
  * issued. The product kit (Loop Product Design, `tensalir/loop-product-plugins`) supplies
  * everything; Vesper holds no CMF wording or rule of its own, and reads CMF from no other kit.
@@ -39,10 +48,26 @@ import {
   type CmfGradingParts,
   type CmfKit,
 } from '@/lib/creative/cmf/kit-cmf'
-import { checkClownBytes, cmfDrawRequest, cmfManifestLine, executeCmfDraws, planCmfRender, type CmfDrawn, type CmfPayload, type CmfRenderPlan } from '@/lib/creative/cmf/render'
+import {
+  checkClownBytes,
+  cmfDrawRequest,
+  cmfManifestLine,
+  executeCmfDraws,
+  planCmfRender,
+  planCmfRenderFromWorkbook,
+  type CmfDrawn,
+  type CmfPayload,
+  type CmfRenderPlan,
+} from '@/lib/creative/cmf/render'
 import { checkPdfInVesper, checkPdfOnWorker, sha256Hex, specCheckText, type SpecCheckResult } from '@/lib/creative/cmf/check-pdf'
 import { workerConfigFromEnv, type WorkerConfig } from '@/lib/creative/cmf/worker-client'
 import type { ClownKey, Spec } from '@/lib/creative/cmf/spec-diff'
+import { PromptRefusal } from '@/lib/creative/cmf/prompt-fill'
+import { buildWorkbookPayload, type WorkbookPayload } from '@/lib/creative/cmf/workbook-payload'
+import { loadStoredWorkbook, type WorkbookImportRow, type WorkbookSourceDeps } from '@/lib/creative/cmf/workbook-source'
+import { CmfPdfRefused, runCmfPdf, type CmfPdfDeps, type RenderOutputRow, type VerdictRow } from '@/lib/creative/cmf/supplier-pdf-run'
+import type { SupplierPdfImage } from '@/lib/creative/cmf/supplier-pdf'
+import { CMF_STORAGE_BUCKET } from '@/lib/cmf/storage'
 import { recordMcpGeneration, STREAM_SESSIONS } from '../record-generation'
 import { imageResultContent } from '../generate-asset'
 import type { JobPayload } from '../jobs'
@@ -64,6 +89,25 @@ export interface CmfToolDeps {
   /** A CMF packet's exported PDF, when the caller may see the packet. */
   packetPdf(packetId: string, ownerId: string): Promise<{ url: string; name: string | null } | null>
   worker(env: NodeJS.ProcessEnv): WorkerConfig | null
+  /** The web CMF Studio's workbook uploads: the import row, the stored bytes, the stored file's Last-Modified. */
+  workbook: WorkbookSourceDeps
+  /** The newest uploads that kept their file, for cmf_list. */
+  recentImports(limit: number): Promise<WorkbookImportRow[]>
+  /** What cmf_pdf reaches beyond the kit and the upload. */
+  pdf: Omit<CmfPdfDeps, 'loadWorkbook' | 'readKey' | 'clownBytes'>
+}
+
+async function emailFromAuth(profileId: string, env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
+  const url = env.NEXT_PUBLIC_SUPABASE_URL
+  const key = env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return null
+  try {
+    const { createClient } = await import('@supabase/supabase-js')
+    const { data } = await createClient(url, key, { auth: { persistSession: false } }).auth.admin.getUserById(profileId)
+    return data?.user?.email ?? null
+  } catch {
+    return null
+  }
 }
 
 export const productionCmfDeps: CmfToolDeps = {
@@ -92,6 +136,62 @@ export const productionCmfDeps: CmfToolDeps = {
     return { url: packet.pdfUrl, name: packet.name ?? null }
   },
   worker: (env) => workerConfigFromEnv(env),
+  workbook: {
+    importRow: (importId) =>
+      prisma.cmfImport.findUnique({ where: { id: importId }, select: { id: true, ownerId: true, fileName: true, storagePath: true, createdAt: true } }),
+    async bytes(storagePath) {
+      const { downloadFromStorage } = await import('@/lib/supabase/storage')
+      return downloadFromStorage(CMF_STORAGE_BUCKET, storagePath)
+    },
+    async storedLastModified(storagePath) {
+      const { storageObjectLastModified } = await import('@/lib/supabase/storage')
+      return storageObjectLastModified(CMF_STORAGE_BUCKET, storagePath)
+    },
+  },
+  recentImports: (limit) =>
+    prisma.cmfImport.findMany({
+      where: { storagePath: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: { id: true, ownerId: true, fileName: true, storagePath: true, createdAt: true },
+    }),
+  pdf: {
+    async renderOutput(outputId) {
+      const out = await prisma.output.findUnique({
+        where: { id: outputId },
+        select: { id: true, fileUrl: true, generationId: true, generation: { select: { userId: true, parameters: true } } },
+      })
+      if (!out) return null
+      return { id: out.id, fileUrl: out.fileUrl, generationId: out.generationId, ownerId: out.generation.userId, parameters: (out.generation.parameters ?? null) as Record<string, unknown> | null } satisfies RenderOutputRow
+    },
+    async webAttempt(id) {
+      return !!(await prisma.cmfRenderAttempt.findUnique({ where: { id }, select: { id: true } }))
+    },
+    async verdicts(outputId, product) {
+      const rows = await prisma.creativeVerdict.findMany({
+        where: { outputId, product },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, profileId: true, credentialId: true, answer: true, remark: true, createdAt: true },
+      })
+      return rows satisfies VerdictRow[]
+    },
+    async verdictEmail(v) {
+      if (v.credentialId) {
+        const cred = await prisma.headlessCredential.findUnique({ where: { id: v.credentialId }, select: { subjectEmail: true } }).catch(() => null)
+        if (cred?.subjectEmail) return cred.subjectEmail
+      }
+      return emailFromAuth(v.profileId)
+    },
+    async imageBytes(url) {
+      const got = await fetchAllowlisted(url, { maxBytes: 40 * 1024 * 1024, timeoutMs: 30_000, contentTypes: ['image/png', 'image/jpeg', 'image/webp', 'application/octet-stream'] })
+      return { bytes: got.buffer, mimeType: got.contentType ?? null } satisfies SupplierPdfImage
+    },
+    async storePdf(path, bytes) {
+      const { uploadBase64ToStorage } = await import('@/lib/supabase/storage')
+      return uploadBase64ToStorage(`data:application/pdf;base64,${Buffer.from(bytes).toString('base64')}`, CMF_STORAGE_BUCKET, path)
+    },
+    now: () => new Date(),
+  },
 }
 
 let deps: CmfToolDeps = productionCmfDeps
@@ -123,6 +223,32 @@ export async function assertCmfAccess(ownerId: string): Promise<void> {
 async function loadCmf(ctx: ToolContext): Promise<{ loaded: LoadedKit; cmf: CmfKit }> {
   const loaded = await deps.loadKit(ctx.env)
   return { loaded, cmf: cmfKit(loaded.kit) }
+}
+
+/**
+ * Claude names things; it never hands Vesper a value. Every CMF tool that reads a workbook upload
+ * takes identifiers only (an import id, a tab, a column letter, a clown key, an output id) and
+ * refuses any other argument, before it reads anything.
+ */
+export function identifiersOnly(tool: string, args: Record<string, unknown>, allowed: readonly string[]): void {
+  const extra = Object.keys(args ?? {}).filter((k) => !allowed.includes(k))
+  if (extra.length) {
+    throw new Error(
+      `${tool} takes identifiers only (${allowed.join(', ')}) and refuses ${extra.join(', ')}: every value comes from the stored workbook's cells, never from Claude. Nothing was read.`
+    )
+  }
+}
+
+/** The payload for one SKU of a workbook upload, built by code, through one key of the kit. */
+async function workbookPayload(loaded: LoadedKit, cmf: CmfKit, a: { import_id: string; tab: string; sku_column: string; clown: string }) {
+  const wb = await loadStoredWorkbook(deps.workbook, a.import_id)
+  const built = await buildWorkbookPayload({ cmf, wb, tab: a.tab, column: a.sku_column, keyId: a.clown, readKey: (entry) => deps.readKitFile(loaded, { path: entry.path, sha256: entry.sha256 }) })
+  return { wb, ...built }
+}
+
+function workbookLine(p: WorkbookPayload): string {
+  const w = p.workbook
+  return `From upload ${w.import_id} (${w.file}, sha256 ${w.sha256.slice(0, 12)}, modified ${w.modified ?? 'unknown'}), ${w.tab} column ${w.column}; the SKU's cells sha256 ${w.sku_spec_sha256.slice(0, 12)}.`
 }
 
 const parsedParts = new Map<string, CmfGradingParts>()
@@ -178,7 +304,13 @@ export const cmfListHandler: ToolHandler = {
       )
     }
     lines.push('A draft key cannot make a prompt: Damien names its zones first. cmf_prompt shows a ready prompt; cmf_render draws it.')
-    return { content: [{ type: 'text', text: lines.join('\n') }], structuredContent: { ...kitHeader(loaded), tabs: out } }
+    const uploads = (await deps.recentImports(5).catch(() => [] as WorkbookImportRow[])).map((i) => ({ import_id: i.id, file: i.fileName, uploaded_at: i.createdAt.toISOString() }))
+    if (uploads.length) {
+      lines.push(
+        `Newest workbook uploads (name one as import_id to build the prompt and the supplier PDF from its cells): ${uploads.map((u) => `${u.import_id} ${u.file} (${u.uploaded_at.slice(0, 16).replace('T', ' ')})`).join('; ')}.`
+      )
+    }
+    return { content: [{ type: 'text', text: lines.join('\n') }], structuredContent: { ...kitHeader(loaded), tabs: out, uploads } }
   },
 }
 
@@ -192,6 +324,17 @@ export const CmfTargetArgs = {
 
 export const CmfPromptArgs = z.object(CmfTargetArgs).strict()
 
+/** A SKU of a workbook upload, by identifiers only. */
+export const CmfWorkbookTargetArgs = {
+  import_id: z.string().uuid(),
+  tab: z.string().min(1).max(80),
+  sku_column: z.string().regex(/^[A-Za-z]{1,2}$/, 'a column letter'),
+  clown: z.string().min(1).max(120),
+}
+
+export const CmfWorkbookPromptArgs = z.object(CmfWorkbookTargetArgs).strict()
+const WORKBOOK_TARGET_KEYS = ['import_id', 'tab', 'sku_column', 'clown'] as const
+
 async function readPayload(loaded: LoadedKit, cmf: CmfKit, tab: string, column: string, clown: string) {
   const { slug, spec } = resolveTab(cmf, tab)
   resolveKey(cmf, spec, clown)
@@ -201,8 +344,83 @@ async function readPayload(loaded: LoadedKit, cmf: CmfKit, tab: string, column: 
   return { slug, spec, entry, payload: JSON.parse(bytes.toString('utf8')) as CmfPayload, bytes }
 }
 
+function workbookPromptResult(loaded: LoadedKit, built: Awaited<ReturnType<typeof workbookPayload>>) {
+  const payload = built.payload
+  const table = [
+    '| # | Zone | Component | Material | Finish | Colour | Code |',
+    '|---|---|---|---|---|---|---|',
+    ...payload.lines.map((l) => `| ${l.n} | ${l.zone_hex} | ${l.component} | ${l.material} | ${l.finish} | ${l.colour_name} | ${l.colour_code} |`),
+  ]
+  const text = [
+    `Damien's template, filled by code from the uploaded workbook's cells, ${payload.tab} column ${payload.column}${payload.sku_name ? ` (${payload.sku_name})` : ''}, through the clown key ${payload.key.id}${payload.key_confirmed ? '' : ' (named, not yet confirmed by Damien)'}. Send it exactly as it is:`,
+    '',
+    payload.prompt,
+    '',
+    ...table,
+    ...(payload.omitted.length ? ['', `Left out: ${payload.omitted.map((o) => `${o.component} (${o.why})`).join('; ')}.`] : []),
+    ...(payload.warnings.length ? ['', ...payload.warnings.map((w) => `Warning: ${w}`)] : []),
+    '',
+    workbookLine(payload),
+    `prompt sha256 ${payload.prompt_sha256.slice(0, 12)}; template ${payload.template_sha256.slice(0, 12)}; clown ${payload.clown.id} ${payload.clown.sha256.slice(0, 12)}, ${payload.clown.aspect ?? '?'}. The clown is the only image. cmf_render with the same import_id, tab, sku_column and clown draws it.`,
+  ].join('\n')
+  return {
+    content: [{ type: 'text' as const, text }],
+    structuredContent: {
+      ...kitHeader(loaded),
+      refused: false,
+      payload_id: built.payloadId,
+      tab: payload.tab,
+      column: payload.column,
+      sku_name: payload.sku_name ?? null,
+      key: payload.key,
+      key_confirmed: payload.key_confirmed,
+      clown: payload.clown,
+      prompt: payload.prompt,
+      prompt_sha256: payload.prompt_sha256,
+      template_sha256: payload.template_sha256,
+      lines: payload.lines,
+      omitted: payload.omitted,
+      warnings: payload.warnings,
+      workbook: {
+        import_id: payload.workbook.import_id,
+        file: payload.workbook.file,
+        sha256: payload.workbook.sha256,
+        modified: payload.workbook.modified,
+        modified_source: payload.workbook.modified_source,
+        imported_at: payload.workbook.imported_at,
+        sku_spec_sha256: payload.workbook.sku_spec_sha256,
+      },
+    },
+  }
+}
+
+function promptRefusalResult(loaded: LoadedKit, a: { import_id: string; tab: string; sku_column: string; clown: string }, err: PromptRefusal) {
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: [`No prompt for ${a.tab} column ${a.sku_column.toUpperCase()} of upload ${a.import_id} through ${a.clown}: the fill refused it.`, ...err.reasons.map((r) => `- ${r}`), 'Nothing is sent until the row or the key is fixed.'].join('\n'),
+      },
+    ],
+    structuredContent: { ...kitHeader(loaded), refused: true, import_id: a.import_id, tab: a.tab, column: a.sku_column.toUpperCase(), key: a.clown, reasons: err.reasons },
+  }
+}
+
 export const cmfPromptHandler: ToolHandler = {
   async run(args, ctx) {
+    if (args && typeof args === 'object' && 'import_id' in args) {
+      identifiersOnly('cmf_prompt', args, WORKBOOK_TARGET_KEYS)
+      const w = CmfWorkbookPromptArgs.safeParse(args)
+      if (!w.success) throw invalidArguments(w.error.issues)
+      await requireCmf(ctx)
+      const { loaded, cmf } = await loadCmf(ctx)
+      try {
+        return workbookPromptResult(loaded, await workbookPayload(loaded, cmf, w.data))
+      } catch (err) {
+        if (err instanceof PromptRefusal) return promptRefusalResult(loaded, w.data, err)
+        throw err
+      }
+    }
     const parsed = CmfPromptArgs.safeParse(args)
     if (!parsed.success) throw invalidArguments(parsed.error.issues)
     await requireCmf(ctx)
@@ -240,7 +458,7 @@ export const cmfPromptHandler: ToolHandler = {
       `prompt sha256 ${payload.prompt_sha256.slice(0, 12)}; template ${payload.template_sha256.slice(0, 12)}; clown ${payload.clown.id} ${payload.clown.sha256.slice(0, 12)}, ${payload.clown.aspect ?? '?'}. The clown is the only image. cmf_render draws it.`,
     ].join('\n')
     return {
-      content: [{ type: 'text', text }],
+      content: [{ type: 'text' as const, text }],
       structuredContent: {
         ...header,
         refused: false,
@@ -274,6 +492,16 @@ export const CmfRenderArgs = z
   })
   .strict()
 
+const RenderOptions = {
+  lane: z.enum(['final', 'draft']).optional(),
+  n: z.number().int().min(1).max(4).optional(),
+  image_size: z.enum(['1K', '2K', '4K']).optional(),
+  async: z.boolean().optional().default(false),
+}
+
+export const CmfWorkbookRenderArgs = z.object({ ...CmfWorkbookTargetArgs, ...RenderOptions }).strict()
+const WORKBOOK_RENDER_KEYS = [...WORKBOOK_TARGET_KEYS, 'lane', 'n', 'image_size', 'async'] as const
+
 interface CmfRenderExecution {
   header: ReturnType<typeof kitHeader>
   plan: CmfRenderPlan
@@ -293,6 +521,11 @@ function renderSummary(x: CmfRenderExecution): string {
     `Rendered ${x.outputs.length} CMF image${x.outputs.length === 1 ? '' : 's'}: ${p.tab} column ${p.column}${p.skuName ? ` (${p.skuName})` : ''}, through ${p.key}${p.keyConfirmed ? '' : ' (key named, not confirmed)'}, ${p.model} (${p.lane}), ${p.aspect} at ${p.imageSize}.`,
     `The clown ${p.clown.id} was the only image; the prompt was the payload's, byte for byte (sha256 ${p.promptSha256.slice(0, 12)}), no rewrite, no lighting clause.`,
   ]
+  if (p.workbook) {
+    lines.push(
+      `Built from upload ${p.workbook.import_id} (${p.workbook.file}, sha256 ${p.workbook.sha256.slice(0, 12)}); the render records the SKU's cells (sha256 ${p.workbook.sku_spec_sha256.slice(0, 12)}), so cmf_pdf can hold it to the workbook.`
+    )
+  }
   if (x.failures.length) lines.push(`Not rendered: ${x.failures.join('; ')}.`)
   lines.push(x.recorded ? `Saved in Vesper under Claude / ${STREAM_SESSIONS.cmf.name}.` : `Not recorded in Vesper's web app (${x.recordError ?? 'unknown'}); the files are safe at the links.`)
   lines.push('Next: grade each render with grade_image (product cmf, the same tab, column and clown). Damien decides.')
@@ -319,6 +552,9 @@ function renderStructured(x: CmfRenderExecution): Record<string, unknown> {
     prompt_sha256: p.promptSha256,
     aspect: p.aspect,
     image_size: p.imageSize,
+    ...(p.workbook
+      ? { workbook: { import_id: p.workbook.import_id, file: p.workbook.file, sha256: p.workbook.sha256, modified: p.workbook.modified, sku_spec_sha256: p.workbook.sku_spec_sha256 } }
+      : {}),
     generationId: x.generationId,
     outputs: x.outputs,
     manifest: x.manifest,
@@ -349,6 +585,29 @@ async function clownForRender(ctx: ToolContext, loaded: LoadedKit, cmf: CmfKit, 
   if (!bytes) throw new CmfError(`the clown ${plan.clown.id}'s pinned copy could not be read. Nothing was paid for.`)
   checkClownBytes(plan, bytes)
   return { row, spec }
+}
+
+/**
+ * What a CMF render records about itself on its generation (`parameters.creative`). From a workbook
+ * upload it also records the upload, the workbook's sha256, the SKU's cells as parsed and the
+ * key's sha256: cmf_pdf reads them back to hold the render to the workbook.
+ */
+export function cmfRenderCreative(plan: CmfRenderPlan, header: Pick<ReturnType<typeof kitHeader>, 'kit_version' | 'kit_tag' | 'kit_commit'>): Record<string, unknown> {
+  return {
+    product: 'cmf',
+    tab: plan.tab,
+    column: plan.column,
+    sku_name: plan.skuName,
+    key: plan.key,
+    key_confirmed: plan.keyConfirmed,
+    lane: plan.lane,
+    model: plan.model,
+    kit_version: header.kit_version,
+    kit_tag: header.kit_tag,
+    kit_commit: header.kit_commit,
+    payload: { id: plan.payloadId, prompt_sha256: plan.promptSha256, clown: plan.clown },
+    ...(plan.workbook ? { key_sha256: plan.keySha256, workbook: plan.workbook } : {}),
+  }
 }
 
 async function executeRender(ctx: ToolContext, loaded: LoadedKit, cmf: CmfKit, plan: CmfRenderPlan, clown: { row: PinRow; spec: PinSpec }, jobId: string | null): Promise<CmfRenderExecution> {
@@ -390,20 +649,7 @@ async function executeRender(ctx: ToolContext, loaded: LoadedKit, cmf: CmfKit, p
         source: 'mcp',
         credentialId: ctx.principal.credentialId,
         mcpJobId: jobId,
-        creative: {
-          product: 'cmf',
-          tab: plan.tab,
-          column: plan.column,
-          sku_name: plan.skuName,
-          key: plan.key,
-          key_confirmed: plan.keyConfirmed,
-          lane: plan.lane,
-          model: plan.model,
-          kit_version: header.kit_version,
-          kit_tag: header.kit_tag,
-          kit_commit: header.kit_commit,
-          payload: { id: plan.payloadId, prompt_sha256: plan.promptSha256, clown: plan.clown },
-        },
+        creative: cmfRenderCreative(plan, header),
         manifest,
         aspectRatio: plan.aspect,
         imageSize: plan.imageSize,
@@ -438,6 +684,7 @@ export const cmfRenderHandler: ToolHandler = {
     return (drawPriceUsd(model, typeof args.image_size === 'string' ? args.image_size : '2K') ?? 0.134) * Math.max(1, n)
   },
   async run(args, ctx) {
+    if (args && typeof args === 'object' && 'import_id' in args) return runWorkbookRender(args, ctx)
     const parsed = CmfRenderArgs.safeParse(args)
     if (!parsed.success) {
       const extra = Object.keys(args).filter((k) => /^(reference|references|image|images|image_url|output_id|prompt)$/i.test(k))
@@ -467,6 +714,40 @@ export const cmfRenderHandler: ToolHandler = {
       }),
     })
   },
+}
+
+/** cmf_render from a workbook upload: the payload built by code, then the same refusals and the same draw. */
+async function runWorkbookRender(args: Record<string, unknown>, ctx: ToolContext) {
+  identifiersOnly('cmf_render', args, WORKBOOK_RENDER_KEYS)
+  const parsed = CmfWorkbookRenderArgs.safeParse(args)
+  if (!parsed.success) throw invalidArguments(parsed.error.issues)
+  await requireCmf(ctx)
+  const a = parsed.data
+  const { loaded, cmf } = await loadCmf(ctx)
+  let built: Awaited<ReturnType<typeof workbookPayload>>
+  try {
+    built = await workbookPayload(loaded, cmf, a)
+  } catch (err) {
+    if (err instanceof PromptRefusal) throw new CmfError(`not sent (nothing was paid for): ${err.reasons.join('; ')}`)
+    throw err
+  }
+  const plan = planCmfRenderFromWorkbook(cmf, built.payload, built.payloadId, a.clown, { lane: a.lane, n: a.n, image_size: a.image_size })
+  assertModelAllowed(ctx.principal.allowedModels, vesperModelId(plan.model))
+  const clown = await clownForRender(ctx, loaded, cmf, plan)
+  return runLongCall<CmfRenderExecution>({
+    ctx,
+    toolName: 'cmf_render',
+    modelId: plan.model,
+    request: { ...a },
+    runAsync: a.async,
+    what: `the ${plan.tab} ${plan.column} render`,
+    execute: (jobId) => executeRender(ctx, loaded, cmf, plan, clown, jobId),
+    toPayload: renderPayload,
+    toWire: async (x) => ({
+      content: await imageResultContent({ summary: renderSummary(x), outputs: x.outputs, modelId: x.plan.model, previewSources: x.previewSources, inline: true }),
+      structuredContent: renderStructured(x),
+    }),
+  })
 }
 
 // ------------------------------------------------------------------ cmf_check_pdf
@@ -531,6 +812,72 @@ export const cmfCheckPdfHandler: ToolHandler = {
     return {
       content: [{ type: 'text', text: specCheckText(result) }],
       structuredContent: { ...kitHeader(loaded), ...result, rows: result.rows },
+    }
+  },
+}
+
+// ------------------------------------------------------------------ cmf_pdf
+
+export const CmfPdfArgs = z
+  .object({
+    import_id: z.string().uuid(),
+    tab: z.string().min(1).max(80),
+    sku_columns: z.array(z.string().regex(/^[A-Za-z]{1,2}$/, 'a column letter')).min(1).max(20),
+    output_ids: z.array(z.string().uuid()).min(1).max(20),
+  })
+  .strict()
+const PDF_KEYS = ['import_id', 'tab', 'sku_columns', 'output_ids'] as const
+
+/** The pinned clown of a key, its bytes checked against the key's clown sha256. */
+async function clownOfKey(ctx: ToolContext, loaded: LoadedKit, cmf: CmfKit, keyId: string): Promise<SupplierPdfImage | null> {
+  const key = cmf.keys[keyId]
+  if (!key?.clown) return null
+  const spec = kitPins(loaded.kit).find((s) => s.product === cmf.slug && s.pinId === key.clown!.id && s.sha256 === key.clown!.sha256)
+  if (!spec) return null
+  const row = (await deps.pinRows(cmf.slug)).find((r) => r.pinId === spec.pinId && r.sha256 === spec.sha256)
+  if (!row || !usablePin(row, spec) || !row.storagePath) return null
+  const bytes = await deps.pinBytes(row.storagePath, ctx.env)
+  if (!bytes || sha256Hex(bytes) !== key.clown.sha256) return null
+  return { bytes, mimeType: 'image/png' }
+}
+
+export const cmfPdfHandler: ToolHandler = {
+  async run(args, ctx) {
+    identifiersOnly('cmf_pdf', args, PDF_KEYS)
+    const parsed = CmfPdfArgs.safeParse(args)
+    if (!parsed.success) throw invalidArguments(parsed.error.issues)
+    await requireCmf(ctx)
+    const { loaded, cmf } = await loadCmf(ctx)
+    try {
+      const r = await runCmfPdf(cmf, parsed.data, {
+        ...deps.pdf,
+        loadWorkbook: (id) => loadStoredWorkbook(deps.workbook, id),
+        readKey: (entry) => deps.readKitFile(loaded, { path: entry.path, sha256: entry.sha256 }),
+        clownBytes: ({ id }) => clownOfKey(ctx, loaded, cmf, id),
+      })
+      const text = [
+        `The supplier PDF is saved: ${r.file_name}`,
+        r.url,
+        `${r.tab}, ${r.columns.map((c) => `${c}${r.sku_names[c] ? ` (${r.sku_names[c]})` : ''}`).join(', ')}: one page per SKU, then one part-breakdown page. Read back and checked before it was saved: ${r.cells_compared} cell(s) and every other printed value, all equal to the workbook's cells.`,
+        `Workbook: ${r.workbook.file}, sha256 ${String(r.workbook.sha256).slice(0, 12)}, modified ${r.workbook.modified} (${r.workbook.modified_source}). Upload ${r.import_id}.`,
+        `Legend from the clown key ${r.key.id}, confirmed by ${r.key.confirmed_by}: ${r.legend.join(', ')}.`,
+        ...r.renders.map((x) => `- ${x.column}: render ${x.output_id}, answered yes by ${x.decided_by} on ${x.decided_at.slice(0, 10)}`),
+      ].join('\n')
+      return { content: [{ type: 'text', text }], structuredContent: { ...kitHeader(loaded), saved: true, ...r } }
+    } catch (err) {
+      if (err instanceof CmfPdfRefused) {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: err.message }],
+          structuredContent: {
+            ...kitHeader(loaded),
+            saved: false,
+            counts: err.check.counts,
+            rows: err.check.rows.filter((x) => x.state !== 'match'),
+          },
+        }
+      }
+      throw err
     }
   },
 }
