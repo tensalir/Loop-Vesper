@@ -19,7 +19,7 @@ import {
   type LoadedKit,
   type StoredKit,
 } from '../src/lib/creative/kit'
-import { ConformanceSchema, KitSchema, ProductKitSchema, type Kit, type ProductKit } from '../src/lib/creative/kit-schema'
+import { ConformanceSchema, KitSchema, kitGraders, kitResults, ProductKitSchema, reportsOnly, type Kit, type ProductKit } from '../src/lib/creative/kit-schema'
 import { kitSetPins, loadKitSet, resolveInKits, servedView, type KitSetLoaders } from '../src/lib/creative/kit-set'
 import { findSkeletonFingerprint } from '../src/lib/prompts/product-prompt-guard'
 import { runConformance } from '../src/lib/creative/conformance'
@@ -66,7 +66,7 @@ test.describe('the sample kit', () => {
     const conf = ConformanceSchema.parse(JSON.parse(CONF_BYTES.toString('utf8')))
     let n = 0
     for (const [slug, vectors] of Object.entries(conf.products)) {
-      for (const v of vectors.ladder) {
+      for (const v of vectors.ladder!) {
         expect(verdictFromKit(kit.ladder, kit.products[slug].rubric.checks, v.failed), `${slug} ${v.failed}`).toBe(v.verdict)
         n += 1
       }
@@ -388,9 +388,12 @@ test.describe('the comment-line grammar', () => {
 /**
  * Loop Product Design's kit, CMF only, read from tensalir/loop-product-plugins at its
  * product-design-v* tag. The sample is the studio release's CMF parts moved into it: the command
- * `/product-design:cmf-review`, the rubric under the plugin's `skills/`, CMF's own ladder (no
- * one-minor verdict: one failed minor check is a PASS with that check listed), the ladder vectors
- * recomputed with it, no prompting, no comment line, no feedback block.
+ * `/product-design:cmf-review`, the rubric under the plugin's `skills/`, CMF's own result rule (no
+ * one-minor verdict: one failed minor check is a PASS with that check listed), its vectors
+ * recomputed with it, no prompting, no comment line, no feedback block. Since product-design's
+ * 5473bf3 the kit names the result rule `results`, the grading surfaces `graders` and says
+ * `blocking: false` where the studio kit says `reporting_only: true`; its conformance file is that
+ * commit's.
  */
 const P_KIT_BYTES = readFileSync(join(FIX, 'product-kit.v1.sample.json'))
 const P_CONF_BYTES = readFileSync(join(FIX, 'product-conformance.v1.sample.json'))
@@ -404,7 +407,7 @@ function withProductKit(mutate: (k: any) => void): Buffer {
 }
 
 test.describe('the product kit', () => {
-  test('validates as Loop Product Design, CMF only, and every CMF ladder vector reproduces', () => {
+  test('validates as Loop Product Design, CMF only, and every CMF result vector reproduces', () => {
     const check = checkKit(P_KIT_BYTES, P_PLUGIN_BYTES, P_CONF_BYTES, PRODUCT_KIT)
     expect(check.problems).toEqual([])
     expect(check.ok).toBe(true)
@@ -418,9 +421,70 @@ test.describe('the product kit', () => {
     expect(kit.feedback ?? null).toBeNull()
     const conf = check.conformance!
     expect(conf.comment_lines).toEqual([])
-    expect(conf.products.cmf.ladder).toHaveLength(211)
-    expect(kit.ladder.rank).toEqual(['PASS', 'RETRY', 'FAIL'])
-    expect(new Set(conf.products.cmf.ladder.map((v) => v.verdict))).toEqual(new Set(['PASS', 'RETRY', 'FAIL']))
+    expect(conf.products.cmf.results).toHaveLength(211)
+    expect(conf.products.cmf.ladder).toBeUndefined()
+    expect(kit.results.rank).toEqual(['PASS', 'RETRY', 'FAIL'])
+    expect(kitResults(kit)).toBe(kit.results)
+    expect(kitGraders(kit)).toBe(kit.graders)
+    expect(new Set(conf.products.cmf.results!.map((v) => v.verdict))).toEqual(new Set(['PASS', 'RETRY', 'FAIL']))
+  })
+
+  test('it says blocking, false while every check only reports, and the tools read that as reports-only', () => {
+    const kit = checkKit(P_KIT_BYTES, P_PLUGIN_BYTES, P_CONF_BYTES, PRODUCT_KIT).kit!
+    expect(kit.products.cmf.rubric.blocking).toBe(false)
+    expect(kit.products.cmf.rubric.reporting_only).toBeUndefined()
+    expect(kit.products.cmf.grading?.blocking).toBe(false)
+    expect(reportsOnly(kit.products.cmf.rubric)).toBe(true)
+    expect(reportsOnly({ blocking: true })).toBe(false)
+    const studio = checkKit(KIT_BYTES, PLUGIN_BYTES, CONF_BYTES).kit!
+    expect(kitResults(studio)).toBe(studio.ladder)
+    expect(kitGraders(studio)).toBe(studio.judges)
+    for (const p of Object.values(studio.products)) expect(reportsOnly(p.rubric)).toBe(p.rubric.reporting_only)
+  })
+
+  test("a product kit in the studio kit's words is refused, and the studio kit keeps its own", () => {
+    const oldNames = checkKit(
+      withProductKit((k) => {
+        k.ladder = k.results
+        delete k.results
+        k.judges = k.graders
+        delete k.graders
+      }),
+      P_PLUGIN_BYTES,
+      P_CONF_BYTES,
+      PRODUCT_KIT
+    )
+    expect(oldNames.ok).toBe(false)
+    expect(oldNames.problems.join()).toContain('kit.json results')
+    expect(oldNames.problems.join()).toContain('kit.json graders')
+    const oldFlag = checkKit(
+      withProductKit((k) => {
+        delete k.products.cmf.rubric.blocking
+        k.products.cmf.rubric.reporting_only = true
+      }),
+      P_PLUGIN_BYTES,
+      P_CONF_BYTES,
+      PRODUCT_KIT
+    )
+    expect(oldFlag.ok).toBe(false)
+    expect(oldFlag.problems.join()).toContain('kit.json products.cmf.rubric.blocking')
+    expect(oldFlag.problems.join()).toContain('kit.json products.cmf.rubric.reporting_only')
+    const studioNewFlag = checkKit(
+      withKit((k) => {
+        for (const p of Object.values(k.products) as any[]) p.rubric.blocking = !p.rubric.reporting_only
+      }),
+      PLUGIN_BYTES,
+      CONF_BYTES
+    )
+    expect(studioNewFlag.ok).toBe(false)
+    expect(studioNewFlag.problems.join()).toContain('rubric.blocking')
+    const conf = JSON.parse(P_CONF_BYTES.toString('utf8'))
+    conf.products.cmf.ladder = conf.products.cmf.results
+    delete conf.products.cmf.results
+    const confBytes = Buffer.from(JSON.stringify(conf))
+    const oldVectors = checkKit(withProductKit((k) => (k.conformance.sha256 = sha256Hex(confBytes))), P_PLUGIN_BYTES, confBytes, PRODUCT_KIT)
+    expect(oldVectors.ok).toBe(false)
+    expect(oldVectors.problems.join()).toContain('conformance.json has no results vectors for cmf')
   })
 
   test('its CMF template is a prompt no model rewrites', () => {

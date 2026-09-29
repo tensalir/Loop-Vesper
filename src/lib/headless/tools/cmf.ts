@@ -19,7 +19,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getProductKit, readKitFile } from '@/lib/creative/kit-runtime'
 import type { LoadedKit as LoadedKitOf } from '@/lib/creative/kit'
-import type { AnyKit } from '@/lib/creative/kit-schema'
+import { reportsOnly, type AnyKit } from '@/lib/creative/kit-schema'
 import { kitHeader } from '@/lib/creative/tool-views'
 import { kitPins, usablePin, type PinRow, type PinSpec } from '@/lib/creative/pins'
 import { pinStorage, prismaPinStore } from '@/lib/creative/pins-runtime'
@@ -152,7 +152,7 @@ export const cmfListHandler: ToolHandler = {
     const tabs = parsed.data.tab ? [resolveTab(cmf, parsed.data.tab)] : Object.entries(cmf.specs).map(([slug, spec]) => ({ slug, spec }))
     const out = []
     const lines: string[] = [
-      `CMF in ${loaded.kit.tag}: rubric ${cmf.product.rubric.version ?? '?'}${cmf.product.rubric.reporting_only ? ' (no check blocks yet)' : ''}. Damien decides every render and every PDF.`,
+      `CMF in ${loaded.kit.tag}: rubric ${cmf.product.rubric.version ?? '?'}${reportsOnly(cmf.product.rubric) ? ' (no check blocks yet)' : ''}. Damien decides every render and every PDF.`,
     ]
     for (const { slug, spec } of tabs) {
       const keys = keysForTab(cmf, spec).map(([id, k]) => ({ id, clown: k.clown?.id ?? null, draft: k.draft, confirmed: k.confirmed }))

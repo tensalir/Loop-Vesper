@@ -10,7 +10,7 @@
  */
 
 import crypto from 'crypto'
-import type { AnyKit, KitProduct } from './kit-schema'
+import { kitResults, reportsOnly, type AnyKit, type KitProduct } from './kit-schema'
 import type { PinRow, PinSpec } from './pins'
 import { kitPins, usablePin } from './pins'
 import { referencePlan } from './tool-views'
@@ -176,7 +176,7 @@ export async function gradeCandidate(req: GradeRequest, deps: GradeDeps): Promis
       }
     })
   )
-  const aggregate = aggregateReads(results, checks, req.kit.ladder)
+  const aggregate = aggregateReads(results, checks, kitResults(req.kit))
   const { label, model } = judgeLabel(aggregate.models, runs)
   return {
     aggregate,
@@ -205,7 +205,7 @@ export async function gradeCandidate(req: GradeRequest, deps: GradeDeps): Promis
     ),
     judge_label: label,
     judge_model: model,
-    reporting_only: product.rubric.reporting_only,
+    reporting_only: reportsOnly(product.rubric),
     latency_ms: now() - started,
   }
 }

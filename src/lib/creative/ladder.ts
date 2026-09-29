@@ -2,7 +2,8 @@
  * The verdict ladder, read from the creative kit.
  *
  * A port of `verdict_from_kit` in the plugin repository's `tools/kit.py`. The
- * kit carries the ladder as data (`kit.ladder`) so Vesper holds no copy of
+ * kit carries the rule as data (`kit.ladder` in the studio kit, `kit.results`
+ * in the product kit; `kitResults` reads either) so Vesper holds no copy of
  * it; the kit's conformance vectors (every single and pair of failures, for
  * every product) are run against this function before a kit is used.
  */

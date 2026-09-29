@@ -20,7 +20,8 @@
  * Before a kit is used:
  *   1. its `plugin.json` at the same commit has the kit's version;
  *   2. it validates against its plugin's schema (`./kit-schema.ts`), and `schema` is 1;
- *   3. `kit/conformance.json` has the sha256 the kit names, and its ladder and
+ *   3. `kit/conformance.json` has the sha256 the kit names, and its result-rule
+ *      vectors (`ladder` in the studio kit, `results` in the product kit) and
  *      comment-line vectors reproduce here (`./conformance.ts`).
  * A kit that fails any of these is stored as invalid and the last good kit of
  * the same plugin stays in use, marked stale. A failed fetch does the same. One

@@ -12,7 +12,7 @@
  */
 
 import crypto from 'crypto'
-import type { AnyKit, KitProduct } from '../kit-schema'
+import { kitResults, reportsOnly, type AnyKit, type KitProduct } from '../kit-schema'
 import type { PinRow, PinSpec } from '../pins'
 import { kitPins, usablePin } from '../pins'
 import { fillText, GradingPromptError } from '../grading-prompt'
@@ -146,7 +146,7 @@ export async function gradeCmfCandidate(req: CmfGradeRequest, deps: GradeDeps): 
       }
     })
   )
-  const aggregate = aggregateReads(results, checks, req.kit.ladder)
+  const aggregate = aggregateReads(results, checks, kitResults(req.kit))
   const { label, model } = judgeLabel(aggregate.models, runs)
   return {
     aggregate,
@@ -174,7 +174,7 @@ export async function gradeCmfCandidate(req: CmfGradeRequest, deps: GradeDeps): 
     ),
     judge_label: label,
     judge_model: model,
-    reporting_only: product.rubric.reporting_only || product.grading.reporting_only === true,
+    reporting_only: reportsOnly(product.rubric) || reportsOnly(product.grading),
     latency_ms: now() - started,
   }
 }

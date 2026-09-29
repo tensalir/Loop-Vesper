@@ -4,7 +4,7 @@
  * `src/lib/headless/tools/creative-read.ts` are thin wrappers around these.
  */
 
-import type { AnyKit, KitProduct } from './kit-schema'
+import { kitGraders, reportsOnly, type AnyKit, type KitProduct } from './kit-schema'
 import type { LoadedKit } from './kit'
 import { kitPins, usablePin, type PinRow, type PinSpec } from './pins'
 import { servedProducts, resolveProduct } from './products'
@@ -61,7 +61,7 @@ export function listProducts(kit: AnyKit, available: (tool: string) => boolean, 
       command: product.command,
       aliases: product.aliases,
       rubric_version: product.rubric.version,
-      reporting_only: product.rubric.reporting_only,
+      reporting_only: reportsOnly(product.rubric),
       colourways: product.grading?.colourways ?? [],
       views: product.grading?.views ?? [],
       looks: p.looks ? Object.keys(p.looks) : [],
@@ -78,7 +78,7 @@ export function listProducts(kit: AnyKit, available: (tool: string) => boolean, 
 export function rubricMarkdown(slug: string, product: KitProduct): string {
   const r = product.rubric
   const lines = [
-    `# ${product.name}: rubric ${r.version ?? '?'}${r.reporting_only ? ' (no check blocks yet)' : ''}`,
+    `# ${product.name}: rubric ${r.version ?? '?'}${reportsOnly(r) ? ' (no check blocks yet)' : ''}`,
     '',
     `Chat reads families ${r.chat_families.join(', ') || 'all'}. The decider decides; a grade is a floor, never an approval.`,
     '',
@@ -109,7 +109,7 @@ export function kitSection(
       `${kit.plugin === 'product-design' ? 'Product kit (Loop Product Design)' : 'Creative kit'} ${kit.version} (${loaded.ref}, commit ${loaded.commit.slice(0, 7)})${loaded.stale ? ` — STALE: ${loaded.staleReason}` : ''}.`,
       `Products: ${products.map((p) => `${p.name} (${p.slug}, ${p.status}, rubric ${p.rubric ?? '?'})`).join('; ')}.`,
       kit.prompting ? `Prompting: genai-prompting ${kit.prompting.version ?? '?'}, Loop edition, ${kit.prompting.lessons.length} lessons.` : 'Prompting: not in this kit.',
-      `Judges: ${kit.judges.surfaces.join(', ')}; Vesper's reads are labelled '${kit.judges.vesper_surface}' and never pooled with another judge.`,
+      `Judges: ${kitGraders(kit).surfaces.join(', ')}; Vesper's reads are labelled '${kitGraders(kit).vesper_surface}' and never pooled with another judge.`,
       kit.comment_line
         ? `Comment lines are written [${kit.comment_line.prefix} <product> <date>] and read under ${[kit.comment_line.prefix, ...kit.comment_line.reads_also].join(' or ')}.`
         : 'No comment lines: answers to these products are recorded in Vesper.',

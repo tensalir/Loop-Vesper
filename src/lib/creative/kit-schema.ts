@@ -8,14 +8,19 @@
  *     Vesper reads CMF from since 2026-09-29. It carries no prompting skill, no Frontify comment
  *     line and no feedback block: those three are null.
  *
- * Strict on what Vesper acts on (the schema number, the plugin and its tag, the ladder,
+ * Strict on what Vesper acts on (the schema number, the plugin and its tag, the result rule,
  * severities, verdicts, statuses, checks, pins, the prompting body); open on the rest, so a field
  * a plugin adds does not refuse a kit this code does not read yet. A new `schema` number is
  * refused: the shape changed and this code has not.
+ *
+ * The two kits name three things differently, and each kit is held to its own names:
+ *   studio-design    `ladder`    `judges`    `rubric.reporting_only` (true while no check blocks)
+ *   product-design   `results`   `graders`   `rubric.blocking` (false while no check blocks)
+ * Code that serves either kit reads them through `kitResults`, `kitGraders` and `reportsOnly`.
  */
 
 import { z } from 'zod'
-import { SEVERITIES, VERDICTS } from './ladder'
+import { SEVERITIES, VERDICTS, type KitLadder } from './ladder'
 
 const sha256 = z.string().regex(/^[0-9a-f]{64}$/, 'a sha256 in lower-case hex')
 const severity = z.enum(SEVERITIES)
@@ -33,6 +38,9 @@ export const KitLadderSchema = z.object({
   rank: z.array(verdict),
 })
 
+/** The product kit's name for the same block: how failed checks become a result. */
+export const KitResultsSchema = KitLadderSchema
+
 export const KitCheckSchema = z
   .object({
     id: z.string().regex(/^[A-E]\d+$/),
@@ -49,7 +57,10 @@ export const KitRubricSchema = z
     path: z.string(),
     sha256,
     version: z.string().nullable(),
-    reporting_only: z.boolean(),
+    // The studio kit says `reporting_only`, the product kit `blocking`; which one a kit must carry
+    // is checked per kit (`sayWhetherChecksBlock`).
+    reporting_only: z.boolean().optional(),
+    blocking: z.boolean().optional(),
     grading_rules: z.string(),
     families: z.array(z.object({ id: z.string(), name: z.string(), note: z.string() }).passthrough()),
     checks: z.array(KitCheckSchema),
@@ -104,6 +115,7 @@ export const KitProductSchema = z
         views: z.array(z.string()).optional(),
         trusted_claims: z.array(z.string()).optional(),
         reporting_only: z.boolean().optional(),
+        blocking: z.boolean().optional(),
         parts_order: z.array(z.string()).optional(),
         calibration: z.string().optional(),
       })
@@ -158,6 +170,9 @@ export const KitJudgesSchema = z
   })
   .passthrough()
 
+/** The product kit's name for the same block: the surfaces a grade is read on, never added together. */
+export const KitGradersSchema = KitJudgesSchema
+
 export const KitCommentLineSchema = z
   .object({
     prefix: z.literal('studio-design'),
@@ -196,10 +211,30 @@ const kitShape = {
   commit: z.null(),
   built_at: z.null(),
   prompting: KitPromptingSchema.nullable(),
-  ladder: KitLadderSchema,
-  judges: KitJudgesSchema,
   products: z.record(KitProductSchema).refine((p) => Object.keys(p).length > 0, 'the kit names no product'),
   conformance: KitFileSchema,
+}
+
+type BlockFlag = 'reporting_only' | 'blocking'
+
+/**
+ * Every product of a kit says whether its checks may block, in that kit's word (`flag`), and
+ * never in the other kit's (`other`), in its rubric and in its grading.
+ */
+function sayWhetherChecksBlock(flag: BlockFlag, other: BlockFlag) {
+  return (kit: { products: Record<string, KitProduct> }, ctx: z.RefinementCtx) => {
+    for (const [slug, p] of Object.entries(kit.products)) {
+      if (typeof p.rubric[flag] !== 'boolean') {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['products', slug, 'rubric', flag], message: 'Required: true or false' })
+      }
+      if (p.rubric[other] !== undefined) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['products', slug, 'rubric', other], message: `this kit says ${flag}` })
+      }
+      if (p.grading && p.grading[other] !== undefined) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['products', slug, 'grading', other], message: `this kit says ${flag}` })
+      }
+    }
+  }
 }
 
 /** Loop Studio Design's kit: the one Vesper has read since 2026-09-24. */
@@ -208,10 +243,13 @@ export const KitSchema = z
     ...kitShape,
     plugin: z.literal('studio-design'),
     tag: z.string().regex(/^studio-design-v\d+\.\d+\.\d+$/),
+    ladder: KitLadderSchema,
+    judges: KitJudgesSchema,
     comment_line: KitCommentLineSchema,
     feedback: KitFeedbackSchema,
   })
   .passthrough()
+  .superRefine(sayWhetherChecksBlock('reporting_only', 'blocking'))
 
 /** Loop Product Design's kit: CMF. No comment line and no feedback block of its own. */
 export const ProductKitSchema = z
@@ -219,17 +257,41 @@ export const ProductKitSchema = z
     ...kitShape,
     plugin: z.literal('product-design'),
     tag: z.string().regex(/^product-design-v\d+\.\d+\.\d+$/),
+    results: KitResultsSchema,
+    graders: KitGradersSchema,
     comment_line: z.null().optional(),
     feedback: z.null().optional(),
   })
   .passthrough()
+  .superRefine(sayWhetherChecksBlock('blocking', 'reporting_only'))
 
 export type Kit = z.infer<typeof KitSchema>
 export type ProductKit = z.infer<typeof ProductKitSchema>
-/** Either kit: what code that reads only the shared parts (products, ladder, version, tag) takes. */
+/** Either kit: what code that reads only the shared parts (products, the result rule, version, tag) takes. */
 export type AnyKit = Kit | ProductKit
 export type KitProduct = z.infer<typeof KitProductSchema>
 export type KitPin = z.infer<typeof KitPinSchema>
+export type KitGraders = z.infer<typeof KitGradersSchema>
+
+/** How failed checks become a result, in either kit: the product kit's `results`, the studio kit's `ladder`. */
+export function kitResults(kit: AnyKit): KitLadder {
+  return kit.plugin === 'product-design' ? kit.results : kit.ladder
+}
+
+/** The surfaces a grade is read on, in either kit: the product kit's `graders`, the studio kit's `judges`. */
+export function kitGraders(kit: AnyKit): KitGraders {
+  return kit.plugin === 'product-design' ? kit.graders : kit.judges
+}
+
+/**
+ * Whether every check only reports, from a rubric or a grading block of either kit: `blocking: false`
+ * in the product kit, `reporting_only: true` in the studio kit.
+ */
+export function reportsOnly(block: { reporting_only?: boolean; blocking?: boolean } | null | undefined): boolean {
+  if (!block) return false
+  if (typeof block.blocking === 'boolean') return !block.blocking
+  return block.reporting_only === true
+}
 
 export const ConformanceSchema = z
   .object({
@@ -238,7 +300,10 @@ export const ConformanceSchema = z
     products: z.record(
       z
         .object({
-          ladder: z.array(z.object({ failed: z.array(z.string()), verdict })),
+          // The result-rule vectors: `ladder` from the studio kit, `results` from the product kit.
+          // Which one a kit's conformance file must carry is checked in `runConformance`.
+          ladder: z.array(z.object({ failed: z.array(z.string()), verdict })).optional(),
+          results: z.array(z.object({ failed: z.array(z.string()), verdict })).optional(),
         })
         .passthrough()
     ),

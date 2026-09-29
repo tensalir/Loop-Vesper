@@ -3,7 +3,8 @@
  *
  * `kit/conformance.json` carries vectors the plugin's builder wrote with the
  * repository's own code: the verdict for every single and pair of failed
- * checks of every product, and comment lines written by the grammar (the
+ * checks of every product (`ladder` in the studio kit's file, `results` in the
+ * product kit's), and comment lines written by the grammar (the
  * studio kit's; the product kit writes no comment line and carries none). A
  * kit whose vectors this code cannot reproduce is refused, and the last good
  * kit stays in use.
@@ -11,7 +12,7 @@
 
 import { formatLine, parseLine, type LineFields } from './grammar'
 import { verdictFromKit } from './ladder'
-import type { AnyKit, Conformance } from './kit-schema'
+import { kitResults, type AnyKit, type Conformance } from './kit-schema'
 
 export function runConformance(kit: AnyKit, conformance: Conformance): string[] {
   const problems: string[] = []
@@ -27,15 +28,23 @@ export function runConformance(kit: AnyKit, conformance: Conformance): string[] 
       problems.push(`conformance.json names ${slug}, which the kit does not carry`)
       continue
     }
+    // The product kit's vectors are `results`, the studio kit's `ladder`: each kit its own name.
+    const name = kit.plugin === 'product-design' ? 'results' : 'ladder'
+    const list = vectors[name]
+    if (!list) {
+      problems.push(`conformance.json has no ${name} vectors for ${slug}`)
+      continue
+    }
+    const rule = kitResults(kit)
     let wrong = 0
-    for (const v of vectors.ladder) {
-      const got = verdictFromKit(kit.ladder, product.rubric.checks, v.failed)
+    for (const v of list) {
+      const got = verdictFromKit(rule, product.rubric.checks, v.failed)
       if (got !== v.verdict) {
         wrong += 1
         if (wrong <= 3) problems.push(`${slug}: failing [${v.failed.join(', ')}] gives ${got}, the repo says ${v.verdict}`)
       }
     }
-    if (wrong > 3) problems.push(`${slug}: ${wrong - 3} more ladder vectors differ`)
+    if (wrong > 3) problems.push(`${slug}: ${wrong - 3} more ${name} vectors differ`)
   }
   const commentLine = kit.comment_line ?? null
   if (!commentLine) {

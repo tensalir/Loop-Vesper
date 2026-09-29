@@ -4,10 +4,10 @@
  "commit": null,
  "conformance": {
   "path": "kit/conformance.json",
-  "sha256": "a75317eed973acd32e02abda561adcfd15784662f0b7aa8895da3c1035528bc5"
+  "sha256": "22edf25d72717ad029fd69520033751639e6363d88f2a867a16f7e7aed9b46e7"
  },
  "feedback": null,
- "judges": {
+ "graders": {
   "label": "judge <model> <surface> x<reads>",
   "never_pooled": true,
   "surfaces": [
@@ -18,35 +18,6 @@
    "vesper"
   ],
   "vesper_surface": "vesper"
- },
- "ladder": {
-  "ignore": [
-   "advisory"
-  ],
-  "otherwise": "PASS",
-  "rank": [
-   "PASS",
-   "RETRY",
-   "FAIL"
-  ],
-  "rules": [
-   {
-    "at_least": 1,
-    "severity": "gate",
-    "verdict": "FAIL"
-   },
-   {
-    "at_least": 1,
-    "severity": "critical",
-    "verdict": "RETRY"
-   },
-   {
-    "at_least": 2,
-    "severity": "minor",
-    "verdict": "RETRY"
-   }
-  ],
-  "unknown_severity": "minor"
  },
  "plugin": "product-design",
  "products": {
@@ -96,6 +67,7 @@
     ]
    },
    "grading": {
+    "blocking": false,
     "inline_limit_bytes": 3500000,
     "models": [
      "gemini-flash-latest",
@@ -106,7 +78,6 @@
      "candidate",
      "clown"
     ],
-    "reporting_only": true,
     "response_mime_type": "application/json",
     "runs": 3,
     "temperature": 0
@@ -120,13 +91,13 @@
      "path": "kit/cmf-grading.json",
      "sha256": "80a4f26d9792211e4e3ca3ee1a51803f0583ea3d8b1b248caa725755819e45cb"
     },
-    "rules": "The grader reads this section into its prompt verbatim.\n\n- **Two images, named.** Image 1 is the candidate render. Image 2 is the clown model it was drawn\n  from: the same object with each component painted one flat colour, shaded, on its own ground.\n  Judge the candidate against the clown, side by side, never against what you think the product\n  looks like.\n- **THE ROW is the spec.** The sheet row for this SKU is quoted under THE ROW: each component with\n  its material, finish, colour name and code, as the sheet wrote them. A colour, material, finish or\n  effect the row does not hold is not in the spec, however plausible it looks.\n- **THE KEY is the map.** Quoted under THE KEY: each clown colour as a hex, the component or\n  components it marks, and the components that are not on this clown. A zone that serves two\n  components names both. A component the key says is not on this clown is absent by design, never\n  missing.\n- **The measurements are evidence, not verdict.** MEASUREMENTS states per zone, in words, how much of\n  it is still within reach of the clown's colour and, where the code has a confirmed hex, how far\n  the zone's colour sits from it. They tell you where to look; they do not decide. A note that\n  ignores a large leftover share is an incomplete note.\n- **What each finish word looks like.** Judge a finish by how the part takes the light:\n  - *matte*: diffuse, no specular hotspot, the light falls off softly across the form.\n  - *VDI 18 to VDI 27*: a spark-eroded grain that scatters the light evenly; near smooth-matte at\n    VDI 18, a fine visible grain at VDI 24, coarser at VDI 27; never glossy.\n  - *satin*: a soft sheen with broad, blurred highlights. *NCVM*: a metallic sheen on a plastic\n    part, highlights that follow the form like metal, no brushed grain unless the row says so.\n  - *gloss*, *high gloss*, *mirror*: sharp specular highlights and clear reflections of the light.\n  - *grinded*, *grinding*: an abraded, frosted surface, even, with the highlights broken up.\n  - *milky*, *frosted*, *see-through*, with or without a percentage: translucent, light passing\n    through the thin edges and a soft glow in the body, more the higher the percentage; never clear\n    like glass, never opaque.\n  - *opaque*: no light through the part at any edge.\n  - *holographic*, *iridescent*, *pearlescent*: the colour shifts with the angle, inside the\n    material, not a sticker on top.\n  - *anodised*: coloured metal with a fine metallic sheen and an even tone, brushed or polished as\n    the row says.\n  - *pad print*, *silk screen*: flat ink on the surface, crisp edges, no relief. *embossed*,\n    *debossed*: relief in the material itself, in the part's own colour unless the row names one.\n- **Absence and leftover are the usual misses.** Graders flag what is wrong and skip what is still\n  there. The likeliest misses on this work: a zone, or a rim of one along a parting line, still in\n  the clown's colour (the Experience 2 carry case shells came back red); a part given no finish; a\n  part that disappeared. Look for the clown's colours first.\n- **Judge what the view shows.** A component the key says is not on this clown, or one hidden by the\n  angle, passes its check; a component shown wrongly fails it.\n- **Fail when unsure**, and say in the note what you could not see.",
-    "template_id": "cmf-grader-f53f81a28485",
+    "rules": "- **Two images, named.** Image 1 is the candidate render. Image 2 is the clown model it was drawn\n  from: the same object with each component painted one flat colour, shaded, on its own ground.\n  Judge the candidate against the clown, side by side, never against what you think the product\n  looks like.\n- **THE ROW is the spec.** The sheet row for this SKU is quoted under THE ROW: each component with\n  its material, finish, colour name and code, as the sheet wrote them. A colour, material, finish or\n  effect the row does not hold is not in the spec, however plausible it looks.\n- **THE KEY is the map.** Quoted under THE KEY: each clown colour as a hex, the component or\n  components it marks, and the components that are not on this clown. A zone that serves two\n  components names both. A component the key says is not on this clown is absent by design, never\n  missing.\n- **The measurements are evidence, not verdict.** MEASUREMENTS states per zone, in words, how much of\n  it is still within reach of the clown's colour and, where the code has a confirmed hex, how far\n  the zone's colour sits from it. They tell you where to look; they do not decide. A note that\n  ignores a large leftover share is an incomplete note.\n- **What each finish word looks like.** Judge a finish by how the part takes the light:\n  - *matte*: diffuse, no specular hotspot, the light falls off softly across the form.\n  - *VDI 18 to VDI 27*: a spark-eroded grain that scatters the light evenly; near smooth-matte at\n    VDI 18, a fine visible grain at VDI 24, coarser at VDI 27; never glossy.\n  - *satin*: a soft sheen with broad, blurred highlights. *NCVM*: a metallic sheen on a plastic\n    part, highlights that follow the form like metal, no brushed grain unless the row says so.\n  - *gloss*, *high gloss*, *mirror*: sharp specular highlights and clear reflections of the light.\n  - *grinded*, *grinding*: an abraded, frosted surface, even, with the highlights broken up.\n  - *milky*, *frosted*, *see-through*, with or without a percentage: translucent, light passing\n    through the thin edges and a soft glow in the body, more the higher the percentage; never clear\n    like glass, never opaque.\n  - *opaque*: no light through the part at any edge.\n  - *holographic*, *iridescent*, *pearlescent*: the colour shifts with the angle, inside the\n    material, not a sticker on top.\n  - *anodised*: coloured metal with a fine metallic sheen and an even tone, brushed or polished as\n    the row says.\n  - *pad print*, *silk screen*: flat ink on the surface, crisp edges, no relief. *embossed*,\n    *debossed*: relief in the material itself, in the part's own colour unless the row names one.\n- **Look for the clown's colours first.** On this work a grader misses what is still there more\n  often than what is wrong: a zone, or a rim of one along a parting line, still in the clown's\n  colour (the Experience 2 carry case shells came back red); a part given no finish; a part that\n  disappeared.\n- **A part the view does not show passes.** A component the key says is not on this clown, or one\n  hidden by the angle, passes its check; a component shown wrongly fails it.\n- **If you are not sure, the check fails**, and the note says what you could not see.",
+    "template_id": "cmf-grader-aa57061ce89e",
     "text": {
      "check": "- {id} [{severity}]: {check} FAILS WHEN: {fails_when}",
      "checks_heading": "THE CHECKS:",
      "grade_only": "Grade image 1, and only image 1, against image 2 and THE ROW. The clown is never under review: a difference in shape, light, camera or ground between the two is a fault in the candidate.",
-     "intro": "You are grading one CMF render for Loop's lead CMF designer: a recoloured render of a clown model, with the clown open beside it and the SKU's sheet row in hand. Read it as someone who has never seen the brief.",
+     "intro": "You are grading one CMF render for Loop's lead CMF designer: a recoloured render of a clown model, with the clown open beside it and the SKU's sheet row in hand. Judge it against the clown and the row, nothing else.",
      "json": "{\"checks\": {ids}, \"worst_issue\": \"<one short phrase>\", \"notes\": \"<at most three short sentences>\", \"zones_seen\": <how many of the clown's zones you could find in image 1>}",
      "json_id": "\"{id}\": true|false",
      "json_id_separator": ", ",
@@ -553,6 +524,7 @@
     }
    },
    "rubric": {
+    "blocking": false,
     "chat_families": [
      "A",
      "B",
@@ -740,12 +712,11 @@
       "note": ""
      }
     ],
-    "grading_rules": "The grader reads this section into its prompt verbatim.\n\n- **Two images, named.** Image 1 is the candidate render. Image 2 is the clown model it was drawn\n  from: the same object with each component painted one flat colour, shaded, on its own ground.\n  Judge the candidate against the clown, side by side, never against what you think the product\n  looks like.\n- **THE ROW is the spec.** The sheet row for this SKU is quoted under THE ROW: each component with\n  its material, finish, colour name and code, as the sheet wrote them. A colour, material, finish or\n  effect the row does not hold is not in the spec, however plausible it looks.\n- **THE KEY is the map.** Quoted under THE KEY: each clown colour as a hex, the component or\n  components it marks, and the components that are not on this clown. A zone that serves two\n  components names both. A component the key says is not on this clown is absent by design, never\n  missing.\n- **The measurements are evidence, not verdict.** MEASUREMENTS states per zone, in words, how much of\n  it is still within reach of the clown's colour and, where the code has a confirmed hex, how far\n  the zone's colour sits from it. They tell you where to look; they do not decide. A note that\n  ignores a large leftover share is an incomplete note.\n- **What each finish word looks like.** Judge a finish by how the part takes the light:\n  - *matte*: diffuse, no specular hotspot, the light falls off softly across the form.\n  - *VDI 18 to VDI 27*: a spark-eroded grain that scatters the light evenly; near smooth-matte at\n    VDI 18, a fine visible grain at VDI 24, coarser at VDI 27; never glossy.\n  - *satin*: a soft sheen with broad, blurred highlights. *NCVM*: a metallic sheen on a plastic\n    part, highlights that follow the form like metal, no brushed grain unless the row says so.\n  - *gloss*, *high gloss*, *mirror*: sharp specular highlights and clear reflections of the light.\n  - *grinded*, *grinding*: an abraded, frosted surface, even, with the highlights broken up.\n  - *milky*, *frosted*, *see-through*, with or without a percentage: translucent, light passing\n    through the thin edges and a soft glow in the body, more the higher the percentage; never clear\n    like glass, never opaque.\n  - *opaque*: no light through the part at any edge.\n  - *holographic*, *iridescent*, *pearlescent*: the colour shifts with the angle, inside the\n    material, not a sticker on top.\n  - *anodised*: coloured metal with a fine metallic sheen and an even tone, brushed or polished as\n    the row says.\n  - *pad print*, *silk screen*: flat ink on the surface, crisp edges, no relief. *embossed*,\n    *debossed*: relief in the material itself, in the part's own colour unless the row names one.\n- **Absence and leftover are the usual misses.** Graders flag what is wrong and skip what is still\n  there. The likeliest misses on this work: a zone, or a rim of one along a parting line, still in\n  the clown's colour (the Experience 2 carry case shells came back red); a part given no finish; a\n  part that disappeared. Look for the clown's colours first.\n- **Judge what the view shows.** A component the key says is not on this clown, or one hidden by the\n  angle, passes its check; a component shown wrongly fails it.\n- **Fail when unsure**, and say in the note what you could not see.",
+    "grading_rules": "- **Two images, named.** Image 1 is the candidate render. Image 2 is the clown model it was drawn\n  from: the same object with each component painted one flat colour, shaded, on its own ground.\n  Judge the candidate against the clown, side by side, never against what you think the product\n  looks like.\n- **THE ROW is the spec.** The sheet row for this SKU is quoted under THE ROW: each component with\n  its material, finish, colour name and code, as the sheet wrote them. A colour, material, finish or\n  effect the row does not hold is not in the spec, however plausible it looks.\n- **THE KEY is the map.** Quoted under THE KEY: each clown colour as a hex, the component or\n  components it marks, and the components that are not on this clown. A zone that serves two\n  components names both. A component the key says is not on this clown is absent by design, never\n  missing.\n- **The measurements are evidence, not verdict.** MEASUREMENTS states per zone, in words, how much of\n  it is still within reach of the clown's colour and, where the code has a confirmed hex, how far\n  the zone's colour sits from it. They tell you where to look; they do not decide. A note that\n  ignores a large leftover share is an incomplete note.\n- **What each finish word looks like.** Judge a finish by how the part takes the light:\n  - *matte*: diffuse, no specular hotspot, the light falls off softly across the form.\n  - *VDI 18 to VDI 27*: a spark-eroded grain that scatters the light evenly; near smooth-matte at\n    VDI 18, a fine visible grain at VDI 24, coarser at VDI 27; never glossy.\n  - *satin*: a soft sheen with broad, blurred highlights. *NCVM*: a metallic sheen on a plastic\n    part, highlights that follow the form like metal, no brushed grain unless the row says so.\n  - *gloss*, *high gloss*, *mirror*: sharp specular highlights and clear reflections of the light.\n  - *grinded*, *grinding*: an abraded, frosted surface, even, with the highlights broken up.\n  - *milky*, *frosted*, *see-through*, with or without a percentage: translucent, light passing\n    through the thin edges and a soft glow in the body, more the higher the percentage; never clear\n    like glass, never opaque.\n  - *opaque*: no light through the part at any edge.\n  - *holographic*, *iridescent*, *pearlescent*: the colour shifts with the angle, inside the\n    material, not a sticker on top.\n  - *anodised*: coloured metal with a fine metallic sheen and an even tone, brushed or polished as\n    the row says.\n  - *pad print*, *silk screen*: flat ink on the surface, crisp edges, no relief. *embossed*,\n    *debossed*: relief in the material itself, in the part's own colour unless the row names one.\n- **Look for the clown's colours first.** On this work a grader misses what is still there more\n  often than what is wrong: a zone, or a rim of one along a parting line, still in the clown's\n  colour (the Experience 2 carry case shells came back red); a part given no finish; a part that\n  disappeared.\n- **A part the view does not show passes.** A component the key says is not on this clown, or one\n  hidden by the angle, passes its check; a component shown wrongly fails it.\n- **If you are not sure, the check fails**, and the note says what you could not see.",
     "object_class": null,
     "path": "skills/cmf-review/references/rubric.md",
     "problem": null,
-    "reporting_only": true,
-    "sha256": "dbc10715a31ae189f964722048889ea32bbc65f05738b3e4f3f81e60dc178035",
+    "sha256": "9779bff17ce9d6bd2a9a7a5410a794e8f41ec82cadafab227319590872c35f68",
     "version": "0.1.0"
    },
    "skill": "cmf-review",
@@ -865,6 +836,35 @@
  },
  "prompting": null,
  "repo": "tensalir/loop-product-plugins",
+ "results": {
+  "ignore": [
+   "advisory"
+  ],
+  "otherwise": "PASS",
+  "rank": [
+   "PASS",
+   "RETRY",
+   "FAIL"
+  ],
+  "rules": [
+   {
+    "at_least": 1,
+    "severity": "gate",
+    "verdict": "FAIL"
+   },
+   {
+    "at_least": 1,
+    "severity": "critical",
+    "verdict": "RETRY"
+   },
+   {
+    "at_least": 2,
+    "severity": "minor",
+    "verdict": "RETRY"
+   }
+  ],
+  "unknown_severity": "minor"
+ },
  "schema": 1,
  "tag": "product-design-v0.2.0",
  "version": "0.2.0"
