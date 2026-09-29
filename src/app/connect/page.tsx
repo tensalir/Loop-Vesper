@@ -7,6 +7,7 @@ import { claudeAccessFor, type RefusalReason } from '@/lib/oauth/claude-access'
 import { oauthConfig } from '@/lib/oauth/config'
 import { redirectHostLabel } from '@/lib/oauth/redirects'
 import { verifyAuthRequest } from '@/lib/oauth/request'
+import { HowToUseInClaude } from '@/components/connect/HowToUseInClaude'
 
 export const dynamic = 'force-dynamic'
 
@@ -129,13 +130,16 @@ export default async function ConnectPage({ searchParams }: { searchParams: { ar
         <li>grade images against Loop&apos;s product rubrics and record your answers</li>
         <li>file feedback on the Loop Studio Design plugin in your name</li>
       </ul>
-      <p className="mb-5 text-xs text-muted-foreground">
+      <p className="mb-4 text-xs text-muted-foreground">
         What it makes is saved in your project &ldquo;Claude&rdquo;. You can disconnect it at any time in Settings,
         under Connected apps. Images and grading through Claude have a daily allowance per person.
         {access.state === 'grantable' && (
           <> Your {access.domain} account gets Claude access when you click Allow.</>
         )}
       </p>
+      <div className="mb-5">
+        <HowToUseInClaude compact />
+      </div>
       <form method="post" action="/api/mcp/oauth/decision" className="flex gap-3">
         <input type="hidden" name="areq" value={areq} />
         <button

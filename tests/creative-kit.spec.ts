@@ -351,7 +351,7 @@ test.describe("Vesper's GitHub App", () => {
     expect(minted[0].url).toContain('/app/installations/99/access_tokens')
     expect(minted[0].body).toEqual({
       repositories: ['loop-ai-studio'],
-      permissions: { contents: 'read', issues: 'write', metadata: 'read' },
+      permissions: { contents: 'read', metadata: 'read' },
     })
     clock += 60 * 60 * 1000 - TOKEN_REFRESH_MARGIN_MS - 1000
     expect(await cache.getToken()).toBe('tok-1')

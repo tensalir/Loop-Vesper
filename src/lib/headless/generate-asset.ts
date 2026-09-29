@@ -7,8 +7,9 @@
  * or collects it later as a job, and a job runs this function directly, so a
  * stored request can never queue itself again.
  *
- * Results carry JPEG previews Claude can read (no `audience` annotation) and
- * links to the full-resolution files.
+ * Results carry JPEG previews and links to the full-resolution files. Each preview goes out twice
+ * (`imageBlocks`): once marked for the user alone, which claude.ai draws inline, and once for the
+ * assistant, which Claude reads.
  */
 
 import { createHash, randomUUID } from 'node:crypto'
@@ -56,6 +57,40 @@ type McpResourceLinkContent = {
 }
 export type McpContent = McpTextContent | McpImageContent | McpResourceLinkContent
 
+/**
+ * Who a picture is for. claude.ai draws an image inline in the chat only when it is marked for the
+ * user; before 2026-09-24 every preview was marked `['user']`, so the person saw it and Claude did
+ * not. The jobs fix (#9) removed the mark so Claude could read its draws, and the pictures fell back
+ * into the folded tool result. Marking each preview for both (#18) did not bring it back: tested
+ * in claude.ai on 2026-09-24, a picture marked `['user', 'assistant']` is handed to Claude and not
+ * drawn. What claude.ai draws is a picture marked for the user alone. So the default sends each
+ * preview twice: one block marked `['user']`, exactly as before #9, and one marked `['assistant']`.
+ *
+ * `MCP_IMAGE_AUDIENCE` changes it without a code change: `split` (default), `user` (the mark from
+ * before #9 alone: inline, and Claude may not see it), or `both` (one block for both audiences).
+ */
+export type ImageAudienceMode = 'split' | 'user' | 'both'
+
+export function imageAudienceMode(): ImageAudienceMode {
+  const v = (process.env.MCP_IMAGE_AUDIENCE || '').trim().toLowerCase()
+  return v === 'user' || v === 'both' ? v : 'split'
+}
+
+export function imageBlocks(data: string, mimeType: string, mode: ImageAudienceMode = imageAudienceMode()): McpImageContent[] {
+  if (mode === 'split') {
+    return [
+      { type: 'image', data, mimeType, annotations: { audience: ['user'], priority: 0.95 } },
+      { type: 'image', data, mimeType, annotations: { audience: ['assistant'], priority: 0.95 } },
+    ]
+  }
+  const audience: Array<'user' | 'assistant'> = mode === 'user' ? ['user'] : ['user', 'assistant']
+  return [{ type: 'image', data, mimeType, annotations: { audience, priority: 0.95 } }]
+}
+
+function linkAudience(mode: ImageAudienceMode): McpContentAnnotations {
+  return { audience: mode === 'user' ? ['user'] : ['user', 'assistant'], priority: 0.85 }
+}
+
 export type GenerateAssetArgs = z.infer<typeof HeadlessGenerateAssetSchema>
 
 export interface GenerateAssetOutput {
@@ -65,6 +100,10 @@ export interface GenerateAssetOutput {
   mimeType: string
   /** The `outputs` row in the web app; null when recording failed. */
   outputId: string | null
+  /** A small public JPEG of the same picture, for showing in a reply; null when it could not be made. */
+  previewUrl: string | null
+  /** The name to save the preview as in a connected folder, so the file card reads as the draw. */
+  filename: string
 }
 
 /** A product render or clown the draw was anchored on; iterating in the web app re-attaches it. */
@@ -284,12 +323,29 @@ export async function executeGenerateAsset(
       const storedUrl = output.url.startsWith('data:')
         ? await uploadBase64ToStorage(output.url, STORAGE_BUCKET, path)
         : await uploadUrlToStorage(output.url, STORAGE_BUCKET, path)
+      const previewSource = output.url.startsWith('data:') ? output.url : storedUrl
+      // A small public JPEG beside the original: what a reply shows (claude.ai draws a picture the
+      // reply carries as a markdown image, never one inside the tool result), and what a poll
+      // sends as the preview without re-reading a multi-megabyte original.
+      let previewUrl: string | null = null
+      try {
+        const { buffer } = await readImageBytes(previewSource)
+        const preview = await makeImagePreview(buffer)
+        previewUrl = await uploadBase64ToStorage(
+          `data:${preview.mimeType};base64,${preview.data}`,
+          STORAGE_BUCKET,
+          `mcp/${ctx.credentialId}/${generationId}/${idx}-preview.jpg`
+        )
+      } catch (err) {
+        console.warn('[mcp/generate_asset] preview upload failed', (err as Error)?.message)
+      }
       return {
         url: storedUrl,
         width: output.width,
         height: output.height,
         mimeType,
-        previewSource: output.url.startsWith('data:') ? output.url : storedUrl,
+        previewSource,
+        previewUrl,
       }
     })
   )
@@ -360,6 +416,8 @@ export async function executeGenerateAsset(
       height: p.height,
       mimeType: p.mimeType,
       outputId: outputIds[idx] ?? null,
+      previewUrl: p.previewUrl,
+      filename: previewFilename(modelId, generationId, idx),
     })),
     previewSources: persisted.map((p) => p.previewSource),
     durationMs: Date.now() - startedAt,
@@ -428,18 +486,70 @@ const PREVIEW_NOTE =
   'The images below are JPEG previews (long edge at most 1568 px) for reading; open the links for the originals.'
 
 /**
- * Build the MCP content for image results: the summary, then for each image
- * a link to the original and, when `inline`, a preview Claude can read.
+ * The lines a reply carries so the person sees the pictures. claude.ai draws a picture only when the
+ * assistant's own text holds it as a markdown image; a picture inside the tool result stays folded
+ * behind the "used the tool" line, whatever it is annotated with (tested 2026-09-24). The small
+ * preview is what goes in the reply; the original stays behind its link.
+ */
+/** `<model>-<draw>-<n>-preview.jpg`: one name per picture that reads as the draw in a folder. */
+export function previewFilename(modelId: string, generationId: string, idx: number): string {
+  const model = modelId.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'draw'
+  return `${model}-${generationId.slice(0, 8)}-${idx + 1}-preview.jpg`
+}
+
+/**
+ * Where files can be written (Cowork with a folder connected, Claude Code), the previews saved
+ * there and attached to the reply show as file cards with a preview panel in the desktop app
+ * (tested 2026-09-25: saving alone shows nothing; sharing the file does), and open in full in Claude
+ * Code. That is the only way a picture shows large beside the conversation; a picture in a tool
+ * result never does, and a picture in the reply is a click-to-load frame. Vesper cannot write to
+ * anyone's disk, so it names the files and Claude saves them.
+ */
+export function saveToFolderText(
+  outputs: Array<{ url: string; previewUrl?: string | null; filename?: string }>,
+  modelId: string
+): string {
+  const day = new Date().toISOString().slice(0, 10)
+  const names = outputs.map((out, idx) => out.filename ?? `${modelId}-${idx + 1}-preview.jpg`)
+  const one = outputs.length === 1
+  return [
+    `Where a folder is connected (Cowork, Claude Code): save ${one ? 'the preview' : 'each preview'} into it as vesper/${day}/<name>, then attach ${one ? 'it' : 'them'} to your reply (share the saved file${one ? '' : 's'}); the desktop app then shows ${one ? 'it' : 'them'} as ${one ? 'a file card' : 'file cards'} with a preview panel. Naming the path is not enough; the file has to be shared. ${one ? 'Name' : 'Names'}, in order: ${names.join(', ')}. Save the preview URL${one ? '' : 's'} above as ${one ? 'it is' : 'they are'} (no re-encoding); the full-resolution link${one ? '' : 's'} stay${one ? 's' : ''} in the manifest line beside ${one ? 'it' : 'them'}.`,
+  ].join('\n')
+}
+
+export function showInReplyLines(
+  outputs: Array<{ url: string; previewUrl?: string | null }>,
+  modelId: string
+): string[] {
+  return outputs.map((out, idx) => `![Image ${idx + 1} from ${modelId}](${out.previewUrl ?? out.url})`)
+}
+
+export function showInReplyText(outputs: Array<{ url: string; previewUrl?: string | null }>, modelId: string): string {
+  const n = outputs.length
+  return [
+    n === 1
+      ? 'To show the person the picture, put this line in your reply exactly as it is (claude.ai draws it there and nowhere else):'
+      : 'To show the person the pictures, put these lines in your reply exactly as they are (claude.ai draws them there and nowhere else):',
+    ...showInReplyLines(outputs, modelId),
+    saveToFolderText(outputs, modelId),
+  ].join('\n')
+}
+
+/**
+ * Build the MCP content for image results: the summary, the lines a reply shows the pictures with,
+ * then for each image a link to the original and, when `inline`, a preview Claude can read.
  */
 export async function imageResultContent(input: {
   summary: string
-  outputs: Array<{ url: string; width: number; height: number; mimeType: string }>
+  outputs: Array<{ url: string; width: number; height: number; mimeType: string; previewUrl?: string | null; filename?: string }>
   modelId: string
   previewSources?: string[]
   inline: boolean
 }): Promise<McpContent[]> {
   const content: McpContent[] = [{ type: 'text', text: input.summary }]
   const n = input.outputs.length
+  const mode = imageAudienceMode()
+  if (n > 0) content.push({ type: 'text', text: showInReplyText(input.outputs, input.modelId) })
   input.outputs.forEach((out, idx) => {
     content.push({
       type: 'resource_link',
@@ -447,6 +557,7 @@ export async function imageResultContent(input: {
       name: `${input.modelId}-${out.width}x${out.height}-${idx}.${extensionForMime(out.mimeType)}`,
       mimeType: out.mimeType,
       description: `Image ${idx + 1} of ${n} from ${input.modelId}, full resolution`,
+      annotations: linkAudience(mode),
     })
   })
   if (!input.inline || n === 0) return content
@@ -454,6 +565,11 @@ export async function imageResultContent(input: {
   const previews = await Promise.all(
     input.outputs.map(async (out, idx) => {
       try {
+        if (out.previewUrl) {
+          // Already the small JPEG; no second resize.
+          const { buffer } = await readImageBytes(out.previewUrl)
+          return { data: buffer.toString('base64'), mimeType: 'image/jpeg' }
+        }
         const { buffer } = await readImageBytes(input.previewSources?.[idx] ?? out.url)
         return await makeImagePreview(buffer)
       } catch (err) {
@@ -468,7 +584,7 @@ export async function imageResultContent(input: {
       content.push({ type: 'text', text: `No preview for image ${idx + 1}; use its link.` })
       return
     }
-    content.push({ type: 'image', data: preview.data, mimeType: preview.mimeType })
+    content.push(...imageBlocks(preview.data, preview.mimeType, mode))
   })
   return content
 }

@@ -154,7 +154,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'generate_asset',
     title: 'Generate an image',
     description:
-      'Generate an image with a Vesper model. Answers inline when the draw finishes within about 50 seconds: a JPEG preview you can read for each image plus a link to the full-resolution file. A slower draw, or async: true, returns a jobId to collect with get_generation_status. Every draw is saved in your Vesper project "Claude". Pass allowFallback: false to forbid silent Replicate routing.',
+      'Generate an image with a Vesper model. Answers inline when the draw finishes within about 50 seconds: a JPEG preview you can read for each image, a link to the full-resolution file, and the markdown image line to put in your reply so the person sees the picture (claude.ai draws it in your reply, not from the tool result). A slower draw, or async: true, returns a jobId to collect with get_generation_status. Every draw is saved in your Vesper project "Claude". Pass allowFallback: false to forbid silent Replicate routing.',
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
@@ -228,7 +228,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'get_generation_status',
     title: 'Collect a long-running job',
     description:
-      'Collect the result of any long Vesper call that returned a jobId (image or video generation). While the job runs it says so; when it is done it returns the result, with image previews.',
+      'Collect the result of any long Vesper call that returned a jobId (image or video generation). While the job runs it says so; when it is done it returns the result, with image previews and the markdown image lines to put in your reply so the person sees the pictures.',
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: 'object',
