@@ -208,3 +208,20 @@ export async function downloadFromStorage(bucket: string, path: string): Promise
   }
   return Buffer.from(await data.arrayBuffer())
 }
+
+/**
+ * A stored file's own Last-Modified, as storage reports it: the time the bytes were written, the
+ * same instant the public URL's Last-Modified header carries. Null when storage has none.
+ * @param bucket - Storage bucket name
+ * @param path - File path within bucket
+ */
+export async function storageObjectLastModified(bucket: string, path: string): Promise<Date | null> {
+  const { data, error } = await supabaseAdmin.storage.from(bucket).info(path)
+  if (error || !data) {
+    throw new Error(`Storage info failed: ${error?.message ?? 'not found'}`)
+  }
+  const raw = (data as { lastModified?: string | null }).lastModified ?? data.updatedAt ?? data.createdAt ?? null
+  if (!raw) return null
+  const at = new Date(raw)
+  return Number.isNaN(at.getTime()) ? null : at
+}
