@@ -50,7 +50,7 @@ export const SERVER_INSTRUCTIONS =
   "grade_image reads a picture three times with the product's grader (judge <model> vesper x3, advisory, never pooled with your own read, which record_grade keeps apart); " +
   "record_verdict records the decider's answer and, for a Frontify asset, returns the comment line to post with the person's own Frontify connector. " +
   "Feedback on the Loop Studio Design plugin: list_feedback_targets, list_feedback to find the same remark, preview_feedback to show the exact issue, submit_feedback only after the colleague says yes; it is filed in the signed-in person's name. " +
-  'Images and grading reads made through Claude count against a daily allowance per person; a refusal says how many were used and when the next one frees up, and nothing is paid for.'
+  'Images and grading reads made through Claude count against a daily allowance per person, together with the CMF renders and grades that person makes in the CMF Studio; a refusal says how many were used and when the next one frees up, and nothing is paid for.'
 
 interface JsonRpcRequest {
   jsonrpc: '2.0'
