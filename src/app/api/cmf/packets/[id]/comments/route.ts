@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import {
-  logCmfActivity,
-  requireAuthenticatedProfile,
-  requireCmfWrite,
-  requirePacketAccess,
-} from '@/lib/cmf/service'
-import { cmfError, translateAccessError } from '@/lib/cmf/api'
+import { requireAuthenticatedProfile, requirePacketAccess } from '@/lib/cmf/service'
+import { translateAccessError } from '@/lib/cmf/api'
+import { retired } from '@/lib/cmf/retired'
 
+/**
+ * /api/cmf/packets/{id}/comments: GET reads a packet's comments, read only. POST is retired for CMF
+ * on 2026-09-30: every CMF step now goes through the CMF service at /api/cmf/v2, as Claude's tools
+ * do (src/lib/cmf/retired.ts says where each step went). A retired method answers 410 with one line
+ * naming the new step.
+ */
 export const dynamic = 'force-dynamic'
-
-const CreateCommentSchema = z.object({
-  body: z.string().trim().min(1).max(4000),
-  /** When set, the comment is pinned to a single SKU row. */
-  renderId: z.string().uuid().optional(),
-})
 
 /**
  * GET /api/cmf/packets/{id}/comments?renderId=
@@ -65,77 +60,6 @@ export async function GET(
   return NextResponse.json({ comments })
 }
 
-/**
- * POST /api/cmf/packets/{id}/comments
- *
- * Add a comment. Requires CMF write access — viewers can read every
- * comment thread (the library is one ground-truth) but mutating it
- * is reserved for the team that actually owns the workflow.
- */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const auth = await requireCmfWrite()
-  if (!auth.profile) return auth.response
-
-  // Verify the packet exists so we 404 on bad IDs.
-  const packet = await prisma.cmfPacket.findUnique({
-    where: { id: params.id },
-    select: { id: true },
-  })
-  if (!packet) {
-    return cmfError('Packet not found', { status: 404 })
-  }
-
-  let body: unknown
-  try {
-    body = await request.json()
-  } catch {
-    return cmfError('Invalid JSON body')
-  }
-
-  const parsed = CreateCommentSchema.safeParse(body)
-  if (!parsed.success) {
-    return cmfError('Invalid request body', {
-      details: parsed.error.issues.map((i) => ({
-        path: i.path.join('.'),
-        message: i.message,
-      })),
-    })
-  }
-
-  if (parsed.data.renderId) {
-    const render = await prisma.cmfRender.findUnique({
-      where: { id: parsed.data.renderId },
-      select: { packetId: true },
-    })
-    if (!render || render.packetId !== params.id) {
-      return cmfError('Render does not belong to this packet')
-    }
-  }
-
-  const comment = await prisma.cmfComment.create({
-    data: {
-      packetId: params.id,
-      renderId: parsed.data.renderId ?? null,
-      userId: auth.profile.userId,
-      body: parsed.data.body,
-    },
-    include: {
-      user: {
-        select: { id: true, displayName: true, username: true, avatarUrl: true },
-      },
-    },
-  })
-
-  await logCmfActivity({
-    packetId: params.id,
-    userId: auth.profile.userId,
-    action: 'commented',
-    targetId: comment.id,
-    metadata: { renderId: comment.renderId },
-  })
-
-  return NextResponse.json({ comment })
+export function POST() {
+  return retired('history')
 }

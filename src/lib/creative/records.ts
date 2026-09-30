@@ -1,7 +1,8 @@
 /**
  * What Vesper keeps of the creative work: every grade (Vesper's three reads, or Claude's own look,
  * each labelled by its judge and never pooled), every decider's answer, and the manifest of every
- * product draw. The plugin repository reads them back nightly through the export
+ * product draw (`generate_product_image`) and every CMF render (`cmf_render`, from Claude or the CMF
+ * Studio). The plugin repository reads them back nightly through the export
  * (`GET /api/headless/v1/creative/{grades,verdicts,manifests}`) into its `record/feedback/`.
  */
 
@@ -127,6 +128,18 @@ export const prismaCreativeRecords: CreativeRecordStore = {
 
 export type ExportKind = 'grades' | 'verdicts' | 'manifests'
 
+/** The draws whose manifest lines the export serves: a Loop product draw, and a CMF render from either door. */
+export const MANIFEST_TOOLS = ['generate_product_image', 'cmf_render'] as const
+
+/** One manifest row of the export, from a generation's parameters; null when it is another product's. */
+export function manifestRow(r: { id: string; createdAt: Date; parameters: unknown }, product?: string): { generation_id: string; created_at: Date; product: unknown; manifest: unknown } | null {
+  const p = (r.parameters ?? {}) as Record<string, unknown>
+  if (!MANIFEST_TOOLS.includes(p.toolName as (typeof MANIFEST_TOOLS)[number])) return null
+  const creative = (p.creative ?? {}) as Record<string, unknown>
+  if (product && creative.product !== product) return null
+  return { generation_id: r.id, created_at: r.createdAt, product: creative.product ?? null, manifest: p.manifest ?? null }
+}
+
 export interface ExportQuery {
   product?: string
   since?: Date
@@ -169,18 +182,11 @@ export async function exportCreativeRecords(kind: ExportKind, q: ExportQuery): P
   const rows = await prisma.generation.findMany({
     where: {
       createdAt: { gt: since },
-      parameters: { path: ['toolName'], equals: 'generate_product_image' },
+      OR: MANIFEST_TOOLS.map((tool) => ({ parameters: { path: ['toolName'], equals: tool } })),
     },
     orderBy: { createdAt: 'asc' },
     take: q.limit,
     select: { id: true, createdAt: true, parameters: true },
   })
-  return rows
-    .map((r) => {
-      const p = (r.parameters ?? {}) as Record<string, unknown>
-      const creative = (p.creative ?? {}) as Record<string, unknown>
-      if (q.product && creative.product !== q.product) return null
-      return { generation_id: r.id, created_at: r.createdAt, product: creative.product ?? null, manifest: p.manifest ?? null }
-    })
-    .filter((r) => r !== null)
+  return rows.map((r) => manifestRow(r, q.product)).filter((r) => r !== null)
 }

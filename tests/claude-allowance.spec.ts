@@ -4,10 +4,15 @@ import {
   checkClaudeAllowance,
   claudeDailyLimit,
   CLAUDE_ALLOWANCE,
+  COUNTED_IMAGES,
+  imageDoorOf,
   WINDOW_MS,
   type AllowanceUsage,
   type CountedWork,
 } from '../src/lib/headless/claude-allowance'
+import { planRender, runRender, setCmfServiceDeps } from '../src/lib/creative/cmf/service'
+import { IMPORT, KEY_ID } from './helpers/cmf-upload'
+import { actor, DAMIEN, serviceWorld } from './helpers/cmf-service-world'
 import { dispatch } from '../src/lib/headless/mcp-dispatch'
 import { HEADLESS_TOOLS, type HeadlessTool } from '../src/lib/headless/tool-registry'
 import { TOOL_HANDLERS } from '../src/lib/headless/tools'
@@ -274,5 +279,81 @@ test.describe('the check in the dispatcher', () => {
     expect(ran).toBe(false)
     expect(res.result.isError).toBe(true)
     expect(res.result.content[0].text).toContain('could not check your daily allowance')
+  })
+})
+
+/**
+ * One allowance per person across both doors (owner, 2026-09-30): a CMF render costs the same
+ * whether Claude or the CMF Studio asks, so the web's renders count with Claude's, and each door
+ * sees the other's.
+ */
+test.describe('one allowance across Claude and the CMF Studio', () => {
+  test.afterEach(() => setCmfServiceDeps(null))
+
+  /** A Prisma JSON-path filter, evaluated on a record in hand: what COUNTED_IMAGES asks the database. */
+  function matches(where: Record<string, any>, parameters: Record<string, unknown>): boolean {
+    if (Array.isArray(where.AND)) return where.AND.every((w: Record<string, any>) => matches(w, parameters))
+    const f = where.parameters as { path: string[]; equals: unknown }
+    return f.path.reduce<any>((v, k) => (v && typeof v === 'object' ? v[k] : undefined), parameters) === f.equals
+  }
+
+  test("the counter takes Claude's draws and the CMF Studio's renders, and nothing else the web makes", async () => {
+    const w = await serviceWorld()
+    setCmfServiceDeps(w.deps)
+    for (const door of ['mcp', 'web'] as const) {
+      const who = actor(DAMIEN, door)
+      const ready = await planRender(who, { import_id: IMPORT, tab: 'Experience 2 CC', sku_column: 'E', clown: KEY_ID }, ENV)
+      await runRender(who, ready, { jobId: null }, ENV)
+    }
+    const records = [
+      ...w.team.generations.map((g) => ({ modelId: g.modelId, parameters: g.parameters })),
+      // A web generation of the rest of the app, and Claude's packaging mockup (built in code).
+      { modelId: 'gemini-nano-banana-pro', parameters: { aspectRatio: '1:1' } },
+      { modelId: 'gemini-nano-banana-pro', parameters: { source: 'web', toolName: 'generate_asset' } },
+      { modelId: 'none', parameters: { source: 'mcp', toolName: 'packaging_mockup' } },
+    ]
+    expect(records.map((r) => imageDoorOf(r))).toEqual(['mcp', 'web', null, null, null])
+    // The database filter takes the same records under the same door.
+    for (const r of records) {
+      const hit = COUNTED_IMAGES.filter((c) => r.modelId !== 'none' && matches(c.where as Record<string, any>, r.parameters as Record<string, unknown>)).map((c) => c.door)
+      expect(hit, JSON.stringify(r.parameters)).toEqual(imageDoorOf(r) ? [imageDoorOf(r)] : [])
+    }
+  })
+
+  test("a render in the CMF Studio is refused on Claude's draws, and a Claude call on the Studio's renders", async () => {
+    const mixed: CountedWork[] = [
+      ...images(30).map((x) => ({ ...x, door: 'mcp' as const })),
+      ...images(10, 12).map((x) => ({ ...x, door: 'web' as const })),
+    ]
+    for (const door of ['web', 'mcp'] as const) {
+      const res = await checkClaudeAllowance({ ownerId: 'p', isAdmin: false, need: { kind: 'image', units: 1 }, env: ENV, now: NOW, usage: usageOf(mixed), door })
+      expect(res.ok, door).toBe(false)
+      if (res.ok) continue
+      expect(res).toMatchObject({ kind: 'image', used: 40, limit: 40, requested: 1 })
+      expect(res.message).toContain('40 of your 40 images through Claude and the CMF Studio together')
+    }
+    // Claude's own count, with nothing from the Studio in it, reads as it always did.
+    const claudeOnly = await checkClaudeAllowance({ ownerId: 'p', isAdmin: false, need: { kind: 'image', units: 1 }, env: ENV, now: NOW, usage: usageOf(images(40)) })
+    expect(claudeOnly.ok).toBe(false)
+    if (!claudeOnly.ok) expect(claudeOnly.message).toContain('40 of your 40 images through Claude in the last 24 hours')
+    // Under the limit together, both doors go ahead.
+    const under = await checkClaudeAllowance({ ownerId: 'p', isAdmin: false, need: { kind: 'image', units: 4 }, env: ENV, now: NOW, usage: usageOf(mixed.slice(4)), door: 'web' })
+    expect(under).toEqual({ ok: true })
+  })
+
+  test('in the CMF Studio an admin is exempt, even at 0; everyone else is refused there at 0', async () => {
+    const off = envOf({ CLAUDE_DAILY_IMAGE_LIMIT: '0' })
+    expect(await checkClaudeAllowance({ ownerId: 'admin', isAdmin: true, need: { kind: 'image', units: 4 }, env: off, now: NOW, usage: never, door: 'web' })).toEqual({ ok: true })
+    const maker = await checkClaudeAllowance({ ownerId: 'p', isAdmin: false, need: { kind: 'image', units: 1 }, env: off, now: NOW, usage: never, door: 'web' })
+    expect(maker.ok).toBe(false)
+    if (!maker.ok) expect(maker.message).toBe('Rendering in the CMF Studio is switched off on this Vesper right now. Nothing was made or paid for. Ask a Vesper admin if you need it.')
+    // Through Claude the switch still stops admins: the shared organisation token is an admin's.
+    const claude = await checkClaudeAllowance({ ownerId: 'admin', isAdmin: true, need: { kind: 'image', units: 1 }, env: off, now: NOW, usage: never })
+    expect(claude.ok).toBe(false)
+    // A web grade counts against the same reads.
+    const reads = Array.from({ length: 40 }, (_, i) => ({ at: ago(1 + i * 0.5), units: 3, door: i % 2 ? ('web' as const) : ('mcp' as const) }))
+    const grade = await checkClaudeAllowance({ ownerId: 'p', isAdmin: false, need: { kind: 'grade', units: 3 }, env: ENV, now: NOW, usage: usageOf(reads), door: 'web' })
+    expect(grade.ok).toBe(false)
+    if (!grade.ok) expect(grade.message).toContain('120 of your 120 grading reads through Claude and the CMF Studio together')
   })
 })

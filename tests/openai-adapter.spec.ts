@@ -184,7 +184,9 @@ test.describe('Edits endpoint shape', () => {
 test.describe('the OpenAI adapter never sends input_fidelity', () => {
   test('neither the generations JSON nor the edits form carries it', async () => {
     process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'sk-test-not-real'
-    // Required after setting the key: the adapter reads it at module load.
+    // Required after setting the key: the adapter reads it at module load. Another test file in
+    // this worker may have loaded it first without a key, so it is loaded afresh.
+    delete require.cache[require.resolve('../src/lib/models/adapters/openai')]
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { OpenAIAdapter, GPT_IMAGE_2_CONFIG } = require('../src/lib/models/adapters/openai')
     const bodies: string[] = []
