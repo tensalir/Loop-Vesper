@@ -17,7 +17,9 @@ import { loadCandidate } from '@/lib/creative/candidate'
 import { prismaCreativeRecords, type GradeRecord } from '@/lib/creative/records'
 import { verdictLine } from '@/lib/creative/verdict-line'
 import { productionCandidateDeps } from '@/lib/creative/work-runtime'
+import { recordCmfVerdict } from '@/lib/creative/cmf/service'
 import { ownerIsAdmin } from './creative-read'
+import { mcpActor } from './cmf'
 import { invalidArguments, type ToolHandler } from './types'
 
 const CHECK_ID = /^[A-E]\d+$/
@@ -37,6 +39,13 @@ export const RecordVerdictArgs = z
   })
   .strict()
 
+/** What an answer says about the grade it answers. */
+function aboutGrade(grade: GradeRecord | null): string {
+  return grade
+    ? `It answers grade ${grade.id} (${grade.verdict}, judge ${grade.judgeModel ?? '?'} ${grade.judge === 'vesper' ? 'vesper' : 'chat'} x${grade.reads}).`
+    : 'No grade of this picture is on record, so the answer stands alone.'
+}
+
 export const recordVerdictHandler: ToolHandler = {
   async run(args, ctx) {
     const parsed = RecordVerdictArgs.safeParse(args)
@@ -48,6 +57,38 @@ export const recordVerdictHandler: ToolHandler = {
     const isAdmin = await ownerIsAdmin(ctx.principal.ownerId)
     // CMF from the product kit, the rest from the creative kit (`src/lib/creative/kit-set.ts`).
     const { loaded, slug, product } = await resolveInKits(productionKitSet(ctx.env), a.product, { isAdmin })
+    if (product.kind === 'cmf') {
+      // A CMF answer is the CMF service's (`src/lib/creative/cmf/service.ts`), the one the web door
+      // calls too; it is always recorded in Vesper.
+      const got = await recordCmfVerdict(
+        mcpActor(ctx),
+        {
+          loaded,
+          grade_id: a.grade_id,
+          output_id: a.output_id,
+          frontify_asset_id: a.frontify_asset_id,
+          image_url: a.image_url,
+          answer: a.answer,
+          remark: a.remark,
+          decoded: a.decoded,
+          decoded_unconfirmed: a.decoded_unconfirmed,
+        },
+        ctx.env
+      )
+      return {
+        content: [{ type: 'text', text: `Recorded the answer "${a.answer}" in Vesper, in your name. ${aboutGrade(got.grade)} The plugin's repository reads it from Vesper; nothing needs posting.` }],
+        structuredContent: {
+          ...kitHeader(got.loaded),
+          verdict_id: got.verdictId,
+          product: got.slug,
+          answer: a.answer,
+          grade_id: got.grade?.id ?? null,
+          route: 'vesper',
+          comment_line: null,
+          frontify_asset_id: got.frontifyAssetId,
+        },
+      }
+    }
     const known = new Set(product.rubric.checks.map((c) => c.id))
     const unknown = [...a.decoded, ...a.decoded_unconfirmed].filter((id) => !known.has(id))
     if (unknown.length) throw new Error(`${product.name}'s rubric has no check ${unknown.join(', ')}`)
@@ -115,9 +156,7 @@ export const recordVerdictHandler: ToolHandler = {
       rubricVersion: product.rubric.version,
     })
 
-    const about = grade
-      ? `It answers grade ${grade.id} (${grade.verdict}, judge ${grade.judgeModel ?? '?'} ${grade.judge === 'vesper' ? 'vesper' : 'chat'} x${grade.reads}).`
-      : 'No grade of this picture is on record, so the answer stands alone.'
+    const about = aboutGrade(grade)
     const text = toFrontify
       ? [
           `Recorded the answer "${a.answer}" in Vesper, in your name. ${about}`,

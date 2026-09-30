@@ -31,9 +31,8 @@ import type { AnyKit, KitProduct } from '@/lib/creative/kit-schema'
 import type { JobPayload } from '../jobs'
 import { runLongCall } from './long-call'
 import { ownerIsAdmin } from './creative-read'
-import { cmfKit, resolveTab, type CmfGradingParts, type CmfKit } from '@/lib/creative/cmf/kit-cmf'
-import { checkCmfTarget, gradeCmfCandidate } from '@/lib/creative/cmf/grading'
-import { assertCmfAccess, cmfGradingParts } from './cmf'
+import { planGrade, runGrade } from '@/lib/creative/cmf/service'
+import { mcpActor } from './cmf'
 import { assertPackagingAccess, executePackagingGrade, packagingGradeLines, packagingGradeStructured } from './packaging'
 import { invalidArguments, type ToolContext, type ToolHandler } from './types'
 
@@ -277,72 +276,6 @@ async function executeGrade(ctx: ToolContext, loaded: LoadedKit, slug: string, p
   return { header, slug, product, candidate: rest, outcome, gradeId, storeError, costUsd }
 }
 
-async function executeCmfGrade(
-  ctx: ToolContext,
-  loaded: LoadedKit,
-  cmf: CmfKit,
-  parts: CmfGradingParts,
-  target: { spec: string; column: string; key: string; tab: string; sku_name: string | null },
-  a: z.infer<typeof GradeImageArgs>
-): Promise<GradeExecution> {
-  const product = cmf.product
-  const candidate = await loadCandidate(a, ctx.principal.ownerId, productionCandidateDeps(ctx.env))
-  const rows = await prismaPinStore.list(cmf.slug)
-  const inlineLimit = product.grading?.inline_limit_bytes ?? 3_500_000
-  const partDeps = pinPartDeps(ctx.env, inlineLimit)
-  const outcome = await gradeCmfCandidate(
-    { kit: loaded.kit, cmf, parts, candidate, spec: target.spec, column: target.column, key: target.key, runs: a.runs },
-    {
-      pinRows: rows,
-      candidatePart: (c) => candidatePartFor(ctx.env, inlineLimit, c),
-      pinPart: (row, spec) => pinPart(row, spec, partDeps),
-      read: gradeReader(ctx.env, product.grading?.models ?? []),
-    }
-  )
-  const header = kitHeader(loaded)
-  const costUsd = GRADE_READ_USD * outcome.aggregate.reads
-  let gradeId: string | null = null
-  let storeError: string | null = null
-  try {
-    const stored = await prismaCreativeRecords.insertGrade({
-      product: cmf.slug,
-      ownerId: ctx.principal.ownerId,
-      credentialId: ctx.principal.credentialId,
-      outputId: candidate.outputId,
-      imageUrl: candidate.imageUrl,
-      frontifyAssetId: candidate.frontifyAssetId,
-      imageSha256: candidate.sha256,
-      colourway: `${target.tab} ${target.column}${target.sku_name ? ` ${target.sku_name}` : ''}`,
-      view: 'clown',
-      viewAssumed: false,
-      claimSource: null,
-      judge: 'vesper',
-      judgeModel: outcome.judge_model,
-      reads: outcome.aggregate.reads,
-      templateId: outcome.template_id,
-      kitVersion: loaded.kit.version,
-      kitCommit: loaded.commit,
-      rubricVersion: product.rubric.version ?? '?',
-      runs: outcome.reads,
-      fails: outcome.aggregate.fails,
-      failed: outcome.aggregate.failed,
-      failedAdvisory: outcome.aggregate.failed_advisory,
-      verdict: outcome.aggregate.verdict,
-      verdictMajority: outcome.aggregate.verdict_majority,
-      unstable: outcome.aggregate.unstable,
-      errors: outcome.aggregate.errors,
-      references: { attached: outcome.references, missing: outcome.missing, prompt_sha256: outcome.prompt_sha256, cmf: target },
-      latencyMs: outcome.latency_ms,
-      costUsd,
-    })
-    gradeId = stored.id
-  } catch (err) {
-    storeError = (err as Error)?.message || 'the grade could not be stored'
-  }
-  const { bytes: _bytes, ...rest } = candidate
-  return { header, slug: cmf.slug, product, candidate: rest, outcome, gradeId, storeError, costUsd, cmf: target }
-}
-
 export const gradeImageHandler: ToolHandler = {
   estimateCostUsd(args) {
     const runs = typeof args.runs === 'number' ? args.runs : 3
@@ -361,21 +294,17 @@ export const gradeImageHandler: ToolHandler = {
       if (!a.tab || !a.column || !a.clown) {
         throw new GradingPromptError('a CMF render is graded against its sheet row and its clown: name the tab, the column and the clown key (cmf_list names them)')
       }
-      await assertCmfAccess(ctx.principal.ownerId)
-      const cmf = cmfKit(loaded.kit)
-      const { slug: specSlug } = resolveTab(cmf, a.tab)
-      const column = a.column.toUpperCase()
-      const parts = await cmfGradingParts(loaded, cmf)
-      const { tab, skuName } = checkCmfTarget(cmf, parts, specSlug, column, a.clown)
-      const target = { spec: specSlug, column, key: a.clown, tab, sku_name: skuName }
+      // The CMF service's grade (`src/lib/creative/cmf/service.ts`), the one the web door calls too.
+      const actor = mcpActor(ctx)
+      const ready = await planGrade(actor, { loaded, tab: a.tab, column: a.column, clown: a.clown, output_id: a.output_id, frontify_asset_id: a.frontify_asset_id, image_url: a.image_url, runs: a.runs }, ctx.env)
       return runLongCall<GradeExecution>({
         ctx,
         toolName: 'grade_image',
-        modelId: cmf.product.grading?.models[0] ?? 'gemini',
+        modelId: ready.cmf.product.grading?.models[0] ?? 'gemini',
         request: { ...a },
         runAsync: a.async,
-        what: `the ${tab} ${column} grade`,
-        execute: () => executeCmfGrade(ctx, loaded, cmf, parts, target, a),
+        what: `the ${ready.target.tab} ${ready.target.column} grade`,
+        execute: () => runGrade(actor, ready, ctx.env),
         toPayload: payload,
         toWire: async (x) => ({ content: [{ type: 'text', text: gradeText(x) }], structuredContent: payload(x).structuredContent }),
       })

@@ -17,251 +17,75 @@
  *
  * Supplier PDFs come from cmf_pdf. The web CMF Studio's export is left as it was.
  *
- * All of them need CMF access (the profile's `cmf_access`, or an admin): the registry gates them
- * (`needs: 'cmf'`) and each handler checks again, because a static token carries its tool list as
- * issued. The product kit (Loop Product Design, `tensalir/loop-product-plugins`) supplies
- * everything; Vesper holds no CMF wording or rule of its own, and reads CMF from no other kit.
+ * Every step is the CMF service's (`src/lib/creative/cmf/service.ts`), the one the web CMF Studio
+ * calls too; this file is Claude's door onto it: it parses the arguments, runs a long call as a
+ * job, and writes the answer Claude reads. All of them need CMF access (the profile's
+ * `cmf_access`, or an admin): the registry gates them (`needs: 'cmf'`) and the service checks
+ * again, because a static token carries its tool list as issued. The product kit (Loop Product
+ * Design, `tensalir/loop-product-plugins`) supplies everything; Vesper holds no CMF wording or rule
+ * of its own, and reads CMF from no other kit.
  */
 
-import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { prisma } from '@/lib/prisma'
-import { getProductKit, readKitFile } from '@/lib/creative/kit-runtime'
-import type { LoadedKit as LoadedKitOf } from '@/lib/creative/kit'
-import { reportsOnly, type AnyKit } from '@/lib/creative/kit-schema'
+import { reportsOnly } from '@/lib/creative/kit-schema'
 import { kitHeader } from '@/lib/creative/tool-views'
-import { kitPins, usablePin, type PinRow, type PinSpec } from '@/lib/creative/pins'
-import { pinStorage, prismaPinStore } from '@/lib/creative/pins-runtime'
-import { pinPart } from '@/lib/creative/pin-parts'
-import { drawImage, type GeminiPart } from '@/lib/creative/gemini'
-import { anchorUrl, drawPriceUsd, geminiDeps, imageSize, pinPartDeps, storeDrawn, vesperModelId } from '@/lib/creative/work-runtime'
-import { fetchAllowlisted } from '@/lib/net/fetch-allowlisted'
+import { payloadId } from '@/lib/creative/cmf/kit-cmf'
+import { drawPriceUsd } from '@/lib/creative/work-runtime'
+import { specCheckText } from '@/lib/creative/cmf/check-pdf'
+import type { PromptRefusal } from '@/lib/creative/cmf/prompt-fill'
+import type { WorkbookPayload } from '@/lib/creative/cmf/workbook-payload'
 import {
-  CmfError,
-  cmfKit,
-  inScopeColumns,
-  keysForTab,
-  payloadFor,
-  payloadId,
-  resolveKey,
-  resolveTab,
-  type CmfGradingParts,
-  type CmfKit,
-} from '@/lib/creative/cmf/kit-cmf'
-import {
-  checkClownBytes,
-  cmfDrawRequest,
-  cmfManifestLine,
-  executeCmfDraws,
-  planCmfRender,
-  planCmfRenderFromWorkbook,
-  type CmfDrawn,
-  type CmfPayload,
-  type CmfRenderPlan,
-} from '@/lib/creative/cmf/render'
-import { checkPdfInVesper, checkPdfOnWorker, sha256Hex, specCheckText, type SpecCheckResult } from '@/lib/creative/cmf/check-pdf'
-import { workerConfigFromEnv, type WorkerConfig } from '@/lib/creative/cmf/worker-client'
-import type { ClownKey, Spec } from '@/lib/creative/cmf/spec-diff'
-import { PromptRefusal } from '@/lib/creative/cmf/prompt-fill'
-import { buildWorkbookPayload, type WorkbookPayload } from '@/lib/creative/cmf/workbook-payload'
-import { loadStoredWorkbook, type WorkbookImportRow, type WorkbookSourceDeps } from '@/lib/creative/cmf/workbook-source'
-import { CmfPdfRefused, runCmfPdf, type CmfPdfDeps, type RenderOutputRow, type VerdictRow } from '@/lib/creative/cmf/supplier-pdf-run'
-import type { SupplierPdfImage } from '@/lib/creative/cmf/supplier-pdf'
-import { CMF_STORAGE_BUCKET } from '@/lib/cmf/storage'
-import { recordMcpGeneration, STREAM_SESSIONS } from '../record-generation'
+  checkPdf,
+  cmfPrompt,
+  listCmf,
+  planRender,
+  runCheckPdf,
+  runRender,
+  supplierPdf,
+  identifiersOnly,
+  productionCmfServiceDeps,
+  setCmfServiceDeps,
+  type CmfActor,
+  type CmfRenderExecution,
+  type CmfServiceDeps,
+  type CmfUploadTarget,
+  type CmfWorkbookBuilt,
+  type LoadedKit,
+} from '@/lib/creative/cmf/service'
+import { STREAM_SESSIONS } from '../record-generation'
 import { imageResultContent } from '../generate-asset'
 import type { JobPayload } from '../jobs'
 import { runLongCall } from './long-call'
-import { assertModelAllowed, invalidArguments, type ToolContext, type ToolHandler } from './types'
+import { invalidArguments, type ToolContext, type ToolHandler } from './types'
+
+export { CmfAccessError, assertCmfAccess, cmfGradingParts, cmfRenderCreative, identifiersOnly } from '@/lib/creative/cmf/service'
 
 // ------------------------------------------------------------------ what the handlers reach
 
-/** The kit CMF is read from: the product kit in production; any kit carrying CMF in the tests. */
-type LoadedKit = LoadedKitOf<AnyKit>
-
-export interface CmfToolDeps {
-  loadKit(env: NodeJS.ProcessEnv): Promise<LoadedKit>
-  readKitFile(loaded: LoadedKit, file: { path: string; sha256: string }): Promise<Buffer>
-  ownerAccess(ownerId: string): Promise<{ admin: boolean; cmf: boolean }>
-  pinRows(product: string): Promise<PinRow[]>
-  pinBytes(path: string, env: NodeJS.ProcessEnv): Promise<Buffer | null>
-  fetchPdf(url: string): Promise<Buffer>
-  /** A CMF packet's exported PDF, when the caller may see the packet. */
-  packetPdf(packetId: string, ownerId: string): Promise<{ url: string; name: string | null } | null>
-  worker(env: NodeJS.ProcessEnv): WorkerConfig | null
-  /** The web CMF Studio's workbook uploads: the import row, the stored bytes, the stored file's Last-Modified. */
-  workbook: WorkbookSourceDeps
-  /** The newest uploads that kept their file, for cmf_list. */
-  recentImports(limit: number): Promise<WorkbookImportRow[]>
-  /** What cmf_pdf reaches beyond the kit and the upload. */
-  pdf: Omit<CmfPdfDeps, 'loadWorkbook' | 'readKey' | 'clownBytes'>
-}
-
-async function emailFromAuth(profileId: string, env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
-  const url = env.NEXT_PUBLIC_SUPABASE_URL
-  const key = env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return null
-  try {
-    const { createClient } = await import('@supabase/supabase-js')
-    const { data } = await createClient(url, key, { auth: { persistSession: false } }).auth.admin.getUserById(profileId)
-    return data?.user?.email ?? null
-  } catch {
-    return null
-  }
-}
-
-export const productionCmfDeps: CmfToolDeps = {
-  loadKit: (env) => getProductKit({ env }),
-  readKitFile: (loaded, file) => readKitFile(loaded, file),
-  async ownerAccess(ownerId) {
-    const p = await prisma.profile.findUnique({ where: { id: ownerId }, select: { role: true, cmfAccess: true, pausedAt: true, deletedAt: true } })
-    if (!p || p.pausedAt || p.deletedAt) return { admin: false, cmf: false }
-    const admin = p.role === 'admin'
-    return { admin, cmf: admin || p.cmfAccess === true }
-  },
-  pinRows: (product) => prismaPinStore.list(product),
-  pinBytes: (path, env) => pinStorage(env).get(path),
-  async fetchPdf(url) {
-    const got = await fetchAllowlisted(url, { maxBytes: 25 * 1024 * 1024, timeoutMs: 30_000, contentTypes: ['application/pdf', 'application/octet-stream'] })
-    return got.buffer
-  },
-  async packetPdf(packetId, ownerId) {
-    // The web app's own rule for who may see a packet; loaded here only, because the module
-    // reads the request's cookies at import time.
-    const { getPacketRole } = await import('@/lib/cmf/service')
-    const role = await getPacketRole(packetId, ownerId)
-    if (!role) return null
-    const packet = await prisma.cmfPacket.findUnique({ where: { id: packetId }, select: { pdfUrl: true, name: true } })
-    if (!packet?.pdfUrl) return null
-    return { url: packet.pdfUrl, name: packet.name ?? null }
-  },
-  worker: (env) => workerConfigFromEnv(env),
-  workbook: {
-    importRow: (importId) =>
-      prisma.cmfImport.findUnique({ where: { id: importId }, select: { id: true, ownerId: true, fileName: true, storagePath: true, createdAt: true } }),
-    async bytes(storagePath) {
-      const { downloadFromStorage } = await import('@/lib/supabase/storage')
-      return downloadFromStorage(CMF_STORAGE_BUCKET, storagePath)
-    },
-    async storedLastModified(storagePath) {
-      const { storageObjectLastModified } = await import('@/lib/supabase/storage')
-      return storageObjectLastModified(CMF_STORAGE_BUCKET, storagePath)
-    },
-  },
-  recentImports: (limit) =>
-    prisma.cmfImport.findMany({
-      where: { storagePath: { not: null } },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      select: { id: true, ownerId: true, fileName: true, storagePath: true, createdAt: true },
-    }),
-  pdf: {
-    async renderOutput(outputId) {
-      const out = await prisma.output.findUnique({
-        where: { id: outputId },
-        select: { id: true, fileUrl: true, generationId: true, generation: { select: { userId: true, parameters: true } } },
-      })
-      if (!out) return null
-      return { id: out.id, fileUrl: out.fileUrl, generationId: out.generationId, ownerId: out.generation.userId, parameters: (out.generation.parameters ?? null) as Record<string, unknown> | null } satisfies RenderOutputRow
-    },
-    async webAttempt(id) {
-      return !!(await prisma.cmfRenderAttempt.findUnique({ where: { id }, select: { id: true } }))
-    },
-    async verdicts(outputId, product) {
-      const rows = await prisma.creativeVerdict.findMany({
-        where: { outputId, product },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true, profileId: true, credentialId: true, answer: true, remark: true, createdAt: true },
-      })
-      return rows satisfies VerdictRow[]
-    },
-    async verdictEmail(v) {
-      if (v.credentialId) {
-        const cred = await prisma.headlessCredential.findUnique({ where: { id: v.credentialId }, select: { subjectEmail: true } }).catch(() => null)
-        if (cred?.subjectEmail) return cred.subjectEmail
-      }
-      return emailFromAuth(v.profileId)
-    },
-    async imageBytes(url) {
-      const got = await fetchAllowlisted(url, { maxBytes: 40 * 1024 * 1024, timeoutMs: 30_000, contentTypes: ['image/png', 'image/jpeg', 'image/webp', 'application/octet-stream'] })
-      return { bytes: got.buffer, mimeType: got.contentType ?? null } satisfies SupplierPdfImage
-    },
-    async storePdf(path, bytes) {
-      const { uploadBase64ToStorage } = await import('@/lib/supabase/storage')
-      return uploadBase64ToStorage(`data:application/pdf;base64,${Buffer.from(bytes).toString('base64')}`, CMF_STORAGE_BUCKET, path)
-    },
-    now: () => new Date(),
-  },
-}
-
-let deps: CmfToolDeps = productionCmfDeps
+/** What the tools reach is the CMF service's; the names are kept for the tests and the other tools. */
+export type CmfToolDeps = CmfServiceDeps
+export const productionCmfDeps: CmfToolDeps = productionCmfServiceDeps
 
 /** Tests swap the handlers' reach for fixtures. */
 export function setCmfToolDeps(next: Partial<CmfToolDeps> | null): void {
-  deps = next ? { ...productionCmfDeps, ...next } : productionCmfDeps
+  setCmfServiceDeps(next)
 }
 
-export class CmfAccessError extends Error {
-  constructor() {
-    super('CMF files need CMF access on your Vesper profile (an admin turns it on under Users). Nothing was read.')
-    this.name = 'CmfAccessError'
+/** The person behind a Claude call, as the CMF service knows them: the credential's owner. */
+export function mcpActor(ctx: ToolContext): CmfActor {
+  return {
+    profileId: ctx.principal.ownerId,
+    email: null,
+    role: ctx.principal.ownerRole ?? null,
+    door: 'mcp',
+    credentialId: ctx.principal.credentialId,
+    allowedModels: ctx.principal.allowedModels,
   }
-}
-
-async function requireCmf(ctx: ToolContext): Promise<{ admin: boolean }> {
-  const access = await deps.ownerAccess(ctx.principal.ownerId)
-  if (!access.cmf) throw new CmfAccessError()
-  return { admin: access.admin }
-}
-
-/** Throws when the caller has no CMF access; exported for grade_image's CMF path. */
-export async function assertCmfAccess(ownerId: string): Promise<void> {
-  const access = await deps.ownerAccess(ownerId)
-  if (!access.cmf) throw new CmfAccessError()
-}
-
-async function loadCmf(ctx: ToolContext): Promise<{ loaded: LoadedKit; cmf: CmfKit }> {
-  const loaded = await deps.loadKit(ctx.env)
-  return { loaded, cmf: cmfKit(loaded.kit) }
-}
-
-/**
- * Claude names things; it never hands Vesper a value. Every CMF tool that reads a workbook upload
- * takes identifiers only (an import id, a tab, a column letter, a clown key, an output id) and
- * refuses any other argument, before it reads anything.
- */
-export function identifiersOnly(tool: string, args: Record<string, unknown>, allowed: readonly string[]): void {
-  const extra = Object.keys(args ?? {}).filter((k) => !allowed.includes(k))
-  if (extra.length) {
-    throw new Error(
-      `${tool} takes identifiers only (${allowed.join(', ')}) and refuses ${extra.join(', ')}: every value comes from the stored workbook's cells, never from Claude. Nothing was read.`
-    )
-  }
-}
-
-/** The payload for one SKU of a workbook upload, built by code, through one key of the kit. */
-async function workbookPayload(loaded: LoadedKit, cmf: CmfKit, a: { import_id: string; tab: string; sku_column: string; clown: string }) {
-  const wb = await loadStoredWorkbook(deps.workbook, a.import_id)
-  const built = await buildWorkbookPayload({ cmf, wb, tab: a.tab, column: a.sku_column, keyId: a.clown, readKey: (entry) => deps.readKitFile(loaded, { path: entry.path, sha256: entry.sha256 }) })
-  return { wb, ...built }
 }
 
 function workbookLine(p: WorkbookPayload): string {
   const w = p.workbook
   return `From upload ${w.import_id} (${w.file}, sha256 ${w.sha256.slice(0, 12)}, modified ${w.modified ?? 'unknown'}), ${w.tab} column ${w.column}; the SKU's cells sha256 ${w.sku_spec_sha256.slice(0, 12)}.`
-}
-
-const parsedParts = new Map<string, CmfGradingParts>()
-
-/** `kit/cmf-grading.json` at the kit's commit, checked by sha256; kept per sha. */
-export async function cmfGradingParts(loaded: LoadedKit, cmf: CmfKit, read: CmfToolDeps['readKitFile'] = deps.readKitFile): Promise<CmfGradingParts> {
-  const file = cmf.product.grading_prompt?.parts_file
-  if (!file) throw new CmfError(`the kit ${loaded.kit.tag} carries no CMF grading parts`)
-  const hit = parsedParts.get(file.sha256)
-  if (hit) return hit
-  const parts = JSON.parse((await read(loaded, file)).toString('utf8')) as CmfGradingParts
-  parsedParts.set(file.sha256, parts)
-  return parts
 }
 
 // ------------------------------------------------------------------ cmf_list
@@ -272,45 +96,27 @@ export const cmfListHandler: ToolHandler = {
   async run(args, ctx) {
     const parsed = CmfListArgs.safeParse(args)
     if (!parsed.success) throw invalidArguments(parsed.error.issues)
-    await requireCmf(ctx)
-    const { loaded, cmf } = await loadCmf(ctx)
-    const parts = await cmfGradingParts(loaded, cmf)
-    const tabs = parsed.data.tab ? [resolveTab(cmf, parsed.data.tab)] : Object.entries(cmf.specs).map(([slug, spec]) => ({ slug, spec }))
-    const out = []
+    const { loaded, cmf, tabs, uploads } = await listCmf(mcpActor(ctx), parsed.data, ctx.env)
     const lines: string[] = [
       `CMF in ${loaded.kit.tag}: rubric ${cmf.product.rubric.version ?? '?'}${reportsOnly(cmf.product.rubric) ? ' (no check blocks yet)' : ''}. Damien decides every render and every PDF.`,
     ]
-    for (const { slug, spec } of tabs) {
-      const keys = keysForTab(cmf, spec).map(([id, k]) => ({ id, clown: k.clown?.id ?? null, draft: k.draft, confirmed: k.confirmed }))
-      const payloads = Object.entries(cmf.payloads)
-        .filter(([, p]) => p.spec === slug)
-        .map(([id, p]) => ({ id, column: p.column, sku_name: p.sku_name, key: p.key, status: p.status, key_confirmed: p.key_confirmed ?? null, reasons: p.reasons ?? [] }))
-      let skus: Array<{ column: string; header?: string | null; name?: string | null; in_scope: boolean; scope_reason?: string | null }> = inScopeColumns(parts, slug).map((c) => ({
-        column: c.column,
-        name: c.sku_name,
-        in_scope: true,
-      }))
-      if (parsed.data.tab) {
-        const specJson = JSON.parse((await deps.readKitFile(loaded, spec)).toString('utf8')) as Spec
-        skus = specJson.skus.map((s) => ({ column: s.column, header: s.header ?? null, name: s.name ?? null, in_scope: s.in_scope === true, scope_reason: (s.scope_reason as string | undefined) ?? null }))
-      }
-      out.push({ tab: spec.tab, slug, vesper_product: spec.vesper_product, skus, keys, payloads })
+    for (const t of tabs) {
+      const { skus, keys, payloads } = t
       const ready = payloads.filter((p) => p.status === 'ready')
       lines.push(
-        `- ${spec.tab} (${slug}): in scope ${skus.filter((s) => s.in_scope).map((s) => `${s.column}${s.name ? ` ${s.name}` : ''}`).join(', ') || 'none'}; ` +
+        `- ${t.tab} (${t.slug}): in scope ${skus.filter((s) => s.in_scope).map((s) => `${s.column}${s.name ? ` ${s.name}` : ''}`).join(', ') || 'none'}; ` +
           `keys ${keys.map((k) => `${k.id}${k.draft ? ' (draft)' : k.confirmed ? ' (confirmed)' : ' (named, not confirmed)'}`).join(', ') || 'none'}; ` +
           `prompts ready ${ready.map((p) => `${p.column} through ${p.key}`).join(', ') || 'none'}` +
           (payloads.some((p) => p.status !== 'ready') ? `; refused ${payloads.filter((p) => p.status !== 'ready').map((p) => `${p.column} (${p.reasons[0] ?? 'refused'})`).join('; ')}` : '')
       )
     }
     lines.push('A draft key cannot make a prompt: Damien names its zones first. cmf_prompt shows a ready prompt; cmf_render draws it.')
-    const uploads = (await deps.recentImports(5).catch(() => [] as WorkbookImportRow[])).map((i) => ({ import_id: i.id, file: i.fileName, uploaded_at: i.createdAt.toISOString() }))
     if (uploads.length) {
       lines.push(
         `Newest workbook uploads (name one as import_id to build the prompt and the supplier PDF from its cells): ${uploads.map((u) => `${u.import_id} ${u.file} (${u.uploaded_at.slice(0, 16).replace('T', ' ')})`).join('; ')}.`
       )
     }
-    return { content: [{ type: 'text', text: lines.join('\n') }], structuredContent: { ...kitHeader(loaded), tabs: out, uploads } }
+    return { content: [{ type: 'text', text: lines.join('\n') }], structuredContent: { ...kitHeader(loaded), tabs, uploads } }
   },
 }
 
@@ -335,16 +141,7 @@ export const CmfWorkbookTargetArgs = {
 export const CmfWorkbookPromptArgs = z.object(CmfWorkbookTargetArgs).strict()
 const WORKBOOK_TARGET_KEYS = ['import_id', 'tab', 'sku_column', 'clown'] as const
 
-async function readPayload(loaded: LoadedKit, cmf: CmfKit, tab: string, column: string, clown: string) {
-  const { slug, spec } = resolveTab(cmf, tab)
-  resolveKey(cmf, spec, clown)
-  const entry = payloadFor(cmf, slug, column.toUpperCase(), clown)
-  if (entry.status !== 'ready' || !entry.path || !entry.sha256) return { slug, spec, entry, payload: null as CmfPayload | null, bytes: null as Buffer | null }
-  const bytes = await deps.readKitFile(loaded, { path: entry.path, sha256: entry.sha256 })
-  return { slug, spec, entry, payload: JSON.parse(bytes.toString('utf8')) as CmfPayload, bytes }
-}
-
-function workbookPromptResult(loaded: LoadedKit, built: Awaited<ReturnType<typeof workbookPayload>>) {
+function workbookPromptResult(loaded: LoadedKit, built: CmfWorkbookBuilt) {
   const payload = built.payload
   const table = [
     '| # | Zone | Component | Material | Finish | Colour | Code |',
@@ -394,7 +191,7 @@ function workbookPromptResult(loaded: LoadedKit, built: Awaited<ReturnType<typeo
   }
 }
 
-function promptRefusalResult(loaded: LoadedKit, a: { import_id: string; tab: string; sku_column: string; clown: string }, err: PromptRefusal) {
+function promptRefusalResult(loaded: LoadedKit, a: CmfUploadTarget, err: PromptRefusal) {
   return {
     content: [
       {
@@ -412,22 +209,17 @@ export const cmfPromptHandler: ToolHandler = {
       identifiersOnly('cmf_prompt', args, WORKBOOK_TARGET_KEYS)
       const w = CmfWorkbookPromptArgs.safeParse(args)
       if (!w.success) throw invalidArguments(w.error.issues)
-      await requireCmf(ctx)
-      const { loaded, cmf } = await loadCmf(ctx)
-      try {
-        return workbookPromptResult(loaded, await workbookPayload(loaded, cmf, w.data))
-      } catch (err) {
-        if (err instanceof PromptRefusal) return promptRefusalResult(loaded, w.data, err)
-        throw err
-      }
+      const got = await cmfPrompt(mcpActor(ctx), w.data, ctx.env)
+      if (got.source !== 'upload') throw new Error('unreachable: an upload target answered from the kit')
+      if ('refused' in got) return promptRefusalResult(got.loaded, got.target, got.refused)
+      return workbookPromptResult(got.loaded, got.built)
     }
     const parsed = CmfPromptArgs.safeParse(args)
     if (!parsed.success) throw invalidArguments(parsed.error.issues)
-    await requireCmf(ctx)
-    const a = parsed.data
-    const { loaded, cmf } = await loadCmf(ctx)
-    const { entry, payload } = await readPayload(loaded, cmf, a.tab, a.column, a.clown)
-    const header = kitHeader(loaded)
+    const got = await cmfPrompt(mcpActor(ctx), parsed.data, ctx.env)
+    if (got.source !== 'kit') throw new Error('unreachable: a kit target answered from an upload')
+    const { entry, payload } = got
+    const header = kitHeader(got.loaded)
     if (!payload) {
       const reasons = entry.reasons ?? []
       return {
@@ -502,19 +294,6 @@ const RenderOptions = {
 export const CmfWorkbookRenderArgs = z.object({ ...CmfWorkbookTargetArgs, ...RenderOptions }).strict()
 const WORKBOOK_RENDER_KEYS = [...WORKBOOK_TARGET_KEYS, 'lane', 'n', 'image_size', 'async'] as const
 
-interface CmfRenderExecution {
-  header: ReturnType<typeof kitHeader>
-  plan: CmfRenderPlan
-  generationId: string
-  outputs: Array<{ url: string; width: number; height: number; mimeType: string; outputId: string | null }>
-  previewSources: string[]
-  manifest: Record<string, unknown>[]
-  failures: string[]
-  recorded: boolean
-  recordError: string | null
-  costUsd: number | null
-}
-
 function renderSummary(x: CmfRenderExecution): string {
   const p = x.plan
   const lines = [
@@ -573,108 +352,25 @@ function renderPayload(x: CmfRenderExecution): JobPayload {
   }
 }
 
-/** The clown's pin for a plan, its bytes checked against the payload before anything is paid for. */
-async function clownForRender(ctx: ToolContext, loaded: LoadedKit, cmf: CmfKit, plan: CmfRenderPlan): Promise<{ row: PinRow; spec: PinSpec }> {
-  const spec = kitPins(loaded.kit).find((s) => s.product === cmf.slug && s.pinId === plan.clown.id && s.sha256 === plan.clown.sha256)
-  if (!spec) throw new CmfError(`the clown ${plan.clown.id} with the payload's sha256 is not a pin in the kit: the clown changed; its key must be sampled again`)
-  const row = (await deps.pinRows(cmf.slug)).find((r) => r.pinId === spec.pinId && r.sha256 === spec.sha256)
-  if (!row || !usablePin(row, spec) || !row.storagePath) {
-    throw new CmfError(`the clown ${plan.clown.id} is not pinned in Vesper yet (an admin syncs the pins). Nothing was paid for.`)
-  }
-  const bytes = await deps.pinBytes(row.storagePath, ctx.env)
-  if (!bytes) throw new CmfError(`the clown ${plan.clown.id}'s pinned copy could not be read. Nothing was paid for.`)
-  checkClownBytes(plan, bytes)
-  return { row, spec }
-}
-
-/**
- * What a CMF render records about itself on its generation (`parameters.creative`). From a workbook
- * upload it also records the upload, the workbook's sha256, the SKU's cells as parsed and the
- * key's sha256: cmf_pdf reads them back to hold the render to the workbook.
- */
-export function cmfRenderCreative(plan: CmfRenderPlan, header: Pick<ReturnType<typeof kitHeader>, 'kit_version' | 'kit_tag' | 'kit_commit'>): Record<string, unknown> {
-  return {
-    product: 'cmf',
-    tab: plan.tab,
-    column: plan.column,
-    sku_name: plan.skuName,
-    key: plan.key,
-    key_confirmed: plan.keyConfirmed,
-    lane: plan.lane,
-    model: plan.model,
-    kit_version: header.kit_version,
-    kit_tag: header.kit_tag,
-    kit_commit: header.kit_commit,
-    payload: { id: plan.payloadId, prompt_sha256: plan.promptSha256, clown: plan.clown },
-    ...(plan.workbook ? { key_sha256: plan.keySha256, workbook: plan.workbook } : {}),
-  }
-}
-
-async function executeRender(ctx: ToolContext, loaded: LoadedKit, cmf: CmfKit, plan: CmfRenderPlan, clown: { row: PinRow; spec: PinSpec }, jobId: string | null): Promise<CmfRenderExecution> {
-  const header = kitHeader(loaded)
-  const inlineLimit = cmf.product.grading?.inline_limit_bytes ?? 3_500_000
-  const part: GeminiPart = await pinPart(clown.row, clown.spec, pinPartDeps(ctx.env, inlineLimit))
-  const gem = geminiDeps(ctx.env)
-  const { images, failures } = await executeCmfDraws(plan, async (_index, deadline) => {
-    const img = await drawImage(gem, { ...cmfDrawRequest(plan, part), deadline })
-    return { ...img, model: plan.model, settings: { aspectRatio: plan.aspect, imageSize: plan.imageSize } } as Omit<CmfDrawn, 'index'>
+/** A planned render, run as a long call: inline when it finishes in time, else as a job. */
+async function runPlannedRender(ctx: ToolContext, request: Record<string, unknown> & { async: boolean }, target: Parameters<typeof planRender>[1]) {
+  const actor = mcpActor(ctx)
+  const ready = await planRender(actor, target, ctx.env)
+  const plan = ready.plan
+  return runLongCall<CmfRenderExecution>({
+    ctx,
+    toolName: 'cmf_render',
+    modelId: plan.model,
+    request: { ...request },
+    runAsync: request.async,
+    what: `the ${plan.tab} ${plan.column} render`,
+    execute: (jobId) => runRender(actor, ready, { jobId }, ctx.env),
+    toPayload: renderPayload,
+    toWire: async (x) => ({
+      content: await imageResultContent({ summary: renderSummary(x), outputs: x.outputs, modelId: x.plan.model, previewSources: x.previewSources, inline: true }),
+      structuredContent: renderStructured(x),
+    }),
   })
-  const generationId = randomUUID()
-  const stored = await Promise.all(
-    images.map(async (img) => {
-      const ext = img.mimeType === 'image/jpeg' ? 'jpg' : img.mimeType === 'image/webp' ? 'webp' : 'png'
-      const url = await storeDrawn(img.bytes, img.mimeType, `mcp/${ctx.principal.credentialId}/${generationId}/${img.index - 1}.${ext}`)
-      return { img, url, ...(await imageSize(img.bytes)) }
-    })
-  )
-  const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
-  const manifest = stored.map((s) => cmfManifestLine(plan, { index: s.img.index, file: s.url, model: s.img.model, settings: s.img.settings, timestamp }))
-  const perImage = drawPriceUsd(plan.model, plan.imageSize)
-  const costUsd = perImage === null ? null : perImage * stored.length
-  const clownUrl = clown.row.storagePath ? await anchorUrl(clown.row.storagePath, ctx.env).catch(() => null) : null
-  let outputIds: Array<string | null> = stored.map(() => null)
-  let recorded = false
-  let recordError: string | null = null
-  try {
-    const result = await recordMcpGeneration({
-      ownerId: ctx.principal.ownerId,
-      generationId,
-      stream: 'cmf',
-      modelId: vesperModelId(plan.model),
-      prompt: plan.prompt,
-      costUsd,
-      outputs: stored.map((s) => ({ url: s.url, width: s.width || null, height: s.height || null })),
-      parameters: {
-        toolName: 'cmf_render',
-        source: 'mcp',
-        credentialId: ctx.principal.credentialId,
-        mcpJobId: jobId,
-        creative: cmfRenderCreative(plan, header),
-        manifest,
-        aspectRatio: plan.aspect,
-        imageSize: plan.imageSize,
-        numOutputs: stored.length,
-        ...(clownUrl ? { anchor: { kind: 'clown', id: plan.clown.id, url: clownUrl, sha256: plan.clown.sha256 } } : {}),
-        estimatedCostUsd: costUsd,
-      },
-    })
-    outputIds = result.outputIds
-    recorded = true
-  } catch (err) {
-    recordError = (err as Error)?.message || 'unknown error'
-  }
-  return {
-    header,
-    plan,
-    generationId,
-    outputs: stored.map((s, i) => ({ url: s.url, width: s.width, height: s.height, mimeType: s.img.mimeType, outputId: outputIds[i] ?? null })),
-    previewSources: stored.map((s) => `data:${s.img.mimeType};base64,${s.img.bytes.toString('base64')}`),
-    manifest,
-    failures,
-    recorded,
-    recordError,
-    costUsd,
-  }
 }
 
 export const cmfRenderHandler: ToolHandler = {
@@ -684,70 +380,21 @@ export const cmfRenderHandler: ToolHandler = {
     return (drawPriceUsd(model, typeof args.image_size === 'string' ? args.image_size : '2K') ?? 0.134) * Math.max(1, n)
   },
   async run(args, ctx) {
-    if (args && typeof args === 'object' && 'import_id' in args) return runWorkbookRender(args, ctx)
+    if (args && typeof args === 'object' && 'import_id' in args) {
+      // From a workbook upload: the payload built by code, then the same refusals and the same draw.
+      identifiersOnly('cmf_render', args, WORKBOOK_RENDER_KEYS)
+      const parsed = CmfWorkbookRenderArgs.safeParse(args)
+      if (!parsed.success) throw invalidArguments(parsed.error.issues)
+      return runPlannedRender(ctx, parsed.data, parsed.data)
+    }
     const parsed = CmfRenderArgs.safeParse(args)
     if (!parsed.success) {
       const extra = Object.keys(args).filter((k) => /^(reference|references|image|images|image_url|output_id|prompt)$/i.test(k))
       if (extra.length) throw new Error(`cmf_render takes no ${extra.join(', ')}: the clown is the only image and the prompt is the payload's, byte for byte.`)
       throw invalidArguments(parsed.error.issues)
     }
-    await requireCmf(ctx)
-    const a = parsed.data
-    const { loaded, cmf } = await loadCmf(ctx)
-    const { entry, bytes } = await readPayload(loaded, cmf, a.tab, a.column, a.clown)
-    if (!bytes) throw new CmfError(`no prompt for ${entry.tab} column ${entry.column} through '${entry.key}': ${(entry.reasons ?? []).join('; ') || 'refused'}`)
-    const plan = planCmfRender(cmf, entry, bytes, { lane: a.lane, n: a.n, image_size: a.image_size })
-    assertModelAllowed(ctx.principal.allowedModels, vesperModelId(plan.model))
-    const clown = await clownForRender(ctx, loaded, cmf, plan)
-    return runLongCall<CmfRenderExecution>({
-      ctx,
-      toolName: 'cmf_render',
-      modelId: plan.model,
-      request: { ...a },
-      runAsync: a.async,
-      what: `the ${plan.tab} ${plan.column} render`,
-      execute: (jobId) => executeRender(ctx, loaded, cmf, plan, clown, jobId),
-      toPayload: renderPayload,
-      toWire: async (x) => ({
-        content: await imageResultContent({ summary: renderSummary(x), outputs: x.outputs, modelId: x.plan.model, previewSources: x.previewSources, inline: true }),
-        structuredContent: renderStructured(x),
-      }),
-    })
+    return runPlannedRender(ctx, parsed.data, parsed.data)
   },
-}
-
-/** cmf_render from a workbook upload: the payload built by code, then the same refusals and the same draw. */
-async function runWorkbookRender(args: Record<string, unknown>, ctx: ToolContext) {
-  identifiersOnly('cmf_render', args, WORKBOOK_RENDER_KEYS)
-  const parsed = CmfWorkbookRenderArgs.safeParse(args)
-  if (!parsed.success) throw invalidArguments(parsed.error.issues)
-  await requireCmf(ctx)
-  const a = parsed.data
-  const { loaded, cmf } = await loadCmf(ctx)
-  let built: Awaited<ReturnType<typeof workbookPayload>>
-  try {
-    built = await workbookPayload(loaded, cmf, a)
-  } catch (err) {
-    if (err instanceof PromptRefusal) throw new CmfError(`not sent (nothing was paid for): ${err.reasons.join('; ')}`)
-    throw err
-  }
-  const plan = planCmfRenderFromWorkbook(cmf, built.payload, built.payloadId, a.clown, { lane: a.lane, n: a.n, image_size: a.image_size })
-  assertModelAllowed(ctx.principal.allowedModels, vesperModelId(plan.model))
-  const clown = await clownForRender(ctx, loaded, cmf, plan)
-  return runLongCall<CmfRenderExecution>({
-    ctx,
-    toolName: 'cmf_render',
-    modelId: plan.model,
-    request: { ...a },
-    runAsync: a.async,
-    what: `the ${plan.tab} ${plan.column} render`,
-    execute: (jobId) => executeRender(ctx, loaded, cmf, plan, clown, jobId),
-    toPayload: renderPayload,
-    toWire: async (x) => ({
-      content: await imageResultContent({ summary: renderSummary(x), outputs: x.outputs, modelId: x.plan.model, previewSources: x.previewSources, inline: true }),
-      structuredContent: renderStructured(x),
-    }),
-  })
 }
 
 // ------------------------------------------------------------------ cmf_check_pdf
@@ -765,50 +412,16 @@ export const CmfCheckPdfArgs = z
   .strict()
   .refine((a) => !!a.pdf_url !== !!a.cmf_packet_id, 'name the PDF by pdf_url or by cmf_packet_id, one of them')
 
-export async function runCmfCheckPdf(ctx: ToolContext, a: z.infer<typeof CmfCheckPdfArgs>): Promise<{ loaded: LoadedKit; result: SpecCheckResult }> {
-  const { loaded, cmf } = await loadCmf(ctx)
-  const { spec: specEntry } = resolveTab(cmf, a.tab)
-  const specBytes = await deps.readKitFile(loaded, specEntry)
-  const spec = JSON.parse(specBytes.toString('utf8')) as Spec
-  let keyJson: { path: string; sha256: string; content: string } | null = null
-  let key: ClownKey | null = null
-  if (a.clown) {
-    const k = resolveKey(cmf, specEntry, a.clown)
-    const kb = await deps.readKitFile(loaded, { path: k.path, sha256: k.sha256 })
-    key = JSON.parse(kb.toString('utf8')) as ClownKey
-    keyJson = { path: k.path, sha256: k.sha256, content: kb.toString('utf8') }
-  }
-  let url = a.pdf_url ?? null
-  if (a.cmf_packet_id) {
-    const packet = await deps.packetPdf(a.cmf_packet_id, ctx.principal.ownerId)
-    if (!packet) throw new CmfError('that CMF packet is not one you can see, or it has no exported PDF yet')
-    url = packet.url
-  }
-  const pdf = await deps.fetchPdf(url!)
-  if (a.engine === 'worker') {
-    const cfg = deps.worker(ctx.env)
-    if (!cfg) throw new CmfError('the creative worker is not configured on this Vesper (CREATIVE_WORKER_URL, CREATIVE_WORKER_SECRET); the check runs in Vesper without engine: "worker"')
-    const result = await checkPdfOnWorker(cfg, {
-      pdfUrl: url!,
-      pdfSha256: sha256Hex(pdf),
-      spec: { path: specEntry.path, sha256: specEntry.sha256, content: specBytes.toString('utf8') },
-      tab: spec.tab,
-      columns: a.columns,
-      layout: a.layout,
-      keyJson,
-    })
-    return { loaded, result }
-  }
-  const result = await checkPdfInVesper({ pdf, spec, columns: a.columns, layout: a.layout, key })
-  return { loaded, result }
+/** The check itself, without the gate: the service's. */
+export async function runCmfCheckPdf(ctx: ToolContext, a: z.infer<typeof CmfCheckPdfArgs>) {
+  return runCheckPdf(mcpActor(ctx), a, ctx.env)
 }
 
 export const cmfCheckPdfHandler: ToolHandler = {
   async run(args, ctx) {
     const parsed = CmfCheckPdfArgs.safeParse(args)
     if (!parsed.success) throw invalidArguments(parsed.error.issues)
-    await requireCmf(ctx)
-    const { loaded, result } = await runCmfCheckPdf(ctx, parsed.data)
+    const { loaded, result } = await checkPdf(mcpActor(ctx), parsed.data, ctx.env)
     return {
       content: [{ type: 'text', text: specCheckText(result) }],
       structuredContent: { ...kitHeader(loaded), ...result, rows: result.rows },
@@ -828,56 +441,34 @@ export const CmfPdfArgs = z
   .strict()
 const PDF_KEYS = ['import_id', 'tab', 'sku_columns', 'output_ids'] as const
 
-/** The pinned clown of a key, its bytes checked against the key's clown sha256. */
-async function clownOfKey(ctx: ToolContext, loaded: LoadedKit, cmf: CmfKit, keyId: string): Promise<SupplierPdfImage | null> {
-  const key = cmf.keys[keyId]
-  if (!key?.clown) return null
-  const spec = kitPins(loaded.kit).find((s) => s.product === cmf.slug && s.pinId === key.clown!.id && s.sha256 === key.clown!.sha256)
-  if (!spec) return null
-  const row = (await deps.pinRows(cmf.slug)).find((r) => r.pinId === spec.pinId && r.sha256 === spec.sha256)
-  if (!row || !usablePin(row, spec) || !row.storagePath) return null
-  const bytes = await deps.pinBytes(row.storagePath, ctx.env)
-  if (!bytes || sha256Hex(bytes) !== key.clown.sha256) return null
-  return { bytes, mimeType: 'image/png' }
-}
-
 export const cmfPdfHandler: ToolHandler = {
   async run(args, ctx) {
     identifiersOnly('cmf_pdf', args, PDF_KEYS)
     const parsed = CmfPdfArgs.safeParse(args)
     if (!parsed.success) throw invalidArguments(parsed.error.issues)
-    await requireCmf(ctx)
-    const { loaded, cmf } = await loadCmf(ctx)
-    try {
-      const r = await runCmfPdf(cmf, parsed.data, {
-        ...deps.pdf,
-        loadWorkbook: (id) => loadStoredWorkbook(deps.workbook, id),
-        readKey: (entry) => deps.readKitFile(loaded, { path: entry.path, sha256: entry.sha256 }),
-        clownBytes: ({ id }) => clownOfKey(ctx, loaded, cmf, id),
-      })
-      const text = [
-        `The supplier PDF is saved: ${r.file_name}`,
-        r.url,
-        `${r.tab}, ${r.columns.map((c) => `${c}${r.sku_names[c] ? ` (${r.sku_names[c]})` : ''}`).join(', ')}: one page per SKU, then one part-breakdown page. Read back and checked before it was saved: ${r.cells_compared} cell(s) and every other printed value, all equal to the workbook's cells.`,
-        `Workbook: ${r.workbook.file}, sha256 ${String(r.workbook.sha256).slice(0, 12)}, modified ${r.workbook.modified} (${r.workbook.modified_source}). Upload ${r.import_id}.`,
-        `Legend from the clown key ${r.key.id}, confirmed by ${r.key.confirmed_by}: ${r.legend.join(', ')}.`,
-        ...r.renders.map((x) => `- ${x.column}: render ${x.output_id}, answered yes by ${x.decided_by} on ${x.decided_at.slice(0, 10)}`),
-      ].join('\n')
-      return { content: [{ type: 'text', text }], structuredContent: { ...kitHeader(loaded), saved: true, ...r } }
-    } catch (err) {
-      if (err instanceof CmfPdfRefused) {
-        return {
-          isError: true,
-          content: [{ type: 'text' as const, text: err.message }],
-          structuredContent: {
-            ...kitHeader(loaded),
-            saved: false,
-            counts: err.check.counts,
-            rows: err.check.rows.filter((x) => x.state !== 'match'),
-          },
-        }
+    const got = await supplierPdf(mcpActor(ctx), parsed.data, ctx.env)
+    if (!got.saved) {
+      const err = got.refused
+      return {
+        isError: true,
+        content: [{ type: 'text' as const, text: err.message }],
+        structuredContent: {
+          ...kitHeader(got.loaded),
+          saved: false,
+          counts: err.check.counts,
+          rows: err.check.rows.filter((x) => x.state !== 'match'),
+        },
       }
-      throw err
     }
+    const r = got.result
+    const text = [
+      `The supplier PDF is saved: ${r.file_name}`,
+      r.url,
+      `${r.tab}, ${r.columns.map((c) => `${c}${r.sku_names[c] ? ` (${r.sku_names[c]})` : ''}`).join(', ')}: one page per SKU, then one part-breakdown page. Read back and checked before it was saved: ${r.cells_compared} cell(s) and every other printed value, all equal to the workbook's cells.`,
+      `Workbook: ${r.workbook.file}, sha256 ${String(r.workbook.sha256).slice(0, 12)}, modified ${r.workbook.modified} (${r.workbook.modified_source}). Upload ${r.import_id}.`,
+      `Legend from the clown key ${r.key.id}, confirmed by ${r.key.confirmed_by}: ${r.legend.join(', ')}.`,
+      ...r.renders.map((x) => `- ${x.column}: render ${x.output_id}, answered yes by ${x.decided_by} on ${x.decided_at.slice(0, 10)}`),
+    ].join('\n')
+    return { content: [{ type: 'text', text }], structuredContent: { ...kitHeader(got.loaded), saved: true, ...r } }
   },
 }
