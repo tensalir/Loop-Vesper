@@ -46,6 +46,7 @@ import type { CmfRender } from '@prisma/client'
 import { resolveSwatchHex, type SwatchContext } from './clown-legend'
 import { getCmfProduct } from './products'
 import type { ComponentSpec, PaletteSwatch } from './schema'
+import { fetchStored } from '@/lib/storage/access'
 
 // A4 portrait, matching Damien's source deck. Page-size constants live here
 // rather than imported from `document.ts` because that module still describes
@@ -96,7 +97,7 @@ function swatchContextForRender(render: RenderProjection): SwatchContext {
 
 async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
   try {
-    const res = await fetch(url)
+    const res = await fetchStored(url)
     if (!res.ok) return null
     const buffer = await res.arrayBuffer()
     return new Uint8Array(buffer)

@@ -3,6 +3,8 @@
  * Uses Gemini multimodal to generate concise descriptions.
  */
 
+import { fetchStored } from '@/lib/storage/access'
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta'
 
@@ -19,7 +21,8 @@ export interface CaptionResult {
  * Fetch file bytes from a URL and convert to base64
  */
 async function fetchFileAsBase64(url: string): Promise<{ base64: string; mimeType: string }> {
-  const response = await fetch(url)
+  // A stored output is read through a signature: its bucket may be private.
+  const response = await fetchStored(url)
   if (!response.ok) {
     throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`)
   }

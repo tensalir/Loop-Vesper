@@ -1,4 +1,5 @@
 import { BaseModelAdapter, ModelConfig } from './base'
+import { MODEL_INPUT_TTL_SECONDS, signStoredUrlsDeep } from '@/lib/storage/access'
 import {
   GeminiAdapter,
   NANO_BANANA_CONFIG,
@@ -71,7 +72,7 @@ class ModelRegistry {
       return null
     }
     // @ts-ignore - TypeScript doesn't understand that adapter is a constructor
-    return new model.adapter(model.config)
+    return withSignedInputs(new model.adapter(model.config))
   }
 
   /**
@@ -95,6 +96,19 @@ class ModelRegistry {
     const model = this.models.get(modelId)
     return model ? model.config : null
   }
+}
+
+/**
+ * Every stored file in a request (a reference, a start or end frame, a reference clip, however
+ * deeply it sits in `parameters`) reaches the adapter as a signed URL. Adapters hand those URLs
+ * to Replicate, Kling, fal and OpenAI, or fetch them for Gemini, and a public URL stops answering
+ * once the buckets are private. Signed here, when the job is dispatched, so a job that waited in
+ * Vesper's own queue still gets a full hour for the provider to fetch its inputs.
+ */
+export function withSignedInputs<A extends BaseModelAdapter>(adapter: A): A {
+  const generate = adapter.generate.bind(adapter)
+  adapter.generate = async (request) => generate(await signStoredUrlsDeep(request, MODEL_INPUT_TTL_SECONDS))
+  return adapter
 }
 
 // Export singleton instance

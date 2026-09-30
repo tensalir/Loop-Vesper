@@ -15,6 +15,7 @@ import type {
   NormalizedBBox,
 } from '../schema/layoutDNA'
 import { createBlankLayoutDNA } from '../schema/layoutDNA'
+import { fetchStored } from '@/lib/storage/access'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta'
@@ -36,7 +37,7 @@ export interface DecomposeInput {
 }
 
 async function fetchImageAsBase64(url: string): Promise<{ base64: string; mimeType: string }> {
-  const response = await fetch(url)
+  const response = await fetchStored(url)
   if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
   const buffer = Buffer.from(await response.arrayBuffer())
   const base64 = buffer.toString('base64')

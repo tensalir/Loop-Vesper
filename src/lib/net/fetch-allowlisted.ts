@@ -13,8 +13,13 @@
  *     subdomains only);
  *   - redirects are followed by hand and every hop is checked again;
  *   - the body is capped (25 MB), the call times out (20 s), and the content
- *     type must be an image or a PDF.
+ *     type must be an image or a PDF;
+ *   - a file in one of Vesper's private buckets is fetched through a signature
+ *     made for the call, since its public URL stops answering once the bucket is
+ *     private (src/lib/storage/access.ts).
  */
+
+import { SERVER_READ_TTL_SECONDS, signStoredUrl, type StorageSigner } from '@/lib/storage/access'
 
 export const FETCH_MAX_BYTES = 25 * 1024 * 1024
 export const FETCH_TIMEOUT_MS = 20_000
@@ -104,6 +109,8 @@ export interface AllowlistedFetchOptions {
   patterns?: readonly string[]
   /** Injected for tests. */
   fetchImpl?: typeof fetch
+  /** Injected for tests: what signs a stored file before it is fetched. */
+  signer?: StorageSigner
 }
 
 export interface AllowlistedFetchResult {
@@ -148,7 +155,7 @@ export async function fetchAllowlisted(
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? FETCH_TIMEOUT_MS)
 
   try {
-    let url = assertAllowlistedUrl(raw, patterns)
+    let url = assertAllowlistedUrl(await signStoredUrl(raw, SERVER_READ_TTL_SECONDS, { signer: options.signer }), patterns)
     for (let hop = 0; ; hop++) {
       const res = await doFetch(url.toString(), { redirect: 'manual', signal: controller.signal })
       if (res.status >= 300 && res.status < 400) {

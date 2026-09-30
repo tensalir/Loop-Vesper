@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { SERVER_READ_TTL_SECONDS, signStoredUrl } from '@/lib/storage/access'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -15,7 +16,8 @@ const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable' // 1 year
  * @param bucket - Storage bucket name
  * @param path - File path within bucket
  * @param opts - Optional settings (cacheControl)
- * @returns Public URL of uploaded file
+ * @returns Public URL of uploaded file. It is what rows store, not what anyone opens: the
+ *   buckets are private, and readers get a signature (src/lib/storage/access.ts).
  */
 export async function uploadBase64ToStorage(
   base64DataUrl: string,
@@ -112,8 +114,8 @@ export async function uploadUrlToStorage(
         throw new Error(`Failed to fetch from GCS: ${response.statusText}`)
       }
     } else if (url.startsWith('http://') || url.startsWith('https://')) {
-      // Regular HTTP/HTTPS URL
-      response = await fetch(url, {
+      // Regular HTTP/HTTPS URL; one of our own stored files is read through a signature.
+      response = await fetch(await signStoredUrl(url, SERVER_READ_TTL_SECONDS), {
         headers: {
           ...(opts?.headers || {}),
         },

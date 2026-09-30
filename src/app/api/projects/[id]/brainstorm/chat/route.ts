@@ -5,6 +5,7 @@ import { streamText, type UIMessage } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 import { prisma } from '@/lib/prisma'
 import { loadSkill, combineSkills } from '@/lib/skills/registry'
+import { fetchStored } from '@/lib/storage/access'
 
 // Default model if env var not set - Sonnet 4.5 recommended per Anthropic docs
 const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929'
@@ -87,7 +88,8 @@ async function fetchImageUrlAsDataUrl(url: string): Promise<string | null> {
   if (!isAllowedAttachmentUrl(url)) return null
 
   try {
-    const res = await fetch(url)
+    // Attachments live in a private bucket; read them through a signature.
+    const res = await fetchStored(url)
     if (!res.ok) return null
 
     const contentType = res.headers.get('content-type') || ''
