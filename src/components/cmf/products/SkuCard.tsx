@@ -16,6 +16,7 @@
 import { ImageOff } from 'lucide-react'
 import type { ProductSummary } from '@/lib/cmf/product-summary'
 import { getComponentLabel } from '@/lib/cmf/products'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface SkuCardProps {
   render: ProductSummary['packets'][number]['renders'][number]
@@ -44,7 +45,7 @@ export function SkuCard({ render, productSlug }: SkuCardProps) {
         {render.renderUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={render.renderUrl}
+            src={toViewUrl(render.renderUrl)}
             alt={render.label ?? ''}
             className="h-full w-full object-contain p-1"
           />

@@ -20,6 +20,7 @@ import { Image as ImageIcon, Video, MessageCircle, Film, Undo2, Sparkles, Loader
 import { cn } from '@/lib/utils'
 import { logMetric } from '@/lib/metrics'
 import { useTimelineStore } from '@/store/timelineStore'
+import { toViewUrl } from '@/lib/storage/refs'
 
 // Default to Kling Official API for best quality and frame interpolation support.
 // Requires KLING_ACCESS_KEY and KLING_SECRET_KEY credentials.
@@ -1938,7 +1939,7 @@ export function GenerationInterface({
                                       title="Use as end frame"
                                     >
                                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img src={candidate.url} alt="End frame candidate" className="w-full h-full object-cover" />
+                                      <img src={toViewUrl(candidate.url)} alt="End frame candidate" className="w-full h-full object-cover" />
                                       <div className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/30 transition-colors">
                                         <Check className="h-4 w-4 text-white opacity-0 hover:opacity-100" />
                                       </div>
@@ -2253,7 +2254,7 @@ export function GenerationInterface({
                     <div className="ml-1 h-4 w-4 overflow-hidden rounded-sm border border-primary/40 bg-background/40">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={activeEditContext.imageUrl}
+                        src={toViewUrl(activeEditContext.imageUrl)}
                         alt="Editing target"
                         className="h-full w-full object-cover"
                       />

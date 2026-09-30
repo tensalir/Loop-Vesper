@@ -4,6 +4,7 @@ import { Camera, ChevronDown, ChevronUp, X } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useSnapshots, type SnapshotOutput } from '@/hooks/useSnapshots'
+import { toViewUrl } from '@/lib/storage/refs'
 
 export const SNAPSHOT_RAIL_MIME = 'application/x-loop-snapshot-image'
 
@@ -69,7 +70,7 @@ export function SnapshotRail({ projectId, onSelect, className }: SnapshotRailPro
                   title={snap.label || `Snapshot @ ${snap.timecodeMs != null ? (snap.timecodeMs / 1000).toFixed(1) + 's' : 'unknown'}`}
                 >
                   <img
-                    src={snap.fileUrl}
+                    src={toViewUrl(snap.fileUrl)}
                     alt={snap.label || 'Snapshot'}
                     className="w-full h-full object-cover"
                     draggable={false}

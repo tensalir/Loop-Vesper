@@ -23,6 +23,7 @@ import { publicUrlForCmfStoragePathOrEmpty } from '@/lib/cmf/storage'
 import type { CmfRender, CmfRenderAttempt } from '@/hooks/useCmf'
 import { ReadOnlyPill } from './Pills'
 import { formatDuration } from './format'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface InspectLightboxProps {
   attempt: CmfRenderAttempt
@@ -66,7 +67,7 @@ export function InspectLightbox({
           {attempt.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={attempt.imageUrl}
+              src={toViewUrl(attempt.imageUrl)}
               alt={`Attempt ${attempt.attemptNumber}`}
               className="w-full max-h-[80vh] object-contain"
             />
@@ -155,7 +156,7 @@ export function InspectLightbox({
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {attempt.referenceImagePaths.map((path, i) => {
-                      const url = publicUrlForCmfStoragePathOrEmpty(path)
+                      const url = toViewUrl(publicUrlForCmfStoragePathOrEmpty(path))
                       return (
                         <a
                           key={path}

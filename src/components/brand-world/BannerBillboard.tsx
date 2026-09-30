@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect } from 'react'
 import * as THREE from 'three'
 import type { PlacedBanner } from '@/lib/brand-world/placement'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface BannerBillboardProps {
   banner: PlacedBanner
@@ -22,7 +23,7 @@ export function BannerBillboard({ banner, stagePosition, stageScale }: BannerBil
 
     const loader = new THREE.TextureLoader()
     loader.load(
-      output.fileUrl,
+      toViewUrl(output.fileUrl),
       (tex) => {
         tex.colorSpace = THREE.SRGBColorSpace
         tex.minFilter = THREE.LinearFilter

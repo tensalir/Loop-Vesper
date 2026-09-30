@@ -10,6 +10,7 @@ import { useQueryClient, InfiniteData } from '@tanstack/react-query'
 import type { Project } from '@/types/project'
 import { getSessions } from '@/lib/api/sessions'
 import { fetchGenerationsPage, PaginatedGenerationsResponse } from '@/lib/api/generations'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface ProjectCardProps {
   project: Project
@@ -278,7 +279,7 @@ export function ProjectCard({ project, currentUserId, onProjectUpdate }: Project
         <div className="aspect-video bg-muted relative overflow-hidden">
           {thumbnailUrl ? (
             <img
-              src={thumbnailUrl}
+              src={toViewUrl(thumbnailUrl)}
               alt={displayProject.name}
               className="w-full h-full object-cover"
             />

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { X, Download, Bookmark, RotateCcw, Check, Video, ArrowDownRight } from 'lucide-react'
 import type { Output } from '@/types/generation'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface ImageLightboxProps {
   imageUrl: string
@@ -80,7 +81,7 @@ export function ImageLightbox({
         {/* Image */}
         <img
           ref={imageRef}
-          src={imageUrl}
+          src={toViewUrl(imageUrl)}
           alt="Full size preview"
           className="max-w-full max-h-[calc(90vh-80px)] object-contain rounded-lg shadow-2xl"
         />

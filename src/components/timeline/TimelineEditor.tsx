@@ -23,6 +23,7 @@ import { captureCurrentFrameAsync } from '@/lib/video/captureFrame'
 import { resolvePreviewClip } from '@/lib/timeline/preview'
 import { TimelineGallery, TIMELINE_GALLERY_DRAG_MIME } from './TimelineGallery'
 import type { ProjectOutput } from '@/hooks/useTimelineOutputs'
+import { toViewUrl } from '@/lib/storage/refs'
 
 const LABEL_WIDTH = 80
 const CLIP_JOIN_TOLERANCE_MS = 1
@@ -177,7 +178,7 @@ export function TimelineEditor({
       }
 
       activePreviewSrcRef.current = targetSrc
-      video.src = targetSrc
+      video.src = toViewUrl(targetSrc)
       video.load()
 
       let canvasHidden = false
@@ -505,7 +506,7 @@ export function TimelineEditor({
       probe.muted = true
       probe.playsInline = true
       probe.preload = 'auto'
-      probe.src = clip.fileUrl
+      probe.src = toViewUrl(clip.fileUrl)
 
       await new Promise<void>((resolve) => {
         if (probe.readyState >= 1) {
@@ -841,7 +842,7 @@ export function TimelineEditor({
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={promptReferenceUrl}
+              src={toViewUrl(promptReferenceUrl)}
               alt="Reference frame for generation"
               className="w-full h-full object-contain"
             />
@@ -854,7 +855,7 @@ export function TimelineEditor({
             {stagedPreview.fileType === 'video' ? (
               <video
                 ref={stagedVideoRef}
-                src={stagedPreview.fileUrl}
+                src={toViewUrl(stagedPreview.fileUrl)}
                 className="w-full h-full object-contain"
                 crossOrigin="anonymous"
                 muted
@@ -865,7 +866,7 @@ export function TimelineEditor({
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={stagedPreview.fileUrl}
+                src={toViewUrl(stagedPreview.fileUrl)}
                 alt={stagedPreview.prompt || 'Preview'}
                 className="w-full h-full object-contain"
               />
@@ -892,7 +893,7 @@ export function TimelineEditor({
             {isPreviewImage && previewClip ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={previewClip.fileUrl}
+                src={toViewUrl(previewClip.fileUrl)}
                 alt="Image clip preview"
                 className="w-full h-full object-contain"
               />
@@ -1137,7 +1138,7 @@ function ClipFilmstrip({
     video.muted = true
     video.playsInline = true
     video.preload = 'auto'
-    video.src = fileUrl
+    video.src = toViewUrl(fileUrl)
 
     let cancelled = false
 
@@ -1459,7 +1460,7 @@ const TrackLane = memo(function TrackLane({
                     touchesNext && 'rounded-r-none',
                   )}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={clip.fileUrl} alt="" className="h-full w-auto object-cover" draggable={false} />
+                    <img src={toViewUrl(clip.fileUrl)} alt="" className="h-full w-auto object-cover" draggable={false} />
                   </div>
                 )}
                 <span className="absolute inset-0 flex items-center justify-center text-[8px] text-foreground/70 font-mono tabular-nums truncate pointer-events-none z-[1] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">

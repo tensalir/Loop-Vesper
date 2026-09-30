@@ -16,6 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { toViewUrl } from '@/lib/storage/refs'
+import { storageImageLoader } from '@/lib/storage/image-loader'
 
 export default function ReviewPage() {
   const router = useRouter()
@@ -83,7 +85,7 @@ export default function ReviewPage() {
 
   const handleDownload = async (fileUrl: string, outputId: string, fileType: string = 'image') => {
     try {
-      const response = await fetch(fileUrl)
+      const response = await fetch(toViewUrl(fileUrl))
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -253,6 +255,7 @@ export default function ReviewPage() {
             >
               {output.fileType === 'image' ? (
                 <Image
+                  loader={storageImageLoader}
                   src={output.fileUrl}
                   alt={output.generation.prompt}
                   fill
@@ -262,7 +265,7 @@ export default function ReviewPage() {
                 />
               ) : (
                 <video
-                  src={output.fileUrl}
+                  src={toViewUrl(output.fileUrl)}
                   className="w-full h-full object-cover"
                   muted
                   playsInline

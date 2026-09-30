@@ -25,6 +25,8 @@ import {
   normalizeReferenceImageUrl,
   getReferenceImageUrls,
 } from './gallery-utils'
+import { toViewUrl } from '@/lib/storage/refs'
+import { storageImageLoader } from '@/lib/storage/image-loader'
 
 // Utility functions imported from ./gallery-utils
 
@@ -59,13 +61,13 @@ const ReferenceImageThumbnail = memo(function ReferenceImageThumbnail({ generati
           <div className="flex flex-col gap-1">
             <span className="text-[10px] text-muted-foreground/70">Start</span>
             <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-border/50">
-              <img src={startFrameUrl} alt="Start frame" className="w-full h-full object-cover" loading="lazy" />
+              <img src={toViewUrl(startFrameUrl)} alt="Start frame" className="w-full h-full object-cover" loading="lazy" />
             </div>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-[10px] text-muted-foreground/70">End</span>
             <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-border/50">
-              <img src={endFrameUrl} alt="End frame" className="w-full h-full object-cover" loading="lazy" />
+              <img src={toViewUrl(endFrameUrl)} alt="End frame" className="w-full h-full object-cover" loading="lazy" />
             </div>
           </div>
         </div>
@@ -84,7 +86,7 @@ const ReferenceImageThumbnail = memo(function ReferenceImageThumbnail({ generati
       {urls.length === 1 ? (
         <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-border/50">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={urls[0]} alt="Reference" className="w-full h-full object-cover" loading="lazy" />
+          <img src={toViewUrl(urls[0])} alt="Reference" className="w-full h-full object-cover" loading="lazy" />
         </div>
       ) : (
         <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-border/50 bg-muted/10 p-0.5">
@@ -92,7 +94,7 @@ const ReferenceImageThumbnail = memo(function ReferenceImageThumbnail({ generati
             {visibleUrls.map((url, index) => (
               <div key={`${generation.id}-ref-${index}`} className="relative">
                 <img
-                  src={url}
+                  src={toViewUrl(url)}
                   alt={`Reference ${index + 1}`}
                   className="w-full h-full object-cover rounded-[4px]"
                   loading="lazy"
@@ -180,7 +182,7 @@ const VideoCardWithOverlay = memo(function VideoCardWithOverlay({
     >
       <video
         ref={videoRef}
-        src={output.fileUrl}
+        src={toViewUrl(output.fileUrl)}
         crossOrigin="anonymous"
         className="w-full h-full object-contain"
         controls
@@ -606,7 +608,7 @@ export function GenerationGallery({
     sourceRect?: DOMRect | null,
   ) => {
     try {
-      const response = await fetch(fileUrl)
+      const response = await fetch(toViewUrl(fileUrl))
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -1629,6 +1631,7 @@ export function GenerationGallery({
                     })()}
                     {output.fileType === 'image' && (
                       <Image
+                        loader={storageImageLoader}
                         src={output.fileUrl}
                         alt="Generated content"
                         width={output.width || 512}

@@ -14,6 +14,7 @@ import { useGenerateMutation } from '@/hooks/useGenerateMutation'
 import { useSessions } from '@/hooks/useSessions'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Session } from '@/types/project'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface ImageToVideoOverlayProps {
   isOpen: boolean
@@ -679,7 +680,7 @@ export function ImageToVideoOverlay({
               {/* Source Image Preview - shows current start frame (can change via swap) */}
               <div className="relative aspect-video rounded-xl overflow-hidden bg-black/40 border border-white/10 shadow-inner group">
                 <img
-                  src={startFrameUrl}
+                  src={toViewUrl(startFrameUrl)}
                   alt="Start frame"
                   className="w-full h-full object-contain"
                 />
@@ -1009,7 +1010,7 @@ function IterationCard({
     if (!videoOutput?.fileUrl) return
     
     try {
-      const response = await fetch(videoOutput.fileUrl)
+      const response = await fetch(toViewUrl(videoOutput.fileUrl))
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -1048,7 +1049,7 @@ function IterationCard({
           <>
             <video
               ref={videoRef}
-              src={videoOutput.fileUrl}
+              src={toViewUrl(videoOutput.fileUrl)}
               crossOrigin="anonymous"
               className="w-full h-full object-contain"
               controls

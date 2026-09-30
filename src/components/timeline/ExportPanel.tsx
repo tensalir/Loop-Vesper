@@ -9,6 +9,7 @@ import { useTimelineStore } from '@/store/timelineStore'
 import { useEnqueueRender, useRenderJobs } from '@/hooks/useTimeline'
 import { useTimelineAutosave } from '@/hooks/useTimelineAutosave'
 import { msToTimecode } from '@/types/timeline'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface ExportPanelProps {
   projectId: string
@@ -130,7 +131,7 @@ function RenderJobCard({ job }: { job: any }) {
       </div>
       {job.status === 'completed' && job.outputUrl && (
         <a
-          href={job.outputUrl}
+          href={toViewUrl(job.outputUrl)}
           target="_blank"
           rel="noopener noreferrer"
           className="p-1 rounded-md text-emerald-500 hover:bg-emerald-500/10 transition-colors"

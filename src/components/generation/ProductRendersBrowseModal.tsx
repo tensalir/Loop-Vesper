@@ -26,6 +26,7 @@ import {
   SENSEWEAR_PRODUCTS,
   type ProductRender,
 } from '@/hooks/useProductRenders'
+import { toViewUrl } from '@/lib/storage/refs'
 
 // Available render type filters
 const RENDER_TYPE_OPTIONS = [
@@ -346,7 +347,7 @@ function RenderThumbnail({
       {render.imageUrl ? (
         <>
           <img
-            src={render.imageUrl}
+            src={toViewUrl(render.imageUrl)}
             alt={`${render.name}${render.colorway ? ` - ${render.colorway}` : ''}`}
             className="w-full h-full object-contain p-2 bg-white/5"
             loading="lazy"

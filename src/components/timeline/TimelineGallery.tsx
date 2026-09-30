@@ -4,6 +4,7 @@ import { useRef, useState, useCallback } from 'react'
 import { Eye, GripHorizontal, Image as ImageIcon, Video, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTimelineOutputs, type ProjectOutput } from '@/hooks/useTimelineOutputs'
+import { toViewUrl } from '@/lib/storage/refs'
 
 const TIMELINE_GALLERY_DRAG_MIME = 'application/x-timeline-gallery-item'
 
@@ -109,7 +110,7 @@ function GalleryTile({
       >
         {isVideo ? (
           <video
-            src={output.fileUrl}
+            src={toViewUrl(output.fileUrl)}
             className="w-full h-full object-cover pointer-events-none"
             muted
             preload="metadata"
@@ -117,7 +118,7 @@ function GalleryTile({
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={output.fileUrl}
+            src={toViewUrl(output.fileUrl)}
             alt={output.prompt || 'Generated image'}
             className="w-full h-full object-cover"
             draggable={false}

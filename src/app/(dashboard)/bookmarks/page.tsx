@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Bookmark as BookmarkIcon, X, Download, ExternalLink, Copy, Check } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface BookmarkedItem {
   id: string
@@ -88,7 +89,7 @@ function BookmarkPreviewModal({
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(output.fileUrl)
+      const response = await fetch(toViewUrl(output.fileUrl))
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -217,7 +218,7 @@ function BookmarkPreviewModal({
           <div className="relative w-full h-full flex items-center justify-center">
             {output.fileType === 'video' ? (
               <video
-                src={output.fileUrl}
+                src={toViewUrl(output.fileUrl)}
                 className="max-w-full max-h-[70vh] md:max-h-[80vh] object-contain rounded-lg shadow-2xl"
                 controls
                 autoPlay
@@ -226,7 +227,7 @@ function BookmarkPreviewModal({
               />
             ) : (
               <img
-                src={output.fileUrl}
+                src={toViewUrl(output.fileUrl)}
                 alt={prompt.slice(0, 100)}
                 className="max-w-full max-h-[70vh] md:max-h-[80vh] object-contain rounded-lg shadow-2xl"
               />
@@ -349,13 +350,13 @@ export default function BookmarksPage() {
               >
                 {bookmark.output.fileType === 'image' ? (
                   <img
-                    src={bookmark.output.fileUrl}
+                    src={toViewUrl(bookmark.output.fileUrl)}
                     alt="Bookmarked content"
                     className="w-full h-full object-cover"
                   />
                 ) : (
                   <video
-                    src={bookmark.output.fileUrl}
+                    src={toViewUrl(bookmark.output.fileUrl)}
                     className="w-full h-full object-cover"
                   />
                 )}

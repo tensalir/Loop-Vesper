@@ -27,6 +27,7 @@ import {
   ChevronRight,
   Info,
 } from 'lucide-react'
+import { toViewUrl } from '@/lib/storage/refs'
 
 export interface IterationVariant {
   label: string
@@ -114,7 +115,7 @@ async function compressImage(referenceImage: string | File): Promise<string | nu
     ) {
       return null
     }
-    const res = await fetch(referenceImage)
+    const res = await fetch(toViewUrl(referenceImage))
     if (!res.ok) return null
     blob = await res.blob()
   } else {

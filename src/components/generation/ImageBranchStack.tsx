@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { Camera, Paintbrush, ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { GenerationWithOutputs } from '@/types/generation'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface BranchItem {
   outputId: string
@@ -84,7 +85,7 @@ export function ImageBranchStack({
             title={branch.label || (branch.sourceKind === 'snapshot' ? 'Snapshot branch' : branch.sourceKind === 'edited' ? 'Edited branch' : 'Branch')}
           >
             <img
-              src={branch.fileUrl}
+              src={toViewUrl(branch.fileUrl)}
               alt={branch.label || 'Branch'}
               className="w-full h-full object-cover"
               draggable={false}

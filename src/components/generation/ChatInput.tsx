@@ -22,6 +22,7 @@ import { IterationButton } from './IterationButton'
 import { PdfBucketRail, PDF_BUCKET_MIME } from './PdfBucketRail'
 import { usePdfIngestion } from '@/hooks/usePdfIngestion'
 import { useParams } from 'next/navigation'
+import { toViewUrl } from '@/lib/storage/refs'
 
 
 interface ChatInputProps {
@@ -492,7 +493,7 @@ export function ChatInput({
         }
       }
       
-      const response = await fetch(imageUrl)
+      const response = await fetch(toViewUrl(imageUrl))
       const blob = await response.blob()
       const file = new File([blob], 'reference.png', { type: blob.type })
       
@@ -605,8 +606,8 @@ export function ChatInput({
             files.push(file)
             previewUrls.push(url) // Use data URL as preview
           } else {
-            // Handle HTTP URLs
-            const response = await fetch(url)
+            // Handle HTTP URLs (a stored file through Vesper's signed route)
+            const response = await fetch(toViewUrl(url))
             if (!response.ok) {
               console.error(`Failed to fetch image: ${url} (${response.status})`)
               continue
@@ -714,7 +715,7 @@ export function ChatInput({
                     title="Click to view full size"
                   >
                     <img
-                      src={previewUrl}
+                      src={toViewUrl(previewUrl)}
                       alt={`Reference ${index + 1}`}
                       className="w-full h-full object-cover"
                     />
@@ -876,7 +877,7 @@ export function ChatInput({
                     >
                       {imagePreviewUrls.length > 0 ? (
                         <img
-                          src={imagePreviewUrls[0]}
+                          src={toViewUrl(imagePreviewUrls[0])}
                           alt="Reference"
                           className="w-full h-full object-cover rounded-[4px]"
                         />
@@ -1121,7 +1122,7 @@ export function ChatInput({
           {fullviewImageUrl && (
             <div className="flex items-center justify-center">
               <img
-                src={fullviewImageUrl}
+                src={toViewUrl(fullviewImageUrl)}
                 alt="Full view"
                 className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
               />

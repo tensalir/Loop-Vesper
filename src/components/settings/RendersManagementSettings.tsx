@@ -48,6 +48,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface ProductRender {
   id: string
@@ -816,7 +817,7 @@ export function RendersManagementSettings() {
                                   className="group relative aspect-square rounded-md overflow-hidden border bg-muted/30 hover:border-primary transition-colors"
                                 >
                                   <img
-                                    src={render.imageUrl}
+                                    src={toViewUrl(render.imageUrl)}
                                     alt={`${render.name} - ${render.colorway || 'Default'} - ${render.angle || 'view'}`}
                                     className="w-full h-full object-contain p-1"
                                   />

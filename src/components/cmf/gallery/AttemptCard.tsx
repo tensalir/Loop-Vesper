@@ -35,6 +35,7 @@ import {
 } from 'lucide-react'
 import type { CmfRenderAttempt } from '@/hooks/useCmf'
 import { formatDuration } from './format'
+import { toViewUrl } from '@/lib/storage/refs'
 
 export interface AttemptCardProps {
   attempt: CmfRenderAttempt
@@ -89,7 +90,7 @@ export function AttemptCard({
         {attempt.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={attempt.imageUrl}
+            src={toViewUrl(attempt.imageUrl)}
             alt={`Attempt ${attempt.attemptNumber}`}
             className="w-full h-full object-contain p-3"
           />

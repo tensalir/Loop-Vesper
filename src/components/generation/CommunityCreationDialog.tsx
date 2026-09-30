@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
 import type { CommunityCreation } from '@/hooks/useCommunityCreations'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface CommunityCreationDialogProps {
   creation: CommunityCreation | null
@@ -93,7 +94,7 @@ export function CommunityCreationDialog({
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(fileUrl)
+      const response = await fetch(toViewUrl(fileUrl))
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -223,7 +224,7 @@ export function CommunityCreationDialog({
                 <div className="w-16 h-16 rounded-lg overflow-hidden border border-border/50">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img 
-                    src={referenceImageUrl} 
+                    src={toViewUrl(referenceImageUrl)} 
                     alt="Reference" 
                     className="w-full h-full object-cover" 
                   />
@@ -259,7 +260,7 @@ export function CommunityCreationDialog({
           <div className="relative w-full h-full flex items-center justify-center">
             {fileType === 'video' ? (
               <video
-                src={fileUrl}
+                src={toViewUrl(fileUrl)}
                 className="max-w-full max-h-[70vh] md:max-h-[80vh] object-contain rounded-lg shadow-2xl"
                 controls
                 autoPlay
@@ -268,7 +269,7 @@ export function CommunityCreationDialog({
               />
             ) : (
               <img
-                src={fileUrl}
+                src={toViewUrl(fileUrl)}
                 alt={prompt.slice(0, 100)}
                 className="max-w-full max-h-[70vh] md:max-h-[80vh] object-contain rounded-lg shadow-2xl"
               />
