@@ -365,7 +365,7 @@ export function useStartRender() {
 }
 
 export function useGradeRender() {
-  return useStep((a: { output_id: string; import_id?: string }) => post<CmfGradeAnswer>('/api/cmf/v2/grade', a))
+  return useStep((a: { output_id: string; import_id?: string; tab?: string; column?: string; clown?: string }) => post<CmfGradeAnswer>('/api/cmf/v2/grade', a))
 }
 
 export function useRecordAnswer() {

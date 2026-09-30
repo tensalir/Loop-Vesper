@@ -82,9 +82,12 @@ function RenderReview({ render: r }: { render: CmfTeamRender }) {
               size="sm"
               variant="outline"
               className="h-7 gap-1.5 text-xs"
-              disabled={grade.isPending || !r.import_id}
-              title={r.import_id ? undefined : 'Only a render made from a workbook upload can be graded here.'}
-              onClick={() => grade.mutate({ output_id: r.output_id, import_id: r.import_id ?? undefined })}
+              disabled={grade.isPending || (!r.import_id && !(r.tab && r.column && r.key))}
+              title={r.import_id ? 'Read against the row of the upload it was made from' : "Read against the kit's row"}
+              onClick={() =>
+                // A render made from an upload is read against that upload's row; one from the kit's own payload, against the kit's.
+                grade.mutate(r.import_id ? { output_id: r.output_id, import_id: r.import_id } : { output_id: r.output_id, tab: r.tab!, column: r.column!, clown: r.key! })
+              }
             >
               {grade.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <ScanSearch className="h-3 w-3" />}
               Grade
