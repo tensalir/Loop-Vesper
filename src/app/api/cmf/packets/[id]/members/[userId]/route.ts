@@ -1,136 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
-import { prisma } from '@/lib/prisma'
-import {
-  logCmfActivity,
-  requireCmfWrite,
-} from '@/lib/cmf/service'
-import { cmfError } from '@/lib/cmf/api'
+import { retired } from '@/lib/cmf/retired'
 
+/**
+ * PATCH, DELETE /api/cmf/packets/{id}/members/{userId}: retired for CMF on 2026-09-30: every CMF
+ * step now goes through the CMF service at /api/cmf/v2, as Claude's tools do
+ * (src/lib/cmf/retired.ts says where each step went). Members belong to packets made the old way,
+ * which are read only. The step answers 410 with one line naming the new one.
+ */
 export const dynamic = 'force-dynamic'
 
-const UpdateMemberSchema = z.object({
-  role: z.enum(['viewer', 'editor', 'approver']),
-})
-
-/**
- * PATCH /api/cmf/packets/{id}/members/{userId}
- *
- * Change a member's role. Owner-only (we never let one editor demote another).
- */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { id: string; userId: string } }
-) {
-  const auth = await requireCmfWrite()
-  if (!auth.profile) return auth.response
-
-  const packet = await prisma.cmfPacket.findUnique({
-    where: { id: params.id },
-    select: { ownerId: true },
-  })
-  if (!packet) {
-    return cmfError('Packet not found', { status: 404 })
-  }
-  if (packet.ownerId !== auth.profile.userId && !auth.profile.isAdmin) {
-    return cmfError(
-      'Only the packet owner or an admin can change member roles',
-      { status: 403 }
-    )
-  }
-
-  let body: unknown
-  try {
-    body = await request.json()
-  } catch {
-    return cmfError('Invalid JSON body')
-  }
-
-  const parsed = UpdateMemberSchema.safeParse(body)
-  if (!parsed.success) {
-    return cmfError('Invalid request body', {
-      details: parsed.error.issues.map((i) => ({
-        path: i.path.join('.'),
-        message: i.message,
-      })),
-    })
-  }
-
-  const member = await prisma.cmfPacketMember.findUnique({
-    where: { packetId_userId: { packetId: params.id, userId: params.userId } },
-  })
-  if (!member) {
-    return cmfError('Member not found', { status: 404 })
-  }
-
-  const updated = await prisma.cmfPacketMember.update({
-    where: { packetId_userId: { packetId: params.id, userId: params.userId } },
-    data: { role: parsed.data.role },
-    include: {
-      user: {
-        select: { id: true, displayName: true, username: true, avatarUrl: true },
-      },
-    },
-  })
-
-  await logCmfActivity({
-    packetId: params.id,
-    userId: auth.profile.userId,
-    action: 'role_changed',
-    targetId: params.userId,
-    metadata: { from: member.role, to: parsed.data.role },
-  })
-
-  return NextResponse.json({ member: updated })
+export function PATCH() {
+  return retired('history')
 }
 
-/**
- * DELETE /api/cmf/packets/{id}/members/{userId}
- *
- * Remove a member. Owner-only, OR a member removing themselves (allowed
- * so a teammate can leave a packet without bothering the owner).
- */
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: { id: string; userId: string } }
-) {
-  const auth = await requireCmfWrite()
-  if (!auth.profile) return auth.response
-
-  const packet = await prisma.cmfPacket.findUnique({
-    where: { id: params.id },
-    select: { ownerId: true },
-  })
-  if (!packet) {
-    return cmfError('Packet not found', { status: 404 })
-  }
-  const isOwner = packet.ownerId === auth.profile.userId
-  const isSelfRemoval = params.userId === auth.profile.userId
-  if (!isOwner && !isSelfRemoval && !auth.profile.isAdmin) {
-    return cmfError(
-      'Only the owner or an admin can remove other members',
-      { status: 403 }
-    )
-  }
-
-  const member = await prisma.cmfPacketMember.findUnique({
-    where: { packetId_userId: { packetId: params.id, userId: params.userId } },
-  })
-  if (!member) {
-    return cmfError('Member not found', { status: 404 })
-  }
-
-  await prisma.cmfPacketMember.delete({
-    where: { packetId_userId: { packetId: params.id, userId: params.userId } },
-  })
-
-  await logCmfActivity({
-    packetId: params.id,
-    userId: auth.profile.userId,
-    action: 'removed_member',
-    targetId: params.userId,
-    metadata: { selfRemoval: isSelfRemoval },
-  })
-
-  return NextResponse.json({ ok: true })
+export function DELETE() {
+  return retired('history')
 }
