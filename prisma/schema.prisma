@@ -1720,6 +1720,30 @@ model CmfSupplierPdf {
   @@map("cmf_supplier_pdfs")
 }
 
+// A CMF render started in the web CMF Studio: the draw runs after the response (up to ~280 s), and
+// the page polls this row. What Claude starts is a `headless_mcp_jobs` row, which needs a
+// credential; the web has none. The render itself is recorded in the CMF team project like any
+// other; this row only says whether it is still running, and what came of it. Running rows count
+// towards the maker's daily image allowance, as Claude's do (src/lib/headless/claude-allowance.ts).
+model CmfWebJob {
+  id          String    @id @default(uuid()) @db.Uuid
+  ownerId     String    @map("owner_id") @db.Uuid
+  toolName    String    @map("tool_name") // cmf_render
+  status      String // processing | completed | failed
+  request     Json
+  result      Json?
+  error       String?   @db.Text
+  outputIds   String[]  @default([]) @map("output_ids") @db.Uuid
+  startedAt   DateTime  @default(now()) @map("started_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  completedAt DateTime? @map("completed_at")
+
+  @@index([ownerId, createdAt(sort: Desc)], map: "cmf_web_jobs_owner_idx")
+  @@index([status, updatedAt], map: "cmf_web_jobs_status_idx")
+  @@map("cmf_web_jobs")
+}
+
 // A colleague's feedback on the Loop Studio Design plugin, per preview: the per-person limits count here,
 // and a preview is filed at most once (keyed on the rendered issue's sha256). The issue itself lives
 // in the plugin's repository, filed by Vesper's GitHub App in the person's name.
