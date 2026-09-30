@@ -1,98 +1,26 @@
 /**
- * Pins three pure helpers that gate the import-dialog UX surface:
+ * Pins two pure helpers of the packets made the old way (src/lib/cmf/service.ts):
  *
- *   - `deriveImportErrorMessage` — maps whatever the mutation rejects
- *     with into a single human-readable string for the persistent
- *     error panel. Three input shapes appear in practice (`Error`,
- *     `string`, anything else); all three must produce a useful
- *     sentence so the panel never shows `[object Object]`.
+ *   - `LIST_PACKETS_ORDER_BY` — the orderBy clause backing the packet
+ *     list, which the CMF Studio's History tab still reads. Pinning it
+ *     means a reshuffle of `listAccessiblePackets` can't quietly drop
+ *     the "most-recently-touched at the top" contract (Damien's "I see
+ *     edited 6 days ago" failure mode).
  *
- *   - `LIST_PACKETS_ORDER_BY` — the orderBy clause backing the
- *     cross-product packets list. Pinning it here means a future
- *     reshuffle of `listAccessiblePackets` can't quietly drop the
- *     "most-recently-touched at the top" contract the rail depends
- *     on (Damien's "I see edited 6 days ago" failure mode).
+ *   - `shouldRunSignatureMerge` — the predicate that gated the old
+ *     importer's signature-fallback merge (off by default, only when
+ *     "Replace existing packet" was ticked AND there's no cmfCode).
  *
- *   - `shouldRunSignatureMerge` — the predicate that gates the
- *     signature-fallback merge. Lives in service.ts so it can be
- *     unit-tested without spinning up Prisma; this test pins the
- *     opt-in contract (off by default, only fires when the user
- *     explicitly ticks "Replace existing packet" AND there's no
- *     cmfCode to anchor on).
+ * The import dialog's error helpers went with the dialog: a workbook is
+ * now uploaded through /api/cmf/v2/uploads, and a refusal is shown in
+ * the CMF service's own words.
  */
 
 import { test, expect } from '@playwright/test'
 import {
-  deriveImportErrorMessage,
-  deriveImportErrorPhase,
-  deriveImportErrorReason,
-  deriveImportErrorRequestId,
-} from '../src/hooks/useCmf'
-import {
   LIST_PACKETS_ORDER_BY,
   shouldRunSignatureMerge,
 } from '../src/lib/cmf/service'
-
-/* ── deriveImportErrorMessage ───────────────────────────────────────────── */
-
-test('deriveImportErrorMessage translates known machine codes into human copy', () => {
-  // Defends against stale clients / missing server `message` field —
-  // a raw code like `cmf_access_required` must never reach the panel
-  // verbatim.
-  expect(deriveImportErrorMessage(new Error('cmf_access_required'))).toContain(
-    'CMF write access is required'
-  )
-  expect(deriveImportErrorMessage(new Error('import_failed'))).toContain(
-    'Import failed'
-  )
-})
-
-test('deriveImportErrorMessage passes unknown sentences through verbatim', () => {
-  // Free-form server messages (e.g. parser detail) should reach the
-  // user untouched so we never lose helpful context.
-  expect(
-    deriveImportErrorMessage(new Error('Workbook has no sheets'))
-  ).toBe('Workbook has no sheets')
-})
-
-test('deriveImportErrorMessage passes strings through verbatim', () => {
-  expect(deriveImportErrorMessage('Workbook too large (max 10 MB)')).toBe(
-    'Workbook too large (max 10 MB)'
-  )
-})
-
-test('deriveImportErrorMessage falls back when Error.message is empty', () => {
-  expect(deriveImportErrorMessage(new Error(''))).toBe('Import failed')
-  expect(deriveImportErrorMessage(new Error('   '))).toBe('Import failed')
-})
-
-test('deriveImportErrorMessage falls back for null / undefined / plain objects', () => {
-  expect(deriveImportErrorMessage(null)).toBe('Import failed')
-  expect(deriveImportErrorMessage(undefined)).toBe('Import failed')
-  expect(deriveImportErrorMessage({ error: 'wat' })).toBe('Import failed')
-})
-
-test('deriveImportErrorRequestId extracts requestId from mutation errors', () => {
-  const err = Object.assign(new Error('Import failed'), {
-    requestId: 'cmfimp_abc123',
-  })
-  expect(deriveImportErrorRequestId(err)).toBe('cmfimp_abc123')
-  expect(deriveImportErrorRequestId(new Error('Import failed'))).toBeNull()
-  expect(deriveImportErrorRequestId({ requestId: 123 })).toBeNull()
-})
-
-test('deriveImportErrorReason / deriveImportErrorPhase extract diagnostics', () => {
-  const err = Object.assign(new Error('Import failed'), {
-    reason: 'Foreign key violation on cmf_renders',
-    phase: 'packet_create',
-  })
-  expect(deriveImportErrorReason(err)).toBe(
-    'Foreign key violation on cmf_renders'
-  )
-  expect(deriveImportErrorPhase(err)).toBe('packet_create')
-  expect(deriveImportErrorReason(new Error('Import failed'))).toBeNull()
-  expect(deriveImportErrorPhase(new Error('Import failed'))).toBeNull()
-})
 
 /* ── LIST_PACKETS_ORDER_BY ──────────────────────────────────────────────── */
 

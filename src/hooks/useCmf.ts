@@ -1,830 +1,435 @@
 'use client'
 
+/**
+ * The CMF Studio's data: every call goes to `/api/cmf/v2/*`, the web door onto the CMF service
+ * Claude's tools call too (`src/lib/creative/cmf/web-door.ts`). The shapes below are what those
+ * routes answer; the words in a refusal are the service's, shown as they come.
+ *
+ * The History tab reads the packets made the old way through the read-only routes that stayed
+ * (`/api/cmf/packets`, `/api/cmf/packets/{id}`). Nothing here writes to them.
+ */
+
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-export interface CmfComponentSpec {
-  region: string
-  label: string
-  pantone?: string | null
-  colorHex?: string | null
-  material?: string | null
-  finish?: string | null
-  technique?: string | null
-  notes?: string | null
+// ------------------------------------------------------------------ shapes
+
+export interface CmfKitHeader {
+  kit_version: string
+  kit_tag: string | null
+  kit_ref?: string | null
+  kit_commit: string | null
+  kit_stale: boolean
+  kit_stale_reason?: string | null
 }
 
-export interface CmfPaletteSwatch {
-  label: string
-  pantone?: string | null
-  colorHex?: string | null
-}
-
-export interface CmfRenderAttempt {
+export interface CmfKeyState {
   id: string
-  renderId: string
-  attemptNumber: number
-  status: 'queued' | 'rendering' | 'ready' | 'failed'
-  approvalStatus: 'pending' | 'approved' | 'archived'
-  basePrompt: string | null
-  enhancedPrompt: string | null
-  modelId: string | null
-  imageUrl: string | null
-  imagePath: string | null
-  imageWidth: number | null
-  imageHeight: number | null
-  error: string | null
-  costUsd: number | null
-  triggeredBy: string | null
-  approvedBy: string | null
-  approvedAt: string | null
-  archivedAt: string | null
-  startedAt: string | null
-  completedAt: string | null
-  createdAt: string
-  updatedAt: string
-  /** Iterative refinement: the freeform "what to change" copy that
-   *  was applied to the spec prompt. Null on dice-roll attempts. */
-  refinementPrompt: string | null
-  /** Iterative refinement: id of the attempt this one is refining.
-   *  Null on dice-roll attempts (top of the chain). */
-  parentAttemptId: string | null
-  /** Iterative refinement (Phase 2): storage paths of the
-   *  designer-supplied reference images that were sent alongside
-   *  the canonical clown reference. Used to display "+N refs" on
-   *  the attempt card and to surface thumbnails in the lightbox so
-   *  the chain stays auditable. Empty array on dice-roll attempts. */
-  referenceImagePaths: string[]
+  clown: string | null
+  draft: boolean
+  confirmed: boolean
 }
 
-export interface CmfRender {
-  id: string
-  packetId: string
-  ownerId: string
-  label: string
-  productCode: string | null
-  ean: string | null
-  productSlug: string
-  variantSlug: string
-  colorwayName: string | null
-  clownAssetId: string | null
-  componentSpecs: CmfComponentSpec[]
-  paletteSwatches: CmfPaletteSwatch[]
-  modelId: string | null
-  basePrompt: string | null
-  enhancedPrompt: string | null
-  renderUrl: string | null
-  renderPath: string | null
-  renderWidth: number | null
-  renderHeight: number | null
-  selectedAttemptId: string | null
-  status: 'draft' | 'queued' | 'rendering' | 'ready' | 'failed'
-  error: string | null
-  attempts: number
-  sortOrder: number
-  createdAt: string
-  updatedAt: string
-  /** Newest attempts first. Empty when the SKU has not been rendered yet. */
-  renderAttempts?: CmfRenderAttempt[]
+export interface CmfListedTab {
+  tab: string | null
+  slug: string
+  vesper_product: string | null
+  skus: Array<{ column: string; header?: string | null; name?: string | null; in_scope: boolean; scope_reason?: string | null }>
+  keys: CmfKeyState[]
+  payloads: Array<{ id: string; column: string; sku_name: string | null; key: string; status: string; key_confirmed: boolean | null; reasons: string[] }>
 }
 
-export interface CmfDocumentDraft {
-  packetName?: string
-  cmfCode?: string
-  notes?: string
-  order?: string[]
-  skuOverrides?: Array<{
-    renderId: string
-    colorwayLabel?: string
-    subtitle?: string
-    notes?: string
-    imageSource?: 'approved' | 'draft'
-    draftAttemptId?: string | null
-  }>
-  paletteOverrides?: CmfPaletteSwatch[]
-}
-
-export interface CmfPacket {
-  id: string
-  name: string
-  cmfCode: string | null
-  notes: string | null
-  status: 'draft' | 'rendering' | 'ready' | 'failed'
-  pdfUrl: string | null
-  pdfPath: string | null
-  pdfError: string | null
-  generatedAt: string | null
-  documentDraft: CmfDocumentDraft | null
-  createdAt: string
-  updatedAt: string
-  renders: CmfRender[]
-}
-
-export interface CmfClownAsset {
-  id: string
-  /** Null for canonical / seeded clowns; otherwise the contributor's profile. */
-  ownerId: string | null
-  productSlug: string
-  variantSlug: string
-  label: string
-  imageUrl: string
-  storagePath: string
-  components: Array<{ region: string; label: string; colorHex?: string | null }>
-  createdAt: string
-  updatedAt: string
-}
-
-export function useCmfPackets() {
-  return useQuery({
-    queryKey: ['cmf', 'packets'],
-    queryFn: async (): Promise<CmfPacket[]> => {
-      const res = await fetch('/api/cmf/packets')
-      if (!res.ok) throw new Error('Failed to load CMF packets')
-      const data = await res.json()
-      return data.packets ?? []
-    },
-    staleTime: 15_000,
-  })
-}
-
-export function useCmfPacket(packetId: string | null) {
-  return useQuery({
-    queryKey: ['cmf', 'packet', packetId],
-    queryFn: async (): Promise<CmfPacket> => {
-      const res = await fetch(`/api/cmf/packets/${packetId}`)
-      if (!res.ok) throw new Error('Failed to load packet')
-      const data = await res.json()
-      return data.packet as CmfPacket
-    },
-    enabled: Boolean(packetId),
-    refetchInterval: (query) => {
-      const data = query.state.data as CmfPacket | undefined
-      const anyRendering = data?.renders?.some(
-        (r) => r.status === 'rendering' || r.status === 'queued'
-      )
-      return anyRendering ? 4000 : false
-    },
-  })
-}
-
-export function useCmfClowns(productSlug?: string) {
-  return useQuery({
-    queryKey: ['cmf', 'clowns', productSlug || 'all'],
-    queryFn: async (): Promise<CmfClownAsset[]> => {
-      const url = new URL('/api/cmf/clowns', window.location.origin)
-      if (productSlug) url.searchParams.set('productSlug', productSlug)
-      const res = await fetch(url.toString())
-      if (!res.ok) throw new Error('Failed to load clown assets')
-      const data = await res.json()
-      return data.assets ?? []
-    },
-    staleTime: 30_000,
-  })
-}
-
-export interface CmfMergeSummary {
-  /** 'created' = brand-new packet; 'merged' = re-upload into existing
-   *  (productSlug, cmfCode) packet (no more duplicates in the dropdown). */
-  kind: 'created' | 'merged'
-  productSlug: string
-  packetId: string
-  packetName: string
-  cmfCode: string | null
-  added: number
-  updated: number
-  unchanged: number
-  removed: number
-  changedRenderIds: string[]
-  changes: Array<{
-    renderId: string
-    label: string
-    changedRegions: string[]
-    paletteChanged: boolean
-  }>
-}
-
-export interface CmfImportUnrecognisedSheet {
-  /** Tab name as it appears in the workbook. */
-  name: string
-  /** Why we couldn't place the tab — surfaced verbatim to the import dialog. */
-  reason: string
-}
-
-export interface CmfImportDroppedSkuColumn {
-  /** Tab the column lived on. */
-  sheetName: string
-  /** Resolved product slug (which packet this column would have joined). */
-  productSlug: string
-  /** SKU column header text — usually "SKU 1", "SKU 2", or a colourway label. */
-  skuLabel: string
-  /** `placeholder` = the column had values but they all looked like
-   *  drafts (xxxxx); `empty` = the column existed but carried no values. */
-  reason: 'placeholder' | 'empty'
-}
-
-export interface CmfImportUnknownAttributeRow {
-  /** Tab the attribute row lived on. */
-  sheetName: string
-  /** Resolved product slug for that tab. */
-  productSlug: string
-  /** Attribute label as written in the workbook (e.g. "Substrate"). */
-  rowLabel: string
-  /** Component header that contained this row (e.g. "POM RING"). */
-  componentLabel: string
-}
-
-export interface CmfImportFailure {
-  productSlug: string
-  rowCount: number
-  reason: string
-  code: string
-}
-
-export interface CmfImportResponse {
-  requestId?: string
-  failures?: CmfImportFailure[]
-  import: {
-    id: string
-    status: string
-    rowCount: number
-    errors: Array<{ rowIndex: number; field?: string; message: string }>
-    parsedRows?: unknown[]
-    format?: 'flat' | 'transposed'
-    /** Sheets that look transposed but whose name doesn't map to any
-     *  product in the catalog. Already returned, now surfaced in the UI. */
-    unmappedSheets?: string[]
-    /** Sheets the parser couldn't structurally identify (didn't pass
-     *  `looksTransposed`, weren't a known meta sheet, and the
-     *  try-anyway pass didn't produce SKUs). Used to vanish silently. */
-    unrecognisedSheets?: CmfImportUnrecognisedSheet[]
-    /** SKU columns dropped by the parser because they looked like
-     *  placeholders or were empty. */
-    droppedSkuColumns?: CmfImportDroppedSkuColumn[]
-    /** Attribute rows whose label fell through `ATTRIBUTE_MAP`. They
-     *  still parse (text lands in the component's `notes`), but
-     *  surfacing them here lets a designer notice "we didn't know
-     *  what 'Substrate' meant". Deduplicated per (component, label). */
-    unknownAttributeRows?: CmfImportUnknownAttributeRow[]
-  }
-  /** One per product slug in the imported workbook. */
-  packets?: Array<{
-    id: string
-    name: string
-    cmfCode: string | null
-    status: string
-    productSlug: string | null
-    /** Display name resolved from the CMF product catalog. Null when the
-     * slug is unknown to the catalog (rare; would mean a parser bug). */
-    productName: string | null
-    renderCount: number
-    /** Smart-import diff result — surfaces "merged into existing packet"
-     *  vs "created new" plus the per-SKU changed/added/unchanged counts. */
-    mergeSummary?: CmfMergeSummary
-  }>
-  /** Convenience — the packet the workspace should auto-open. */
-  packet?: CmfPacket
-}
-
-/**
- * Map known machine error codes to human-readable copy. Defends the
- * panel from ever surfacing raw codes (e.g. `import_failed`,
- * `cmf_access_required`) when an upstream client bundle is stale or
- * an API response lacks a `message` field.
- */
-const CMF_IMPORT_CODE_MESSAGES: Record<string, string> = {
-  import_failed:
-    'Import failed. Please retry. If this keeps happening, share the request ID with the team.',
-  invalid_workbook:
-    'We could not parse this workbook. Use the template and retry.',
-  file_required:
-    'Please attach an .xlsx workbook before importing.',
-  workbook_too_large:
-    'That workbook is too large (max 10 MB). Trim it down and try again.',
-  cmf_access_required:
-    'CMF write access is required for this action. Ask an admin to grant CMF access in user management.',
-  unauthorized:
-    'You need to sign in again to continue importing.',
-}
-
-/**
- * Pure derivation of the user-facing import error message. Lives
- * outside the panel so a unit test can pin the mapping without
- * standing up React + the toast system. Three cases:
- *
- *   - `Error` instances: use the message verbatim, but translate it
- *     when the message is actually a known machine code (defensive
- *     against stale clients that fall back to `error.error`).
- *   - Strings: use as-is so callers can pass an already-formatted
- *     message without wrapping in `new Error()`.
- *   - Anything else (null/undefined, plain objects, abort signals
- *     without a message): fall back to the generic "Import failed"
- *     so the panel never shows `[object Object]`.
- */
-export function deriveImportErrorMessage(err: unknown): string {
-  if (err instanceof Error) {
-    const msg = err.message?.trim()
-    if (!msg) return 'Import failed'
-    return CMF_IMPORT_CODE_MESSAGES[msg] ?? msg
-  }
-  if (typeof err === 'string') {
-    const msg = err.trim()
-    if (!msg) return 'Import failed'
-    return CMF_IMPORT_CODE_MESSAGES[msg] ?? msg
-  }
-  return 'Import failed'
-}
-
-/**
- * Pull non-message debug context off an import mutation error.
- * The panel uses this to show a support reference id without
- * polluting the human-readable error string.
- */
-export function deriveImportErrorRequestId(err: unknown): string | null {
-  if (!err || typeof err !== 'object') return null
-  const value = (err as { requestId?: unknown }).requestId
-  return typeof value === 'string' && value.trim().length > 0 ? value : null
-}
-
-/**
- * Pull the sanitised server-side `reason` from a 500 import failure
- * so the panel can show the operator-facing detail (e.g. a Prisma
- * constraint message) alongside the friendly user copy.
- */
-export function deriveImportErrorReason(err: unknown): string | null {
-  if (!err || typeof err !== 'object') return null
-  const value = (err as { reason?: unknown }).reason
-  return typeof value === 'string' && value.trim().length > 0 ? value : null
-}
-
-/**
- * Pull the import failure phase from a 500 import failure so support
- * can see which stage of the pipeline blew up.
- */
-export function deriveImportErrorPhase(err: unknown): string | null {
-  if (!err || typeof err !== 'object') return null
-  const value = (err as { phase?: unknown }).phase
-  return typeof value === 'string' && value.trim().length > 0 ? value : null
-}
-
-/**
- * Pure derivation of the cache keys an import response should
- * invalidate. Lives outside the hook so a unit test can pin the
- * behaviour without setting up a QueryClient:
- *
- *   - Always invalidate the global packet list — the new / merged
- *     packet(s) need to show in the Products dropdown.
- *   - Invalidate every packet detail touched by the import. Without
- *     this, a re-upload that merged a new SKU into an already-open
- *     packet keeps showing the stale renders list until the next
- *     manual refetch (the "I added a SKU but the gallery still only
- *     shows the old ones" report).
- *
- * Multi-product imports return the touched packets on `data.packets`
- * and the auto-open packet on `data.packet`; we de-duplicate so the
- * primary packet doesn't end up invalidated twice.
- */
-export function cmfImportInvalidationKeys(
-  data: Pick<CmfImportResponse, 'packet' | 'packets'>
-): Array<['cmf', 'packets'] | ['cmf', 'packet', string]> {
-  const keys: Array<['cmf', 'packets'] | ['cmf', 'packet', string]> = [
-    ['cmf', 'packets'],
-  ]
-  const touchedIds = new Set<string>()
-  if (data.packet?.id) touchedIds.add(data.packet.id)
-  for (const p of data.packets ?? []) {
-    if (p.id) touchedIds.add(p.id)
-  }
-  // Materialise the set via Array.from so the iteration target stays
-  // compatible with the current tsconfig (no `--downlevelIteration`
-  // required) — same workaround used by `service.ts:componentsDiffer`.
-  for (const id of Array.from(touchedIds)) {
-    keys.push(['cmf', 'packet', id])
-  }
-  return keys
-}
-
-export function useImportCmfWorkbook() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (args: {
-      file: File
-      packetName?: string
-      cmfCode?: string
-      notes?: string
-      createPacket?: boolean
-      /** Opt-in signature-fallback merge. When omitted/false, an
-       *  upload without a real `cmfCode` always creates a fresh
-       *  packet instead of silently merging into a same-SKU-set
-       *  older one. Designers tick this in the import dialog when
-       *  they explicitly want to overwrite an existing packet. */
-      replaceExisting?: boolean
-    }): Promise<CmfImportResponse> => {
-      const formData = new FormData()
-      formData.append('file', args.file)
-      if (args.packetName) formData.append('packetName', args.packetName)
-      if (args.cmfCode) formData.append('cmfCode', args.cmfCode)
-      if (args.notes) formData.append('notes', args.notes)
-      if (args.createPacket) formData.append('createPacket', 'true')
-      if (args.replaceExisting) formData.append('replaceExisting', 'true')
-
-      const res = await fetch('/api/cmf/import', {
-        method: 'POST',
-        body: formData,
-      })
-      if (!res.ok) {
-        const payload = await res
-          .json()
-          .catch(() => ({})) as Record<string, unknown>
-        const rawMessage =
-          (typeof payload.message === 'string' && payload.message) ||
-          (typeof payload.error === 'string' && payload.error) ||
-          'Import failed'
-        const message = CMF_IMPORT_CODE_MESSAGES[rawMessage] ?? rawMessage
-        const requestId =
-          typeof payload.requestId === 'string' ? payload.requestId : undefined
-        const code =
-          (typeof payload.code === 'string' && payload.code) ||
-          (typeof payload.error === 'string' && payload.error) ||
-          undefined
-        const reason =
-          typeof payload.reason === 'string' ? payload.reason : undefined
-        const phase =
-          typeof payload.phase === 'string' ? payload.phase : undefined
-        const error = new Error(message) as Error & {
-          requestId?: string
-          code?: string
-          reason?: string
-          phase?: string
-        }
-        if (requestId) error.requestId = requestId
-        if (reason) error.reason = reason
-        if (phase) error.phase = phase
-        if (code) error.code = code
-        throw error
-      }
-      return res.json()
-    },
-    onSuccess: (data) => {
-      for (const queryKey of cmfImportInvalidationKeys(data)) {
-        queryClient.invalidateQueries({ queryKey })
-      }
-    },
-  })
-}
-
-export function useUploadClown() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (args: {
-      file: File
-      productSlug: string
-      variantSlug?: string
-      label: string
-      components?: Array<{ region: string; label: string; colorHex?: string }>
-    }): Promise<CmfClownAsset> => {
-      const formData = new FormData()
-      formData.append('file', args.file)
-      formData.append('productSlug', args.productSlug)
-      if (args.variantSlug) formData.append('variantSlug', args.variantSlug)
-      formData.append('label', args.label)
-      if (args.components) formData.append('components', JSON.stringify(args.components))
-
-      const res = await fetch('/api/cmf/clowns', {
-        method: 'POST',
-        body: formData,
-      })
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        throw new Error(error.error || 'Upload failed')
-      }
-      const data = await res.json()
-      return data.asset as CmfClownAsset
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cmf', 'clowns'] })
-    },
-  })
-}
-
-export interface CmfClownBulkResult {
-  zip: string
-  inner: string
-  productSlug: string | null
-  variantSlug: string | null
-  status: 'uploaded' | 'replaced' | 'skipped' | 'error'
-  message?: string
-}
-
-export interface CmfClownBulkResponse {
-  summary: {
-    uploaded: number
-    replaced: number
-    skipped: number
-    total: number
-  }
-  results: CmfClownBulkResult[]
-}
-
-/**
- * Bulk-upload one or more "Clown Renders" zip files. The server uses the
- * canonical zip→product mapping (`clown-zip-mapping.ts`) so the same
- * payload that seeds production locally can be fed by a designer
- * dragging zips into the dialog.
- */
-export function useUploadClownsBulk() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (args: { files: File[] }): Promise<CmfClownBulkResponse> => {
-      const formData = new FormData()
-      for (const file of args.files) {
-        formData.append('files', file)
-      }
-      const res = await fetch('/api/cmf/clowns/bulk', {
-        method: 'POST',
-        body: formData,
-      })
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        throw new Error(error.error || 'Bulk upload failed')
-      }
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cmf', 'clowns'] })
-    },
-  })
-}
-
-export function useUpdateCmfRender() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (args: {
-      renderId: string
-      packetId: string
-      data: Partial<{
-        label: string
-        productCode: string | null
-        ean: string | null
-        colorwayName: string | null
-        clownAssetId: string | null
-        modelId: string
-        componentSpecs: CmfComponentSpec[]
-        paletteSwatches: CmfPaletteSwatch[]
-      }>
-    }): Promise<CmfRender> => {
-      const res = await fetch(`/api/cmf/renders/${args.renderId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(args.data),
-      })
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        throw new Error(error.error || 'Update failed')
-      }
-      const data = await res.json()
-      return data.render as CmfRender
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['cmf', 'packet', variables.packetId] })
-    },
-  })
-}
-
-/**
- * Phase 2 of iterative refinement: upload refinement-reference
- * images for a single render. Returns the stored paths + public URLs
- * so the UI can show thumbnails immediately, and so the caller can
- * pass `paths` straight into `useGenerateCmfRender`.
- *
- * Why this is a separate hook (rather than folded into the generate
- * mutation):
- *   - The upload route accepts multipart, the generate route accepts
- *     JSON. Splitting keeps each mutation simple.
- *   - Designers can drop refs progressively and see thumbnails before
- *     committing to "Generate refined attempt".
- *   - Failed uploads can be retried independently of the generate
- *     call.
- */
-export interface CmfRefinementReference {
-  path: string
+export interface CmfTeamRender {
+  output_id: string
+  generation_id: string
   url: string
-  filename: string
+  made_at: string
+  made_by: string | null
+  door: 'mcp' | 'web' | null
+  tab: string | null
+  column: string | null
+  sku_name: string | null
+  key: string | null
+  lane: string | null
+  model: string | null
+  kit_tag: string | null
+  import_id: string | null
+  grade: { grade_id: string; verdict: string; judge: string; judge_model: string | null; reads: number; at: string } | null
+  answers: Array<{ answer: string; remark: string | null; by: string | null; decider: boolean; at: string }>
+  decider_answer: { answer: string; remark: string | null; by: string; at: string } | null
+  pdf_eligible: boolean
+  pdf_why: string | null
 }
 
-export function useUploadRefinementReferences() {
+export interface CmfListedPdf {
+  supplier_pdf_id: string
+  file: string
+  url: string
+  tab: string
+  columns: string[]
+  output_ids: string[]
+  import_id: string
+  key: string
+  made_by: string | null
+  door: 'mcp' | 'web'
+  made_at: string
+}
+
+export interface CmfListing extends CmfKitHeader {
+  rubric_version: string | null
+  /** The kit's CMF deciders by name: whose answer a supplier PDF counts. */
+  deciders: string[]
+  tabs: CmfListedTab[]
+  uploads: Array<{ import_id: string; file: string; uploaded_at: string }>
+  renders: CmfTeamRender[]
+  supplier_pdfs: CmfListedPdf[]
+  problems: string[]
+}
+
+export interface CmfUploadTab {
+  tab: string
+  slug: string | null
+  vesper_product: string | null
+  skus: Array<{ column: string; header: string | null; name: string | null; in_scope: boolean; scope_reason: string | null }>
+  keys: CmfKeyState[]
+}
+
+export interface CmfUploadView {
+  import_id: string
+  file: string
+  sha256: string | null
+  modified: string | null
+  modified_source: string | null
+  imported_at: string
+  tabs: CmfUploadTab[]
+}
+
+export interface CmfListedKey {
+  id: string
+  product: string | null
+  variant: string | null
+  draft: boolean
+  confirmed: boolean
+  tabs: string[]
+  clown: { id: string; sha256: string; width: number | null; height: number | null } | null
+  pinned: boolean
+  clown_url: string | null
+}
+
+export interface CmfUploadTarget {
+  import_id: string
+  tab: string
+  sku_column: string
+  clown: string
+}
+
+export interface CmfPromptLine {
+  n: number | string
+  zone_hex: string
+  component: string
+  material: string
+  finish: string
+  colour_name: string
+  colour_code: string
+}
+
+export type CmfPromptAnswer = CmfKitHeader &
+  (
+    | { refused: true; reasons: string[]; tab: string; column: string; key: string; import_id?: string }
+    | {
+        refused: false
+        payload_id: string
+        tab: string
+        column: string
+        sku_name: string | null
+        key: { id: string; sha256: string; confirmed_by: string | null; confirmed_at: string | null } | { id: string }
+        key_confirmed: boolean
+        clown: { id: string; sha256: string; aspect?: string | null }
+        prompt: string
+        prompt_sha256: string
+        template_sha256: string
+        lines: CmfPromptLine[]
+        omitted: Array<{ component: string; why: string }>
+        warnings: string[]
+        workbook?: { import_id: string; file: string; sha256: string; modified: string | null; sku_spec_sha256: string }
+      }
+  )
+
+export interface CmfRenderPlanView {
+  tab: string
+  column: string
+  sku_name: string | null
+  key: string
+  key_confirmed: boolean
+  lane: 'final' | 'draft'
+  model: string
+  n: number
+  prompt_sha256: string
+  aspect: string
+  image_size: string
+}
+
+export interface CmfRenderStarted extends CmfKitHeader {
+  job_id: string
+  status: 'processing'
+  plan: CmfRenderPlanView
+  estimated_cost_usd: number | null
+}
+
+export interface CmfRenderJob {
+  job_id: string
+  status: 'processing' | 'completed' | 'failed'
+  result: {
+    generationId: string
+    outputs: Array<{ url: string; width: number; height: number; mimeType: string; outputId: string | null }>
+    failures: string[]
+    recorded: boolean
+    record_error: string | null
+    tab: string
+    column: string
+    key: string
+  } | null
+  error: string | null
+  started_at: string
+  completed_at: string | null
+}
+
+export interface CmfGradeAnswer extends CmfKitHeader {
+  grade_id: string | null
+  status: string
+  verdict: string
+  errors: number
+  reads: unknown[]
+  judge_model: string | null
+  stored: boolean
+  store_error?: string
+  cmf: { tab: string; column: string; key: string; sku_name: string | null; import_id?: string }
+  checks: Array<{ id: string; severity: string; caption: string; fails: number; reads: number }>
+}
+
+export interface CmfVerdictAnswer extends CmfKitHeader {
+  verdict_id: string
+  answer: 'yes' | 'no'
+  grade_id: string | null
+  decider: string | null
+}
+
+export interface CmfSupplierPdfAnswer extends CmfKitHeader {
+  saved: true
+  url: string
+  file_name: string
+  tab: string
+  columns: string[]
+  sku_names: Record<string, string | null>
+  key: { id: string; sha256: string; confirmed_by: string }
+  legend: string[]
+  workbook: { file: string | null; sha256: string | null; modified: string | null; modified_source: string | null }
+  renders: Array<{ column: string; output_id: string; decided_by: string; decided_at: string }>
+  cells_compared: number
+  rows_compared: number
+  supplier_pdf_id: string | null
+  listed_error?: string
+}
+
+export interface CmfCheckRow {
+  tab: string
+  column: string | null
+  part: string
+  component: string
+  field: string
+  sheet: string | null
+  pdf: string | null
+  state: string
+  cause: string | null
+  where: string | null
+}
+
+export interface CmfCheckAnswer extends CmfKitHeader {
+  clean: boolean
+  engine: string
+  layout: string
+  tab: string
+  columns: string[]
+  counts: Record<string, number>
+  cells_compared: number
+  notes: string[]
+  pdf_sha256: string
+  rows: CmfCheckRow[]
+}
+
+/** A refusal from the CMF service, in its own words, with what the step adds (reasons, rows, the allowance). */
+export class CmfRequestError extends Error {
+  constructor(message: string, readonly status: number, readonly body: Record<string, unknown>) {
+    super(message)
+    this.name = 'CmfRequestError'
+  }
+}
+
+async function call<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, init)
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  if (!res.ok) throw new CmfRequestError(typeof data.error === 'string' ? data.error : `The request failed (${res.status}).`, res.status, data)
+  return data as T
+}
+
+const post = <T,>(url: string, body: unknown) =>
+  call<T>(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
+// ------------------------------------------------------------------ queries
+
+export const CMF_QUERY = {
+  listing: ['cmf', 'v2', 'listing'] as const,
+  upload: (id: string | null) => ['cmf', 'v2', 'upload', id] as const,
+  keys: ['cmf', 'v2', 'keys'] as const,
+  prompt: (t: CmfUploadTarget | null) => ['cmf', 'v2', 'prompt', t?.import_id, t?.tab, t?.sku_column, t?.clown] as const,
+  job: (id: string | null) => ['cmf', 'v2', 'job', id] as const,
+  history: ['cmf', 'history'] as const,
+  historyPacket: (id: string | null) => ['cmf', 'history', id] as const,
+}
+
+/** The kit's tabs and keys, the newest uploads, and the team's renders and supplier PDFs from both doors. */
+export function useCmfListing() {
+  return useQuery({
+    queryKey: CMF_QUERY.listing,
+    queryFn: () => call<CmfListing>('/api/cmf/v2/list'),
+    staleTime: 10_000,
+    // Renders made in Claude appear here too; a quiet refresh keeps the team's work current.
+    refetchInterval: 30_000,
+  })
+}
+
+export function useCmfUpload(importId: string | null) {
+  return useQuery({
+    queryKey: CMF_QUERY.upload(importId),
+    queryFn: async () => (await call<{ upload: CmfUploadView }>(`/api/cmf/v2/uploads/${importId}`)).upload,
+    enabled: Boolean(importId),
+    staleTime: 5 * 60_000,
+  })
+}
+
+export function useCmfKeys() {
+  return useQuery({
+    queryKey: CMF_QUERY.keys,
+    queryFn: async () => call<CmfKitHeader & { keys: CmfListedKey[] }>('/api/cmf/v2/keys'),
+    staleTime: 60_000,
+  })
+}
+
+/** The exact prompt a render of this target sends, or why there is none. */
+export function useCmfPrompt(target: CmfUploadTarget | null) {
+  return useQuery({
+    queryKey: CMF_QUERY.prompt(target),
+    queryFn: () => post<CmfPromptAnswer>('/api/cmf/v2/prompt', target),
+    enabled: Boolean(target),
+    staleTime: 60_000,
+    retry: false,
+  })
+}
+
+/** A render the person started: polled while it draws; the listing is refreshed when it lands. */
+export function useCmfRenderJob(jobId: string | null) {
+  const qc = useQueryClient()
+  return useQuery({
+    queryKey: CMF_QUERY.job(jobId),
+    queryFn: async () => {
+      const job = await call<CmfRenderJob>(`/api/cmf/v2/render/${jobId}`)
+      if (job.status !== 'processing') await qc.invalidateQueries({ queryKey: CMF_QUERY.listing })
+      return job
+    },
+    enabled: Boolean(jobId),
+    refetchInterval: (query) => ((query.state.data as CmfRenderJob | undefined)?.status === 'processing' || !query.state.data ? 4000 : false),
+  })
+}
+
+// ------------------------------------------------------------------ steps
+
+function useStep<TArgs, TOut>(fn: (a: TArgs) => Promise<TOut>, refresh = true) {
+  const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (args: {
-      renderId: string
-      files: File[]
-    }): Promise<{ batchId: string; references: CmfRefinementReference[] }> => {
-      if (args.files.length === 0) {
-        throw new Error('No files to upload')
-      }
-      const formData = new FormData()
-      for (const file of args.files) formData.append('files', file)
-      const res = await fetch(
-        `/api/cmf/renders/${args.renderId}/refinement-references`,
-        { method: 'POST', body: formData }
-      )
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        throw new Error(error.error || 'Reference upload failed')
-      }
-      return res.json()
+    mutationFn: fn,
+    onSuccess: async () => {
+      if (refresh) await qc.invalidateQueries({ queryKey: CMF_QUERY.listing })
     },
   })
 }
 
-export function useGenerateCmfRender() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (args: {
-      renderId: string
-      packetId: string
-      /** Optional iterative-refinement payload — when set, the new
-       *  attempt is generated as a correction layered on top of the
-       *  workbook spec. Both fields go into the POST body; the API
-       *  treats their absence as the bulk-burst "fresh attempt"
-       *  path. */
-      refinementPrompt?: string
-      parentAttemptId?: string
-      /** Storage paths returned by `useUploadRefinementReferences`.
-       *  Up to 4. The API caps to 4 again server-side. */
-      referenceImagePaths?: string[]
-    }): Promise<CmfRender> => {
-      const refPaths = (args.referenceImagePaths ?? []).filter(Boolean).slice(0, 4)
-      const hasRefinement =
-        Boolean(args.refinementPrompt?.trim()) ||
-        Boolean(args.parentAttemptId) ||
-        refPaths.length > 0
-      const res = await fetch(`/api/cmf/renders/${args.renderId}/generate`, {
-        method: 'POST',
-        headers: hasRefinement
-          ? { 'Content-Type': 'application/json' }
-          : undefined,
-        body: hasRefinement
-          ? JSON.stringify({
-              refinementPrompt: args.refinementPrompt?.trim() || undefined,
-              parentAttemptId: args.parentAttemptId || undefined,
-              referenceImagePaths: refPaths.length > 0 ? refPaths : undefined,
-            })
-          : undefined,
-      })
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        throw new Error(error.error || 'Render failed')
-      }
-      const data = await res.json()
-      return data.render as CmfRender
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['cmf', 'packet', variables.packetId] })
-      queryClient.invalidateQueries({ queryKey: ['cmf', 'packets'] })
-    },
+export function useUploadWorkbook() {
+  return useStep(async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return (await call<{ upload: CmfUploadView }>('/api/cmf/v2/uploads', { method: 'POST', body: form })).upload
   })
 }
 
-export interface CmfBulkGenerateSummary {
-  sku: number
-  attempts: number
-  started: number
-  failed: number
+export function useStartRender() {
+  return useStep((a: CmfUploadTarget & { lane: 'final' | 'draft'; n?: number }) => post<CmfRenderStarted>('/api/cmf/v2/render', a), false)
 }
 
-export interface CmfBulkGenerateResult {
-  summary: CmfBulkGenerateSummary
-  results: Array<{ renderId: string; attempt: number; ok: boolean; error?: string }>
+export function useGradeRender() {
+  return useStep((a: { output_id: string; import_id?: string }) => post<CmfGradeAnswer>('/api/cmf/v2/grade', a))
 }
 
-/**
- * Kick off the "Nano Banana bulk" workflow: 3 attempts per SKU by default.
- * The packet query is invalidated so the gallery refreshes once attempts
- * settle on the server.
- */
-export function useBulkGenerateCmfPacket() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (args: {
-      packetId: string
-      attemptsPerSku?: number
-      renderIds?: string[]
-    }): Promise<CmfBulkGenerateResult> => {
-      const res = await fetch(`/api/cmf/packets/${args.packetId}/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          attemptsPerSku: args.attemptsPerSku,
-          renderIds: args.renderIds,
-        }),
-      })
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        throw new Error(error.error || 'Bulk generation failed')
-      }
-      return res.json()
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['cmf', 'packet', variables.packetId] })
-      queryClient.invalidateQueries({ queryKey: ['cmf', 'packets'] })
-    },
+export function useRecordAnswer() {
+  return useStep((a: { output_id: string; grade_id?: string; answer: 'yes' | 'no'; remark: string }) => post<CmfVerdictAnswer>('/api/cmf/v2/verdict', a))
+}
+
+export function useMakeSupplierPdf() {
+  return useStep((a: { import_id: string; tab: string; sku_columns: string[]; output_ids: string[] }) => post<CmfSupplierPdfAnswer>('/api/cmf/v2/pdf', a))
+}
+
+export function useCheckPdf() {
+  return useStep((a: { pdf_url?: string; cmf_packet_id?: string; tab: string; columns?: string[]; layout?: 'vesper' | 'ours' }) => post<CmfCheckAnswer>('/api/cmf/v2/check-pdf', a), false)
+}
+
+// ------------------------------------------------------------------ history, made the old way (read only)
+
+export interface CmfHistoryAttempt {
+  id: string
+  attemptNumber: number
+  status: string
+  approvalStatus: string
+  imageUrl: string | null
+  modelId: string | null
+  basePrompt: string | null
+  enhancedPrompt: string | null
+  refinementPrompt: string | null
+  createdAt: string
+}
+
+export interface CmfHistoryRender {
+  id: string
+  label: string
+  productSlug: string
+  colorwayName: string | null
+  productCode: string | null
+  status: string
+  renderUrl: string | null
+  renderAttempts?: CmfHistoryAttempt[]
+}
+
+export interface CmfHistoryPacket {
+  id: string
+  name: string
+  cmfCode: string | null
+  status: string
+  pdfUrl: string | null
+  createdAt: string
+  updatedAt: string
+  renders: CmfHistoryRender[]
+}
+
+export function useCmfHistory() {
+  return useQuery({
+    queryKey: CMF_QUERY.history,
+    queryFn: async () => (await call<{ packets: CmfHistoryPacket[] }>('/api/cmf/packets')).packets ?? [],
+    staleTime: 5 * 60_000,
   })
 }
 
-export function useCmfAttemptAction() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (args: {
-      attemptId: string
-      packetId: string
-      action: 'approve' | 'archive' | 'restore'
-    }) => {
-      const res = await fetch(`/api/cmf/attempts/${args.attemptId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: args.action }),
-      })
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        throw new Error(error.error || 'Attempt action failed')
-      }
-      return res.json()
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['cmf', 'packet', variables.packetId] })
-      queryClient.invalidateQueries({ queryKey: ['cmf', 'packets'] })
-    },
-  })
-}
-
-/**
- * Delete a packet permanently. The server scopes deletion to admins
- * and the original owner; non-owners get a 403 toast surfaced to the
- * caller. On success we invalidate both the per-packet and the
- * packet-list queries so the Products dialog and the workspace strip
- * both drop the row immediately.
- */
-export function useDeleteCmfPacket() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (args: { packetId: string }): Promise<{ ok: true }> => {
-      const res = await fetch(`/api/cmf/packets/${args.packetId}`, {
-        method: 'DELETE',
-      })
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        throw new Error(error.error || 'Delete failed')
-      }
-      return res.json()
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['cmf', 'packets'] })
-      queryClient.removeQueries({ queryKey: ['cmf', 'packet', variables.packetId] })
-    },
-  })
-}
-
-export function useUpdateCmfDocumentDraft() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (args: { packetId: string; documentDraft: CmfDocumentDraft }) => {
-      const res = await fetch(`/api/cmf/packets/${args.packetId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documentDraft: args.documentDraft }),
-      })
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        throw new Error(error.error || 'Failed to save document draft')
-      }
-      return res.json()
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['cmf', 'packet', variables.packetId] })
-    },
-  })
-}
-
-export function useGenerateCmfPdf() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (args: {
-      packetId: string
-      allowDraft?: boolean
-    }): Promise<CmfPacket> => {
-      const res = await fetch(`/api/cmf/packets/${args.packetId}/pdf`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ allowDraft: !!args.allowDraft }),
-      })
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        throw new Error(error.error || 'PDF generation failed')
-      }
-      const data = await res.json()
-      return data.packet as CmfPacket
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['cmf', 'packet', variables.packetId] })
-      queryClient.invalidateQueries({ queryKey: ['cmf', 'packets'] })
-    },
+export function useCmfHistoryPacket(packetId: string | null) {
+  return useQuery({
+    queryKey: CMF_QUERY.historyPacket(packetId),
+    queryFn: async () => (await call<{ packet: CmfHistoryPacket }>(`/api/cmf/packets/${packetId}`)).packet,
+    enabled: Boolean(packetId),
+    staleTime: 5 * 60_000,
   })
 }

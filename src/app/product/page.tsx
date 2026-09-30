@@ -40,11 +40,11 @@ const TOOLS: ProductTool[] = [
     slug: 'cmf',
     name: 'CMF Studio',
     description:
-      'Workbook → resolved clown refs → photoreal SKU renders → packet PDF. One pipeline, one source of truth, every colourway through Vesper.',
+      "Upload the CMF workbook, see the exact prompt Damien's template makes for each SKU, render, review with the team, and make the supplier PDF, checked against the sheet. The same steps and records as CMF in Claude.",
     href: '/product/cmf',
     status: 'live',
     icon: Palette,
-    pipeline: ['Schema', 'References', 'Render', 'Export'],
+    pipeline: ['Workbook', 'Render', 'Review', 'PDF'],
   },
   {
     slug: 'soon',
