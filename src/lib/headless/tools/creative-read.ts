@@ -12,7 +12,7 @@
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { productionKitSet } from '@/lib/creative/kit-runtime'
-import { loadKitSet, resolveInKits, type KitSetState } from '@/lib/creative/kit-set'
+import { loadKitSet, resolveInKits, type KitSetLoaders, type KitSetState } from '@/lib/creative/kit-set'
 import { cap, kitHeader, kitSection, listProducts, referencePlan } from '@/lib/creative/tool-views'
 import { pinStorage, prismaPinStore } from '@/lib/creative/pins-runtime'
 import type { McpContent } from '../generate-asset'
@@ -27,6 +27,28 @@ export async function ownerIsAdmin(ownerId: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/**
+ * How grade_image and record_verdict find a product: the kits and whether the owner is an admin.
+ * Production reads both; `tests/cmf-parity.spec.ts` swaps them to hold those tools to the web
+ * CMF Studio's answers on one kit, with no database.
+ */
+export interface CreativeToolReach {
+  kitSet(env: NodeJS.ProcessEnv): KitSetLoaders
+  isAdmin(ownerId: string): Promise<boolean>
+}
+
+const productionCreativeToolReach: CreativeToolReach = { kitSet: (env) => productionKitSet(env), isAdmin: ownerIsAdmin }
+let toolReach: CreativeToolReach = productionCreativeToolReach
+
+export function creativeToolReach(): CreativeToolReach {
+  return toolReach
+}
+
+/** Tests swap the reach; null puts production back. */
+export function setCreativeToolReach(next: Partial<CreativeToolReach> | null): void {
+  toolReach = next ? { ...productionCreativeToolReach, ...next } : productionCreativeToolReach
 }
 
 function callable(ctx: ToolContext): (tool: string) => boolean {

@@ -10,7 +10,6 @@
  */
 
 import { z } from 'zod'
-import { productionKitSet } from '@/lib/creative/kit-runtime'
 import { resolveInKits } from '@/lib/creative/kit-set'
 import { kitHeader } from '@/lib/creative/tool-views'
 import { loadCandidate } from '@/lib/creative/candidate'
@@ -18,7 +17,7 @@ import { prismaCreativeRecords, type GradeRecord } from '@/lib/creative/records'
 import { verdictLine } from '@/lib/creative/verdict-line'
 import { productionCandidateDeps } from '@/lib/creative/work-runtime'
 import { isCmfRenderOutput, recordCmfVerdict, requireCmf } from '@/lib/creative/cmf/service'
-import { ownerIsAdmin } from './creative-read'
+import { creativeToolReach } from './creative-read'
 import { mcpActor } from './cmf'
 import { invalidArguments, type ToolHandler } from './types'
 
@@ -54,9 +53,10 @@ export const recordVerdictHandler: ToolHandler = {
     if (!a.grade_id && !a.output_id && !a.frontify_asset_id && !a.image_url) {
       throw new Error('name the picture the answer is about: grade_id, output_id, frontify_asset_id or image_url')
     }
-    const isAdmin = await ownerIsAdmin(ctx.principal.ownerId)
+    const reach = creativeToolReach()
+    const isAdmin = await reach.isAdmin(ctx.principal.ownerId)
     // CMF from the product kit, the rest from the creative kit (`src/lib/creative/kit-set.ts`).
-    const { loaded, slug, product } = await resolveInKits(productionKitSet(ctx.env), a.product, { isAdmin })
+    const { loaded, slug, product } = await resolveInKits(reach.kitSet(ctx.env), a.product, { isAdmin })
     if (product.kind === 'cmf') {
       // A CMF answer is the CMF service's (`src/lib/creative/cmf/service.ts`), the one the web door
       // calls too: it needs CMF access, and it is always recorded in Vesper.

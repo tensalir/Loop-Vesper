@@ -30,7 +30,7 @@ import {
 import type { AnyKit, KitProduct } from '@/lib/creative/kit-schema'
 import type { JobPayload } from '../jobs'
 import { runLongCall } from './long-call'
-import { ownerIsAdmin } from './creative-read'
+import { creativeToolReach, ownerIsAdmin } from './creative-read'
 import { planGrade, runGrade } from '@/lib/creative/cmf/service'
 import { mcpActor } from './cmf'
 import { assertPackagingAccess, executePackagingGrade, packagingGradeLines, packagingGradeStructured } from './packaging'
@@ -287,8 +287,9 @@ export const gradeImageHandler: ToolHandler = {
     const parsed = GradeImageArgs.safeParse(args)
     if (!parsed.success) throw invalidArguments(parsed.error.issues)
     const a = parsed.data
-    const isAdmin = await ownerIsAdmin(ctx.principal.ownerId)
-    const hit = await resolveInKits(productionKitSet(ctx.env), a.product, { isAdmin })
+    const reach = creativeToolReach()
+    const isAdmin = await reach.isAdmin(ctx.principal.ownerId)
+    const hit = await resolveInKits(reach.kitSet(ctx.env), a.product, { isAdmin })
     const { slug, product } = hit
     if (hit.source === 'product') {
       if (product.kind !== 'cmf') throw new GradingPromptError(`${product.name} is not CMF; the product kit serves only CMF`)
