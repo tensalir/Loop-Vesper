@@ -154,9 +154,10 @@ function answerError(err: unknown): Response {
 
 async function run(handler: (actor: CmfActor, d: CmfWebDoorDeps) => Promise<Response>): Promise<Response> {
   const d = doorDeps
-  const who = await d.actor()
-  if ('refused' in who) return refusal(who.refused.status, who.refused.error)
   try {
+    // The sign-in check reads the profile; a fault there is answered like any other.
+    const who = await d.actor()
+    if ('refused' in who) return refusal(who.refused.status, who.refused.error)
     return await handler(who.actor, d)
   } catch (err) {
     return answerError(err)
