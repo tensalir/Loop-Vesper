@@ -306,7 +306,7 @@ const SPEC_DIFF = findSpecDiff()
 test.describe("the product repository's spec_diff.py --layout ours on the same PDF", () => {
   test.skip(!SPEC_DIFF, 'the product repository or pypdf is not on this machine')
 
-  test('agrees row for row on every header cell, component field and footer; its legend reading is the one difference', async () => {
+  test('agrees row for row on every header cell, component field, footer and the legend', async () => {
     const cases: Array<{ spec: Spec; columns: string[]; key: ClownKeyFile; info: WorkbookInfo }> = [
       { spec: withTestFilledBanner(E2CC, ['D', 'E']), columns: ['D', 'E'], key: FRONT, info: E2CC.workbook as WorkbookInfo },
       { spec: E2CC, columns: ['E'], key: FRONT, info: E2CC.workbook as WorkbookInfo },
@@ -335,10 +335,10 @@ test.describe("the product repository's spec_diff.py --layout ours on the same P
         const view = (rows: Array<Record<string, unknown>>) =>
           rows.filter((r) => r.component !== 'LEGEND').map((r) => [r.column, r.component, r.field, r.sheet, r.pdf, r.state, r.cause, r.where])
         expect(view(py), `case ${n}`).toEqual(view(ts as unknown as Array<Record<string, unknown>>))
-        // spec_diff.py ends the ours legend at the first component header, and every legend entry is one:
-        // it reads the legend as empty. Vesper ends it at "Shared by every SKU" and reads the key's order.
+        // Both end the ours legend at "Shared by every SKU" (spec_diff.py since the product repository's e1e5105;
+        // before, it stopped at the first component header and read the legend as empty).
         const pyLegend = py.find((r) => r.component === 'LEGEND')!
-        expect(pyLegend.state).toBe('missing_in_pdf')
+        expect(pyLegend.state).toBe('match')
         expect(check.rows.find((r) => r.component === 'LEGEND')!.state).toBe('match')
       }
     } finally {

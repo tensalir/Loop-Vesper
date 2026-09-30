@@ -7,6 +7,7 @@ import { usePdfBuckets, usePdfBucketImages, type PdfBucketImage } from '@/hooks/
 import { usePdfIngestion } from '@/hooks/usePdfIngestion'
 import { useToast } from '@/components/ui/use-toast'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { toViewUrl } from '@/lib/storage/refs'
 
 export const PDF_BUCKET_MIME = 'application/x-pdf-bucket-image'
 
@@ -81,7 +82,7 @@ export function PdfBucketRail({
     e.dataTransfer.setData('text/uri-list', image.imageUrl)
 
     const img = new Image()
-    img.src = image.imageUrl
+    img.src = toViewUrl(image.imageUrl)
     try {
       e.dataTransfer.setDragImage(img, 18, 18)
     } catch {
@@ -202,7 +203,7 @@ export function PdfBucketRail({
                   title="Drag to reference images, click to preview"
                 >
                   <img
-                    src={image.imageUrl}
+                    src={toViewUrl(image.imageUrl)}
                     alt={image.label || `PDF image ${image.sortOrder + 1}`}
                     className="w-full h-full object-cover pointer-events-none"
                     draggable={false}
@@ -235,7 +236,7 @@ export function PdfBucketRail({
           {previewImage && (
             <div className="flex items-center justify-center">
               <img
-                src={previewImage.imageUrl}
+                src={toViewUrl(previewImage.imageUrl)}
                 alt={previewImage.label || 'PDF preview'}
                 className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
               />

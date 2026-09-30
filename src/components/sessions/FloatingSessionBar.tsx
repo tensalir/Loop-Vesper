@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Plus, Image as ImageIcon, Video, Loader2, Pencil, Trash2, Check, X } from 'lucide-react'
 import { fetchGenerationsPage } from '@/lib/api/generations'
 import type { Session } from '@/types/project'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface FloatingSessionBarProps {
   sessions: Session[]
@@ -249,7 +250,7 @@ export function FloatingSessionBar({
                   ) : thumbnail?.imageUrl ? (
                     <>
                       <img
-                        src={thumbnail.imageUrl}
+                        src={toViewUrl(thumbnail.imageUrl)}
                         alt={session.name}
                         className="w-full h-full object-cover"
                       />

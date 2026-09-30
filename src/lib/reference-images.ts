@@ -1,4 +1,5 @@
 import { createHash } from 'crypto'
+import { SERVER_READ_TTL_SECONDS, signStoredUrl, type StorageSigner } from '@/lib/storage/access'
 
 export interface ReferenceImagePointer {
   referenceImageId: string
@@ -109,12 +110,14 @@ export async function persistReferenceImages(
   return results
 }
 
+/** A reference as a data URL; a stored file is read through a fresh signature (its bucket may be private). */
 export async function downloadReferenceImageAsDataUrl(
   url: string,
   mimeHint?: string,
-  fetcher: typeof fetch = fetch
+  fetcher: typeof fetch = fetch,
+  signer?: StorageSigner
 ): Promise<string> {
-  const response = await fetcher(url)
+  const response = await fetcher(await signStoredUrl(url, SERVER_READ_TTL_SECONDS, { signer }))
   if (!response.ok) {
     throw new Error(`Failed to download reference image: ${response.status} ${response.statusText}`)
   }

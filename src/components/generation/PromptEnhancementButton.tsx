@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
 import { Wand2, Loader2 } from 'lucide-react'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface PromptEnhancementButtonProps {
   prompt: string
@@ -104,7 +105,7 @@ async function referenceImageToCompressedDataUrl(
       ) {
         return null
       }
-      const res = await fetch(referenceImage)
+      const res = await fetch(toViewUrl(referenceImage))
       if (!res.ok) return null
       blob = await res.blob()
     } else {

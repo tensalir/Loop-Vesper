@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Download as DownloadIcon, ExternalLink, History } from 'lucide-react'
 import { useDownloadHistory, type DownloadHistoryItem } from '@/hooks/useDownloadHistory'
 import { useToast } from '@/components/ui/use-toast'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface DownloadHistoryModalProps {
   open: boolean
@@ -45,7 +46,7 @@ export function DownloadHistoryModal({ open, onOpenChange }: DownloadHistoryModa
   const handleRedownload = async (item: DownloadHistoryItem) => {
     setRedownloadingId(item.outputId)
     try {
-      const response = await fetch(item.fileUrl)
+      const response = await fetch(toViewUrl(item.fileUrl))
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -128,14 +129,14 @@ export function DownloadHistoryModal({ open, onOpenChange }: DownloadHistoryModa
                     {item.fileType === 'image' ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={item.fileUrl}
+                        src={toViewUrl(item.fileUrl)}
                         alt={item.prompt.slice(0, 100)}
                         className="w-full h-full object-cover"
                         loading="lazy"
                       />
                     ) : (
                       <video
-                        src={item.fileUrl}
+                        src={toViewUrl(item.fileUrl)}
                         className="w-full h-full object-cover"
                         muted
                       />

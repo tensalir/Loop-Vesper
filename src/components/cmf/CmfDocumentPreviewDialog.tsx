@@ -48,6 +48,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toViewUrl } from '@/lib/storage/refs'
 
 const AUTOSAVE_DEBOUNCE_MS = 1500
 
@@ -519,7 +520,7 @@ function CmfPageCard({
           {page.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={page.imageUrl}
+              src={toViewUrl(page.imageUrl)}
               alt={page.colorwayLabel}
               className="max-h-full max-w-full object-contain p-3"
             />

@@ -21,6 +21,7 @@ import { TOOL_HANDLERS, type ToolContext, type ToolPrincipal } from './tools'
 import { prismaJobStore } from './mcp-jobs'
 import { checkDailyCostCap } from './cost-cap'
 import { allowanceNeed, checkClaudeAllowance } from './claude-allowance'
+import { CLAUDE_TTL_SECONDS, signStoredUrlsDeep } from '@/lib/storage/access'
 
 export const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26']
 const PREFERRED_PROTOCOL_VERSION = '2025-11-25'
@@ -128,7 +129,26 @@ export interface DispatchDeps {
   checkCostCap?: typeof checkDailyCostCap
   checkAllowance?: typeof checkClaudeAllowance
   env?: NodeJS.ProcessEnv
+  /** Signs every stored file in what goes back to Claude; the default signs for seven days. */
+  signForClaude?: <T>(value: T) => Promise<T>
 }
+
+/**
+ * What goes back to Claude carries stored files as signed URLs, never public ones: the markdown
+ * image lines claude.ai draws, the full-resolution links, resource links, product renders, job
+ * results collected later. Seven days, so a picture in a chat and the link the person opens from
+ * it keep working through the week the work usually runs; the rows keep the canonical URL, so
+ * asking again (get_generation_status, list_product_renders) signs afresh.
+ */
+function defaultSignForClaude<T>(value: T): Promise<T> {
+  return signStoredUrlsDeep(value, CLAUDE_TTL_SECONDS)
+}
+
+/**
+ * Records, not pictures: the plugin repository's nightly job commits these rows to git, so their
+ * image URLs stay the canonical identifiers, as `GET /api/headless/v1/creative/*` serves them.
+ */
+const UNSIGNED_TOOLS: ReadonlySet<string> = new Set(['export_creative_records'])
 
 const defaultJobs: ToolContext['jobs'] = {
   store: prismaJobStore,
@@ -145,6 +165,7 @@ export async function dispatch(
   const handlers = deps.handlers ?? TOOL_HANDLERS
   const recordUsage = deps.recordUsage ?? recordHeadlessUsage
   const env = deps.env ?? process.env
+  const signForClaude = deps.signForClaude ?? defaultSignForClaude
 
   switch (method) {
     case 'initialize': {
@@ -229,7 +250,7 @@ export async function dispatch(
       }
       try {
         const contents = await readMcpResource(parsed.data.uri, { allowedModels: principal.allowedModels })
-        return rpcSuccess(id, contents)
+        return rpcSuccess(id, await signForClaude(contents))
       } catch (err) {
         return rpcError(id, ERROR_CODES.methodNotFound, (err as Error)?.message || 'Resource read failed')
       }
@@ -346,7 +367,8 @@ export async function dispatch(
       try {
         const result = await handler.run(args, ctx)
         // The cost field is Vesper-internal: log it, never send it.
-        const { costUsd, ...wireResult } = result
+        const { costUsd, ...unsigned } = result
+        const wireResult = UNSIGNED_TOOLS.has(tool.name) ? unsigned : await signForClaude(unsigned)
         recordUsage({
           credentialId: principal.credentialId,
           ownerId: principal.ownerId,

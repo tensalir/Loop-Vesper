@@ -11,6 +11,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Search, Loader2, Video, Clock, Plus } from 'lucide-react'
 import { useProjectVideos, useLoadMoreObserver, type BrowseVideo } from '@/hooks/useVideoBrowse'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface VideoBrowseModalProps {
   isOpen: boolean
@@ -161,7 +162,7 @@ function VideoThumbnail({
       {/* Poster image — no autoplay to avoid decode spikes */}
       <video
         ref={previewRef}
-        src={video.url}
+        src={toViewUrl(video.url)}
         className="w-full h-full object-cover"
         preload="metadata"
         muted

@@ -33,6 +33,7 @@ import {
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface CmfClownLibraryDialogProps {
   open: boolean
@@ -387,7 +388,7 @@ function ClownThumb({
         {asset.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={asset.imageUrl}
+            src={toViewUrl(asset.imageUrl)}
             alt={asset.label}
             className="w-full h-full object-contain"
             loading="lazy"

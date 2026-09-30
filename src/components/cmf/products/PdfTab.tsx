@@ -17,6 +17,7 @@ import { useMemo } from 'react'
 import { ArrowUpRight, Download, FileText } from 'lucide-react'
 import type { ProductSummary } from '@/lib/cmf/product-summary'
 import { timeAgo } from '@/lib/cmf/format'
+import { toDownloadUrl, toViewUrl } from '@/lib/storage/refs'
 
 interface PdfTabProps {
   summary: ProductSummary
@@ -67,7 +68,7 @@ export function PdfTab({ summary, onSelectPacket }: PdfTabProps) {
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <a
-                href={packet.pdfUrl ?? '#'}
+                href={packet.pdfUrl ? toDownloadUrl(packet.pdfUrl, `${packet.cmfCode || packet.name || 'cmf-packet'}.pdf`) : '#'}
                 download
                 className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-card/50 px-2.5 py-1 text-[11px] font-medium hover:border-border hover:bg-card/80 transition-colors"
               >
@@ -75,7 +76,7 @@ export function PdfTab({ summary, onSelectPacket }: PdfTabProps) {
                 Download
               </a>
               <a
-                href={packet.pdfUrl ?? '#'}
+                href={toViewUrl(packet.pdfUrl) ?? '#'}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -88,7 +89,7 @@ export function PdfTab({ summary, onSelectPacket }: PdfTabProps) {
           <div className="bg-background/40">
             <iframe
               title={`PDF preview · ${packet.cmfCode || packet.name}`}
-              src={packet.pdfUrl ?? ''}
+              src={toViewUrl(packet.pdfUrl) ?? ''}
               className="block h-[600px] w-full border-0"
             />
           </div>

@@ -53,6 +53,7 @@ import {
   LayoutTemplate,
   Package,
 } from 'lucide-react'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface CmfPacketWorkspaceProps {
   initialPacketId: string | null
@@ -179,7 +180,7 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
   }
   const handleExportClick = () => {
     if (packet?.pdfUrl) {
-      window.open(packet.pdfUrl, '_blank', 'noopener,noreferrer')
+      window.open(toViewUrl(packet.pdfUrl), '_blank', 'noopener,noreferrer')
       return
     }
     handleGeneratePdf(readiness.approved < readiness.total)
@@ -365,7 +366,7 @@ export function CmfPacketWorkspace({ initialPacketId }: CmfPacketWorkspaceProps)
                   size="sm"
                   variant="outline"
                   onClick={() =>
-                    window.open(packet.pdfUrl!, '_blank', 'noopener,noreferrer')
+                    window.open(toViewUrl(packet.pdfUrl!), '_blank', 'noopener,noreferrer')
                   }
                   className="gap-1.5"
                 >

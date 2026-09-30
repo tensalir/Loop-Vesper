@@ -12,6 +12,7 @@
 
 import { AlertTriangle, Upload } from 'lucide-react'
 import type { CmfClownAsset } from '@/hooks/useCmf'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface ReferencesTabProps {
   clowns: CmfClownAsset[]
@@ -72,7 +73,7 @@ export function ReferencesTab({ clowns, onUpdateReferences }: ReferencesTabProps
             <div className="aspect-square bg-background/40 flex items-center justify-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={clown.imageUrl}
+                src={toViewUrl(clown.imageUrl)}
                 alt={clown.label}
                 className="h-full w-full object-contain p-3"
               />

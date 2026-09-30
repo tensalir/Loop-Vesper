@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface ChatThread {
   id: string
@@ -806,13 +807,13 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
                           {imageMatches.map((match, idx) => (
                             <a 
                               key={idx} 
-                              href={match[1]} 
+                              href={toViewUrl(match[1])} 
                               target="_blank" 
                               rel="noopener noreferrer"
                               className="block w-20 h-20 rounded-lg overflow-hidden border border-primary-foreground/20"
                             >
                               <img
-                                src={match[1]}
+                                src={toViewUrl(match[1])}
                                 alt="Attached"
                                 className="w-full h-full object-cover hover:opacity-80 transition-opacity"
                               />
@@ -827,7 +828,7 @@ export function BrainstormChatWidget({ projectId, isOpen: controlledIsOpen, onOp
                           {fileMatches.map((match, idx) => (
                             <a
                               key={idx}
-                              href={match[1]}
+                              href={toViewUrl(match[1])}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-1 px-2 py-1 rounded bg-primary-foreground/10 text-xs hover:bg-primary-foreground/20 transition-colors"

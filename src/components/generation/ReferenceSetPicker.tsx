@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ImagePlus, Film, Music, Plus, X, Loader2 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { useMediaUpload, type MediaKind, type UploadedMedia } from '@/hooks/useMediaUpload'
+import { toViewUrl } from '@/lib/storage/refs'
 
 /** One uploaded reference, already in storage and addressable by the provider. */
 export interface ReferenceSetItem {
@@ -210,9 +211,9 @@ export function ReferenceSetPicker({
               title={`${item.name}${item.durationSeconds ? ` · ${formatDuration(item.durationSeconds)}` : ''}`}
             >
               {item.kind === 'image' ? (
-                <img src={item.previewUrl} alt={item.name} className="w-full h-full object-cover" />
+                <img src={toViewUrl(item.previewUrl)} alt={item.name} className="w-full h-full object-cover" />
               ) : item.kind === 'video' ? (
-                <video src={item.previewUrl} className="w-full h-full object-cover" muted playsInline />
+                <video src={toViewUrl(item.previewUrl)} className="w-full h-full object-cover" muted playsInline />
               ) : (
                 <Music className="h-3.5 w-3.5 text-muted-foreground" />
               )}

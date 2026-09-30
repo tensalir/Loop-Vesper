@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { getToonGradient3 } from './toon-materials'
 import type { BrandWorldOutput } from '@/lib/brand-world/placement'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface RobotBillboardProps {
   output: BrandWorldOutput
@@ -98,7 +99,7 @@ export function RobotBillboard({
 
     const loader = new THREE.TextureLoader()
     loader.load(
-      output.fileUrl,
+      toViewUrl(output.fileUrl),
       (tex) => {
         tex.colorSpace = THREE.SRGBColorSpace
         tex.minFilter = THREE.LinearFilter

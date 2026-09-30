@@ -25,6 +25,8 @@ import {
   ChevronRight,
   Loader2,
 } from 'lucide-react'
+import { toViewUrl } from '@/lib/storage/refs'
+import { storageImageLoader } from '@/lib/storage/image-loader'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -247,7 +249,7 @@ export default function DashboardPage() {
                     <div className="relative aspect-square rounded-xl overflow-hidden bg-muted transition-all group-hover:ring-2 group-hover:ring-primary/50 group-focus-visible:ring-2 group-focus-visible:ring-primary">
                       {creation.fileType === 'video' ? (
                         <video
-                          src={creation.fileUrl}
+                          src={toViewUrl(creation.fileUrl)}
                           className="w-full h-full object-cover"
                           muted
                           loop
@@ -260,6 +262,7 @@ export default function DashboardPage() {
                         />
                       ) : (
                         <Image
+                          loader={storageImageLoader}
                           src={creation.fileUrl}
                           alt={creation.generation.prompt.slice(0, 100)}
                           fill

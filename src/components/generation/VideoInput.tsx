@@ -22,6 +22,7 @@ import { PromptEnhancementButton } from './PromptEnhancementButton'
 import { IterationButton } from './IterationButton'
 import { SnapshotRail, SNAPSHOT_RAIL_MIME } from './SnapshotRail'
 import { ReferenceSetPicker, type ReferenceSetItem } from './ReferenceSetPicker'
+import { toViewUrl } from '@/lib/storage/refs'
 
 interface VideoInputProps {
   prompt: string
@@ -394,7 +395,7 @@ export function VideoInput({
       console.warn('[VideoInput] Failed to load start image for aspect ratio detection')
       setDetectedAspectRatio(null)
     }
-    img.src = imageUrl
+    img.src = toViewUrl(imageUrl)
   }, [isKlingModel, imagePreviewUrl, referenceImageUrl])
 
   const handleSubmit = async () => {
@@ -825,7 +826,7 @@ export function VideoInput({
       let cancelled = false
       ;(async () => {
         try {
-          const response = await fetch(url)
+          const response = await fetch(toViewUrl(url))
           const blob = await response.blob()
           if (cancelled) return
           const mimeType = blob.type || 'image/jpeg'
@@ -900,7 +901,7 @@ export function VideoInput({
       let cancelled = false
       ;(async () => {
         try {
-          const response = await fetch(url)
+          const response = await fetch(toViewUrl(url))
           const blob = await response.blob()
           if (cancelled) return
           const mimeType = blob.type || 'image/jpeg'
@@ -1108,7 +1109,7 @@ export function VideoInput({
                         }`}
                       >
                         <img
-                          src={imagePreviewUrl || ''}
+                          src={toViewUrl(imagePreviewUrl) || ''}
                           alt="Start frame"
                           className="w-full h-full object-cover"
                         />
@@ -1221,7 +1222,7 @@ export function VideoInput({
                     title="Preview start frame"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={imagePreviewUrl || ''} alt="Start frame" className="w-full h-full object-cover" />
+                    <img src={toViewUrl(imagePreviewUrl) || ''} alt="Start frame" className="w-full h-full object-cover" />
                   </button>
                 )
               )}
@@ -1274,7 +1275,7 @@ export function VideoInput({
                       isOverlay ? 'w-[28px] h-[28px]' : 'w-[32px] h-[32px]'
                     }`}>
                       <img
-                        src={endFramePreviewUrl || ''}
+                        src={toViewUrl(endFramePreviewUrl) || ''}
                         alt="End frame"
                         className="w-full h-full object-cover"
                       />
@@ -1579,7 +1580,7 @@ export function VideoInput({
         <DialogContent className="max-w-4xl p-2 sm:p-3 bg-background/95 backdrop-blur-xl border-white/10">
           {previewImageUrl ? (
             <img
-              src={previewImageUrl}
+              src={toViewUrl(previewImageUrl)}
               alt="Frame preview"
               className="w-full h-auto max-h-[80vh] object-contain rounded-md"
             />

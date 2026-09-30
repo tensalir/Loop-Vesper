@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import { selectPromptVariant } from '@/lib/cmf/prompt'
 import { cn } from '@/lib/utils'
 import type { CmfRefinementReference, CmfRenderAttempt } from '@/hooks/useCmf'
+import { toViewUrl } from '@/lib/storage/refs'
 
 /** Phase 2 cap mirrored from the upload route. Drives both the drop-
  *  zone "X / 4" counter and the disabled state when the limit is hit.
@@ -192,7 +193,7 @@ export function RefinePanel({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={ref.url}
+                  src={toViewUrl(ref.url)}
                   alt={ref.filename}
                   className="w-full h-full object-cover"
                 />

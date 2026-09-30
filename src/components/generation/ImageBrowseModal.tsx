@@ -24,6 +24,7 @@ import {
   useLoadMoreObserver,
   type BrowseImage,
 } from '@/hooks/useImageBrowse'
+import { storageImageLoader } from '@/lib/storage/image-loader'
 
 interface ImageBrowseModalProps {
   isOpen: boolean
@@ -352,6 +353,7 @@ const ImageThumbnail = memo(function ImageThumbnail({
       {/* Thumbnail via next/image (auto-optimized, lazy-loaded, WebP/AVIF) */}
       {!hasError ? (
         <Image
+          loader={storageImageLoader}
           src={image.url}
           alt={image.prompt}
           fill

@@ -19,6 +19,8 @@ import { getModel, getModelConfig } from '@/lib/models/registry'
 import type { GenerationRequest } from '@/lib/models/base'
 import { uploadBase64ToStorage, uploadUrlToStorage } from '@/lib/supabase/storage'
 import { referenceToDataUrl } from '@/lib/net/fetch-allowlisted'
+import { fetchStored } from '@/lib/storage/access'
+import { canonicalStorageUrl } from '@/lib/storage/refs'
 import { makeImagePreview } from '@/lib/images/preview'
 import { resolveProductRenders } from './list-product-renders'
 import { getMcpGenerationTimeoutMs } from './mcp-timeout'
@@ -161,7 +163,7 @@ async function probeMimeType(url: string): Promise<string> {
     return 'image/png'
   }
   try {
-    const res = await fetch(url, { method: 'HEAD' })
+    const res = await fetchStored(url, { method: 'HEAD' })
     const ct = res.headers.get('content-type')?.split(';')[0]?.trim() || ''
     if (ct.startsWith('image/')) return ct
   } catch {
@@ -198,7 +200,7 @@ async function readImageBytes(source: string): Promise<{ buffer: Buffer; mimeTyp
     const mimeType = source.slice(5, comma).split(';')[0] || 'image/png'
     return { buffer: Buffer.from(source.slice(comma + 1), 'base64'), mimeType }
   }
-  const res = await fetch(source)
+  const res = await fetchStored(source)
   if (!res.ok) throw new Error(`Failed to fetch image (HTTP ${res.status}).`)
   const mimeType = res.headers.get('content-type')?.split(';')[0]?.trim() || 'image/png'
   return { buffer: Buffer.from(await res.arrayBuffer()), mimeType }
@@ -386,7 +388,8 @@ export async function executeGenerateAsset(
         ...(typeof seed === 'number' ? { seed } : {}),
         allowFallback: allowFallback !== false,
         ...(productRenderIds?.length ? { productRenderIds } : {}),
-        ...(referenceImage && /^https:\/\//i.test(referenceImage) ? { referenceImageUrl: referenceImage } : {}),
+        // A signed URL Claude hands back is kept in its public form, without its expiry.
+        ...(referenceImage && /^https:\/\//i.test(referenceImage) ? { referenceImageUrl: canonicalStorageUrl(referenceImage) } : {}),
         ...(anchor ? { anchor } : {}),
         provider,
         effectiveModelId,

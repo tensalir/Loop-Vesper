@@ -12,6 +12,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
+import { toViewUrl } from '@/lib/storage/refs'
 
 /**
  * Rectangle (in viewport coordinates) of the element the download was
@@ -191,7 +192,7 @@ export function DownloadHistoryProvider({ children }: { children: ReactNode }) {
                 >
                   {flight.fileType === 'video' ? (
                     <video
-                      src={flight.imageUrl}
+                      src={toViewUrl(flight.imageUrl)}
                       muted
                       playsInline
                       autoPlay={false}
@@ -200,7 +201,7 @@ export function DownloadHistoryProvider({ children }: { children: ReactNode }) {
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={flight.imageUrl}
+                      src={toViewUrl(flight.imageUrl)}
                       alt=""
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />
