@@ -275,7 +275,7 @@ test.describe('one CMF, two doors: the web CMF Studio answers as Claude does', (
     const p = await parityWorld()
     const form = new FormData()
     const bytes = specToXlsx(p.w.upload)
-    form.append('file', new Blob([bytes]), 'CMF_Schema_upload.xlsx')
+    form.append('file', new Blob([new Uint8Array(bytes)]), 'CMF_Schema_upload.xlsx')
     const up = await viaWeb(webUpload(new Request('http://vesper.test/api/cmf/v2/uploads', { method: 'POST', body: form })))
     expect(up.status, JSON.stringify(up.body)).toBe(201)
     const id = up.body.upload.import_id as string
@@ -298,7 +298,7 @@ test.describe('one CMF, two doors: the web CMF Studio answers as Claude does', (
     expect(web.body.workbook.import_id).toBe(id)
     // What is not a workbook is refused, and nothing is kept.
     const bad = new FormData()
-    bad.append('file', new Blob([Buffer.from('not a workbook')]), 'notes.txt')
+    bad.append('file', new Blob(['not a workbook']), 'notes.txt')
     const refused = await viaWeb(webUpload(new Request('http://vesper.test/api/cmf/v2/uploads', { method: 'POST', body: bad })))
     expect(refused.status).toBe(422)
     expect(refused.body.error).toContain('notes.txt is not an .xlsx workbook')

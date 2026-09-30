@@ -45,7 +45,7 @@ function importsOf(source: string): string[] {
     /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g,
     /\brequire\(\s*['"]([^'"]+)['"]\s*\)/g,
   ]
-  for (const re of patterns) for (const m of source.matchAll(re)) out.push(m[1])
+  for (const re of patterns) for (const m of Array.from(source.matchAll(re))) out.push(m[1])
   return out
 }
 
