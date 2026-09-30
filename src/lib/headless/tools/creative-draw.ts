@@ -10,9 +10,9 @@
 
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { getCreativeKit } from '@/lib/creative/kit-runtime'
+import { productionKitSet } from '@/lib/creative/kit-runtime'
+import { resolveInKits } from '@/lib/creative/kit-set'
 import { kitHeader } from '@/lib/creative/tool-views'
-import { resolveProduct } from '@/lib/creative/products'
 import { prismaPinStore } from '@/lib/creative/pins-runtime'
 import { executeDraws, manifestLine, planDraw, type DrawPlan } from '@/lib/creative/draw'
 import {
@@ -223,9 +223,9 @@ export const generateProductImageHandler: ToolHandler = {
   },
   async run(args, ctx) {
     const a = parseDrawArgs(args)
-    const loaded = await getCreativeKit({ env: ctx.env })
     const isAdmin = await ownerIsAdmin(ctx.principal.ownerId)
-    const { slug, product } = resolveProduct(loaded.kit, a.product, { isAdmin })
+    // A CMF name resolves to the product kit, and planDraw sends it to cmf_render.
+    const { loaded, slug, product } = await resolveInKits(productionKitSet(ctx.env), a.product, { isAdmin })
     const rows = await prismaPinStore.list(slug)
     const plan = planDraw(loaded.kit, slug, product, a, rows, { isAdmin })
     assertModelAllowed(ctx.principal.allowedModels, vesperModelId(plan.model))

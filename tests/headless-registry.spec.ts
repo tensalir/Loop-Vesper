@@ -89,7 +89,7 @@ test.describe('effectiveTools', () => {
   })
 
   test('the CMF tools need CMF access or an admin, and the creative switch hides them', () => {
-    const cmf = ['cmf_check_pdf', 'cmf_list', 'cmf_prompt', 'cmf_render']
+    const cmf = ['cmf_check_pdf', 'cmf_list', 'cmf_pdf', 'cmf_prompt', 'cmf_render']
     const withFlag = effectiveTools({ allowedTools: ['*'] }, { role: 'user', cmfAccess: true })
     expect(cmf.every((t) => (withFlag as string[]).includes(t))).toBe(true)
     const admin = effectiveTools({ allowedTools: ['*'] }, { role: 'admin' })

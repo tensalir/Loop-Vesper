@@ -1,0 +1,10 @@
+{
+ "author": {
+  "name": "Loop Product"
+ },
+ "description": "Loop Product Design, for Loop's Design team: the mother, packaging production and the CMF review.",
+ "displayName": "Loop Product Design",
+ "name": "product-design",
+ "repository": "https://github.com/tensalir/loop-product-plugins",
+ "version": "0.2.0"
+}

@@ -1,6 +1,7 @@
 /**
- * The creative kit's source: the plugin repository on GitHub, read through
- * Vesper's GitHub App.
+ * A kit's source: its plugin repository on GitHub, read through Vesper's
+ * GitHub App. The studio kit's tags start `studio-design-v`, the product kit's
+ * `product-design-v`.
  */
 
 import type { Gh } from '@/lib/github/rest'
@@ -19,11 +20,11 @@ interface ContentsFile {
   encoding?: string
 }
 
-export function githubKitSource(gh: Gh, repo: string): KitSource {
+export function githubKitSource(gh: Gh, repo: string, tagPrefix: string = TAG_PREFIX): KitSource {
   let refsCache: { etag: string | null; refs: MatchingRef[] } | null = null
 
   async function listTags(): Promise<MatchingRef[]> {
-    const res = await gh(`/repos/${repo}/git/matching-refs/tags/${TAG_PREFIX}`, { etag: refsCache?.etag })
+    const res = await gh(`/repos/${repo}/git/matching-refs/tags/${tagPrefix}`, { etag: refsCache?.etag })
     if (res.status === 304 && refsCache) return refsCache.refs
     if (res.status === 404) return []
     const refs = res.json<MatchingRef[]>()
@@ -39,8 +40,8 @@ export function githubKitSource(gh: Gh, repo: string): KitSource {
         return { ref, commit: res.json<{ sha: string }>().sha }
       }
       const refs = await listTags()
-      const tag = newestTag(refs.map((r) => r.ref))
-      if (!tag) throw new Error(`${repo} has no ${TAG_PREFIX}* tag yet`)
+      const tag = newestTag(refs.map((r) => r.ref), tagPrefix)
+      if (!tag) throw new Error(`${repo} has no ${tagPrefix}* tag yet`)
       const entry = refs.find((r) => r.ref === `refs/tags/${tag}`)!
       if (entry.object.type === 'tag') {
         // An annotated tag points at a tag object, which points at the commit.

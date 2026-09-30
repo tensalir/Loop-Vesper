@@ -19,7 +19,7 @@
  */
 
 import crypto from 'crypto'
-import type { Kit } from './kit-schema'
+import type { AnyKit } from './kit-schema'
 
 export const PIN_BUCKET_DEFAULT = 'creative-pins'
 export const GEMINI_REFRESH_WITHIN_MS = 24 * 60 * 60 * 1000
@@ -118,7 +118,7 @@ export function pinPreviewPath(sha256: string): string {
 }
 
 /** Every pin the kit names, once per id and sha256. */
-export function kitPins(kit: Kit): PinSpec[] {
+export function kitPins(kit: AnyKit): PinSpec[] {
   const out: PinSpec[] = []
   const seen = new Set<string>()
   const add = (p: PinSpec) => {

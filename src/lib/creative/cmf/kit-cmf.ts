@@ -1,8 +1,9 @@
 /**
- * The CMF part of the creative kit, read as the CMF tools need it. Pure: the kit and the files it
+ * The CMF part of a kit, read as the CMF tools need it. Pure: the kit and the files it
  * names come in; nothing here reaches the network.
  *
- * What the kit carries for CMF (the plugin repository's `tools/kit.py`, `cmf_entry`):
+ * What the product kit (Loop Product Design, `tensalir/loop-product-plugins`) carries for CMF, as
+ * the plugin repository's kit builder writes it:
  *   keys      every clown key: its clown (id, sha256, size), whether it is a draft (a zone names no
  *             component) and whether Damien confirmed it
  *   specs     every tab's parsed spec, by path and sha256
@@ -14,7 +15,7 @@
  *             THE KEY for every tab × column × key of that tab's product
  */
 
-import type { Kit, KitProduct } from '../kit-schema'
+import type { AnyKit, KitProduct } from '../kit-schema'
 
 export class CmfError extends Error {
   constructor(message: string) {
@@ -70,9 +71,9 @@ export interface CmfGradingParts {
 }
 
 /** The kit's CMF product, or a refusal when the kit carries none. */
-export function cmfKit(kit: Kit): CmfKit {
+export function cmfKit(kit: AnyKit): CmfKit {
   const found = Object.entries(kit.products).find(([, p]) => p.kind === 'cmf')
-  if (!found) throw new CmfError(`the creative kit ${kit.version} carries no CMF product`)
+  if (!found) throw new CmfError(`the ${kit.plugin === 'product-design' ? 'product' : 'creative'} kit ${kit.version} carries no CMF product`)
   const [slug, product] = found
   const raw = product as Record<string, unknown>
   return {

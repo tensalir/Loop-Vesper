@@ -1,18 +1,18 @@
 /**
  * Vesper's read of a CMF render against its sheet row and its clown: the CMF grader's words from
- * the creative kit, THE ROW and THE KEY that the repository's CMF script built for that tab, column
- * and key (`kit/cmf-grading.json`), the candidate first and the clown second, three reads, the
- * kit's ladder. A port of `assemble_cmf_grading_prompt` in the plugin repository's `tools/kit.py`,
- * held to every CMF fixture in the kit's conformance file.
+ * the product kit (Loop Product Design), THE ROW and THE KEY that the repository's CMF script built
+ * for that tab, column and key (`kit/cmf-grading.json`), the candidate first and the clown second,
+ * three reads, that kit's ladder. A port of `assemble_cmf_grading_prompt` in the plugin
+ * repository's kit builder, held to every CMF fixture in the kit's conformance file.
  *
  * Vesper measures nothing on the pixels, so the prompt carries the kit's one no-measurement line
  * where `qa.py` would give the zone measurements: a Vesper CMF grade is weaker than the
- * repository's `qa x3` on leftover clown colour, and says what it is. While the rubric is reporting
- * only, every result says so.
+ * repository's `qa x3` on leftover clown colour, and says what it is. While no check of the rubric
+ * blocks, every result says so.
  */
 
 import crypto from 'crypto'
-import type { Kit, KitProduct } from '../kit-schema'
+import { kitResults, reportsOnly, type AnyKit, type KitProduct } from '../kit-schema'
 import type { PinRow, PinSpec } from '../pins'
 import { kitPins, usablePin } from '../pins'
 import { fillText, GradingPromptError } from '../grading-prompt'
@@ -70,7 +70,7 @@ export function assembleCmfGradingPrompt(product: KitProduct, parts: CmfGradingP
 }
 
 export interface CmfGradeRequest {
-  kit: Kit
+  kit: AnyKit
   cmf: CmfKit
   parts: CmfGradingParts
   candidate: Candidate
@@ -146,7 +146,7 @@ export async function gradeCmfCandidate(req: CmfGradeRequest, deps: GradeDeps): 
       }
     })
   )
-  const aggregate = aggregateReads(results, checks, req.kit.ladder)
+  const aggregate = aggregateReads(results, checks, kitResults(req.kit))
   const { label, model } = judgeLabel(aggregate.models, runs)
   return {
     aggregate,
@@ -174,7 +174,7 @@ export async function gradeCmfCandidate(req: CmfGradeRequest, deps: GradeDeps): 
     ),
     judge_label: label,
     judge_model: model,
-    reporting_only: product.rubric.reporting_only || product.grading.reporting_only === true,
+    reporting_only: reportsOnly(product.rubric) || reportsOnly(product.grading),
     latency_ms: now() - started,
   }
 }

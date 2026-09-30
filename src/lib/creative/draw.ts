@@ -9,7 +9,7 @@
  */
 
 import crypto from 'crypto'
-import type { Kit, KitProduct } from './kit-schema'
+import type { AnyKit, KitProduct } from './kit-schema'
 import type { PinRow, PinSpec } from './pins'
 import { kitPins, usablePin } from './pins'
 import { referencePlan } from './tool-views'
@@ -95,7 +95,7 @@ export function modelForLane(product: KitProduct, lane: Lane): RouterRow {
 }
 
 /** The plan for a draw, or a refusal naming what is missing. Pure: no network, no spend. */
-export function planDraw(kit: Kit, slug: string, product: KitProduct, args: DrawArgs, rows: readonly PinRow[], opts: { isAdmin?: boolean } = {}): DrawPlan {
+export function planDraw(kit: AnyKit, slug: string, product: KitProduct, args: DrawArgs, rows: readonly PinRow[], opts: { isAdmin?: boolean } = {}): DrawPlan {
   if (product.kind === 'packaging') {
     throw new DrawError('packaging is drawn as a mockup first, in code, then finished: packaging_mockup and packaging_finish, not generate_product_image')
   }

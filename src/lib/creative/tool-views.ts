@@ -4,7 +4,7 @@
  * `src/lib/headless/tools/creative-read.ts` are thin wrappers around these.
  */
 
-import type { Kit, KitProduct } from './kit-schema'
+import { kitGraders, reportsOnly, type AnyKit, type KitProduct } from './kit-schema'
 import type { LoadedKit } from './kit'
 import { kitPins, usablePin, type PinRow, type PinSpec } from './pins'
 import { servedProducts, resolveProduct } from './products'
@@ -15,14 +15,14 @@ export const TEXT_CAP = 20_000
 export const TOOLS_BY_KIND: Record<KitProduct['kind'], string[]> = {
   'product-imagery': ['get_product_references', 'generate_product_image', 'grade_image', 'record_grade', 'record_verdict'],
   packaging: ['get_product_references', 'packaging_list_looks', 'packaging_mockup', 'packaging_finish', 'grade_image', 'record_verdict'],
-  cmf: ['get_product_references', 'cmf_list', 'cmf_prompt', 'cmf_render', 'grade_image', 'cmf_check_pdf', 'record_verdict'],
+  cmf: ['get_product_references', 'cmf_list', 'cmf_prompt', 'cmf_render', 'grade_image', 'cmf_check_pdf', 'record_verdict', 'cmf_pdf'],
 }
 
 export function cap(text: string, max: number = TEXT_CAP): string {
   return text.length <= max ? text : `${text.slice(0, max)}\n\n[cut at ${max} characters of ${text.length}]`
 }
 
-export function kitHeader(loaded: Pick<LoadedKit, 'kit' | 'ref' | 'commit' | 'stale' | 'staleReason'>) {
+export function kitHeader(loaded: Pick<LoadedKit<AnyKit>, 'kit' | 'ref' | 'commit' | 'stale' | 'staleReason'>) {
   return {
     kit_version: loaded.kit.version,
     kit_tag: loaded.kit.tag,
@@ -50,7 +50,7 @@ export interface ProductListing {
   tools: string[]
 }
 
-export function listProducts(kit: Kit, available: (tool: string) => boolean, opts: { isAdmin?: boolean } = {}): ProductListing[] {
+export function listProducts(kit: AnyKit, available: (tool: string) => boolean, opts: { isAdmin?: boolean } = {}): ProductListing[] {
   return servedProducts(kit, opts).map(({ slug, product }) => {
     const p = product as KitProduct & { looks?: Record<string, unknown> }
     return {
@@ -61,7 +61,7 @@ export function listProducts(kit: Kit, available: (tool: string) => boolean, opt
       command: product.command,
       aliases: product.aliases,
       rubric_version: product.rubric.version,
-      reporting_only: product.rubric.reporting_only,
+      reporting_only: reportsOnly(product.rubric),
       colourways: product.grading?.colourways ?? [],
       views: product.grading?.views ?? [],
       looks: p.looks ? Object.keys(p.looks) : [],
@@ -78,7 +78,7 @@ export function listProducts(kit: Kit, available: (tool: string) => boolean, opt
 export function rubricMarkdown(slug: string, product: KitProduct): string {
   const r = product.rubric
   const lines = [
-    `# ${product.name}: rubric ${r.version ?? '?'}${r.reporting_only ? ' (reporting only: no check blocks)' : ''}`,
+    `# ${product.name}: rubric ${r.version ?? '?'}${reportsOnly(r) ? ' (no check blocks yet)' : ''}`,
     '',
     `Chat reads families ${r.chat_families.join(', ') || 'all'}. The decider decides; a grade is a floor, never an approval.`,
     '',
@@ -96,7 +96,7 @@ export function rubricMarkdown(slug: string, product: KitProduct): string {
 export type KitSection = 'summary' | 'products' | 'prompting' | 'feedback' | `rubric:${string}`
 
 export function kitSection(
-  loaded: LoadedKit,
+  loaded: LoadedKit<AnyKit>,
   section: string,
   available: (tool: string) => boolean,
   opts: { isAdmin?: boolean } = {}
@@ -106,11 +106,13 @@ export function kitSection(
   if (section === 'summary') {
     const products = listProducts(kit, available, opts).map((p) => ({ slug: p.slug, name: p.name, kind: p.kind, status: p.status, rubric: p.rubric_version }))
     const text = [
-      `Creative kit ${kit.version} (${loaded.ref}, commit ${loaded.commit.slice(0, 7)})${loaded.stale ? ` — STALE: ${loaded.staleReason}` : ''}.`,
+      `${kit.plugin === 'product-design' ? 'Product kit (Loop Product Design)' : 'Creative kit'} ${kit.version} (${loaded.ref}, commit ${loaded.commit.slice(0, 7)})${loaded.stale ? ` — STALE: ${loaded.staleReason}` : ''}.`,
       `Products: ${products.map((p) => `${p.name} (${p.slug}, ${p.status}, rubric ${p.rubric ?? '?'})`).join('; ')}.`,
       kit.prompting ? `Prompting: genai-prompting ${kit.prompting.version ?? '?'}, Loop edition, ${kit.prompting.lessons.length} lessons.` : 'Prompting: not in this kit.',
-      `Judges: ${kit.judges.surfaces.join(', ')}; Vesper's reads are labelled '${kit.judges.vesper_surface}' and never pooled with another judge.`,
-      `Comment lines are written [${kit.comment_line.prefix} <product> <date>] and read under ${[kit.comment_line.prefix, ...kit.comment_line.reads_also].join(' or ')}.`,
+      `Judges: ${kitGraders(kit).surfaces.join(', ')}; Vesper's reads are labelled '${kitGraders(kit).vesper_surface}' and never pooled with another judge.`,
+      kit.comment_line
+        ? `Comment lines are written [${kit.comment_line.prefix} <product> <date>] and read under ${[kit.comment_line.prefix, ...kit.comment_line.reads_also].join(' or ')}.`
+        : 'No comment lines: answers to these products are recorded in Vesper.',
     ].join('\n')
     return { text, structured: { ...header, products, prompting_version: kit.prompting?.version ?? null } }
   }
@@ -127,6 +129,7 @@ export function kitSection(
     }
   }
   if (section === 'feedback') {
+    if (!kit.feedback) return { text: 'This kit carries no feedback block.', structured: { ...header, feedback: null } }
     return { text: cap(JSON.stringify(kit.feedback, null, 2)), structured: { ...header, feedback: kit.feedback } }
   }
   if (section.startsWith('rubric:')) {
@@ -191,7 +194,7 @@ function pick<T>(map: Record<string, T> | undefined, key: string | undefined, fa
  * invents an order.
  */
 export function referencePlan(
-  kit: Kit,
+  kit: AnyKit,
   query: ReferenceQuery,
   rows: readonly PinRow[],
   opts: { isAdmin?: boolean } = {}

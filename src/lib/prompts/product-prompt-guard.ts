@@ -11,7 +11,9 @@
  * product's aliases from the plugin repository), the three fingerprints are
  * copied here from their sources:
  *   - products/eclipse/skill/references/generation.md, skeleton v3
- *   - workstreams/cmf/plugin/skills/review/references/prompt-template.md
+ *   - the CMF template, `skills/cmf-review/references/prompt-template.md` in Loop Product
+ *     Design (tensalir/loop-product-plugins; in Loop Studio Design until 2026-09-29): the
+ *     product kit's `products.cmf.template.fingerprint`, held equal by tests/creative-kit.spec.ts
  *   - products/packaging/skill/references/finishing.md, skeleton v2
  */
 
