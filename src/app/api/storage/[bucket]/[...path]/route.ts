@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import { getAuthUser } from '@/lib/api/auth'
+import { prisma } from '@/lib/prisma'
 import { handleStorageRequest } from '@/lib/storage/browser-route'
+import { mediaAccessProblem } from '@/lib/storage/media-access'
 
 /**
  * GET /api/storage/<bucket>/<path>: a stored render, video or product render for a signed-in
@@ -18,7 +20,11 @@ async function serve(request: NextRequest, { params }: Params): Promise<Response
     {
       async authenticate() {
         const { user, error, statusCode } = await getAuthUser()
-        return user ? null : { status: statusCode ?? 401, error: error || 'Unauthorized' }
+        if (!user) return { status: statusCode ?? 401, error: error || 'Unauthorized' }
+        // Signed in is not enough: sign-up is not gated, so a Loop address (confirmed) or admin.
+        const profile = await prisma.profile.findUnique({ where: { id: user.id }, select: { role: true } })
+        const problem = mediaAccessProblem(user, profile?.role)
+        return problem ? { status: 403, error: problem } : null
       },
     }
   )

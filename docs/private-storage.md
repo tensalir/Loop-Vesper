@@ -214,3 +214,12 @@ and private: the browser route (redirect, download, resize, refusal without a si
 the MCP dispatcher (markdown image, links, structured result, one signing call; records left
 canonical), the model wrapper (nested inputs, data and provider URLs untouched, the request not
 mutated), Vesper's own reads (allowlist, reference download), and the fallback when signing fails.
+
+## Who may open stored media
+
+The browser route asks for more than a sign-in. Accounts are not approved by anyone, so a new
+account could otherwise open any file whose path it knows. `src/lib/storage/media-access.ts`
+lets in a confirmed email on `MEDIA_ACCESS_DOMAINS` (default `loopearplugs.com`) or an admin; anyone
+else gets a 403. On 2026-09-30 Vesper had 58 accounts: 54 on loopearplugs.com, plus four others
+(none active in 60 days except the owner's own, which is an admin). To let a partner in, add their
+domain to `MEDIA_ACCESS_DOMAINS` in Vercel.

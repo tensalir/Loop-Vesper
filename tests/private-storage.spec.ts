@@ -17,6 +17,7 @@ import {
   type StorageSigner,
 } from '../src/lib/storage/access'
 import { handleStorageRequest, REDIRECT_MAX_AGE_SECONDS } from '../src/lib/storage/browser-route'
+import { mediaAccessProblem, mediaAccessDomains } from '../src/lib/storage/media-access'
 import { storageImageLoader } from '../src/lib/storage/image-loader'
 import { fetchAllowlisted, allowedHostPatterns } from '../src/lib/net/fetch-allowlisted'
 import { downloadReferenceImageAsDataUrl } from '../src/lib/reference-images'
@@ -318,5 +319,32 @@ test.describe("Vesper's own server reads", () => {
     expect(await signStoredUrl(`${BASE}/storage/v1/object/sign/generated-images/${RENDER_PATH}?token=old`, 60, { signer: broken })).toBe(RENDER)
     expect(await signStoredUrlsDeep({ a: RENDER, b: [PROVIDER] }, 60, { signer: broken })).toEqual({ a: RENDER, b: [PROVIDER] })
     expect(await signStoredUrl(PROVIDER, 60, { signer: broken })).toBe(PROVIDER)
+  })
+})
+
+test.describe('who may open stored media, beyond being signed in', () => {
+  const CONFIRMED = '2026-01-01T00:00:00Z'
+  const env = (v?: string) => ({ ...(v === undefined ? {} : { MEDIA_ACCESS_DOMAINS: v }) }) as unknown as NodeJS.ProcessEnv
+
+  test('a confirmed Loop address may; the domain is matched exactly and case-insensitively', () => {
+    expect(mediaAccessProblem({ email: 'Someone@LoopEarplugs.com', email_confirmed_at: CONFIRMED }, 'user', env())).toBeNull()
+    expect(mediaAccessProblem({ email: 'someone@mail.loopearplugs.com', email_confirmed_at: CONFIRMED }, 'user', env())).not.toBeNull()
+    expect(mediaAccessProblem({ email: 'someone@loopearplugs.com.evil.io', email_confirmed_at: CONFIRMED }, 'user', env())).not.toBeNull()
+  })
+
+  test('any other address, an unconfirmed Loop address, or no email is refused', () => {
+    expect(mediaAccessProblem({ email: 'stranger@gmail.com', email_confirmed_at: CONFIRMED }, 'user', env())).toBe('Stored media is open to Loop accounts only')
+    expect(mediaAccessProblem({ email: 'someone@loopearplugs.com', email_confirmed_at: null }, 'user', env())).toBe('Stored media needs a confirmed email address')
+    expect(mediaAccessProblem({ email: null }, 'user', env())).not.toBeNull()
+  })
+
+  test('an admin may, whatever the address', () => {
+    expect(mediaAccessProblem({ email: 'owner@elsewhere.ai', email_confirmed_at: CONFIRMED }, 'admin', env())).toBeNull()
+  })
+
+  test('MEDIA_ACCESS_DOMAINS widens the list, and * switches the domain rule off', () => {
+    expect(mediaAccessProblem({ email: 'x@partner.com', email_confirmed_at: CONFIRMED }, 'user', env('loopearplugs.com, partner.com'))).toBeNull()
+    expect(mediaAccessProblem({ email: 'x@anything.io', email_confirmed_at: null }, 'user', env('*'))).toBeNull()
+    expect(mediaAccessDomains(env(''))).toEqual(['loopearplugs.com'])
   })
 })
