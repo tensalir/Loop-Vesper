@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { SERVER_READ_TTL_SECONDS, signStoredUrl } from '@/lib/storage/access'
+import { providerFetchHeaders } from '@/lib/storage/provider-fetch'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -116,13 +117,12 @@ export async function uploadUrlToStorage(
     } else if (url.startsWith('http://') || url.startsWith('https://')) {
       // Regular HTTP/HTTPS URL; one of our own stored files is read through a signature.
       response = await fetch(await signStoredUrl(url, SERVER_READ_TTL_SECONDS), {
-        headers: {
-          ...(opts?.headers || {}),
-        },
+        headers: providerFetchHeaders(url, opts?.headers),
       })
-      
+
       if (!response.ok) {
-        throw new Error(`Failed to fetch from URL: ${response.statusText}`)
+        // The status too: "Forbidden" alone reads as a storage problem, and this is the provider.
+        throw new Error(`Failed to fetch from URL: ${response.status} ${response.statusText}`)
       }
     } else {
       throw new Error(`Unsupported URL format: ${url}`)
