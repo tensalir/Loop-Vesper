@@ -259,18 +259,25 @@ Connect: Claude sends you to Vesper's sign-in (OAuth 2.1), you allow it on
   120) model reads by `grade_image` (three per grade by default). It is
   counted from what Vesper already records: MCP generations
   (`parameters.source = 'mcp'`, one per output, not the code-built packaging
-  mockup), Vesper's own grades in `creative_grades`, and calls still running
-  in `headless_mcp_jobs`. The check runs before anything is paid for; a
-  refusal is an ordinary tool result (`isError`) saying how many were used,
-  the limit and roughly when the next one frees up. Admins are not limited,
-  the web app is not affected, and `0` turns that kind of work off through
-  Claude for everyone, admins included. `MCP_DAILY_COST_CAP_USD` still applies
-  on top when set.
+  mockup), the CMF renders the web CMF Studio made (`source = 'web'`,
+  `toolName = 'cmf_render'`), Vesper's own grades in `creative_grades` from
+  either door, and calls still running in `headless_mcp_jobs` and
+  `cmf_web_jobs`. The CMF Studio checks the same allowance before its renders
+  and grades, so a person has one count across both doors, not one each. The
+  check runs before anything is paid for; a refusal is an ordinary tool result
+  (`isError`; a 429 in the web) saying how many were used, the limit and
+  roughly when the next one frees up, and names both doors when the Studio's
+  work is in the count. Admins are not limited. The rest of the web app is not
+  affected. `0` turns that kind of work off through Claude for everyone, admins
+  included (the shared organisation token is an admin's), and in the CMF
+  Studio for everyone but admins. `MCP_DAILY_COST_CAP_USD` still applies on top
+  when set.
 
 ### CMF supplier PDFs come from `cmf_pdf`
 
-Supplier CMF PDFs are made by `cmf_pdf`, not by the web CMF Studio's export
-(which is left as it was). Claude passes identifiers only: a workbook upload
+Supplier CMF PDFs are made by `cmf_pdf`, or by the same step in the CMF
+Studio's PDF tab (`POST /api/cmf/v2/pdf`); the Studio's old packet export is
+retired. Claude passes identifiers only: a workbook upload
 (`import_id`, the file the CMF Studio keeps at `cmf/{owner}/imports/{id}.xlsx`),
 a `tab`, `sku_columns` and one approved render per SKU (`output_ids`). Vesper
 reads every value from that upload's cells.
@@ -302,8 +309,8 @@ reads every value from that upload's cells.
 ### CMF is the team's, in both doors
 
 Every CMF step is one service, `src/lib/creative/cmf/service.ts`, which the
-Claude tools call and the web CMF Studio will call; each takes the person and
-the door, and the gate is CMF access on the profile, read fresh.
+Claude tools and the web CMF Studio both call (next section); each takes the
+person and the door, and the gate is CMF access on the profile, read fresh.
 
 - **One team project.** Every CMF render, from Claude or the CMF Studio, is
   saved in the CMF team project (`projects.system_key = 'cmf'`, one per
@@ -311,8 +318,8 @@ the door, and the gate is CMF access on the profile, read fresh.
   `parameters.creative` and the door in `parameters.source` (`mcp` or `web`).
   Every profile with CMF access is a member (a render joins its maker; the
   script below adds everyone once); one who loses the access is dropped the
-  next time anyone renders. The daily allowance still
-  counts a Claude render (`source = 'mcp'`, by its maker).
+  next time anyone renders. The daily allowance counts a render from either
+  door against its maker, once.
 - **What the team sees.** `cmf_list` shows the team's newest renders with their
   grade, the decider's answer and whether each can go on a supplier PDF, and
   the newest supplier PDFs. `grade_image` and `cmf_pdf` take any of the team's
@@ -330,6 +337,69 @@ the door, and the gate is CMF access on the profile, read fresh.
   (a dry run; `--apply` to act, `--owner <profile id>` for the project's owner).
 - **The manifests.** `export_creative_records` with `kind: manifests` now also
   serves every `cmf_render`'s manifest lines, from either door.
+
+### One CMF, two doors
+
+The owner ruled (2026-09-30) that the headless engine is the behaviour, in
+Claude and in the web alike. There is one CMF: the service. Claude's tools
+(`src/lib/headless/tools/cmf.ts`, `grade_image` and `record_verdict` for
+product `cmf`) and the web CMF Studio's routes
+(`src/lib/creative/cmf/web-door.ts`, served at `/api/cmf/v2/*`) are two thin
+doors onto it. Both parse their arguments with the same schemas
+(`src/lib/creative/cmf/args.ts`), and a refusal is the service's own sentence
+in both.
+
+| Step | Claude | CMF Studio | Service |
+|---|---|---|---|
+| List | `cmf_list` | `GET list` | `listCmf` |
+| Prompt | `cmf_prompt` | `POST prompt` | `cmfPrompt` |
+| Render | `cmf_render` | `POST render`, then `GET render/{job}` | `planRender`, `runRender` |
+| Grade | `grade_image` (product `cmf`) | `POST grade` | `planGrade`, `runGrade` |
+| Answer | `record_verdict` (product `cmf`) | `POST verdict` | `recordCmfVerdict` |
+| Supplier PDF | `cmf_pdf` | `POST pdf` | `supplierPdf` |
+| Check a PDF | `cmf_check_pdf` | `POST check-pdf` | `checkPdf` |
+| Upload a workbook | (names it by `import_id`) | `POST uploads`, `GET uploads/{id}` | `uploadWorkbook`, `readUpload` |
+| Clowns and keys | (in `cmf_list`) | `GET keys` | `cmfKeys` |
+
+- **The web actor.** The signed-in profile, door `web`, no credential, every
+  model. Claude's is the credential's owner, door `mcp`. Records say which
+  door made them (`parameters.source`, `cmf_supplier_pdfs.door`, a grade or
+  answer with no credential); nothing else about them differs.
+- **What only a door does.** Claude runs a long call inline or as a
+  `headless_mcp_jobs` job. The web plans and refuses a render in the request,
+  answers 202, and draws after the response in a `cmf_web_jobs` job the page
+  polls; a grade waits in the request. Both check the one daily allowance.
+- **The CMF Studio's tabs.** Workbook (upload the export; its tabs, SKUs by
+  column letter and each key's state), Render (the exact prompt, read only,
+  then the render), Review (the team's renders with their grade, every answer,
+  a yes or no with why, and whether it counts as the decider's), PDF (the
+  supplier PDF from eligible renders, its check, and past PDFs), History (made
+  the old way, read only), and Clowns and keys (from the kit, read only).
+- **Retired for CMF.** The web's own prompt (lighting presets, refinement
+  text, a model rewrite), clown rotation and the Replicate fallback, the
+  approve flag, `componentSpecs` editing, clown replacement and legend edits,
+  and the packet PDF export. Their routes answer `410` with one line naming
+  the step that replaced them (`src/lib/cmf/retired.ts`); the read routes stay
+  and the tables are kept. `src/lib/cmf/{prompt,render,pdf}.ts` are imported
+  by no route or component. Nothing made the old way goes into a supplier PDF.
+- **Adding or changing a step.** The service first
+  (`src/lib/creative/cmf/service.ts`, with its reach in `CmfServiceDeps` and a
+  test in `tests/cmf-service.spec.ts`). Then both doors: the tool in
+  `src/lib/headless/tools/cmf.ts` and the route in `web-door.ts` with its
+  one-line `src/app/api/cmf/v2/*/route.ts`, parsing the same schema in
+  `args.ts`. Then parity: a case in `tests/cmf-parity.spec.ts` holding the two
+  answers equal. A step that only one door has is a drift; say why in the
+  service if it must be.
+- **The drift guard.** `tests/cmf-parity.spec.ts` (every route against its
+  tool, on one kit, upload and person), `tests/cmf-import-lint.spec.ts` (no
+  web CMF file imports `src/lib/cmf/{prompt,render,pdf,xlsx}` or
+  `src/lib/models`), and `tests/cmf-tool-golden.spec.ts` (what Claude reads,
+  byte for byte; rewrite it only on purpose, with `CMF_GOLDEN_WRITE=1`).
+- **Before deploying.** Apply both migrations, in order:
+  `20260930120000_cmf_team_records` and then `20260930140000_cmf_web_jobs`
+  (`npx prisma db execute --file <migration.sql> --schema prisma/schema.prisma`),
+  deploy, then run `npx tsx scripts/cmf-team-project.ts` as a dry run and
+  again with `--apply`.
 
 ### Configuring Cursor
 

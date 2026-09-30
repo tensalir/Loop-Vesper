@@ -15,7 +15,8 @@
  *   cmf_pdf        the supplier PDF, built by code from one upload and Damien's approved renders,
  *                  read back and checked before it is saved (`supplier-pdf-run.ts`)
  *
- * Supplier PDFs come from cmf_pdf. The web CMF Studio's export is left as it was.
+ * Supplier PDFs come from cmf_pdf, or the same step in the CMF Studio's PDF tab; the Studio's old
+ * packet export is retired.
  *
  * Every render, grade, answer and supplier PDF is the CMF team's: renders are saved in the team
  * project (`team-records.ts`), cmf_list shows the team's newest renders and PDFs from either door,
