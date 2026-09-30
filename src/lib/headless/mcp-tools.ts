@@ -347,7 +347,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'grade_image',
     title: 'Grade a picture of a Loop product',
     description:
-      "Vesper's scripted read of one picture against its product's rubric: three reads with the product's grader words and pinned references from the creative kit, majority per check, the verdict ladder. Labelled judge <model> vesper x3; advisory, the product's decider decides; never pooled with your own read (record that with record_grade). Give exactly one picture: output_id (a draw of yours), frontify_asset_id or an https image_url. A draw of yours brings its colourway and view; otherwise name them, or the kit default is assumed and the answer says so. When most reads error the result is ERROR, not a verdict. For a CMF render (product cmf) name the tab, column and clown key: it is read against its sheet row and its clown, the clown attached second, reporting only while the CMF rubric is; Vesper measures nothing on the pixels. For packaging (product packaging) name the look, box and colourway, or give a packaging draw of yours: it is read against the cell's composite built in code, the white render, the dieline and the front panel; packaging's grader words are uncalibrated and every result says so. Needs packaging access for packaging.",
+      "Vesper's scripted read of one picture against its product's rubric: three reads with the product's grader words and pinned references from the creative kit. Labelled judge <model> vesper x3; advisory, the product's decider decides; never pooled with your own read (record that with record_grade). Give exactly one picture: output_id (a draw of yours), frontify_asset_id or an https image_url. A draw of yours brings its colourway and view; otherwise name them, or the kit default is assumed and the answer says so. When most reads error the result is ERROR, not a verdict. For a CMF render (product cmf) name the tab, column and clown key: it is read against its sheet row and its clown, the clown attached second, reporting only while the CMF rubric is; Vesper measures nothing on the pixels. With import_id it is read against that workbook upload's row instead of the kit's, and a render made from the upload needs only its output_id; any CMF render of the team's can be graded, whoever made it. Needs CMF access for CMF. For packaging (product packaging) name the look, box and colourway, or give a packaging draw of yours: it is read against the cell's composite built in code, the white render, the dieline and the front panel; packaging's grader words are uncalibrated and every result says so. Needs packaging access for packaging.",
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
@@ -355,10 +355,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       required: ['product'],
       properties: {
         product: { type: 'string', description: 'slug or name, e.g. eclipse' },
-        output_id: { type: 'string', description: 'an output of yours in Vesper' },
+        output_id: { type: 'string', description: "an output of yours in Vesper, or any of the CMF team's renders" },
         frontify_asset_id: { type: 'string', description: 'a Frontify asset id' },
         image_url: { type: 'string', description: 'an https URL on Vesper\'s fetch allowlist' },
         colourway: { type: 'string', maxLength: 40, description: 'a colourway you name is a trusted claim' },
+        import_id: { type: 'string', description: "CMF: the workbook upload whose row the render is read against (the one it was made from); its tab, column and clown come from the render's record" },
         view: { type: 'string', maxLength: 40 },
         runs: { type: 'integer', minimum: 1, maximum: 5, default: 3 },
         tab: { type: 'string', description: 'CMF: the sheet tab, e.g. "Experience 2 CC" (needed for product cmf)' },
@@ -399,7 +400,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'record_verdict',
     title: "Record the decider's answer",
     description:
-      "Records a decider's yes or no on one picture, with their remark verbatim and the checks it names (decoded, or decoded_unconfirmed when they have not confirmed your reading), in the signed-in person's name, against the picture's latest grade (or grade_id). For a Frontify asset of a product whose answers go to Frontify, returns the exact comment line to post with the person's own Frontify connector; otherwise it is recorded in Vesper. Never approves, moves or tags anything.",
+      "Records a decider's yes or no on one picture, with their remark verbatim and the checks it names (decoded, or decoded_unconfirmed when they have not confirmed your reading), in the signed-in person's name, against the picture's latest grade (or grade_id). For a Frontify asset of a product whose answers go to Frontify, returns the exact comment line to post with the person's own Frontify connector; otherwise it is recorded in Vesper. An answer on a CMF render (product cmf) needs CMF access; only the answer of the decider the kit names goes on a supplier PDF. Never approves, moves or tags anything.",
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: 'object',
@@ -527,7 +528,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'cmf_list',
     title: 'What CMF renders can be made',
     description:
-      "The CMF sheet's tabs as the creative kit carries them: per tab, the SKU columns in scope (Product Name filled), the clown keys of its product (draft, named, or confirmed by Damien), and which tab, column and key have a prompt ready or refused, with the reasons. Name a tab to list every SKU column, in scope or not, with why. Needs CMF access.",
+      "The CMF sheet's tabs as the creative kit carries them: per tab, the SKU columns in scope (Product Name filled), the clown keys of its product (draft, named, or confirmed by Damien), and which tab, column and key have a prompt ready or refused, with the reasons. Name a tab to list every SKU column, in scope or not, with why. Also the newest workbook uploads, and the CMF team's newest renders from Claude and the CMF Studio (with their grade, the decider's answer and whether each can go on a supplier PDF) and supplier PDFs. Needs CMF access.",
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: 'object',
@@ -558,7 +559,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'cmf_render',
     title: 'Render a colourway on its clown',
     description:
-      "Sends the payload for one tab, SKU column and clown key the way the repository's render.py sends it: the clown the only image, the prompt byte for byte (no rewrite, no lighting clause), the clown's aspect, 2K unless asked, one model call per image. With import_id and sku_column the prompt is filled by code from that workbook upload, and the render records the upload, the workbook's sha256 and the SKU's cells, so cmf_pdf can put it on a supplier PDF; without, it sends the kit's pre-built payload. Refuses before paying when the key is a draft, a cell is missing, the template or the prompt is not the payload's, or the clown's bytes are not the ones the key was sampled from. Identifiers only, never a cell value. Saved under Claude / CMF. Grade each render with grade_image next; Damien decides. Needs CMF access.",
+      "Sends the payload for one tab, SKU column and clown key the way the repository's render.py sends it: the clown the only image, the prompt byte for byte (no rewrite, no lighting clause), the clown's aspect, 2K unless asked, one model call per image. With import_id and sku_column the prompt is filled by code from that workbook upload, and the render records the upload, the workbook's sha256 and the SKU's cells, so cmf_pdf can put it on a supplier PDF; without, it sends the kit's pre-built payload. Refuses before paying when the key is a draft, a cell is missing, the template or the prompt is not the payload's, or the clown's bytes are not the ones the key was sampled from. Identifiers only, never a cell value. Saved in the CMF team's project, which everyone with CMF access sees in Claude and in the CMF Studio. Grade each render with grade_image next; Damien decides. Needs CMF access.",
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
@@ -602,7 +603,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'cmf_pdf',
     title: 'Make the supplier CMF PDF',
     description:
-      "Builds the supplier CMF PDF by code from one workbook upload in Vesper: one render/spec page per SKU, then one shared part-breakdown page (the clown, a legend from the confirmed clown key, material, finish and technique per component; no per-colourway Pantone). Every value is printed as its cell holds it; the header's Edit date, Drawn and Checked are the sheet's cells; every page's footer names the workbook file, its modified time and sha256. Each output_id must be a cmf_render made from a workbook upload with Damien's yes through record_verdict; a web CMF Studio attempt is refused, and so is a render whose cells have changed since (the changed fields are named). Before saving, the PDF is read back and compared with the same upload; any difference or empty required cell refuses, naming SKU, component, field, cell and both values, and nothing is saved. On a clean check it is stored beside the upload and its link returned. Identifiers only: import_id, tab, sku_columns, output_ids. Needs CMF access.",
+      "Builds the supplier CMF PDF by code from one workbook upload in Vesper: one render/spec page per SKU, then one shared part-breakdown page (the clown, a legend from the confirmed clown key, material, finish and technique per component; no per-colourway Pantone). Every value is printed as its cell holds it; the header's Edit date, Drawn and Checked are the sheet's cells; every page's footer names the workbook file, its modified time and sha256. Each output_id must be a CMF render of the team's (from Claude or the CMF Studio, whoever made it) made from a workbook upload, with Damien's yes through record_verdict; an attempt the web CMF Studio made the old way is refused, and so is a render whose cells have changed since (the changed fields are named). Before saving, the PDF is read back and compared with the same upload; any difference or empty required cell refuses, naming SKU, component, field, cell and both values, and nothing is saved. On a clean check it is stored beside the upload, listed for the team (cmf_list shows it), and its link returned. Identifiers only: import_id, tab, sku_columns, output_ids. Needs CMF access.",
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: 'object',

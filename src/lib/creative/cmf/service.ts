@@ -11,18 +11,25 @@
  * records. The owner ruled that the headless engine is the behaviour, so it moved here, unchanged,
  * and both doors call it. A CMF step is changed here or nowhere.
  *
- *   listCmf          the kit's tabs, SKUs, keys and ready prompts, and the newest uploads
+ *   listCmf          the kit's tabs, SKUs, keys and ready prompts, the newest uploads, and the
+ *                    team's newest renders (grade, answers, whether each can go on a supplier PDF)
+ *                    and supplier PDFs, from either door
  *   cmfPrompt        Damien's template filled by code (an upload's cells, or the kit's payload)
  *   planRender       every refusal before anything is paid for; then runRender draws and records
- *   planGrade        the kit's grader for one render; runGrade reads it and stores the grade
+ *                    the render in the CMF team project (`team-records.ts`)
+ *   planGrade        the kit's grader for one render, against the kit's row or an upload's
+ *                    (`grading-row.ts`); runGrade reads it and stores the grade
  *   recordCmfVerdict a person's yes or no on a render, and whether the kit names them its decider
- *   supplierPdf      the supplier PDF from one upload and approved renders, checked, then saved
+ *   supplierPdf      the supplier PDF from one upload and approved renders of the team's, checked,
+ *                    then saved and listed (`cmf_supplier_pdfs`)
  *   checkPdf         every value on a CMF PDF against its sheet cell
  *
  * Every function takes the actor (who asks, through which door) and applies one gate: CMF access
- * on the profile (`cmf_access`, or an admin), read fresh on every call. What a door does beyond
- * that (parsing its arguments, the words it answers with, running a long call as a job) stays in
- * the door. Pure where it can be; everything it reaches is in `CmfServiceDeps`, so tests swap it.
+ * on the profile (`cmf_access`, or an admin), read fresh on every call. Every render, grade, answer
+ * and supplier PDF is the whole CMF team's: any CMF actor reads and uses any of them, whoever made
+ * it and through whichever door. What a door does beyond that (parsing its arguments, the words it
+ * answers with, running a long call as a job) stays in the door. Pure where it can be; everything
+ * it reaches is in `CmfServiceDeps`, so tests swap it.
  */
 
 import { randomUUID } from 'node:crypto'
@@ -53,7 +60,6 @@ import type { GradeDeps, GradeOutcome } from '@/lib/creative/grade'
 import { prismaCreativeRecords, type CreativeRecordStore, type GradeRecord } from '@/lib/creative/records'
 import { fetchAllowlisted } from '@/lib/net/fetch-allowlisted'
 import { CMF_STORAGE_BUCKET } from '@/lib/cmf/storage'
-import { recordMcpGeneration, type RecordMcpGenerationInput, type RecordMcpGenerationResult } from '@/lib/headless/record-generation'
 import { assertModelAllowed } from '@/lib/headless/tools/types'
 import { CmfError, cmfKit, inScopeColumns, keysForTab, payloadFor, resolveKey, resolveTab, type CmfGradingParts, type CmfKit, type CmfPayloadEntry, type CmfSpec } from './kit-cmf'
 import {
@@ -71,12 +77,14 @@ import {
 import { checkPdfInVesper, checkPdfOnWorker, sha256Hex, type SpecCheckResult } from './check-pdf'
 import { workerConfigFromEnv, type WorkerConfig } from './worker-client'
 import type { ClownKey, Spec } from './spec-diff'
-import { PromptRefusal } from './prompt-fill'
+import { PromptRefusal, skuSpecChanges, skuSpecView, type ClownKeyFile, type SkuSpecView } from './prompt-fill'
 import { buildWorkbookPayload } from './workbook-payload'
-import { loadStoredWorkbook, type WorkbookImportRow, type WorkbookSourceDeps } from './workbook-source'
+import { loadStoredWorkbook, workbookTab, type WorkbookImportRow, type WorkbookSourceDeps } from './workbook-source'
 import { CmfPdfRefused, deciderEmails, runCmfPdf, type CmfPdfArgs, type CmfPdfDeps, type CmfPdfResult, type RenderOutputRow, type VerdictRow } from './supplier-pdf-run'
 import type { SupplierPdfImage } from './supplier-pdf'
 import { checkCmfTarget, gradeCmfCandidate } from './grading'
+import { gradingPartsFor, type PantoneLookup } from './grading-row'
+import { isCmfRender, prismaCmfTeamStore, recordCmfRender, type CmfTeamStore, type SupplierPdfRecord, type TeamRenderRow } from './team-records'
 
 // ------------------------------------------------------------------ the actor
 
@@ -133,8 +141,8 @@ export interface CmfServiceDeps {
   }
   /** One CMF grade's reads: the candidate and the clown as parts, the model reads. */
   grader(env: NodeJS.ProcessEnv, inlineLimit: number, models: readonly string[]): Pick<GradeDeps, 'candidatePart' | 'pinPart' | 'read'>
-  /** A render's generation and outputs, written where the web app shows them. */
-  recordRender(input: RecordMcpGenerationInput): Promise<RecordMcpGenerationResult>
+  /** The CMF team's records: the team project every render is saved in, and the supplier PDFs. */
+  team: CmfTeamStore
 }
 
 async function emailFromAuth(profileId: string, env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
@@ -249,7 +257,7 @@ export const productionCmfServiceDeps: CmfServiceDeps = {
       read: gradeReader(env, models),
     }
   },
-  recordRender: (input) => recordMcpGeneration(input),
+  team: prismaCmfTeamStore,
 }
 
 let deps: CmfServiceDeps = productionCmfServiceDeps
@@ -332,11 +340,188 @@ export interface CmfListedTab {
   payloads: Array<{ id: string; column: string; sku_name: string | null; key: string; status: string; key_confirmed: boolean | null; reasons: string[] }>
 }
 
+/** A CMF render of the team's, from either door, with its newest grade and the answers on it. */
+export interface CmfTeamRender {
+  output_id: string
+  generation_id: string
+  url: string
+  made_at: string
+  made_by: string | null
+  door: CmfDoor | null
+  tab: string | null
+  column: string | null
+  sku_name: string | null
+  key: string | null
+  lane: string | null
+  model: string | null
+  kit_tag: string | null
+  import_id: string | null
+  grade: { grade_id: string; verdict: string; judge: string; judge_model: string | null; reads: number; at: string } | null
+  /** Every answer on it, newest first; `decider` when the kit names the person as its CMF decider. */
+  answers: Array<{ answer: string; remark: string | null; by: string | null; decider: boolean; at: string }>
+  /** The newest answer of a decider the kit names: the one a supplier PDF counts. */
+  decider_answer: { answer: string; remark: string | null; by: string; at: string } | null
+  /** Whether cmf_pdf would take it as far as the render goes (the upload's cells are checked when it runs). */
+  pdf_eligible: boolean
+  pdf_why: string | null
+}
+
+/** A supplier PDF of the team's, from either door. */
+export interface CmfListedPdf {
+  supplier_pdf_id: string
+  file: string
+  url: string
+  tab: string
+  columns: string[]
+  output_ids: string[]
+  import_id: string
+  key: string
+  made_by: string | null
+  door: CmfDoor
+  made_at: string
+}
+
 export interface CmfListing {
   loaded: LoadedKit
   cmf: CmfKit
   tabs: CmfListedTab[]
   uploads: Array<{ import_id: string; file: string; uploaded_at: string }>
+  /** The team's newest CMF renders, from Claude and from the web, newest first. */
+  renders: CmfTeamRender[]
+  /** The team's newest supplier PDFs, newest first. */
+  supplier_pdfs: CmfListedPdf[]
+  /** What could not be read, said plainly; the rest of the listing stands. */
+  problems: string[]
+}
+
+export const TEAM_RENDERS_LISTED = 10
+export const SUPPLIER_PDFS_LISTED = 5
+
+type Json = Record<string, unknown>
+
+function creativeOf(parameters: unknown): Json {
+  const p = (parameters && typeof parameters === 'object' ? parameters : {}) as Json
+  return (p.creative && typeof p.creative === 'object' ? p.creative : {}) as Json
+}
+
+const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null)
+
+/**
+ * Why cmf_pdf would refuse a render before it reads the upload, or null when it would take it:
+ * the same rules as `runCmfPdf`.
+ */
+function pdfWhy(cmf: CmfKit, parameters: unknown, deciders: Array<{ name: string }>, deciderAnswer: CmfTeamRender['decider_answer']): string | null {
+  if (!isCmfRender(parameters) || !engineDoor(parameters)) return 'not a CMF render made by the CMF engine'
+  const c = creativeOf(parameters)
+  const wb = c.workbook as Json | undefined
+  if (!wb || !wb.sku_spec) return "made from the kit's saved copy of the sheet, not from a workbook upload"
+  if (!deciders.length) return "the product kit names no CMF decider's email"
+  if (!deciderAnswer) return `no answer from ${deciders.map((d) => d.name).join(' or ')} yet`
+  if (deciderAnswer.answer !== 'yes') return `${deciderAnswer.by}'s latest answer is ${deciderAnswer.answer}${deciderAnswer.remark ? `: "${deciderAnswer.remark}"` : ''}`
+  const keyId = str(c.key)
+  const key = keyId ? cmf.keys[keyId] : undefined
+  if (!key) return `its clown key '${keyId ?? '?'}' is not in this kit any more`
+  const keySha = str(c.key_sha256)
+  if (keySha && key.sha256 !== keySha) return `its clown key '${keyId}' changed since it was made`
+  if (key.draft) return `its clown key '${keyId}' is a draft`
+  if (!key.confirmed) return `its clown key '${keyId}' is not confirmed by Damien`
+  return null
+}
+
+/** The door a render was made through, when the CMF engine made it. */
+function engineDoor(parameters: unknown): CmfDoor | null {
+  const source = ((parameters ?? {}) as Json).source
+  return source === 'mcp' || source === 'web' ? source : null
+}
+
+/**
+ * The team's newest renders and supplier PDFs, read only; a part that cannot be read is named, not
+ * fatal. Membership of the team project is kept when someone renders, never by a listing.
+ */
+async function teamListing(cmf: CmfKit): Promise<Pick<CmfListing, 'renders' | 'supplier_pdfs' | 'problems'>> {
+  const problems: string[] = []
+  const deciders = deciderEmails(cmf)
+  let rows: TeamRenderRow[] = []
+  try {
+    const project = await deps.team.findTeamProject()
+    if (project) rows = await deps.team.recentRenders(project.id, TEAM_RENDERS_LISTED)
+  } catch (err) {
+    problems.push(`the team's renders could not be read (${(err as Error)?.message || 'unknown error'})`)
+  }
+  let pdfs: SupplierPdfRecord[] = []
+  try {
+    pdfs = await deps.team.recentSupplierPdfs(SUPPLIER_PDFS_LISTED)
+  } catch (err) {
+    problems.push(`the supplier PDFs could not be read (${(err as Error)?.message || 'unknown error'})`)
+  }
+  const emails = new Map<string, Promise<string | null>>()
+  const emailOf = (v: VerdictRow) => {
+    const k = `${v.profileId}|${v.credentialId ?? ''}`
+    if (!emails.has(k)) emails.set(k, deps.pdf.verdictEmail(v).catch(() => null))
+    return emails.get(k)!
+  }
+  const answersOf = new Map<string, VerdictRow[]>()
+  for (const r of rows) {
+    try {
+      answersOf.set(r.outputId, await deps.pdf.verdicts(r.outputId, cmf.slug))
+    } catch (err) {
+      answersOf.set(r.outputId, [])
+      problems.push(`the answers on ${r.outputId} could not be read (${(err as Error)?.message || 'unknown error'})`)
+    }
+  }
+  const people = new Set<string>([...pdfs.map((x) => x.madeBy), ...Array.from(answersOf.values()).flat().map((v) => v.profileId)])
+  const names = await deps.team.profileNames(Array.from(people)).catch(() => new Map<string, string | null>())
+  const renders: CmfTeamRender[] = []
+  for (const r of rows) {
+    const c = creativeOf(r.parameters)
+    const grade = await deps.records.latestGrade({ product: cmf.slug, outputId: r.outputId }).catch(() => null)
+    const answers: CmfTeamRender['answers'] = []
+    let deciderAnswer: CmfTeamRender['decider_answer'] = null
+    for (const v of answersOf.get(r.outputId) ?? []) {
+      const email = ((await emailOf(v)) ?? '').trim().toLowerCase()
+      const d = deciders.find((x) => x.email === email)
+      answers.push({ answer: v.answer, remark: v.remark, by: d?.name ?? names.get(v.profileId) ?? null, decider: !!d, at: v.createdAt.toISOString() })
+      if (d && !deciderAnswer) deciderAnswer = { answer: v.answer, remark: v.remark, by: d.name, at: v.createdAt.toISOString() }
+    }
+    const why = pdfWhy(cmf, r.parameters, deciders, deciderAnswer)
+    renders.push({
+      output_id: r.outputId,
+      generation_id: r.generationId,
+      url: r.fileUrl,
+      made_at: r.createdAt.toISOString(),
+      made_by: r.makerName,
+      door: engineDoor(r.parameters),
+      tab: str(c.tab),
+      column: str(c.column),
+      sku_name: str(c.sku_name),
+      key: str(c.key),
+      lane: str(c.lane),
+      model: str(c.model),
+      kit_tag: str(c.kit_tag),
+      import_id: str((c.workbook as Json | undefined)?.import_id),
+      grade: grade
+        ? { grade_id: grade.id, verdict: grade.verdict, judge: grade.judge, judge_model: grade.judgeModel, reads: grade.reads, at: grade.createdAt.toISOString() }
+        : null,
+      answers,
+      decider_answer: deciderAnswer,
+      pdf_eligible: why === null,
+      pdf_why: why,
+    })
+  }
+  const supplier_pdfs: CmfListedPdf[] = pdfs.map((x) => ({
+    supplier_pdf_id: x.id,
+    file: x.fileName,
+    url: x.url,
+    tab: x.tab,
+    columns: x.skuColumns,
+    output_ids: x.outputIds,
+    import_id: x.importId,
+    key: x.keyId,
+    made_by: names.get(x.madeBy) ?? null,
+    door: x.door,
+    made_at: x.createdAt.toISOString(),
+  }))
+  return { renders, supplier_pdfs, problems }
 }
 
 /** The kit's tabs (one, when named), their SKUs, keys and prompts, and the newest uploads. */
@@ -363,7 +548,7 @@ export async function listCmf(actor: CmfActor, args: { tab?: string }, env: Node
     out.push({ tab: spec.tab, slug, vesper_product: spec.vesper_product, skus, keys, payloads })
   }
   const uploads = (await deps.recentImports(5).catch(() => [] as WorkbookImportRow[])).map((i) => ({ import_id: i.id, file: i.fileName, uploaded_at: i.createdAt.toISOString() }))
-  return { loaded, cmf, tabs: out, uploads }
+  return { loaded, cmf, tabs: out, uploads, ...(await teamListing(cmf)) }
 }
 
 // ------------------------------------------------------------------ cmfPrompt
@@ -546,28 +731,32 @@ export async function runRender(actor: CmfActor, ready: CmfRenderReady, opts: { 
   let recorded = false
   let recordError: string | null = null
   try {
-    const result = await deps.recordRender({
-      ownerId: actor.profileId,
-      generationId,
-      stream: 'cmf',
-      modelId: vesperModelId(plan.model),
-      prompt: plan.prompt,
-      costUsd,
-      outputs: stored.map((s) => ({ url: s.url, width: s.width || null, height: s.height || null })),
-      parameters: {
-        toolName: 'cmf_render',
-        source: 'mcp',
-        credentialId: actor.credentialId,
-        mcpJobId: opts.jobId,
-        creative: cmfRenderCreative(plan, header),
-        manifest,
-        aspectRatio: plan.aspect,
-        imageSize: plan.imageSize,
-        numOutputs: stored.length,
-        ...(clownUrl ? { anchor: { kind: 'clown', id: plan.clown.id, url: clownUrl, sha256: plan.clown.sha256 } } : {}),
-        estimatedCostUsd: costUsd,
+    // In the CMF team's project, whichever door: the same `parameters.creative`, the door named.
+    const result = await recordCmfRender(
+      {
+        ownerId: actor.profileId,
+        generationId,
+        source: actor.door,
+        modelId: vesperModelId(plan.model),
+        prompt: plan.prompt,
+        costUsd,
+        outputs: stored.map((s) => ({ url: s.url, width: s.width || null, height: s.height || null })),
+        parameters: {
+          toolName: 'cmf_render',
+          source: actor.door,
+          credentialId: actor.credentialId,
+          mcpJobId: opts.jobId,
+          creative: cmfRenderCreative(plan, header),
+          manifest,
+          aspectRatio: plan.aspect,
+          imageSize: plan.imageSize,
+          numOutputs: stored.length,
+          ...(clownUrl ? { anchor: { kind: 'clown', id: plan.clown.id, url: clownUrl, sha256: plan.clown.sha256 } } : {}),
+          estimatedCostUsd: costUsd,
+        },
       },
-    })
+      deps.team
+    )
     outputIds = result.outputIds
     recorded = true
   } catch (err) {
@@ -589,13 +778,19 @@ export async function runRender(actor: CmfActor, ready: CmfRenderReady, opts: { 
 
 // ------------------------------------------------------------------ planGrade, runGrade
 
-/** A CMF render to grade: its sheet row and clown key, and the picture. */
+/**
+ * A CMF render to grade: its sheet row and clown key, and the picture. With `import_id` the row is
+ * that upload's, built by code from the same parse the prompt was filled from; a render made from
+ * an upload records which, and its tab, column and key, so those may be left out. Without it the
+ * row is the kit's committed one, as before.
+ */
 export interface CmfGradeTarget {
   /** The product kit, when the door has already read it (grade_image resolves the product first). */
   loaded?: LoadedKit
-  tab: string
-  column: string
-  clown: string
+  tab?: string
+  column?: string
+  clown?: string
+  import_id?: string
   output_id?: string
   frontify_asset_id?: string
   image_url?: string
@@ -606,7 +801,7 @@ export interface CmfGradeReady {
   loaded: LoadedKit
   cmf: CmfKit
   parts: CmfGradingParts
-  target: { spec: string; column: string; key: string; tab: string; sku_name: string | null }
+  target: { spec: string; column: string; key: string; tab: string; sku_name: string | null; import_id?: string; workbook_sha256?: string | null }
   picture: Pick<CmfGradeTarget, 'output_id' | 'frontify_asset_id' | 'image_url'>
   runs?: number
 }
@@ -623,24 +818,136 @@ export interface CmfGradeExecution {
   cmf: CmfGradeReady['target']
 }
 
-/** The gate, the tab, column and key against the kit, before any read is paid for. */
+/** The gate, the tab, column and key against the kit (or the upload), before any read is paid for. */
 export async function planGrade(actor: CmfActor, t: CmfGradeTarget, env: NodeJS.ProcessEnv = process.env): Promise<CmfGradeReady> {
   await requireCmf(actor)
   const loaded = t.loaded ?? (await deps.loadKit(env))
   const cmf = cmfKit(loaded.kit)
+  const picture = { output_id: t.output_id, frontify_asset_id: t.frontify_asset_id, image_url: t.image_url }
+  if (t.import_id) return planUploadGrade(loaded, cmf, t, picture)
+  if (!t.tab || !t.column || !t.clown) {
+    throw new CmfError('a CMF render is graded against its sheet row and its clown: name the tab, the column and the clown key (cmf_list names them)')
+  }
   const { slug: specSlug } = resolveTab(cmf, t.tab)
   const column = t.column.toUpperCase()
   const parts = await cmfGradingParts(loaded, cmf)
   const { tab, skuName } = checkCmfTarget(cmf, parts, specSlug, column, t.clown)
   const target = { spec: specSlug, column, key: t.clown, tab, sku_name: skuName }
-  return { loaded, cmf, parts, target, picture: { output_id: t.output_id, frontify_asset_id: t.frontify_asset_id, image_url: t.image_url }, runs: t.runs }
+  return { loaded, cmf, parts, target, picture, runs: t.runs }
+}
+
+const fold = (v: string) => v.replace(/\s+/g, ' ').trim().toLowerCase()
+
+/** The kit's owned Pantone lookup (`pantone.json`'s codes), read by sha256; none when the kit names none. */
+async function pantoneOf(loaded: LoadedKit, cmf: CmfKit): Promise<PantoneLookup> {
+  const file = (cmf.product as Record<string, unknown>).pantone as { path?: string; sha256?: string } | undefined
+  if (!file?.path || !file.sha256) return {}
+  const json = JSON.parse((await deps.readKitFile(loaded, { path: file.path, sha256: file.sha256 })).toString('utf8')) as { codes?: PantoneLookup }
+  return json.codes ?? {}
+}
+
+/**
+ * A grade against an upload's row: the tab, column and key the render records (or the ones named),
+ * the row and the key built by code from the upload (`grading-row.ts`), and the render's recorded
+ * cells held to that row, so a render is never graded against cells it was not made from.
+ */
+async function planUploadGrade(loaded: LoadedKit, cmf: CmfKit, t: CmfGradeTarget, picture: CmfGradeReady['picture']): Promise<CmfGradeReady> {
+  const importId = t.import_id!
+  let tab = t.tab ?? null
+  let column = t.column ?? null
+  let clown = t.clown ?? null
+  let recordedCells: SkuSpecView | null = null
+  if (t.output_id) {
+    const render = await deps.pdf.renderOutput(t.output_id)
+    if (render && isCmfRender(render.parameters)) {
+      const c = creativeOf(render.parameters)
+      const wb = (c.workbook ?? null) as Json | null
+      const from = str(wb?.import_id)
+      if (from && from !== importId) {
+        throw new CmfError(`output ${t.output_id} was rendered from upload ${from}, not ${importId}: grade it against the upload it was made from (import_id ${from})`)
+      }
+      // A tab may be named by its sheet name or its slug; both name one tab of the kit.
+      const tabOf = (q: string) => {
+        try {
+          return resolveTab(cmf, q).slug
+        } catch {
+          return fold(q)
+        }
+      }
+      const recorded: Array<[string, string | null, string | null, (q: string) => string]> = [
+        ['tab', tab, str(c.tab), tabOf],
+        ['column', column, str(c.column), fold],
+        ['clown', clown, str(c.key), fold],
+      ]
+      for (const [name, given, rec, same] of recorded) {
+        if (given && rec && same(given) !== same(rec)) {
+          throw new CmfError(`output ${t.output_id} is a render of ${str(c.tab)} column ${str(c.column)} through ${str(c.key)}; the ${name} named (${given}) is not its own. Leave it out, or name the render's.`)
+        }
+      }
+      tab = tab ?? str(c.tab)
+      column = column ?? str(c.column)
+      clown = clown ?? str(c.key)
+      recordedCells = (wb?.sku_spec ?? null) as SkuSpecView | null
+    }
+  }
+  if (!tab || !column || !clown) {
+    throw new CmfError(`name the tab, the column and the clown key to grade against upload ${importId}; only a CMF render made from an upload records them`)
+  }
+  const wbk = await loadStoredWorkbook(deps.workbook, importId)
+  const { spec, kitSlug } = workbookTab(wbk, cmf, tab)
+  const col = column.toUpperCase()
+  const sku = spec.skus.find((s) => s.column === col)
+  if (!sku) throw new CmfError(`${spec.tab} has no SKU column ${col}; its columns: ${spec.skus.map((s) => s.column).join(', ')}`)
+  if (sku.in_scope !== true) throw new CmfError(`${spec.tab} column ${col} is not in scope (${String(sku.scope_reason ?? 'no Product Name')}), so there is no row to grade a render against`)
+  const keyEntry = resolveKey(cmf, cmf.specs[kitSlug], clown)
+  if (recordedCells) {
+    const changes = skuSpecChanges(recordedCells, skuSpecView(spec, col))
+    if (changes.length) {
+      throw new CmfError(
+        [
+          `output ${t.output_id} was rendered from cells that are not upload ${importId}'s row now, so it is not graded against it:`,
+          ...changes.slice(0, 12).map((c) => `- ${c.component} · ${c.field} (${c.cell ?? '?'}): rendered from ${JSON.stringify(c.rendered ?? '')}, the upload holds ${JSON.stringify(c.now ?? '')}`),
+          ...(changes.length > 12 ? [`(${changes.length - 12} more)`] : []),
+        ].join('\n')
+      )
+    }
+  }
+  const keyFile = JSON.parse((await deps.readKitFile(loaded, { path: keyEntry.path, sha256: keyEntry.sha256 })).toString('utf8')) as ClownKeyFile
+  const kitParts = await cmfGradingParts(loaded, cmf)
+  const parts = gradingPartsFor({ spec, specSlug: kitSlug, column: col, keyId: clown, key: keyFile, pantone: await pantoneOf(loaded, cmf), noKeyLines: kitParts.no_key_lines })
+  const { tab: tabName, skuName } = checkCmfTarget(cmf, parts, kitSlug, col, clown)
+  const target = { spec: kitSlug, column: col, key: clown, tab: tabName, sku_name: skuName, import_id: wbk.importId, workbook_sha256: wbk.info.sha256 ?? null }
+  return { loaded, cmf, parts, target, picture, runs: t.runs }
+}
+
+/**
+ * The picture under review for CMF: an output of the actor's own, as for every product, or any
+ * CMF render of the team's, whoever made it, from either door.
+ */
+function teamCandidate(env: NodeJS.ProcessEnv): CandidateDeps {
+  const base = deps.candidate(env)
+  return {
+    ...base,
+    async findOwnOutput(outputId, ownerId) {
+      const own = await base.findOwnOutput(outputId, ownerId)
+      if (own) return own
+      const render = await deps.pdf.renderOutput(outputId)
+      return render && isCmfRender(render.parameters) ? { fileUrl: render.fileUrl, parameters: render.parameters } : null
+    },
+  }
+}
+
+/** Whether an output is a CMF render of the team's (the answer on it needs CMF access). */
+export async function isCmfRenderOutput(outputId: string): Promise<boolean> {
+  const render = await deps.pdf.renderOutput(outputId).catch(() => null)
+  return !!render && isCmfRender(render.parameters)
 }
 
 /** Three reads of one render against its row and its clown, stored in `creative_grades`. */
 export async function runGrade(actor: CmfActor, ready: CmfGradeReady, env: NodeJS.ProcessEnv = process.env): Promise<CmfGradeExecution> {
   const { loaded, cmf, parts, target } = ready
   const product = cmf.product
-  const candidate = await loadCandidate(ready.picture, actor.profileId, deps.candidate(env))
+  const candidate = await loadCandidate(ready.picture, actor.profileId, teamCandidate(env))
   const rows = await deps.pinRows(cmf.slug)
   const inlineLimit = product.grading?.inline_limit_bytes ?? 3_500_000
   const outcome = await gradeCmfCandidate(
@@ -728,6 +1035,7 @@ export interface CmfVerdictOutcome {
  * kit names as CMF decider, by the email the answer was given under, counts.
  */
 export async function recordCmfVerdict(actor: CmfActor, v: CmfVerdictInput, env: NodeJS.ProcessEnv = process.env): Promise<CmfVerdictOutcome> {
+  await requireCmf(actor)
   const loaded = v.loaded ?? (await deps.loadKit(env))
   const cmf = cmfKit(loaded.kit)
   const slug = cmf.slug
@@ -744,7 +1052,7 @@ export async function recordCmfVerdict(actor: CmfActor, v: CmfVerdictInput, env:
   }
   let imageSha256: string | null = grade?.imageSha256 ?? null
   if (!grade && v.image_url) {
-    const candidate = await loadCandidate({ image_url: v.image_url }, actor.profileId, deps.candidate(env))
+    const candidate = await loadCandidate({ image_url: v.image_url }, actor.profileId, teamCandidate(env))
     imageSha256 = candidate.sha256
   }
   if (!grade) {
@@ -797,7 +1105,9 @@ async function clownOfKey(env: NodeJS.ProcessEnv, loaded: LoadedKit, cmf: CmfKit
   return { bytes, mimeType: 'image/png' }
 }
 
-export type CmfSupplierPdfOutcome = { saved: true; loaded: LoadedKit; result: CmfPdfResult } | { saved: false; loaded: LoadedKit; refused: CmfPdfRefused }
+export type CmfSupplierPdfOutcome =
+  | { saved: true; loaded: LoadedKit; result: CmfPdfResult; listed: { id: string } | { error: string } }
+  | { saved: false; loaded: LoadedKit; refused: CmfPdfRefused }
 
 /**
  * The supplier PDF from one upload and one approved render per SKU column (`supplier-pdf-run.ts`):
@@ -814,7 +1124,37 @@ export async function supplierPdf(actor: CmfActor, args: CmfPdfArgs, env: NodeJS
       readKey: (entry) => deps.readKitFile(loaded, { path: entry.path, sha256: entry.sha256 }),
       clownBytes: ({ id }) => clownOfKey(env, loaded, cmf, id),
     })
-    return { saved: true, loaded, result }
+    // Listed for the team, in both doors. The PDF is saved already; a row that fails to write is
+    // said, never a reason to lose the PDF.
+    const header = kitHeader(loaded)
+    const listed = await deps.team
+      .insertSupplierPdf({
+        storagePath: result.path,
+        url: result.url,
+        fileName: result.file_name,
+        importId: result.import_id,
+        tab: result.tab,
+        skuColumns: result.columns,
+        skuNames: result.sku_names,
+        outputIds: result.renders.map((r) => r.output_id),
+        keyId: result.key.id,
+        keySha256: result.key.sha256,
+        keyConfirmedBy: result.key.confirmed_by,
+        workbookFile: result.workbook.file,
+        workbookSha256: result.workbook.sha256,
+        workbookModified: result.workbook.modified,
+        check: { clean: true, cells_compared: result.cells_compared, rows_compared: result.rows_compared },
+        renders: result.renders,
+        kitVersion: header.kit_version ?? null,
+        kitTag: header.kit_tag ?? null,
+        kitCommit: header.kit_commit ?? null,
+        madeBy: actor.profileId,
+        credentialId: actor.credentialId,
+        door: actor.door,
+      })
+      .then((row) => ({ id: row.id }))
+      .catch((err: unknown) => ({ error: (err as Error)?.message || 'unknown error' }))
+    return { saved: true, loaded, result, listed }
   } catch (err) {
     if (err instanceof CmfPdfRefused) return { saved: false, loaded, refused: err }
     throw err

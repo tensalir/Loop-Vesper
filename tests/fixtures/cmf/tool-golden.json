@@ -3,7 +3,7 @@
   "content": [
    {
     "type": "text",
-    "text": "CMF in product-design-v0.2.0: rubric 0.1.0 (no check blocks yet). Damien decides every render and every PDF.\n- Aphrodite CC (aphrodite-cc): in scope C TML Holographic; keys case-aphrodite--7613-555 (draft), case-aphrodite--7613-556 (draft), case-aphrodite--7613-558 (draft), case-aphrodite--7613-560 (draft), case-aphrodite--7613-562 (draft); prompts ready none\n- Aphrodite Earplug (aphrodite-earplug): in scope C TML Holographic; keys aphrodite--v38 (draft), aphrodite--v40 (draft); prompts ready none\n- Cocoon (cocoon): in scope C Cocoon Berry, D Cocoon Cloud, E Cocoon Sage; keys cocoon--default (draft); prompts ready none\n- Dream (dream): in scope none; keys dream--default (draft); prompts ready none\n- Dream CC (dream-cc): in scope none; keys case-dream--v603 (draft), case-dream--v604 (draft), case-dream--v605 (draft), case-dream--v606 (draft); prompts ready none\n- Eclipse (eclipse): in scope none; keys none; prompts ready none\n- Engage 2 (engage-2): in scope none; keys engage2--v602 (draft); prompts ready none\n- Engage 2 CC (engage-2-cc): in scope none; keys none; prompts ready none\n- Experience 2 (experience-2): in scope C Ice blu satin, D Ice blue satin holographic, E Ice blue glossy holographic, F Ice blue diamond, G Ice blu satin 2, H Ice blue satin holographic 2, I Ice blue glossy holographic 2, J Ice blue diamond 2; keys experience2--glossy (draft), experience2--satin (draft); prompts ready none\n- Experience 2 CC (experience-2-cc): in scope C c, D Ice blu marble, E Ice blu classic matte, F Ice blu marble; keys case-experience2--back (draft), case-experience2--front (named, not confirmed); prompts ready C through case-experience2--front, D through case-experience2--front, E through case-experience2--front, F through case-experience2--front\n- Link (link): in scope C Coachella desert sun, D Coachella Oasis, E Coachella Dusk, F Coachella Dawn, G Coachella Verbena; keys link--v609 (draft), link--v610 (draft); prompts ready none\n- Quiet 2 (quiet-2): in scope none; keys none; prompts ready none\n- Quiet 2 CC (quiet-2-cc): in scope none; keys none; prompts ready none\n- Switch 2 (switch-2): in scope C Switch 2 Glow, D Switch 2 Monochrome, E Switch 2 Ember, F Switch 2 Haegeum, G Switch 2 Navy; keys switch2--motorsport-615 (draft); prompts ready none\n- Switch 2 CC (switch-2-cc): in scope C Switch 2 Glow, D Switch 2 Monochrome, E Switch 2 Ember, F Switch 2 Haegeum, G Switch 2 Navy; keys case-switch2--default (draft); prompts ready none\nA draft key cannot make a prompt: Damien names its zones first. cmf_prompt shows a ready prompt; cmf_render draws it.\nNewest workbook uploads (name one as import_id to build the prompt and the supplier PDF from its cells): 11111111-2222-4333-8444-555555555555 TML2027 CMF_Schema_All_Products.xlsx (2026-09-22 09:20); 22222222-2222-4333-8444-555555555555 older.xlsx (2026-09-20 08:00)."
+    "text": "CMF in product-design-v0.2.0: rubric 0.1.0 (no check blocks yet). Damien decides every render and every PDF.\n- Aphrodite CC (aphrodite-cc): in scope C TML Holographic; keys case-aphrodite--7613-555 (draft), case-aphrodite--7613-556 (draft), case-aphrodite--7613-558 (draft), case-aphrodite--7613-560 (draft), case-aphrodite--7613-562 (draft); prompts ready none\n- Aphrodite Earplug (aphrodite-earplug): in scope C TML Holographic; keys aphrodite--v38 (draft), aphrodite--v40 (draft); prompts ready none\n- Cocoon (cocoon): in scope C Cocoon Berry, D Cocoon Cloud, E Cocoon Sage; keys cocoon--default (draft); prompts ready none\n- Dream (dream): in scope none; keys dream--default (draft); prompts ready none\n- Dream CC (dream-cc): in scope none; keys case-dream--v603 (draft), case-dream--v604 (draft), case-dream--v605 (draft), case-dream--v606 (draft); prompts ready none\n- Eclipse (eclipse): in scope none; keys none; prompts ready none\n- Engage 2 (engage-2): in scope none; keys engage2--v602 (draft); prompts ready none\n- Engage 2 CC (engage-2-cc): in scope none; keys none; prompts ready none\n- Experience 2 (experience-2): in scope C Ice blu satin, D Ice blue satin holographic, E Ice blue glossy holographic, F Ice blue diamond, G Ice blu satin 2, H Ice blue satin holographic 2, I Ice blue glossy holographic 2, J Ice blue diamond 2; keys experience2--glossy (draft), experience2--satin (draft); prompts ready none\n- Experience 2 CC (experience-2-cc): in scope C c, D Ice blu marble, E Ice blu classic matte, F Ice blu marble; keys case-experience2--back (draft), case-experience2--front (named, not confirmed); prompts ready C through case-experience2--front, D through case-experience2--front, E through case-experience2--front, F through case-experience2--front\n- Link (link): in scope C Coachella desert sun, D Coachella Oasis, E Coachella Dusk, F Coachella Dawn, G Coachella Verbena; keys link--v609 (draft), link--v610 (draft); prompts ready none\n- Quiet 2 (quiet-2): in scope none; keys none; prompts ready none\n- Quiet 2 CC (quiet-2-cc): in scope none; keys none; prompts ready none\n- Switch 2 (switch-2): in scope C Switch 2 Glow, D Switch 2 Monochrome, E Switch 2 Ember, F Switch 2 Haegeum, G Switch 2 Navy; keys switch2--motorsport-615 (draft); prompts ready none\n- Switch 2 CC (switch-2-cc): in scope C Switch 2 Glow, D Switch 2 Monochrome, E Switch 2 Ember, F Switch 2 Haegeum, G Switch 2 Navy; keys case-switch2--default (draft); prompts ready none\nA draft key cannot make a prompt: Damien names its zones first. cmf_prompt shows a ready prompt; cmf_render draws it.\nNewest workbook uploads (name one as import_id to build the prompt and the supplier PDF from its cells): 11111111-2222-4333-8444-555555555555 TML2027 CMF_Schema_All_Products.xlsx (2026-09-22 09:20); 22222222-2222-4333-8444-555555555555 older.xlsx (2026-09-20 08:00).\nNo CMF render is in the team project yet."
    }
   ],
   "structuredContent": {
@@ -493,14 +493,16 @@
      "file": "older.xlsx",
      "uploaded_at": "2026-09-20T08:00:00.000Z"
     }
-   ]
+   ],
+   "renders": [],
+   "supplier_pdfs": []
   }
  },
  "list_tab": {
   "content": [
    {
     "type": "text",
-    "text": "CMF in product-design-v0.2.0: rubric 0.1.0 (no check blocks yet). Damien decides every render and every PDF.\n- Experience 2 CC (experience-2-cc): in scope C c, D Ice blu marble, E Ice blu classic matte, F Ice blu marble; keys case-experience2--back (draft), case-experience2--front (named, not confirmed); prompts ready C through case-experience2--front, D through case-experience2--front, E through case-experience2--front, F through case-experience2--front\nA draft key cannot make a prompt: Damien names its zones first. cmf_prompt shows a ready prompt; cmf_render draws it.\nNewest workbook uploads (name one as import_id to build the prompt and the supplier PDF from its cells): 11111111-2222-4333-8444-555555555555 TML2027 CMF_Schema_All_Products.xlsx (2026-09-22 09:20); 22222222-2222-4333-8444-555555555555 older.xlsx (2026-09-20 08:00)."
+    "text": "CMF in product-design-v0.2.0: rubric 0.1.0 (no check blocks yet). Damien decides every render and every PDF.\n- Experience 2 CC (experience-2-cc): in scope C c, D Ice blu marble, E Ice blu classic matte, F Ice blu marble; keys case-experience2--back (draft), case-experience2--front (named, not confirmed); prompts ready C through case-experience2--front, D through case-experience2--front, E through case-experience2--front, F through case-experience2--front\nA draft key cannot make a prompt: Damien names its zones first. cmf_prompt shows a ready prompt; cmf_render draws it.\nNewest workbook uploads (name one as import_id to build the prompt and the supplier PDF from its cells): 11111111-2222-4333-8444-555555555555 TML2027 CMF_Schema_All_Products.xlsx (2026-09-22 09:20); 22222222-2222-4333-8444-555555555555 older.xlsx (2026-09-20 08:00).\nNo CMF render is in the team project yet."
    }
   ],
   "structuredContent": {
@@ -609,7 +611,9 @@
      "file": "older.xlsx",
      "uploaded_at": "2026-09-20T08:00:00.000Z"
     }
-   ]
+   ],
+   "renders": [],
+   "supplier_pdfs": []
   }
  },
  "prompt_kit": {
@@ -965,7 +969,7 @@
   "content": [
    {
     "type": "text",
-    "text": "The supplier PDF is saved: CMF-TEST01_rev_A_Experience_2_Carry_Case_CMF_Ice_blu_marble_Ice_blu_classic_matte.pdf\nhttps://placeholder.supabase.co/storage/v1/object/public/generated-images/cmf/owner-1/imports/11111111-2222-4333-8444-555555555555/pdf/20260929120000/CMF-TEST01_rev_A_Experience_2_Carry_Case_CMF_Ice_blu_marble_Ice_blu_classic_matte.pdf\nExperience 2 CC, D (Ice blu marble), E (Ice blu classic matte): one page per SKU, then one part-breakdown page. Read back and checked before it was saved: 64 cell(s) and every other printed value, all equal to the workbook's cells.\nWorkbook: TML2027 CMF_Schema_All_Products.xlsx, sha256 9b99da438e27, modified 2026-09-22T09:20:42Z (the upload's Last-Modified in Vesper's storage: the file carries no save time of its own, so this is when it was uploaded, not when it was edited). Upload 11111111-2222-4333-8444-555555555555.\nLegend from the clown key case-experience2--front, confirmed by test (Damien has not confirmed this key): Shell - Front, Shell - Back, Insert.\n- D: render aaaaaaaa-0000-4000-8000-00000000000d, answered yes by Damien on 2026-09-29\n- E: render aaaaaaaa-0000-4000-8000-00000000000e, answered yes by Damien on 2026-09-29"
+    "text": "The supplier PDF is saved: CMF-TEST01_rev_A_Experience_2_Carry_Case_CMF_Ice_blu_marble_Ice_blu_classic_matte.pdf\nhttps://placeholder.supabase.co/storage/v1/object/public/generated-images/cmf/owner-1/imports/11111111-2222-4333-8444-555555555555/pdf/20260929120000/CMF-TEST01_rev_A_Experience_2_Carry_Case_CMF_Ice_blu_marble_Ice_blu_classic_matte.pdf\nExperience 2 CC, D (Ice blu marble), E (Ice blu classic matte): one page per SKU, then one part-breakdown page. Read back and checked before it was saved: 64 cell(s) and every other printed value, all equal to the workbook's cells.\nWorkbook: TML2027 CMF_Schema_All_Products.xlsx, sha256 9b99da438e27, modified 2026-09-22T09:20:42Z (the upload's Last-Modified in Vesper's storage: the file carries no save time of its own, so this is when it was uploaded, not when it was edited). Upload 11111111-2222-4333-8444-555555555555.\nLegend from the clown key case-experience2--front, confirmed by test (Damien has not confirmed this key): Shell - Front, Shell - Back, Insert.\n- D: render aaaaaaaa-0000-4000-8000-00000000000d, answered yes by Damien on 2026-09-29\n- E: render aaaaaaaa-0000-4000-8000-00000000000e, answered yes by Damien on 2026-09-29\nListed for the CMF team: cmf_list and the CMF Studio show it."
    }
   ],
   "structuredContent": {
@@ -1040,7 +1044,8 @@
     }
    ],
    "cells_compared": 64,
-   "rows_compared": 90
+   "rows_compared": 90,
+   "supplier_pdf_id": "cccccccc-0000-4000-8000-000000000001"
   }
  },
  "pdf_saved_paths": [

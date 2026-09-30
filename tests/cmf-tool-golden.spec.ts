@@ -32,6 +32,7 @@ import {
 } from '../src/lib/headless/tools/cmf'
 import type { ToolHandler } from '../src/lib/headless/tools/types'
 import { clone, png, specToXlsx, testConfirmed, withTestFilledBanner } from './helpers/cmf-supplier'
+import { MemoryCmfTeam } from './helpers/memory-cmf-team'
 import { ctx, DECIDER, E2CC, FRONT, IMPORT, KEY_ID, kitWith, UPLOAD_NAME } from './helpers/cmf-upload'
 
 const GOLDEN = path.join(__dirname, 'fixtures', 'cmf', 'tool-golden.json')
@@ -172,6 +173,7 @@ async function depsFor(
       { id: '22222222-2222-4333-8444-555555555555', ownerId: 'owner-2', fileName: 'older.xlsx', storagePath: 'cmf/owner-2/imports/x.xlsx', createdAt: new Date('2026-09-20T08:00:00Z') },
     ],
     pdf,
+    team: new MemoryCmfTeam(),
   }
   return { deps, saved }
 }

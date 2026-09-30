@@ -3,9 +3,10 @@
  * supplier PDF saved beside the upload, or a refusal that says why and saves nothing.
  *
  *   1. the upload is read and parsed (`workbook-source.ts`); the tab and columns are its own
- *   2. each render is a Claude-path render (`cmf_render`) made from a workbook upload, with a yes
- *      from the CMF decider through `record_verdict` (the latest answer of a person the kit names
- *      as CMF decider, by email); a web CMF Studio attempt is refused, its clown is not recorded
+ *   2. each render is a CMF engine render (`cmf_render`, from Claude or the CMF Studio, any of
+ *      the team's, whoever made it) made from a workbook upload, with a yes from the CMF decider
+ *      (the latest answer of a person the kit names as CMF decider, by email); an attempt the web
+ *      CMF Studio made the old way is refused, its clown is not recorded
  *   3. the renders share one clown key; the kit's key is still that key (same sha256) and Damien
  *      has confirmed it; the legend is built from it
  *   4. each render's recorded cells equal the upload's cells now for its SKU, else the fields that
@@ -112,8 +113,8 @@ interface RecordedRender {
 
 function recorded(output: RenderOutputRow): RecordedRender {
   const p = (output.parameters ?? {}) as Record<string, any>
-  if (p.toolName !== 'cmf_render' || p.source !== 'mcp') {
-    throw new CmfError(`output ${output.id} is not a CMF render made through Claude (cmf_render); a supplier PDF takes only those, with Damien's yes`)
+  if (p.toolName !== 'cmf_render' || (p.source !== 'mcp' && p.source !== 'web')) {
+    throw new CmfError(`output ${output.id} is not a CMF render made by the CMF engine (cmf_render, from Claude or the CMF Studio); a supplier PDF takes only those, with Damien's yes`)
   }
   const c = (p.creative ?? {}) as Record<string, any>
   const wb = c.workbook as Record<string, any> | undefined

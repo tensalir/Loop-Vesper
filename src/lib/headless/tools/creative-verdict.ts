@@ -17,7 +17,7 @@ import { loadCandidate } from '@/lib/creative/candidate'
 import { prismaCreativeRecords, type GradeRecord } from '@/lib/creative/records'
 import { verdictLine } from '@/lib/creative/verdict-line'
 import { productionCandidateDeps } from '@/lib/creative/work-runtime'
-import { recordCmfVerdict } from '@/lib/creative/cmf/service'
+import { isCmfRenderOutput, recordCmfVerdict, requireCmf } from '@/lib/creative/cmf/service'
 import { ownerIsAdmin } from './creative-read'
 import { mcpActor } from './cmf'
 import { invalidArguments, type ToolHandler } from './types'
@@ -59,7 +59,7 @@ export const recordVerdictHandler: ToolHandler = {
     const { loaded, slug, product } = await resolveInKits(productionKitSet(ctx.env), a.product, { isAdmin })
     if (product.kind === 'cmf') {
       // A CMF answer is the CMF service's (`src/lib/creative/cmf/service.ts`), the one the web door
-      // calls too; it is always recorded in Vesper.
+      // calls too: it needs CMF access, and it is always recorded in Vesper.
       const got = await recordCmfVerdict(
         mcpActor(ctx),
         {
@@ -88,6 +88,11 @@ export const recordVerdictHandler: ToolHandler = {
           frontify_asset_id: got.frontifyAssetId,
         },
       }
+    }
+    if (a.output_id && (await isCmfRenderOutput(a.output_id))) {
+      // A CMF render under another product's name: the CMF gate first, then the product it is.
+      await requireCmf(mcpActor(ctx))
+      throw new Error(`output ${a.output_id} is a CMF render: record the answer with product cmf`)
     }
     const known = new Set(product.rubric.checks.map((c) => c.id))
     const unknown = [...a.decoded, ...a.decoded_unconfirmed].filter((id) => !known.has(id))

@@ -299,6 +299,38 @@ reads every value from that upload's cells.
   `cmf/{owner}/imports/{id}/pdf/{time}/{cmfCode}_{Product}_CMF_{Colorway}.pdf`
   and its link returned.
 
+### CMF is the team's, in both doors
+
+Every CMF step is one service, `src/lib/creative/cmf/service.ts`, which the
+Claude tools call and the web CMF Studio will call; each takes the person and
+the door, and the gate is CMF access on the profile, read fresh.
+
+- **One team project.** Every CMF render, from Claude or the CMF Studio, is
+  saved in the CMF team project (`projects.system_key = 'cmf'`, one per
+  deployment), not in the maker's "Claude" project, with the same
+  `parameters.creative` and the door in `parameters.source` (`mcp` or `web`).
+  Every profile with CMF access is a member (a render joins its maker; the
+  script below adds everyone once); one who loses the access is dropped the
+  next time anyone renders. The daily allowance still
+  counts a Claude render (`source = 'mcp'`, by its maker).
+- **What the team sees.** `cmf_list` shows the team's newest renders with their
+  grade, the decider's answer and whether each can go on a supplier PDF, and
+  the newest supplier PDFs. `grade_image` and `cmf_pdf` take any of the team's
+  renders, whoever made them; an answer on a CMF render needs CMF access.
+- **An upload's row.** `grade_image` with `import_id` reads the render against
+  that upload's row, built by code as the product repository's `qa.py` builds
+  THE ROW and THE KEY (`grading-row.ts`), instead of the kit's committed row; a
+  render made from the upload needs only its `output_id`.
+- **Supplier PDFs are listed.** Every PDF `cmf_pdf` saves gets a
+  `cmf_supplier_pdfs` row: storage path, upload, SKU columns, renders, the clown
+  key's sha256, the check, who made it, the door and when.
+- **Before deploying.** Apply
+  `prisma/migrations/20260930120000_cmf_team_records/migration.sql`, then move
+  the renders Claude made so far with `npx tsx scripts/cmf-team-project.ts`
+  (a dry run; `--apply` to act, `--owner <profile id>` for the project's owner).
+- **The manifests.** `export_creative_records` with `kind: manifests` now also
+  serves every `cmf_render`'s manifest lines, from either door.
+
 ### Configuring Cursor
 
 In Cursor's Settings → MCP → Add server:

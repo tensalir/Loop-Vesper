@@ -168,9 +168,12 @@ model Project {
   briefing      String?  @db.Text // High-level instructions that apply to all chats in this project
   ownerId       String   @map("owner_id") @db.Uuid
   isShared      Boolean  @default(true) @map("is_shared")
-  // Marks a project the system keeps for its owner, found by key rather than
-  // by name so renaming it is safe. 'claude' = images made from Claude through
-  // the MCP connector. Unique per owner (partial index, in the migration).
+  // Marks a project the system keeps, found by key rather than by name so
+  // renaming it is safe. 'claude' = images made from Claude through the MCP
+  // connector, one per owner. 'cmf' = the CMF team's renders from both doors,
+  // one per deployment, every profile with CMF access a member
+  // (src/lib/creative/cmf/team-records.ts). Both unique by partial index, in
+  // the migrations.
   systemKey     String?  @map("system_key")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
@@ -1680,6 +1683,41 @@ model CreativeVerdict {
   @@index([product, createdAt(sort: Desc)], map: "creative_verdicts_product_idx")
   @@index([createdAt], map: "creative_verdicts_created_idx")
   @@map("creative_verdicts")
+}
+
+// Every supplier PDF cmf_pdf saved, from either door (Claude or the CMF Studio):
+// where it is stored, the upload, SKU columns, renders and clown key it was made
+// from, its read-back check, who made it and when. See
+// src/lib/creative/cmf/team-records.ts. Foreign keys live in the migration only.
+model CmfSupplierPdf {
+  id               String   @id @default(uuid()) @db.Uuid
+  storagePath      String   @map("storage_path")
+  url              String
+  fileName         String   @map("file_name")
+  importId         String   @map("import_id") @db.Uuid
+  tab              String
+  skuColumns       String[] @map("sku_columns")
+  skuNames         Json     @default("{}") @map("sku_names")
+  outputIds        String[] @map("output_ids") @db.Uuid
+  keyId            String   @map("key_id")
+  keySha256        String   @map("key_sha256")
+  keyConfirmedBy   String?  @map("key_confirmed_by")
+  workbookFile     String?  @map("workbook_file")
+  workbookSha256   String?  @map("workbook_sha256")
+  workbookModified String?  @map("workbook_modified")
+  check            Json // { clean, cells_compared, rows_compared }
+  renders          Json     @default("[]")
+  kitVersion       String?  @map("kit_version")
+  kitTag           String?  @map("kit_tag")
+  kitCommit        String?  @map("kit_commit")
+  madeBy           String   @map("made_by") @db.Uuid
+  credentialId     String?  @map("credential_id") @db.Uuid
+  door             String // mcp | web
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt(sort: Desc)], map: "cmf_supplier_pdfs_created_idx")
+  @@index([importId, createdAt(sort: Desc)], map: "cmf_supplier_pdfs_import_idx")
+  @@map("cmf_supplier_pdfs")
 }
 
 // A colleague's feedback on the Loop Studio Design plugin, per preview: the per-person limits count here,

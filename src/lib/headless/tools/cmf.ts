@@ -17,6 +17,10 @@
  *
  * Supplier PDFs come from cmf_pdf. The web CMF Studio's export is left as it was.
  *
+ * Every render, grade, answer and supplier PDF is the CMF team's: renders are saved in the team
+ * project (`team-records.ts`), cmf_list shows the team's newest renders and PDFs from either door,
+ * grade_image and cmf_pdf take any of the team's renders, and an answer on one needs CMF access.
+ *
  * Every step is the CMF service's (`src/lib/creative/cmf/service.ts`), the one the web CMF Studio
  * calls too; this file is Claude's door onto it: it parses the arguments, runs a long call as a
  * job, and writes the answer Claude reads. All of them need CMF access (the profile's
@@ -46,13 +50,14 @@ import {
   productionCmfServiceDeps,
   setCmfServiceDeps,
   type CmfActor,
+  type CmfListedPdf,
   type CmfRenderExecution,
+  type CmfTeamRender,
   type CmfServiceDeps,
   type CmfUploadTarget,
   type CmfWorkbookBuilt,
   type LoadedKit,
 } from '@/lib/creative/cmf/service'
-import { STREAM_SESSIONS } from '../record-generation'
 import { imageResultContent } from '../generate-asset'
 import type { JobPayload } from '../jobs'
 import { runLongCall } from './long-call'
@@ -90,13 +95,41 @@ function workbookLine(p: WorkbookPayload): string {
 
 // ------------------------------------------------------------------ cmf_list
 
+const DOOR_NAME: Record<string, string> = { mcp: 'Claude', web: 'the CMF Studio' }
+const day = (iso: string) => iso.slice(0, 16).replace('T', ' ')
+
+/** The team's newest renders and supplier PDFs, one line each. */
+function teamLines(renders: CmfTeamRender[], pdfs: CmfListedPdf[], problems: string[]): string[] {
+  const lines: string[] = []
+  if (renders.length) {
+    lines.push("The team's newest CMF renders, from Claude and the CMF Studio (name one as output_id for grade_image, record_verdict and cmf_pdf):")
+    for (const r of renders) {
+      const what = `${r.tab ?? '?'} column ${r.column ?? '?'}${r.sku_name ? ` (${r.sku_name})` : ''} through ${r.key ?? '?'}`
+      const who = `${r.door ? DOOR_NAME[r.door] : 'an unknown door'}${r.made_by ? `, ${r.made_by}` : ''}, ${day(r.made_at)}`
+      const grade = r.grade ? `grade ${r.grade.verdict} (${r.grade.judge === 'vesper' ? 'Vesper' : 'Claude'} x${r.grade.reads})` : 'no grade'
+      const answer = r.decider_answer ? `${r.decider_answer.by} said ${r.decider_answer.answer}` : 'no answer from the decider'
+      const pdf = r.pdf_eligible ? 'can go on a supplier PDF' : `not for a supplier PDF: ${r.pdf_why}`
+      lines.push(`- ${r.output_id}: ${what}; ${who}; ${grade}; ${answer}; ${pdf}.`)
+    }
+  } else {
+    lines.push('No CMF render is in the team project yet.')
+  }
+  if (pdfs.length) {
+    lines.push(
+      `Supplier PDFs made (newest first): ${pdfs.map((x) => `${x.file} (${x.tab} ${x.columns.join(', ')}, upload ${x.import_id}, ${DOOR_NAME[x.door] ?? x.door}${x.made_by ? `, ${x.made_by}` : ''}, ${day(x.made_at)}) ${x.url}`).join('; ')}.`
+    )
+  }
+  for (const p of problems) lines.push(`Not listed: ${p}.`)
+  return lines
+}
+
 export const CmfListArgs = z.object({ tab: z.string().min(1).max(80).optional() }).strict()
 
 export const cmfListHandler: ToolHandler = {
   async run(args, ctx) {
     const parsed = CmfListArgs.safeParse(args)
     if (!parsed.success) throw invalidArguments(parsed.error.issues)
-    const { loaded, cmf, tabs, uploads } = await listCmf(mcpActor(ctx), parsed.data, ctx.env)
+    const { loaded, cmf, tabs, uploads, renders, supplier_pdfs, problems } = await listCmf(mcpActor(ctx), parsed.data, ctx.env)
     const lines: string[] = [
       `CMF in ${loaded.kit.tag}: rubric ${cmf.product.rubric.version ?? '?'}${reportsOnly(cmf.product.rubric) ? ' (no check blocks yet)' : ''}. Damien decides every render and every PDF.`,
     ]
@@ -116,7 +149,8 @@ export const cmfListHandler: ToolHandler = {
         `Newest workbook uploads (name one as import_id to build the prompt and the supplier PDF from its cells): ${uploads.map((u) => `${u.import_id} ${u.file} (${u.uploaded_at.slice(0, 16).replace('T', ' ')})`).join('; ')}.`
       )
     }
-    return { content: [{ type: 'text', text: lines.join('\n') }], structuredContent: { ...kitHeader(loaded), tabs, uploads } }
+    lines.push(...teamLines(renders, supplier_pdfs, problems))
+    return { content: [{ type: 'text', text: lines.join('\n') }], structuredContent: { ...kitHeader(loaded), tabs, uploads, renders, supplier_pdfs, ...(problems.length ? { problems } : {}) } }
   },
 }
 
@@ -306,7 +340,7 @@ function renderSummary(x: CmfRenderExecution): string {
     )
   }
   if (x.failures.length) lines.push(`Not rendered: ${x.failures.join('; ')}.`)
-  lines.push(x.recorded ? `Saved in Vesper under Claude / ${STREAM_SESSIONS.cmf.name}.` : `Not recorded in Vesper's web app (${x.recordError ?? 'unknown'}); the files are safe at the links.`)
+  lines.push(x.recorded ? `Saved in Vesper in the CMF team's project, which everyone with CMF access sees, in Claude and in the CMF Studio.` : `Not recorded in Vesper's web app (${x.recordError ?? 'unknown'}); the files are safe at the links.`)
   lines.push('Next: grade each render with grade_image (product cmf, the same tab, column and clown). Damien decides.')
   x.outputs.forEach((o, i) => lines.push(`${i + 1}. output ${o.outputId ?? '(not recorded)'}: ${o.url}`))
   return lines.join('\n')
@@ -468,7 +502,11 @@ export const cmfPdfHandler: ToolHandler = {
       `Workbook: ${r.workbook.file}, sha256 ${String(r.workbook.sha256).slice(0, 12)}, modified ${r.workbook.modified} (${r.workbook.modified_source}). Upload ${r.import_id}.`,
       `Legend from the clown key ${r.key.id}, confirmed by ${r.key.confirmed_by}: ${r.legend.join(', ')}.`,
       ...r.renders.map((x) => `- ${x.column}: render ${x.output_id}, answered yes by ${x.decided_by} on ${x.decided_at.slice(0, 10)}`),
+      'id' in got.listed ? "Listed for the CMF team: cmf_list and the CMF Studio show it." : `Not listed for the CMF team (${got.listed.error}); the PDF is safe at the link.`,
     ].join('\n')
-    return { content: [{ type: 'text', text }], structuredContent: { ...kitHeader(got.loaded), saved: true, ...r } }
+    return {
+      content: [{ type: 'text', text }],
+      structuredContent: { ...kitHeader(got.loaded), saved: true, ...r, supplier_pdf_id: 'id' in got.listed ? got.listed.id : null },
+    }
   },
 }

@@ -53,9 +53,11 @@ export const GradeImageArgs = z
     colourway: z.string().max(40).optional(),
     view: z.string().max(40).optional(),
     runs: z.number().int().min(1).max(MAX_RUNS).optional(),
-    // CMF: the sheet's tab, the SKU column and the clown key the render was drawn through.
-    // Packaging: the look, the box and the colourway (read from the picture's own record when it
-    // is a Vesper packaging draw).
+    // CMF: the sheet's tab, the SKU column and the clown key the render was drawn through, and
+    // the workbook upload whose row it is graded against (import_id; a render made from an upload
+    // records its tab, column and key). Packaging: the look, the box and the colourway (read from
+    // the picture's own record when it is a Vesper packaging draw).
+    import_id: z.string().uuid().optional(),
     tab: z.string().max(80).optional(),
     column: z.string().max(4).optional(),
     clown: z.string().max(120).optional(),
@@ -93,8 +95,8 @@ interface GradeExecution {
   gradeId: string | null
   storeError: string | null
   costUsd: number
-  /** A CMF grade: the row and the key it was read against. */
-  cmf?: { tab: string; spec: string; column: string; sku_name: string | null; key: string }
+  /** A CMF grade: the row and the key it was read against, and the upload the row came from. */
+  cmf?: { tab: string; spec: string; column: string; sku_name: string | null; key: string; import_id?: string; workbook_sha256?: string | null }
   /** A packaging grade: the lines and fields its path adds (the cell, the composite, the calibration note). */
   packaging?: { lines: string[]; structured: Record<string, unknown> }
 }
@@ -132,7 +134,7 @@ export function gradeText(x: Pick<GradeExecution, 'slug' | 'product' | 'outcome'
   }
   if (x.cmf) {
     lines.push(
-      `Read against ${x.cmf.tab} column ${x.cmf.column}${x.cmf.sku_name ? ` (${x.cmf.sku_name})` : ''} and its clown through the key ${x.cmf.key}, the clown attached second.`,
+      `Read against ${x.cmf.tab} column ${x.cmf.column}${x.cmf.sku_name ? ` (${x.cmf.sku_name})` : ''}${x.cmf.import_id ? ` of upload ${x.cmf.import_id}, its row built by code from that workbook,` : ''} and its clown through the key ${x.cmf.key}, the clown attached second.`,
       "Vesper measured nothing on the pixels; the repository's qa x3 measures leftover clown colour in code, so this read is the weaker of the two on that."
     )
     if (x.gradeId) lines.push(`grade_id ${x.gradeId}: record Damien's answer with record_verdict.`)
@@ -291,12 +293,16 @@ export const gradeImageHandler: ToolHandler = {
     if (hit.source === 'product') {
       if (product.kind !== 'cmf') throw new GradingPromptError(`${product.name} is not CMF; the product kit serves only CMF`)
       const loaded = hit.loaded
-      if (!a.tab || !a.column || !a.clown) {
+      if (!a.import_id && (!a.tab || !a.column || !a.clown)) {
         throw new GradingPromptError('a CMF render is graded against its sheet row and its clown: name the tab, the column and the clown key (cmf_list names them)')
       }
       // The CMF service's grade (`src/lib/creative/cmf/service.ts`), the one the web door calls too.
       const actor = mcpActor(ctx)
-      const ready = await planGrade(actor, { loaded, tab: a.tab, column: a.column, clown: a.clown, output_id: a.output_id, frontify_asset_id: a.frontify_asset_id, image_url: a.image_url, runs: a.runs }, ctx.env)
+      const ready = await planGrade(
+        actor,
+        { loaded, tab: a.tab, column: a.column, clown: a.clown, import_id: a.import_id, output_id: a.output_id, frontify_asset_id: a.frontify_asset_id, image_url: a.image_url, runs: a.runs },
+        ctx.env
+      )
       return runLongCall<GradeExecution>({
         ctx,
         toolName: 'grade_image',
@@ -310,6 +316,7 @@ export const gradeImageHandler: ToolHandler = {
       })
     }
     const loaded = hit.loaded
+    if (a.import_id) throw new GradingPromptError(`import_id names a CMF workbook upload; ${product.name} is not CMF`)
     if (product.kind === 'packaging') {
       await assertPackagingAccess(ctx.principal.ownerId)
       if (!product.grading_prompt || !product.grading) {
