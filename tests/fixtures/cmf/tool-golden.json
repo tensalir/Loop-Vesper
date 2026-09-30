@@ -1,0 +1,1226 @@
+{
+ "list_all": {
+  "content": [
+   {
+    "type": "text",
+    "text": "CMF in product-design-v0.2.0: rubric 0.1.0 (no check blocks yet). Damien decides every render and every PDF.\n- Aphrodite CC (aphrodite-cc): in scope C TML Holographic; keys case-aphrodite--7613-555 (draft), case-aphrodite--7613-556 (draft), case-aphrodite--7613-558 (draft), case-aphrodite--7613-560 (draft), case-aphrodite--7613-562 (draft); prompts ready none\n- Aphrodite Earplug (aphrodite-earplug): in scope C TML Holographic; keys aphrodite--v38 (draft), aphrodite--v40 (draft); prompts ready none\n- Cocoon (cocoon): in scope C Cocoon Berry, D Cocoon Cloud, E Cocoon Sage; keys cocoon--default (draft); prompts ready none\n- Dream (dream): in scope none; keys dream--default (draft); prompts ready none\n- Dream CC (dream-cc): in scope none; keys case-dream--v603 (draft), case-dream--v604 (draft), case-dream--v605 (draft), case-dream--v606 (draft); prompts ready none\n- Eclipse (eclipse): in scope none; keys none; prompts ready none\n- Engage 2 (engage-2): in scope none; keys engage2--v602 (draft); prompts ready none\n- Engage 2 CC (engage-2-cc): in scope none; keys none; prompts ready none\n- Experience 2 (experience-2): in scope C Ice blu satin, D Ice blue satin holographic, E Ice blue glossy holographic, F Ice blue diamond, G Ice blu satin 2, H Ice blue satin holographic 2, I Ice blue glossy holographic 2, J Ice blue diamond 2; keys experience2--glossy (draft), experience2--satin (draft); prompts ready none\n- Experience 2 CC (experience-2-cc): in scope C c, D Ice blu marble, E Ice blu classic matte, F Ice blu marble; keys case-experience2--back (draft), case-experience2--front (named, not confirmed); prompts ready C through case-experience2--front, D through case-experience2--front, E through case-experience2--front, F through case-experience2--front\n- Link (link): in scope C Coachella desert sun, D Coachella Oasis, E Coachella Dusk, F Coachella Dawn, G Coachella Verbena; keys link--v609 (draft), link--v610 (draft); prompts ready none\n- Quiet 2 (quiet-2): in scope none; keys none; prompts ready none\n- Quiet 2 CC (quiet-2-cc): in scope none; keys none; prompts ready none\n- Switch 2 (switch-2): in scope C Switch 2 Glow, D Switch 2 Monochrome, E Switch 2 Ember, F Switch 2 Haegeum, G Switch 2 Navy; keys switch2--motorsport-615 (draft); prompts ready none\n- Switch 2 CC (switch-2-cc): in scope C Switch 2 Glow, D Switch 2 Monochrome, E Switch 2 Ember, F Switch 2 Haegeum, G Switch 2 Navy; keys case-switch2--default (draft); prompts ready none\nA draft key cannot make a prompt: Damien names its zones first. cmf_prompt shows a ready prompt; cmf_render draws it.\nNewest workbook uploads (name one as import_id to build the prompt and the supplier PDF from its cells): 11111111-2222-4333-8444-555555555555 TML2027 CMF_Schema_All_Products.xlsx (2026-09-22 09:20); 22222222-2222-4333-8444-555555555555 older.xlsx (2026-09-20 08:00)."
+   }
+  ],
+  "structuredContent": {
+   "kit_version": "0.2.0",
+   "kit_tag": "product-design-v0.2.0",
+   "kit_ref": "product-design-v0.2.0",
+   "kit_commit": "d90c9bb",
+   "kit_stale": false,
+   "tabs": [
+    {
+     "tab": "Aphrodite CC",
+     "slug": "aphrodite-cc",
+     "vesper_product": "case-aphrodite",
+     "skus": [
+      {
+       "column": "C",
+       "name": "TML Holographic",
+       "in_scope": true
+      }
+     ],
+     "keys": [
+      {
+       "id": "case-aphrodite--7613-555",
+       "clown": "case-aphrodite--7613-555",
+       "draft": true,
+       "confirmed": false
+      },
+      {
+       "id": "case-aphrodite--7613-556",
+       "clown": "case-aphrodite--7613-556",
+       "draft": true,
+       "confirmed": false
+      },
+      {
+       "id": "case-aphrodite--7613-558",
+       "clown": "case-aphrodite--7613-558",
+       "draft": true,
+       "confirmed": false
+      },
+      {
+       "id": "case-aphrodite--7613-560",
+       "clown": "case-aphrodite--7613-560",
+       "draft": true,
+       "confirmed": false
+      },
+      {
+       "id": "case-aphrodite--7613-562",
+       "clown": "case-aphrodite--7613-562",
+       "draft": true,
+       "confirmed": false
+      }
+     ],
+     "payloads": []
+    },
+    {
+     "tab": "Aphrodite Earplug",
+     "slug": "aphrodite-earplug",
+     "vesper_product": "aphrodite",
+     "skus": [
+      {
+       "column": "C",
+       "name": "TML Holographic",
+       "in_scope": true
+      }
+     ],
+     "keys": [
+      {
+       "id": "aphrodite--v38",
+       "clown": "aphrodite--v38",
+       "draft": true,
+       "confirmed": false
+      },
+      {
+       "id": "aphrodite--v40",
+       "clown": "aphrodite--v40",
+       "draft": true,
+       "confirmed": false
+      }
+     ],
+     "payloads": []
+    },
+    {
+     "tab": "Cocoon",
+     "slug": "cocoon",
+     "vesper_product": "cocoon",
+     "skus": [
+      {
+       "column": "C",
+       "name": "Cocoon Berry",
+       "in_scope": true
+      },
+      {
+       "column": "D",
+       "name": "Cocoon Cloud",
+       "in_scope": true
+      },
+      {
+       "column": "E",
+       "name": "Cocoon Sage",
+       "in_scope": true
+      }
+     ],
+     "keys": [
+      {
+       "id": "cocoon--default",
+       "clown": "cocoon--default",
+       "draft": true,
+       "confirmed": false
+      }
+     ],
+     "payloads": []
+    },
+    {
+     "tab": "Dream",
+     "slug": "dream",
+     "vesper_product": "dream",
+     "skus": [],
+     "keys": [
+      {
+       "id": "dream--default",
+       "clown": "dream--default",
+       "draft": true,
+       "confirmed": false
+      }
+     ],
+     "payloads": []
+    },
+    {
+     "tab": "Dream CC",
+     "slug": "dream-cc",
+     "vesper_product": "case-dream",
+     "skus": [],
+     "keys": [
+      {
+       "id": "case-dream--v603",
+       "clown": "case-dream--v603",
+       "draft": true,
+       "confirmed": false
+      },
+      {
+       "id": "case-dream--v604",
+       "clown": "case-dream--v604",
+       "draft": true,
+       "confirmed": false
+      },
+      {
+       "id": "case-dream--v605",
+       "clown": "case-dream--v605",
+       "draft": true,
+       "confirmed": false
+      },
+      {
+       "id": "case-dream--v606",
+       "clown": "case-dream--v606",
+       "draft": true,
+       "confirmed": false
+      }
+     ],
+     "payloads": []
+    },
+    {
+     "tab": "Eclipse",
+     "slug": "eclipse",
+     "vesper_product": "eclipse",
+     "skus": [],
+     "keys": [],
+     "payloads": []
+    },
+    {
+     "tab": "Engage 2",
+     "slug": "engage-2",
+     "vesper_product": "engage2",
+     "skus": [],
+     "keys": [
+      {
+       "id": "engage2--v602",
+       "clown": "engage2--v602",
+       "draft": true,
+       "confirmed": false
+      }
+     ],
+     "payloads": []
+    },
+    {
+     "tab": "Engage 2 CC",
+     "slug": "engage-2-cc",
+     "vesper_product": "case-engage2",
+     "skus": [],
+     "keys": [],
+     "payloads": []
+    },
+    {
+     "tab": "Experience 2",
+     "slug": "experience-2",
+     "vesper_product": "experience2",
+     "skus": [
+      {
+       "column": "C",
+       "name": "Ice blu satin",
+       "in_scope": true
+      },
+      {
+       "column": "D",
+       "name": "Ice blue satin holographic",
+       "in_scope": true
+      },
+      {
+       "column": "E",
+       "name": "Ice blue glossy holographic",
+       "in_scope": true
+      },
+      {
+       "column": "F",
+       "name": "Ice blue diamond",
+       "in_scope": true
+      },
+      {
+       "column": "G",
+       "name": "Ice blu satin 2",
+       "in_scope": true
+      },
+      {
+       "column": "H",
+       "name": "Ice blue satin holographic 2",
+       "in_scope": true
+      },
+      {
+       "column": "I",
+       "name": "Ice blue glossy holographic 2",
+       "in_scope": true
+      },
+      {
+       "column": "J",
+       "name": "Ice blue diamond 2",
+       "in_scope": true
+      }
+     ],
+     "keys": [
+      {
+       "id": "experience2--glossy",
+       "clown": "experience2--glossy",
+       "draft": true,
+       "confirmed": false
+      },
+      {
+       "id": "experience2--satin",
+       "clown": "experience2--satin",
+       "draft": true,
+       "confirmed": false
+      }
+     ],
+     "payloads": []
+    },
+    {
+     "tab": "Experience 2 CC",
+     "slug": "experience-2-cc",
+     "vesper_product": "case-experience2",
+     "skus": [
+      {
+       "column": "C",
+       "name": "c",
+       "in_scope": true
+      },
+      {
+       "column": "D",
+       "name": "Ice blu marble",
+       "in_scope": true
+      },
+      {
+       "column": "E",
+       "name": "Ice blu classic matte",
+       "in_scope": true
+      },
+      {
+       "column": "F",
+       "name": "Ice blu marble",
+       "in_scope": true
+      }
+     ],
+     "keys": [
+      {
+       "id": "case-experience2--back",
+       "clown": "case-experience2--back",
+       "draft": true,
+       "confirmed": false
+      },
+      {
+       "id": "case-experience2--front",
+       "clown": "case-experience2--front",
+       "draft": false,
+       "confirmed": false
+      }
+     ],
+     "payloads": [
+      {
+       "id": "experience-2-cc--C--case-experience2--front",
+       "column": "C",
+       "sku_name": "c",
+       "key": "case-experience2--front",
+       "status": "ready",
+       "key_confirmed": false,
+       "reasons": []
+      },
+      {
+       "id": "experience-2-cc--D--case-experience2--front",
+       "column": "D",
+       "sku_name": "Ice blu marble",
+       "key": "case-experience2--front",
+       "status": "ready",
+       "key_confirmed": false,
+       "reasons": []
+      },
+      {
+       "id": "experience-2-cc--E--case-experience2--front",
+       "column": "E",
+       "sku_name": "Ice blu classic matte",
+       "key": "case-experience2--front",
+       "status": "ready",
+       "key_confirmed": false,
+       "reasons": []
+      },
+      {
+       "id": "experience-2-cc--F--case-experience2--front",
+       "column": "F",
+       "sku_name": "Ice blu marble",
+       "key": "case-experience2--front",
+       "status": "ready",
+       "key_confirmed": false,
+       "reasons": []
+      }
+     ]
+    },
+    {
+     "tab": "Link",
+     "slug": "link",
+     "vesper_product": "link",
+     "skus": [
+      {
+       "column": "C",
+       "name": "Coachella desert sun",
+       "in_scope": true
+      },
+      {
+       "column": "D",
+       "name": "Coachella Oasis",
+       "in_scope": true
+      },
+      {
+       "column": "E",
+       "name": "Coachella Dusk",
+       "in_scope": true
+      },
+      {
+       "column": "F",
+       "name": "Coachella Dawn",
+       "in_scope": true
+      },
+      {
+       "column": "G",
+       "name": "Coachella Verbena",
+       "in_scope": true
+      }
+     ],
+     "keys": [
+      {
+       "id": "link--v609",
+       "clown": "link--v609",
+       "draft": true,
+       "confirmed": false
+      },
+      {
+       "id": "link--v610",
+       "clown": "link--v610",
+       "draft": true,
+       "confirmed": false
+      }
+     ],
+     "payloads": []
+    },
+    {
+     "tab": "Quiet 2",
+     "slug": "quiet-2",
+     "vesper_product": "quiet2",
+     "skus": [],
+     "keys": [],
+     "payloads": []
+    },
+    {
+     "tab": "Quiet 2 CC",
+     "slug": "quiet-2-cc",
+     "vesper_product": "case-quiet2",
+     "skus": [],
+     "keys": [],
+     "payloads": []
+    },
+    {
+     "tab": "Switch 2",
+     "slug": "switch-2",
+     "vesper_product": "switch2",
+     "skus": [
+      {
+       "column": "C",
+       "name": "Switch 2 Glow",
+       "in_scope": true
+      },
+      {
+       "column": "D",
+       "name": "Switch 2 Monochrome",
+       "in_scope": true
+      },
+      {
+       "column": "E",
+       "name": "Switch 2 Ember",
+       "in_scope": true
+      },
+      {
+       "column": "F",
+       "name": "Switch 2 Haegeum",
+       "in_scope": true
+      },
+      {
+       "column": "G",
+       "name": "Switch 2 Navy",
+       "in_scope": true
+      }
+     ],
+     "keys": [
+      {
+       "id": "switch2--motorsport-615",
+       "clown": "switch2--motorsport-615",
+       "draft": true,
+       "confirmed": false
+      }
+     ],
+     "payloads": []
+    },
+    {
+     "tab": "Switch 2 CC",
+     "slug": "switch-2-cc",
+     "vesper_product": "case-switch2",
+     "skus": [
+      {
+       "column": "C",
+       "name": "Switch 2 Glow",
+       "in_scope": true
+      },
+      {
+       "column": "D",
+       "name": "Switch 2 Monochrome",
+       "in_scope": true
+      },
+      {
+       "column": "E",
+       "name": "Switch 2 Ember",
+       "in_scope": true
+      },
+      {
+       "column": "F",
+       "name": "Switch 2 Haegeum",
+       "in_scope": true
+      },
+      {
+       "column": "G",
+       "name": "Switch 2 Navy",
+       "in_scope": true
+      }
+     ],
+     "keys": [
+      {
+       "id": "case-switch2--default",
+       "clown": "case-switch2--default",
+       "draft": true,
+       "confirmed": false
+      }
+     ],
+     "payloads": []
+    }
+   ],
+   "uploads": [
+    {
+     "import_id": "11111111-2222-4333-8444-555555555555",
+     "file": "TML2027 CMF_Schema_All_Products.xlsx",
+     "uploaded_at": "2026-09-22T09:20:41.000Z"
+    },
+    {
+     "import_id": "22222222-2222-4333-8444-555555555555",
+     "file": "older.xlsx",
+     "uploaded_at": "2026-09-20T08:00:00.000Z"
+    }
+   ]
+  }
+ },
+ "list_tab": {
+  "content": [
+   {
+    "type": "text",
+    "text": "CMF in product-design-v0.2.0: rubric 0.1.0 (no check blocks yet). Damien decides every render and every PDF.\n- Experience 2 CC (experience-2-cc): in scope C c, D Ice blu marble, E Ice blu classic matte, F Ice blu marble; keys case-experience2--back (draft), case-experience2--front (named, not confirmed); prompts ready C through case-experience2--front, D through case-experience2--front, E through case-experience2--front, F through case-experience2--front\nA draft key cannot make a prompt: Damien names its zones first. cmf_prompt shows a ready prompt; cmf_render draws it.\nNewest workbook uploads (name one as import_id to build the prompt and the supplier PDF from its cells): 11111111-2222-4333-8444-555555555555 TML2027 CMF_Schema_All_Products.xlsx (2026-09-22 09:20); 22222222-2222-4333-8444-555555555555 older.xlsx (2026-09-20 08:00)."
+   }
+  ],
+  "structuredContent": {
+   "kit_version": "0.2.0",
+   "kit_tag": "product-design-v0.2.0",
+   "kit_ref": "product-design-v0.2.0",
+   "kit_commit": "d90c9bb",
+   "kit_stale": false,
+   "tabs": [
+    {
+     "tab": "Experience 2 CC",
+     "slug": "experience-2-cc",
+     "vesper_product": "case-experience2",
+     "skus": [
+      {
+       "column": "C",
+       "header": "SKU 1",
+       "name": "c",
+       "in_scope": true,
+       "scope_reason": "header not renamed; Product Name filled"
+      },
+      {
+       "column": "D",
+       "header": "SKU 2",
+       "name": "Ice blu marble",
+       "in_scope": true,
+       "scope_reason": "header not renamed; Product Name filled"
+      },
+      {
+       "column": "E",
+       "header": "SKU 3",
+       "name": "Ice blu classic matte",
+       "in_scope": true,
+       "scope_reason": "header not renamed; Product Name filled"
+      },
+      {
+       "column": "F",
+       "header": "SKU 4",
+       "name": "Ice blu marble",
+       "in_scope": true,
+       "scope_reason": "header not renamed; Product Name filled"
+      }
+     ],
+     "keys": [
+      {
+       "id": "case-experience2--back",
+       "clown": "case-experience2--back",
+       "draft": true,
+       "confirmed": false
+      },
+      {
+       "id": "case-experience2--front",
+       "clown": "case-experience2--front",
+       "draft": false,
+       "confirmed": false
+      }
+     ],
+     "payloads": [
+      {
+       "id": "experience-2-cc--C--case-experience2--front",
+       "column": "C",
+       "sku_name": "c",
+       "key": "case-experience2--front",
+       "status": "ready",
+       "key_confirmed": false,
+       "reasons": []
+      },
+      {
+       "id": "experience-2-cc--D--case-experience2--front",
+       "column": "D",
+       "sku_name": "Ice blu marble",
+       "key": "case-experience2--front",
+       "status": "ready",
+       "key_confirmed": false,
+       "reasons": []
+      },
+      {
+       "id": "experience-2-cc--E--case-experience2--front",
+       "column": "E",
+       "sku_name": "Ice blu classic matte",
+       "key": "case-experience2--front",
+       "status": "ready",
+       "key_confirmed": false,
+       "reasons": []
+      },
+      {
+       "id": "experience-2-cc--F--case-experience2--front",
+       "column": "F",
+       "sku_name": "Ice blu marble",
+       "key": "case-experience2--front",
+       "status": "ready",
+       "key_confirmed": false,
+       "reasons": []
+      }
+     ]
+    }
+   ],
+   "uploads": [
+    {
+     "import_id": "11111111-2222-4333-8444-555555555555",
+     "file": "TML2027 CMF_Schema_All_Products.xlsx",
+     "uploaded_at": "2026-09-22T09:20:41.000Z"
+    },
+    {
+     "import_id": "22222222-2222-4333-8444-555555555555",
+     "file": "older.xlsx",
+     "uploaded_at": "2026-09-20T08:00:00.000Z"
+    }
+   ]
+  }
+ },
+ "prompt_kit": {
+  "content": [
+   {
+    "type": "text",
+    "text": "Damien's template, filled by code from Experience 2 CC column E (Ice blu classic matte) through the clown key case-experience2--front (named, not yet confirmed by Damien). Send it exactly as it is:\n\nUse the attached image as the exact base. Keep geometry, proportions, camera angle, framing, lighting and background unchanged.\nThe image is a clown model: each flat colour marks one component. Recolour ONLY these zones:\n- #D51C1B → Shell - Front: ABS, , VDI 24 — Matte (Pantone 544C)\n- #D51C1B → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\n- #C6B807 → Insert: Silicone, VDI 24, Antistatic Coating + Grinding,  (Pantone 544C)\n- #206893 → Shell - Front: ABS, , VDI 24 — Matte (Pantone 544C)\n- #206893 → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\nRender realistic material behaviour for each finish. Do not add, remove or reshape any part. No text, no logos, no extra objects.\n\n| # | Zone | Component | Material | Finish | Colour | Code |\n|---|---|---|---|---|---|---|\n| 1 | #D51C1B | Shell - Front | ABS |  | VDI 24 — Matte | Pantone 544C |\n| 2 | #D51C1B | Shell - Back | ABS |  | VDI 24 — Matte | Pantone 544C |\n| 3 | #C6B807 | Insert | Silicone | VDI 24, Antistatic Coating + Grinding |  | Pantone 544C |\n| 4 | #206893 | Shell - Front | ABS |  | VDI 24 — Matte | Pantone 544C |\n| 5 | #206893 | Shell - Back | ABS |  | VDI 24 — Matte | Pantone 544C |\n\nLeft out: Cord (not on this clown (the key's not_on_clown)); ARTWORK (not on this clown (the key's not_on_clown)).\n\nWarning: case-experience2--front.json is not confirmed (confirmed_by is empty): the prompt is built from its mapping, and the payload records key_confirmed: false until the lead CMF designer confirms it\n\nprompt sha256 94e256a80c7b; template 34df61cda3ba; clown case-experience2--front 1d9dbbe86bf4, 1:1. The clown is the only image. cmf_render draws it."
+   }
+  ],
+  "structuredContent": {
+   "kit_version": "0.2.0",
+   "kit_tag": "product-design-v0.2.0",
+   "kit_ref": "product-design-v0.2.0",
+   "kit_commit": "d90c9bb",
+   "kit_stale": false,
+   "refused": false,
+   "payload_id": "experience-2-cc--E--case-experience2--front",
+   "tab": "Experience 2 CC",
+   "column": "E",
+   "sku_name": "Ice blu classic matte",
+   "key": {
+    "id": "case-experience2--front",
+    "file": "plugin/skills/review/references/clown-keys/case-experience2--front.json",
+    "sha256": "102bce0aff21a555fc7fa4e09e350c9885885ab0f6139f35b2b35ca747fdb9ae",
+    "confirmed_by": null,
+    "confirmed_at": null
+   },
+   "key_confirmed": false,
+   "clown": {
+    "id": "case-experience2--front",
+    "file": "references/clowns/case-experience2--front.png",
+    "sha256": "1d9dbbe86bf4cbaa29d6444e6b4d1e6e5ce0d3a54bdd5e4c8ee003f9cc9d9296",
+    "width": 1280,
+    "height": 1280,
+    "aspect": "1:1"
+   },
+   "prompt": "Use the attached image as the exact base. Keep geometry, proportions, camera angle, framing, lighting and background unchanged.\nThe image is a clown model: each flat colour marks one component. Recolour ONLY these zones:\n- #D51C1B → Shell - Front: ABS, , VDI 24 — Matte (Pantone 544C)\n- #D51C1B → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\n- #C6B807 → Insert: Silicone, VDI 24, Antistatic Coating + Grinding,  (Pantone 544C)\n- #206893 → Shell - Front: ABS, , VDI 24 — Matte (Pantone 544C)\n- #206893 → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\nRender realistic material behaviour for each finish. Do not add, remove or reshape any part. No text, no logos, no extra objects.",
+   "prompt_sha256": "94e256a80c7bde698f185969144e14ef3e7e2e22c5fae67ffc14fad7fda3b648",
+   "template_sha256": "34df61cda3ba23ec31c46e168bcd24b828173a652c1305b72c49e39caf856b1b",
+   "lines": [
+    {
+     "n": 1,
+     "zone_hex": "#D51C1B",
+     "component": "Shell - Front",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Outer Shell",
+     "cells": {
+      "colour": "Experience 2 CC!E14",
+      "material": "Experience 2 CC!B13",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 2,
+     "zone_hex": "#D51C1B",
+     "component": "Shell - Back",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Outer Shell",
+     "cells": {
+      "colour": "Experience 2 CC!E20",
+      "material": "Experience 2 CC!B19",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 3,
+     "zone_hex": "#C6B807",
+     "component": "Insert",
+     "material": "Silicone",
+     "finish": "VDI 24, Antistatic Coating + Grinding",
+     "colour_name": "",
+     "colour_code": "Pantone 544C",
+     "field": "Colour",
+     "cells": {
+      "colour": "Experience 2 CC!E26",
+      "material": "Experience 2 CC!B25",
+      "finish": [
+       {
+        "field": "Finishing",
+        "cell": "Experience 2 CC!B27"
+       },
+       {
+        "field": "Finishing Technique",
+        "cell": "Experience 2 CC!B28"
+       }
+      ]
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 4,
+     "zone_hex": "#206893",
+     "component": "Shell - Front",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Inner Shell",
+     "cells": {
+      "colour": "Experience 2 CC!E15",
+      "material": "Experience 2 CC!B13",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 5,
+     "zone_hex": "#206893",
+     "component": "Shell - Back",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Inner Shell",
+     "cells": {
+      "colour": "Experience 2 CC!E21",
+      "material": "Experience 2 CC!B19",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    }
+   ],
+   "omitted": [
+    {
+     "component": "Cord",
+     "why": "not on this clown (the key's not_on_clown)"
+    },
+    {
+     "component": "ARTWORK",
+     "why": "not on this clown (the key's not_on_clown)"
+    }
+   ],
+   "warnings": [
+    "case-experience2--front.json is not confirmed (confirmed_by is empty): the prompt is built from its mapping, and the payload records key_confirmed: false until the lead CMF designer confirms it"
+   ]
+  }
+ },
+ "prompt_upload": {
+  "content": [
+   {
+    "type": "text",
+    "text": "Damien's template, filled by code from the uploaded workbook's cells, Experience 2 CC column D (Ice blu marble), through the clown key case-experience2--front. Send it exactly as it is:\n\nUse the attached image as the exact base. Keep geometry, proportions, camera angle, framing, lighting and background unchanged.\nThe image is a clown model: each flat colour marks one component. Recolour ONLY these zones:\n- #D51C1B → Shell - Front: ABS, , VDI 24 — ABS frosted milky see through (Pantone 544C)\n- #D51C1B → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\n- #C6B807 → Insert: Silicone, VDI 24, Antistatic Coating + Grinding, Silicon mix marble imitation white (Pantone 544C + 427C + 5405)\n- #206893 → Shell - Front: ABS, , VDI 24 — ABS frosted milky see through (Pantone 544C)\n- #206893 → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\nRender realistic material behaviour for each finish. Do not add, remove or reshape any part. No text, no logos, no extra objects.\n\n| # | Zone | Component | Material | Finish | Colour | Code |\n|---|---|---|---|---|---|---|\n| 1 | #D51C1B | Shell - Front | ABS |  | VDI 24 — ABS frosted milky see through | Pantone 544C |\n| 2 | #D51C1B | Shell - Back | ABS |  | VDI 24 — Matte | Pantone 544C |\n| 3 | #C6B807 | Insert | Silicone | VDI 24, Antistatic Coating + Grinding | Silicon mix marble imitation white | Pantone 544C + 427C + 5405 |\n| 4 | #206893 | Shell - Front | ABS |  | VDI 24 — ABS frosted milky see through | Pantone 544C |\n| 5 | #206893 | Shell - Back | ABS |  | VDI 24 — Matte | Pantone 544C |\n\nLeft out: Cord (not on this clown (the key's not_on_clown)); ARTWORK (not on this clown (the key's not_on_clown)).\n\nFrom upload 11111111-2222-4333-8444-555555555555 (TML2027 CMF_Schema_All_Products.xlsx, sha256 9b99da438e27, modified 2026-09-22T09:20:42Z), Experience 2 CC column D; the SKU's cells sha256 d3d93eb635c4.\nprompt sha256 4dd741f0ed62; template 34df61cda3ba; clown case-experience2--front f98e63f0bda3, 1:1. The clown is the only image. cmf_render with the same import_id, tab, sku_column and clown draws it."
+   }
+  ],
+  "structuredContent": {
+   "kit_version": "0.2.0",
+   "kit_tag": "product-design-v0.2.0",
+   "kit_ref": "product-design-v0.2.0",
+   "kit_commit": "d90c9bb",
+   "kit_stale": false,
+   "refused": false,
+   "payload_id": "import:11111111-2222-4333-8444-555555555555:experience-2-cc--D--case-experience2--front",
+   "tab": "Experience 2 CC",
+   "column": "D",
+   "sku_name": "Ice blu marble",
+   "key": {
+    "id": "case-experience2--front",
+    "sha256": "102bce0aff21a555fc7fa4e09e350c9885885ab0f6139f35b2b35ca747fdb9ae",
+    "confirmed_by": "test (Damien has not confirmed this key)",
+    "confirmed_at": "2026-09-29"
+   },
+   "key_confirmed": true,
+   "clown": {
+    "id": "case-experience2--front",
+    "sha256": "f98e63f0bda3822bc5b6b250a659ea033fca5b625f3455a43cf4c797cad8b184",
+    "width": 1280,
+    "height": 1280,
+    "aspect": "1:1"
+   },
+   "prompt": "Use the attached image as the exact base. Keep geometry, proportions, camera angle, framing, lighting and background unchanged.\nThe image is a clown model: each flat colour marks one component. Recolour ONLY these zones:\n- #D51C1B → Shell - Front: ABS, , VDI 24 — ABS frosted milky see through (Pantone 544C)\n- #D51C1B → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\n- #C6B807 → Insert: Silicone, VDI 24, Antistatic Coating + Grinding, Silicon mix marble imitation white (Pantone 544C + 427C + 5405)\n- #206893 → Shell - Front: ABS, , VDI 24 — ABS frosted milky see through (Pantone 544C)\n- #206893 → Shell - Back: ABS, , VDI 24 — Matte (Pantone 544C)\nRender realistic material behaviour for each finish. Do not add, remove or reshape any part. No text, no logos, no extra objects.",
+   "prompt_sha256": "4dd741f0ed62ce276653b3ebb95681499e8fc78e4c42f2ab24d34ca41868cf2f",
+   "template_sha256": "34df61cda3ba23ec31c46e168bcd24b828173a652c1305b72c49e39caf856b1b",
+   "lines": [
+    {
+     "n": 1,
+     "zone_hex": "#D51C1B",
+     "component": "Shell - Front",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — ABS frosted milky see through",
+     "colour_code": "Pantone 544C",
+     "field": "Outer Shell",
+     "cells": {
+      "colour": "Experience 2 CC!D14",
+      "material": "Experience 2 CC!B13",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 2,
+     "zone_hex": "#D51C1B",
+     "component": "Shell - Back",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Outer Shell",
+     "cells": {
+      "colour": "Experience 2 CC!D20",
+      "material": "Experience 2 CC!B19",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 3,
+     "zone_hex": "#C6B807",
+     "component": "Insert",
+     "material": "Silicone",
+     "finish": "VDI 24, Antistatic Coating + Grinding",
+     "colour_name": "Silicon mix marble imitation white",
+     "colour_code": "Pantone 544C + 427C + 5405",
+     "field": "Colour",
+     "cells": {
+      "colour": "Experience 2 CC!D26",
+      "material": "Experience 2 CC!B25",
+      "finish": [
+       {
+        "field": "Finishing",
+        "cell": "Experience 2 CC!B27"
+       },
+       {
+        "field": "Finishing Technique",
+        "cell": "Experience 2 CC!B28"
+       }
+      ]
+     },
+     "codes": [
+      "Pantone 544C",
+      "427C",
+      "5405"
+     ]
+    },
+    {
+     "n": 4,
+     "zone_hex": "#206893",
+     "component": "Shell - Front",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — ABS frosted milky see through",
+     "colour_code": "Pantone 544C",
+     "field": "Inner Shell",
+     "cells": {
+      "colour": "Experience 2 CC!D15",
+      "material": "Experience 2 CC!B13",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    },
+    {
+     "n": 5,
+     "zone_hex": "#206893",
+     "component": "Shell - Back",
+     "material": "ABS",
+     "finish": "",
+     "colour_name": "VDI 24 — Matte",
+     "colour_code": "Pantone 544C",
+     "field": "Inner Shell",
+     "cells": {
+      "colour": "Experience 2 CC!D21",
+      "material": "Experience 2 CC!B19",
+      "finish": []
+     },
+     "codes": [
+      "Pantone 544C"
+     ]
+    }
+   ],
+   "omitted": [
+    {
+     "component": "Cord",
+     "why": "not on this clown (the key's not_on_clown)"
+    },
+    {
+     "component": "ARTWORK",
+     "why": "not on this clown (the key's not_on_clown)"
+    }
+   ],
+   "warnings": [],
+   "workbook": {
+    "import_id": "11111111-2222-4333-8444-555555555555",
+    "file": "TML2027 CMF_Schema_All_Products.xlsx",
+    "sha256": "9b99da438e278061bf849d0102cc7fb35b92990208db0e5c2e0ac36190fc077a",
+    "modified": "2026-09-22T09:20:42Z",
+    "modified_source": "the upload's Last-Modified in Vesper's storage: the file carries no save time of its own, so this is when it was uploaded, not when it was edited",
+    "imported_at": "2026-09-22T09:20:41Z",
+    "sku_spec_sha256": "d3d93eb635c4468c96be22342a5cd40d886fba8ff01c1ec55ed261582cad60da"
+   }
+  }
+ },
+ "prompt_upload_draft": {
+  "thrown": "CmfError",
+  "message": "the clown key 'case-experience2--back' is a draft: a zone names no component yet. Damien names the zones (the chips page), then the prompt is built. No prompt is sent from a draft key."
+ },
+ "render_prompt_arg": {
+  "thrown": "Error",
+  "message": "cmf_render takes no prompt: the clown is the only image and the prompt is the payload's, byte for byte."
+ },
+ "render_upload_value": {
+  "thrown": "Error",
+  "message": "cmf_render takes identifiers only (import_id, tab, sku_column, clown, lane, n, image_size, async) and refuses prompt: every value comes from the stored workbook's cells, never from Claude. Nothing was read."
+ },
+ "render_draft": {
+  "thrown": "CmfError",
+  "message": "the clown key 'case-experience2--back' is a draft: a zone names no component yet. Damien names the zones (the chips page), then the payload is built. No prompt is sent from a draft key."
+ },
+ "render_kit_clown": {
+  "thrown": "CmfError",
+  "message": "not sent (nothing was paid for): the key's clown is f98e63f0bda3, the payload's 1d9dbbe86bf4: the clown changed; its key must be sampled again"
+ },
+ "check_pdf_none": {
+  "thrown": "Error",
+  "message": "Invalid arguments: name the PDF by pdf_url or by cmf_packet_id, one of them"
+ },
+ "check_pdf_worker": {
+  "thrown": "CmfError",
+  "message": "the creative worker is not configured on this Vesper (CREATIVE_WORKER_URL, CREATIVE_WORKER_SECRET); the check runs in Vesper without engine: \"worker\""
+ },
+ "check_pdf_packet": {
+  "thrown": "CmfError",
+  "message": "that CMF packet is not one you can see, or it has no exported PDF yet"
+ },
+ "pdf_values": {
+  "thrown": "Error",
+  "message": "cmf_pdf takes identifiers only (import_id, tab, sku_columns, output_ids) and refuses values: every value comes from the stored workbook's cells, never from Claude. Nothing was read."
+ },
+ "pdf_saved": {
+  "content": [
+   {
+    "type": "text",
+    "text": "The supplier PDF is saved: CMF-TEST01_rev_A_Experience_2_Carry_Case_CMF_Ice_blu_marble_Ice_blu_classic_matte.pdf\nhttps://placeholder.supabase.co/storage/v1/object/public/generated-images/cmf/owner-1/imports/11111111-2222-4333-8444-555555555555/pdf/20260929120000/CMF-TEST01_rev_A_Experience_2_Carry_Case_CMF_Ice_blu_marble_Ice_blu_classic_matte.pdf\nExperience 2 CC, D (Ice blu marble), E (Ice blu classic matte): one page per SKU, then one part-breakdown page. Read back and checked before it was saved: 64 cell(s) and every other printed value, all equal to the workbook's cells.\nWorkbook: TML2027 CMF_Schema_All_Products.xlsx, sha256 9b99da438e27, modified 2026-09-22T09:20:42Z (the upload's Last-Modified in Vesper's storage: the file carries no save time of its own, so this is when it was uploaded, not when it was edited). Upload 11111111-2222-4333-8444-555555555555.\nLegend from the clown key case-experience2--front, confirmed by test (Damien has not confirmed this key): Shell - Front, Shell - Back, Insert.\n- D: render aaaaaaaa-0000-4000-8000-00000000000d, answered yes by Damien on 2026-09-29\n- E: render aaaaaaaa-0000-4000-8000-00000000000e, answered yes by Damien on 2026-09-29"
+   }
+  ],
+  "structuredContent": {
+   "kit_version": "0.2.0",
+   "kit_tag": "product-design-v0.2.0",
+   "kit_ref": "product-design-v0.2.0",
+   "kit_commit": "d90c9bb",
+   "kit_stale": false,
+   "saved": true,
+   "url": "https://placeholder.supabase.co/storage/v1/object/public/generated-images/cmf/owner-1/imports/11111111-2222-4333-8444-555555555555/pdf/20260929120000/CMF-TEST01_rev_A_Experience_2_Carry_Case_CMF_Ice_blu_marble_Ice_blu_classic_matte.pdf",
+   "path": "cmf/owner-1/imports/11111111-2222-4333-8444-555555555555/pdf/20260929120000/CMF-TEST01_rev_A_Experience_2_Carry_Case_CMF_Ice_blu_marble_Ice_blu_classic_matte.pdf",
+   "file_name": "CMF-TEST01_rev_A_Experience_2_Carry_Case_CMF_Ice_blu_marble_Ice_blu_classic_matte.pdf",
+   "import_id": "11111111-2222-4333-8444-555555555555",
+   "tab": "Experience 2 CC",
+   "columns": [
+    "D",
+    "E"
+   ],
+   "sku_names": {
+    "D": "Ice blu marble",
+    "E": "Ice blu classic matte"
+   },
+   "key": {
+    "id": "case-experience2--front",
+    "sha256": "102bce0aff21a555fc7fa4e09e350c9885885ab0f6139f35b2b35ca747fdb9ae",
+    "confirmed_by": "test (Damien has not confirmed this key)"
+   },
+   "legend": [
+    "Shell - Front",
+    "Shell - Back",
+    "Insert"
+   ],
+   "pages": [
+    {
+     "kind": "sku",
+     "column": "D"
+    },
+    {
+     "kind": "sku",
+     "column": "E"
+    },
+    {
+     "kind": "breakdown",
+     "column": null
+    }
+   ],
+   "workbook": {
+    "file": "TML2027 CMF_Schema_All_Products.xlsx",
+    "sha256": "9b99da438e278061bf849d0102cc7fb35b92990208db0e5c2e0ac36190fc077a",
+    "modified": "2026-09-22T09:20:42Z",
+    "modified_source": "the upload's Last-Modified in Vesper's storage: the file carries no save time of its own, so this is when it was uploaded, not when it was edited",
+    "imported_at": "2026-09-22T09:20:41Z"
+   },
+   "renders": [
+    {
+     "column": "D",
+     "output_id": "aaaaaaaa-0000-4000-8000-00000000000d",
+     "decided_by": "Damien",
+     "decided_at": "2026-09-29T10:00:00.000Z",
+     "prompt_sha256": "4dd741f0ed62ce276653b3ebb95681499e8fc78e4c42f2ab24d34ca41868cf2f",
+     "clown_sha256": "f98e63f0bda3822bc5b6b250a659ea033fca5b625f3455a43cf4c797cad8b184",
+     "rendered_from_import": "11111111-2222-4333-8444-555555555555"
+    },
+    {
+     "column": "E",
+     "output_id": "aaaaaaaa-0000-4000-8000-00000000000e",
+     "decided_by": "Damien",
+     "decided_at": "2026-09-29T10:00:00.000Z",
+     "prompt_sha256": "94e256a80c7bde698f185969144e14ef3e7e2e22c5fae67ffc14fad7fda3b648",
+     "clown_sha256": "f98e63f0bda3822bc5b6b250a659ea033fca5b625f3455a43cf4c797cad8b184",
+     "rendered_from_import": "11111111-2222-4333-8444-555555555555"
+    }
+   ],
+   "cells_compared": 64,
+   "rows_compared": 90
+  }
+ },
+ "pdf_saved_paths": [
+  "cmf/owner-1/imports/11111111-2222-4333-8444-555555555555/pdf/20260929120000/CMF-TEST01_rev_A_Experience_2_Carry_Case_CMF_Ice_blu_marble_Ice_blu_classic_matte.pdf"
+ ],
+ "pdf_no_answer": {
+  "thrown": "CmfError",
+  "message": "output aaaaaaaa-0000-4000-8000-00000000000d (Experience 2 CC column D) has no answer from Damien yet: ask for a yes through record_verdict first"
+ },
+ "pdf_web_attempt": {
+  "thrown": "CmfError",
+  "message": "'bbbbbbbb-0000-4000-8000-000000000001' is a web CMF Studio attempt: its clown is not recorded, so the legend cannot be shown to come from the key that made it. Render the SKU with cmf_render and import_id, and have Damien answer it."
+ },
+ "pdf_cells_changed": {
+  "thrown": "CmfError",
+  "message": "output aaaaaaaa-0000-4000-8000-00000000000d (Experience 2 CC column D) was rendered from cells that have changed since (upload 11111111-2222-4333-8444-555555555555); render it again from this upload and have Damien answer it:\n- Insert · Colour (Experience 2 CC!D26): rendered from \"Silicon mix marble imitation Pantone 544C + white\", the workbook now holds \"Silicon mix marble imitation Pantone 544C + 427C + 5405 + white\""
+ },
+ "prompt_upload_refused": {
+  "content": [
+   {
+    "type": "text",
+    "text": "No prompt for Experience 2 CC column E of upload 11111111-2222-4333-8444-555555555555 through case-experience2--front: the fill refused it.\n- Experience 2 CC!E26 Insert · Colour: no code and no ' / ' or 'N/A' (a colour in words only: 'Ice blue'); a zone line needs the code as the sheet writes it\nNothing is sent until the row or the key is fixed."
+   }
+  ],
+  "structuredContent": {
+   "kit_version": "0.2.0",
+   "kit_tag": "product-design-v0.2.0",
+   "kit_ref": "product-design-v0.2.0",
+   "kit_commit": "d90c9bb",
+   "kit_stale": false,
+   "refused": true,
+   "import_id": "11111111-2222-4333-8444-555555555555",
+   "tab": "Experience 2 CC",
+   "column": "E",
+   "key": "case-experience2--front",
+   "reasons": [
+    "Experience 2 CC!E26 Insert · Colour: no code and no ' / ' or 'N/A' (a colour in words only: 'Ice blue'); a zone line needs the code as the sheet writes it"
+   ]
+  }
+ },
+ "render_upload_refused": {
+  "thrown": "CmfError",
+  "message": "not sent (nothing was paid for): Experience 2 CC!E26 Insert · Colour: no code and no ' / ' or 'N/A' (a colour in words only: 'Ice blue'); a zone line needs the code as the sheet writes it"
+ },
+ "check_pdf_supplier": {
+  "content": [
+   {
+    "type": "text",
+    "text": "The PDF does not match the sheet and must not go out: 3 value(s) differ (Experience 2 CC, column(s) D, E; 0 cell(s) compared).\nEngine: Vesper's port of spec_diff.py; layout vesper; PDF sha256 <pdf sha256 12>.\n- D: 1 missing_in_pdf\n- E: 1 missing_in_pdf\n- (legend): 1 missing_in_pdf\nNote: page 1: title None names no remaining SKU column of Experience 2 CC\nNote: page 2: title None names no remaining SKU column of Experience 2 CC\nNote: page 3: title None names no remaining SKU column of Experience 2 CC\n\n| Col | Component · field | State | Cause | Sheet | PDF |\n|---|---|---|---|---|---|\n| D | PAGE · (page) | missing_in_pdf |  | Ice blu marble |  |\n| E | PAGE · (page) | missing_in_pdf |  | Ice blu classic matte |  |\n|  | LEGEND · order | missing_in_pdf | legend_not_from_key | Shell - Front / Shell - Back / Insert / Cor... |  |\nA value is copied from its sheet cell or it is not right; the fix is in the export, never in the sheet. Damien decides."
+   }
+  ],
+  "structuredContent": {
+   "kit_version": "0.2.0",
+   "kit_tag": "product-design-v0.2.0",
+   "kit_ref": "product-design-v0.2.0",
+   "kit_commit": "d90c9bb",
+   "kit_stale": false,
+   "engine": "vesper",
+   "tab": "Experience 2 CC",
+   "columns": [
+    "D",
+    "E"
+   ],
+   "layout": "vesper",
+   "rows": [
+    {
+     "tab": "Experience 2 CC",
+     "column": "D",
+     "sku_name": "Ice blu marble",
+     "part": "page",
+     "component": "PAGE",
+     "field": "(page)",
+     "pdf_label": null,
+     "sheet": "Ice blu marble",
+     "pdf": null,
+     "state": "missing_in_pdf",
+     "cause": null,
+     "where": null
+    },
+    {
+     "tab": "Experience 2 CC",
+     "column": "E",
+     "sku_name": "Ice blu classic matte",
+     "part": "page",
+     "component": "PAGE",
+     "field": "(page)",
+     "pdf_label": null,
+     "sheet": "Ice blu classic matte",
+     "pdf": null,
+     "state": "missing_in_pdf",
+     "cause": null,
+     "where": null
+    },
+    {
+     "tab": "Experience 2 CC",
+     "column": null,
+     "sku_name": null,
+     "part": "legend",
+     "component": "LEGEND",
+     "field": "order",
+     "pdf_label": null,
+     "sheet": "Shell - Front | Shell - Back | Insert | Cord | ARTWORK",
+     "pdf": null,
+     "state": "missing_in_pdf",
+     "cause": "legend_not_from_key",
+     "where": null
+    }
+   ],
+   "counts": {
+    "match": 0,
+    "mismatch": 0,
+    "missing_in_pdf": 3,
+    "empty_in_sheet": 0,
+    "extra_in_pdf": 0
+   },
+   "summary": {
+    "D": {
+     "match": 0,
+     "mismatch": 0,
+     "missing_in_pdf": 1,
+     "empty_in_sheet": 0,
+     "extra_in_pdf": 0
+    },
+    "E": {
+     "match": 0,
+     "mismatch": 0,
+     "missing_in_pdf": 1,
+     "empty_in_sheet": 0,
+     "extra_in_pdf": 0
+    },
+    "(legend)": {
+     "match": 0,
+     "mismatch": 0,
+     "missing_in_pdf": 1,
+     "empty_in_sheet": 0,
+     "extra_in_pdf": 0
+    }
+   },
+   "cells_compared": 0,
+   "assertions": {
+    "footer_names_sheet_and_time": true,
+    "legend_from_clown_key": false
+   },
+   "notes": [
+    "page 1: title None names no remaining SKU column of Experience 2 CC",
+    "page 2: title None names no remaining SKU column of Experience 2 CC",
+    "page 3: title None names no remaining SKU column of Experience 2 CC"
+   ],
+   "clean": false,
+   "pdf_sha256": "<pdf sha256>"
+  }
+ },
+ "no_access": {
+  "list": {
+   "thrown": "CmfAccessError",
+   "message": "CMF files need CMF access on your Vesper profile (an admin turns it on under Users). Nothing was read."
+  },
+  "prompt": {
+   "thrown": "CmfAccessError",
+   "message": "CMF files need CMF access on your Vesper profile (an admin turns it on under Users). Nothing was read."
+  },
+  "prompt_upload": {
+   "thrown": "CmfAccessError",
+   "message": "CMF files need CMF access on your Vesper profile (an admin turns it on under Users). Nothing was read."
+  },
+  "render": {
+   "thrown": "CmfAccessError",
+   "message": "CMF files need CMF access on your Vesper profile (an admin turns it on under Users). Nothing was read."
+  },
+  "render_upload": {
+   "thrown": "CmfAccessError",
+   "message": "CMF files need CMF access on your Vesper profile (an admin turns it on under Users). Nothing was read."
+  },
+  "check": {
+   "thrown": "CmfAccessError",
+   "message": "CMF files need CMF access on your Vesper profile (an admin turns it on under Users). Nothing was read."
+  },
+  "pdf": {
+   "thrown": "CmfAccessError",
+   "message": "CMF files need CMF access on your Vesper profile (an admin turns it on under Users). Nothing was read."
+  }
+ }
+}
