@@ -133,6 +133,7 @@ export async function executeGenerateVideo(
     allowFallback: allowFallback !== false,
   }
 
+  // Doubled, as video always has been here: 120s for a video model, so a 240s wall.
   const timeoutMs = getMcpGenerationTimeoutMs(modelId) * 2
   const generation = await withTimeout(
     adapter.generate(request),
