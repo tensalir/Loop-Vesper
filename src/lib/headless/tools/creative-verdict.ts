@@ -86,6 +86,8 @@ export const recordVerdictHandler: ToolHandler = {
           route: 'vesper',
           comment_line: null,
           frontify_asset_id: got.frontifyAssetId,
+          // The kit's CMF decider this answer counts as (the supplier PDF's rule), or null.
+          decider: got.decider,
         },
       }
     }

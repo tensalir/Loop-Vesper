@@ -23,6 +23,9 @@
  *   supplierPdf      the supplier PDF from one upload and approved renders of the team's, checked,
  *                    then saved and listed (`cmf_supplier_pdfs`)
  *   checkPdf         every value on a CMF PDF against its sheet cell
+ *   uploadWorkbook   a workbook export kept for the team, read by the same parse every step uses
+ *   readUpload       an upload's tabs and SKUs by column letter, each tab's keys and their state
+ *   cmfKeys          the kit's clown keys and their clowns, read only
  *
  * Every function takes the actor (who asks, through which door) and applies one gate: CMF access
  * on the profile (`cmf_access`, or an admin), read fresh on every call. Every render, grade, answer
@@ -59,7 +62,7 @@ import { loadCandidate, type CandidateDeps, type LoadedCandidate } from '@/lib/c
 import type { GradeDeps, GradeOutcome } from '@/lib/creative/grade'
 import { prismaCreativeRecords, type CreativeRecordStore, type GradeRecord } from '@/lib/creative/records'
 import { fetchAllowlisted } from '@/lib/net/fetch-allowlisted'
-import { CMF_STORAGE_BUCKET } from '@/lib/cmf/storage'
+import { CMF_STORAGE_BUCKET, importStoragePath } from '@/lib/cmf/storage'
 import { assertModelAllowed } from '@/lib/headless/tools/types'
 import { CmfError, cmfKit, inScopeColumns, keysForTab, payloadFor, resolveKey, resolveTab, type CmfGradingParts, type CmfKit, type CmfPayloadEntry, type CmfSpec } from './kit-cmf'
 import {
@@ -79,6 +82,7 @@ import { workerConfigFromEnv, type WorkerConfig } from './worker-client'
 import type { ClownKey, Spec } from './spec-diff'
 import { PromptRefusal, skuSpecChanges, skuSpecView, type ClownKeyFile, type SkuSpecView } from './prompt-fill'
 import { buildWorkbookPayload } from './workbook-payload'
+import { parseWorkbookBytes, workbookInfoForUpload } from './workbook'
 import { loadStoredWorkbook, workbookTab, type WorkbookImportRow, type WorkbookSourceDeps } from './workbook-source'
 import { CmfPdfRefused, deciderEmails, runCmfPdf, type CmfPdfArgs, type CmfPdfDeps, type CmfPdfResult, type RenderOutputRow, type VerdictRow } from './supplier-pdf-run'
 import type { SupplierPdfImage } from './supplier-pdf'
@@ -125,6 +129,12 @@ export interface CmfServiceDeps {
   workbook: WorkbookSourceDeps
   /** The newest uploads that kept their file, for cmf_list. */
   recentImports(limit: number): Promise<WorkbookImportRow[]>
+  /** Where a new workbook upload is kept: its import row, and its file at `cmf/{owner}/imports/{id}.xlsx`. */
+  uploads: {
+    create(input: { ownerId: string; fileName: string; tabs: Array<{ tab: string; skus: number }> }): Promise<{ id: string }>
+    store(path: string, bytes: Buffer): Promise<void>
+    setStoragePath(importId: string, path: string): Promise<void>
+  }
   /** What cmf_pdf reaches beyond the kit and the upload. */
   pdf: Omit<CmfPdfDeps, 'loadWorkbook' | 'readKey' | 'clownBytes'>
   /** The picture under review: an output, a Frontify asset or a URL. */
@@ -203,6 +213,31 @@ export const productionCmfServiceDeps: CmfServiceDeps = {
       take: limit,
       select: { id: true, ownerId: true, fileName: true, storagePath: true, createdAt: true },
     }),
+  uploads: {
+    async create(input) {
+      const skus = input.tabs.reduce((n, t) => n + t.skus, 0)
+      const row = await prisma.cmfImport.create({
+        data: {
+          ownerId: input.ownerId,
+          fileName: input.fileName,
+          // Read by the CMF engine's parse (workbook.ts) from the stored file whenever it is used;
+          // the row keeps only what the upload held, for the record.
+          rawRows: { reader: 'cmf-engine', tabs: input.tabs } as object,
+          status: 'parsed',
+          rowCount: skus,
+        },
+        select: { id: true },
+      })
+      return { id: row.id }
+    },
+    async store(path, bytes) {
+      const { uploadBase64ToStorage } = await import('@/lib/supabase/storage')
+      await uploadBase64ToStorage(`data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${bytes.toString('base64')}`, CMF_STORAGE_BUCKET, path)
+    },
+    async setStoragePath(importId, path) {
+      await prisma.cmfImport.update({ where: { id: importId }, data: { storagePath: path } })
+    },
+  },
   pdf: {
     async renderOutput(outputId) {
       const out = await prisma.output.findUnique({
@@ -549,6 +584,154 @@ export async function listCmf(actor: CmfActor, args: { tab?: string }, env: Node
   }
   const uploads = (await deps.recentImports(5).catch(() => [] as WorkbookImportRow[])).map((i) => ({ import_id: i.id, file: i.fileName, uploaded_at: i.createdAt.toISOString() }))
   return { loaded, cmf, tabs: out, uploads, ...(await teamListing(cmf)) }
+}
+
+// ------------------------------------------------------------------ uploadWorkbook, readUpload
+
+/** One tab of an upload, as the CMF engine parses it, and the kit's keys for it. */
+export interface CmfUploadTab {
+  tab: string
+  /** The kit's tab it is, or null when the kit has no such tab (nothing can be made from it). */
+  slug: string | null
+  vesper_product: string | null
+  skus: Array<{ column: string; header: string | null; name: string | null; in_scope: boolean; scope_reason: string | null }>
+  keys: CmfListedTab['keys']
+}
+
+/** A workbook upload: the file as Vesper keeps it, and every tab the engine read from it. */
+export interface CmfUploadView {
+  import_id: string
+  file: string
+  sha256: string | null
+  modified: string | null
+  modified_source: string | null
+  imported_at: string
+  tabs: CmfUploadTab[]
+}
+
+export const MAX_WORKBOOK_BYTES = 10 * 1024 * 1024
+
+/**
+ * An upload's tabs and SKUs by column letter, read by the parse cmf_prompt, cmf_render and cmf_pdf
+ * read it with (`loadStoredWorkbook`), and each tab's keys with their state, as cmf_list gives them.
+ */
+export async function readUpload(actor: CmfActor, args: { import_id: string }, env: NodeJS.ProcessEnv = process.env): Promise<{ loaded: LoadedKit; upload: CmfUploadView }> {
+  await requireCmf(actor)
+  const { loaded, cmf } = await loadCmf(env)
+  const wb = await loadStoredWorkbook(deps.workbook, args.import_id)
+  const tabs: CmfUploadTab[] = Object.entries(wb.specs).map(([title, spec]) => {
+    let slug: string | null = null
+    let kitSpec: CmfSpec | null = null
+    try {
+      const hit = resolveTab(cmf, title)
+      slug = hit.slug
+      kitSpec = hit.spec
+    } catch {
+      // A tab the kit does not know: listed, and nothing can be made from it.
+    }
+    return {
+      tab: title,
+      slug,
+      vesper_product: kitSpec?.vesper_product ?? null,
+      skus: spec.skus.map((x) => ({
+        column: x.column,
+        header: x.header ?? null,
+        name: x.name ?? null,
+        in_scope: x.in_scope === true,
+        scope_reason: (x.scope_reason as string | undefined) ?? null,
+      })),
+      keys: kitSpec ? keysForTab(cmf, kitSpec).map(([id, k]) => ({ id, clown: k.clown?.id ?? null, draft: k.draft, confirmed: k.confirmed })) : [],
+    }
+  })
+  return {
+    loaded,
+    upload: {
+      import_id: wb.importId,
+      file: wb.fileName,
+      sha256: wb.info.sha256 ?? null,
+      modified: wb.info.modified ?? null,
+      modified_source: wb.info.modified_source ?? null,
+      imported_at: wb.importedAt,
+      tabs,
+    },
+  }
+}
+
+/**
+ * A workbook export kept for the team: read by the CMF engine's parse first (a file it cannot read
+ * is refused and nothing is kept), then its row and its file, then read back through the same path
+ * every step reads an upload by (`readUpload`). Claude names it by the import id this returns.
+ */
+export async function uploadWorkbook(actor: CmfActor, args: { file_name: string; bytes: Buffer }, env: NodeJS.ProcessEnv = process.env): Promise<{ loaded: LoadedKit; upload: CmfUploadView }> {
+  await requireCmf(actor)
+  const name = args.file_name.trim() || 'workbook.xlsx'
+  if (!/\.xlsx$/i.test(name)) throw new CmfError(`${name} is not an .xlsx workbook: upload the CMF workbook as exported (File, Download, Microsoft Excel). Nothing was kept.`)
+  if (args.bytes.length > MAX_WORKBOOK_BYTES) throw new CmfError(`${name} is larger than ${MAX_WORKBOOK_BYTES / (1024 * 1024)} MB. Nothing was kept.`)
+  let specs: ReturnType<typeof parseWorkbookBytes>
+  try {
+    specs = parseWorkbookBytes(args.bytes, workbookInfoForUpload({ bytes: args.bytes, fileName: name, storedLastModified: null }))
+  } catch (err) {
+    throw new CmfError(`${name} is not a workbook Vesper can read (${(err as Error)?.message || 'unknown error'}). Nothing was kept.`)
+  }
+  const tabs = Object.entries(specs).map(([tab, spec]) => ({ tab, skus: spec.skus.length }))
+  if (!tabs.length) throw new CmfError(`${name} has no CMF tab Vesper can read. Nothing was kept.`)
+  const { id } = await deps.uploads.create({ ownerId: actor.profileId, fileName: name, tabs })
+  const path = importStoragePath(actor.profileId, id)
+  try {
+    await deps.uploads.store(path, args.bytes)
+    await deps.uploads.setStoragePath(id, path)
+  } catch (err) {
+    throw new CmfError(`${name} could not be kept in Vesper's storage (${(err as Error)?.message || 'unknown error'}). Upload it again.`)
+  }
+  return readUpload(actor, { import_id: id }, env)
+}
+
+// ------------------------------------------------------------------ cmfKeys
+
+/** A clown key of the kit, read only: its state, its clown, and whether Vesper holds the clown's pin. */
+export interface CmfListedKey {
+  id: string
+  product: string | null
+  variant: string | null
+  draft: boolean
+  confirmed: boolean
+  /** The kit's tabs whose product the key is for. */
+  tabs: string[]
+  clown: { id: string; sha256: string; width: number | null; height: number | null } | null
+  /** Whether the clown's pinned copy is in Vesper (a render refuses a clown that is not). */
+  pinned: boolean
+  /** A link to the pinned clown, when there is one. */
+  clown_url: string | null
+}
+
+/** The kit's clown keys and their clowns, with their state. A key changes only in the product kit's repository. */
+export async function cmfKeys(actor: CmfActor, env: NodeJS.ProcessEnv = process.env): Promise<{ loaded: LoadedKit; keys: CmfListedKey[] }> {
+  await requireCmf(actor)
+  const { loaded, cmf } = await loadCmf(env)
+  const specs = kitPins(loaded.kit).filter((p) => p.product === cmf.slug)
+  const rows = await deps.pinRows(cmf.slug).catch(() => [] as PinRow[])
+  const keys: CmfListedKey[] = []
+  for (const [id, k] of Object.entries(cmf.keys).sort(([a], [b]) => a.localeCompare(b))) {
+    const spec = k.clown ? specs.find((p) => p.pinId === k.clown!.id && p.sha256 === k.clown!.sha256) : undefined
+    const row = spec ? rows.find((r) => r.pinId === spec.pinId && r.sha256 === spec.sha256) : undefined
+    const pinned = !!(spec && row && usablePin(row, spec) && row.storagePath)
+    const clown_url = pinned && row?.storagePath ? await deps.draw.clownUrl(row.storagePath, env).catch(() => null) : null
+    keys.push({
+      id,
+      product: k.product,
+      variant: k.variant,
+      draft: k.draft,
+      confirmed: k.confirmed,
+      tabs: Object.values(cmf.specs)
+        .filter((x) => !!x.vesper_product && x.vesper_product === k.product)
+        .map((x) => x.tab ?? '')
+        .filter(Boolean),
+      clown: k.clown ? { id: k.clown.id, sha256: k.clown.sha256, width: k.clown.width ?? null, height: k.clown.height ?? null } : null,
+      pinned,
+      clown_url,
+    })
+  }
+  return { loaded, keys }
 }
 
 // ------------------------------------------------------------------ cmfPrompt
