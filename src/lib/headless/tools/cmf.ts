@@ -30,7 +30,7 @@
  * of its own, and reads CMF from no other kit.
  */
 
-import { z } from 'zod'
+import type { z } from 'zod'
 import { reportsOnly } from '@/lib/creative/kit-schema'
 import { kitHeader } from '@/lib/creative/tool-views'
 import { payloadId } from '@/lib/creative/cmf/kit-cmf'
@@ -58,12 +58,26 @@ import {
   type CmfWorkbookBuilt,
   type LoadedKit,
 } from '@/lib/creative/cmf/service'
+import {
+  CmfCheckPdfArgs,
+  CmfListArgs,
+  CmfPdfArgs,
+  CmfPromptArgs,
+  CmfRenderArgs,
+  CmfWorkbookPromptArgs,
+  CmfWorkbookRenderArgs,
+  PDF_KEYS,
+  WORKBOOK_RENDER_KEYS,
+  WORKBOOK_TARGET_KEYS,
+} from '@/lib/creative/cmf/args'
 import { imageResultContent } from '../generate-asset'
 import type { JobPayload } from '../jobs'
 import { runLongCall } from './long-call'
 import { invalidArguments, type ToolContext, type ToolHandler } from './types'
 
 export { CmfAccessError, assertCmfAccess, cmfGradingParts, cmfRenderCreative, identifiersOnly } from '@/lib/creative/cmf/service'
+// The arguments are both doors' (`src/lib/creative/cmf/args.ts`); re-exported under the names the tests know.
+export { CmfCheckPdfArgs, CmfListArgs, CmfPdfArgs, CmfPromptArgs, CmfRenderArgs, CmfTargetArgs, CmfWorkbookPromptArgs, CmfWorkbookRenderArgs, CmfWorkbookTargetArgs } from '@/lib/creative/cmf/args'
 
 // ------------------------------------------------------------------ what the handlers reach
 
@@ -123,8 +137,6 @@ function teamLines(renders: CmfTeamRender[], pdfs: CmfListedPdf[], problems: str
   return lines
 }
 
-export const CmfListArgs = z.object({ tab: z.string().min(1).max(80).optional() }).strict()
-
 export const cmfListHandler: ToolHandler = {
   async run(args, ctx) {
     const parsed = CmfListArgs.safeParse(args)
@@ -155,25 +167,6 @@ export const cmfListHandler: ToolHandler = {
 }
 
 // ------------------------------------------------------------------ cmf_prompt
-
-export const CmfTargetArgs = {
-  tab: z.string().min(1).max(80),
-  column: z.string().regex(/^[A-Za-z]{1,2}$/, 'a column letter'),
-  clown: z.string().min(1).max(120),
-}
-
-export const CmfPromptArgs = z.object(CmfTargetArgs).strict()
-
-/** A SKU of a workbook upload, by identifiers only. */
-export const CmfWorkbookTargetArgs = {
-  import_id: z.string().uuid(),
-  tab: z.string().min(1).max(80),
-  sku_column: z.string().regex(/^[A-Za-z]{1,2}$/, 'a column letter'),
-  clown: z.string().min(1).max(120),
-}
-
-export const CmfWorkbookPromptArgs = z.object(CmfWorkbookTargetArgs).strict()
-const WORKBOOK_TARGET_KEYS = ['import_id', 'tab', 'sku_column', 'clown'] as const
 
 function workbookPromptResult(loaded: LoadedKit, built: CmfWorkbookBuilt) {
   const payload = built.payload
@@ -308,26 +301,6 @@ export const cmfPromptHandler: ToolHandler = {
 
 // ------------------------------------------------------------------ cmf_render
 
-export const CmfRenderArgs = z
-  .object({
-    ...CmfTargetArgs,
-    lane: z.enum(['final', 'draft']).optional(),
-    n: z.number().int().min(1).max(4).optional(),
-    image_size: z.enum(['1K', '2K', '4K']).optional(),
-    async: z.boolean().optional().default(false),
-  })
-  .strict()
-
-const RenderOptions = {
-  lane: z.enum(['final', 'draft']).optional(),
-  n: z.number().int().min(1).max(4).optional(),
-  image_size: z.enum(['1K', '2K', '4K']).optional(),
-  async: z.boolean().optional().default(false),
-}
-
-export const CmfWorkbookRenderArgs = z.object({ ...CmfWorkbookTargetArgs, ...RenderOptions }).strict()
-const WORKBOOK_RENDER_KEYS = [...WORKBOOK_TARGET_KEYS, 'lane', 'n', 'image_size', 'async'] as const
-
 function renderSummary(x: CmfRenderExecution): string {
   const p = x.plan
   const lines = [
@@ -433,19 +406,6 @@ export const cmfRenderHandler: ToolHandler = {
 
 // ------------------------------------------------------------------ cmf_check_pdf
 
-export const CmfCheckPdfArgs = z
-  .object({
-    pdf_url: z.string().url().max(2000).optional(),
-    cmf_packet_id: z.string().uuid().optional(),
-    tab: z.string().min(1).max(80),
-    columns: z.array(z.string().min(1).max(80)).max(20).optional(),
-    layout: z.enum(['vesper', 'ours']).optional().default('vesper'),
-    clown: z.string().min(1).max(120).optional(),
-    engine: z.enum(['vesper', 'worker']).optional().default('vesper'),
-  })
-  .strict()
-  .refine((a) => !!a.pdf_url !== !!a.cmf_packet_id, 'name the PDF by pdf_url or by cmf_packet_id, one of them')
-
 /** The check itself, without the gate: the service's. */
 export async function runCmfCheckPdf(ctx: ToolContext, a: z.infer<typeof CmfCheckPdfArgs>) {
   return runCheckPdf(mcpActor(ctx), a, ctx.env)
@@ -465,15 +425,6 @@ export const cmfCheckPdfHandler: ToolHandler = {
 
 // ------------------------------------------------------------------ cmf_pdf
 
-export const CmfPdfArgs = z
-  .object({
-    import_id: z.string().uuid(),
-    tab: z.string().min(1).max(80),
-    sku_columns: z.array(z.string().regex(/^[A-Za-z]{1,2}$/, 'a column letter')).min(1).max(20),
-    output_ids: z.array(z.string().uuid()).min(1).max(20),
-  })
-  .strict()
-const PDF_KEYS = ['import_id', 'tab', 'sku_columns', 'output_ids'] as const
 
 export const cmfPdfHandler: ToolHandler = {
   async run(args, ctx) {
