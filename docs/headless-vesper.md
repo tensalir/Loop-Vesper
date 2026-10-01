@@ -112,10 +112,15 @@ Response:
   "skill": {
     "skillId": "genai-prompting",
     "hash": "a1b2c3d4e5f6",
-    "lastModified": "2026-05-04T11:48:00.000Z"
+    "lastModified": "creative 0.5.0 (genai-prompting 1.0.2)",
+    "source": "kit"
   }
 }
 ```
+
+`skill.source` names the prompting text that ran: `kit` (the Loop edition
+from the creative kit), `db` (an admin override, Enhance only), `bundled`
+(Vesper's own copy, when the kit cannot be read) or `fallback`.
 
 Optional fields:
 
@@ -143,9 +148,10 @@ curl -X POST "$BASE_URL/api/headless/v1/prompts/iterate" \
   }'
 ```
 
-Returns the structured `slate` JSON described in the Iteration Slate
-Mode section of the Gen-AI prompting skill, plus the `skill` version
-block.
+Returns the structured `slate` JSON (the Iteration Slate Mode schema in
+`src/lib/prompts/iteration-slate-mode.ts`), written with the same
+prompting text as `/prompts/enhance` but never the admin override, plus
+the `skill` version block naming the source that ran.
 
 ### `GET /models`
 

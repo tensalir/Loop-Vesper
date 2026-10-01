@@ -42,7 +42,7 @@ For Cursor with header auth:
 ## Workflow
 
 1. `list_models` or read `vesper://models`
-2. `enhance_prompt` before first generation
+2. Before the first prompt, read the Loop edition of the prompting skill once (`get_creative_kit` section `prompting`) or call `enhance_prompt`; it replaces any generic prompting skill
 3. `list_product_renders` when the brief needs real Loop product shots
 4. `generate_asset` — images return inline by default
 5. Pass a prior Storage URL as `referenceImage` for iteration

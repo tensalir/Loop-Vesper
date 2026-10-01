@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test'
 import sharp from 'sharp'
-import { dispatch } from '../src/lib/headless/mcp-dispatch'
+import { dispatch, SERVER_INSTRUCTIONS } from '../src/lib/headless/mcp-dispatch'
+import { MCP_TOOLS } from '../src/lib/headless/mcp-tools'
+import { getMcpPromptMessages } from '../src/lib/headless/mcp-prompts'
+import { FALLBACK_SYSTEM_PROMPT, setKitPromptingLoader } from '../src/lib/prompts/prompting-source'
 import { imageAudienceMode, imageBlocks, imageResultContent, previewFilename, saveToFolderText, showInReplyLines } from '../src/lib/headless/generate-asset'
 import { PREVIEW_LONG_EDGE, PREVIEW_MAX_BYTES } from '../src/lib/images/preview'
 import { ORG_DEFAULT_TOOLS, HEADLESS_TOOLS } from '../src/lib/headless/tool-registry'
@@ -122,6 +125,116 @@ test.describe('dispatch', () => {
     )) as { result: { instructions: string } }
     expect(res.result.instructions).toContain('get_generation_status')
     expect(res.result.instructions).toContain('previews')
+  })
+})
+
+/**
+ * Every path Claude takes to a prompt names the Loop edition of the prompting skill, from the kit,
+ * with its version (2026-10-01: the generic skill was taken out of Loop's Claude organisation).
+ */
+test.describe('the prompting skill Claude is pointed at', () => {
+  const KIT_VERSION = 'creative 0.5.0 (genai-prompting 1.0.2)'
+  const kitLoader = async () => ({ text: '# Prompting image and video models, the Loop way\n\nLOOP BODY', version: KIT_VERSION })
+  const identity = async <T,>(v: T) => v
+  test.afterEach(() => setKitPromptingLoader(async () => null))
+
+  test('the instructions open with it, early enough to survive a cut, and are no longer than before', async () => {
+    const res = (await dispatch(
+      { jsonrpc: '2.0', id: 7, method: 'initialize', params: { protocolVersion: '2025-11-25' } },
+      orgPrincipal,
+      { recordUsage: noUsage }
+    )) as { result: { instructions: string } }
+    const text = res.result.instructions
+    expect(text).toBe(SERVER_INSTRUCTIONS)
+    const head = text.slice(0, 400)
+    expect(head).toContain('generate_asset')
+    expect(head).toContain('generate_video')
+    expect(head).toContain('get_creative_kit, section prompting')
+    expect(head).toContain('once per conversation')
+    expect(head).toContain('enhance_prompt')
+    expect(head).toContain('replaces any generic prompting skill')
+    expect(head).toMatch(/product skeleton, cmf_prompt, packaging\) go as they are/)
+    expect(text.length).toBeLessThanOrEqual(3355)
+  })
+
+  test('generate_asset and generate_video are picked for images and videos, and point at the skill', () => {
+    for (const name of ['generate_asset', 'generate_video']) {
+      const tool = MCP_TOOLS.find((t) => t.name === name)!
+      expect(tool.description).toMatch(/use it whenever the person asks for an? (image|video)/)
+      expect(tool.description).toContain('get_creative_kit section prompting, once per conversation')
+      expect(tool.description).toContain('enhance_prompt')
+    }
+    expect(MCP_TOOLS.find((t) => t.name === 'generate_asset')!.description).toContain('a code-filled product, CMF or packaging prompt goes as it is')
+  })
+
+  test('each MCP prompt carries the kit text and its version, and vesper:generate says to write with it', async () => {
+    setKitPromptingLoader(kitLoader)
+    for (const name of ['vesper:generate', 'vesper:enhance', 'vesper:iterate']) {
+      const res = (await dispatch(
+        { jsonrpc: '2.0', id: 8, method: 'prompts/get', params: { name, arguments: { prompt: 'a lemon on a table' } } },
+        orgPrincipal,
+        { recordUsage: noUsage }
+      )) as { result: { messages: Array<{ content: { text: string } }> } }
+      const text = res.result.messages.map((m) => m.content.text).join('\n')
+      expect(text).toContain('LOOP BODY')
+      expect(text).toContain(`the Loop edition, ${KIT_VERSION}, from the creative kit`)
+      expect(text).not.toContain('unavailable')
+    }
+    const generate = (await getMcpPromptMessages('vesper:generate', { prompt: 'x' }))!.messages[0].content.text
+    const write = generate.indexOf('Write the prompt with the prompting skill below, or call enhance_prompt')
+    expect(write).toBeGreaterThan(-1)
+    expect(write).toBeLessThan(generate.indexOf('generate_asset with the prompt'))
+    expect(generate).toContain('Use no other prompting skill')
+    expect(generate).toMatch(/A prompt filled by code goes out unchanged/)
+    expect(generate).not.toContain('Optionally call enhance_prompt')
+  })
+
+  test('without the kit, the prompts say so and name the copy that was served', async () => {
+    setKitPromptingLoader(async () => null)
+    const res = (await dispatch(
+      { jsonrpc: '2.0', id: 9, method: 'prompts/get', params: { name: 'vesper:generate', arguments: {} } },
+      orgPrincipal,
+      { recordUsage: noUsage }
+    )) as { result: { messages: Array<{ content: { text: string } }> } }
+    const text = res.result.messages[0].content.text
+    expect(text).toContain("the creative kit could not be read, so this is Vesper's bundled copy")
+    expect(text).toContain('Generative AI Prompt Engineering')
+    const fallback = await getMcpPromptMessages('vesper:enhance', { prompt: 'x', modelId: 'm' }, async () => ({
+      text: FALLBACK_SYSTEM_PROMPT,
+      source: 'fallback',
+      sha256: 'f',
+      version: null,
+      id: null,
+    }))
+    expect(fallback!.messages[0].content.text).toContain('generic fallback instruction, not the Loop edition')
+  })
+
+  test('an unknown prompt is still refused', async () => {
+    const res = (await dispatch(
+      { jsonrpc: '2.0', id: 10, method: 'prompts/get', params: { name: 'vesper:nope', arguments: {} } },
+      orgPrincipal,
+      { recordUsage: noUsage }
+    )) as { error?: { code: number } }
+    expect(res.error?.code).toBe(-32601)
+  })
+
+  test('the skill resource serves the kit with its version, or names the fallback', async () => {
+    setKitPromptingLoader(kitLoader)
+    const read = async () =>
+      (
+        (await dispatch(
+          { jsonrpc: '2.0', id: 11, method: 'resources/read', params: { uri: 'vesper://skill/genai-prompting' } },
+          orgPrincipal,
+          { recordUsage: noUsage, signForClaude: identity }
+        )) as { result: { contents: Array<{ text: string; mimeType: string }> } }
+      ).result.contents[0]
+    const fromKit = await read()
+    expect(fromKit.mimeType).toBe('text/markdown')
+    expect(fromKit.text.startsWith(`> Prompting skill: the Loop edition, ${KIT_VERSION}`)).toBe(true)
+    expect(fromKit.text).toContain('LOOP BODY')
+    setKitPromptingLoader(async () => null)
+    const bundled = await read()
+    expect(bundled.text).toContain("Vesper's bundled copy")
   })
 })
 

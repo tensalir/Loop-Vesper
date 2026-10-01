@@ -10,9 +10,11 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { getModelConfig } from '@/lib/models/registry'
 import { referenceToDataUrl, splitDataUrl } from '@/lib/net/fetch-allowlisted'
-import { getPromptingSystemPrompt, type PromptingSource } from './prompting-source'
+import { getPromptingSystemPrompt, skillVersionFromSource, type PromptingSource } from './prompting-source'
 import { productPromptPassthrough, type PromptPassthrough } from './product-prompt-guard'
 import type { SkillVersion } from './skill-version'
+
+export { skillVersionFromSource }
 
 const DEFAULT_PROMPT_ENHANCE_MODEL = 'claude-sonnet-4-5-20250929'
 
@@ -103,16 +105,6 @@ function isVideoModelId(modelId: string): boolean {
     config?.type === 'video' ||
     /veo|video|replicate-video|fal-video|gemini-video/i.test(modelId)
   )
-}
-
-/** The skill version reported with every result, read from the source that actually ran. */
-export function skillVersionFromSource(source: PromptingSource): SkillVersion {
-  return {
-    skillId: source.source === 'db' ? `prompt-override:${source.id}` : 'genai-prompting',
-    hash: source.sha256.slice(0, 12),
-    lastModified: source.version ?? new Date(0).toISOString(),
-    source: source.source,
-  }
 }
 
 export function buildRequestContent(args: {

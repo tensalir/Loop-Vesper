@@ -7,7 +7,6 @@
 import { getAllModels } from '@/lib/models/registry'
 import { listProductRenders } from './list-product-renders'
 import { getGenAiSkillResourceText } from './mcp-prompts'
-import { githubAppConfigFromEnv } from '@/lib/github/app'
 
 export interface McpResourceDefinition {
   uri: string
@@ -33,9 +32,9 @@ export const MCP_RESOURCE_CATALOG: McpResourceDefinition[] = [
   },
   {
     uri: 'vesper://skill/genai-prompting',
-    name: 'Gen-AI prompting skill',
+    name: 'Loop prompting skill',
     description:
-      "The prompting skill enhance_prompt runs on: the Loop edition from the creative kit when Vesper can read it, else the bundled skill.",
+      'The Loop edition of the prompting skill from the creative kit, with its version: what enhance_prompt and iterate_prompt run on, and what to write a generate_asset or generate_video prompt with. When the kit cannot be read, its first line says so and names what is served instead.',
     mimeType: 'text/markdown',
   },
   {
@@ -102,13 +101,12 @@ export async function readMcpResource(
   }
 
   if (uri === 'vesper://skill/genai-prompting') {
-    const fromKit = await kitPromptingText()
     return {
       contents: [
         {
           uri,
           mimeType: 'text/markdown',
-          text: fromKit ?? getGenAiSkillResourceText(),
+          text: await getGenAiSkillResourceText(),
         },
       ],
     }
@@ -140,15 +138,4 @@ export async function readMcpResource(
   }
 
   throw new Error(`Unknown resource URI: ${uri}`)
-}
-
-/** The Loop edition's body from the kit, or null (no App, no kit, or a failure: the bundled skill is served). */
-async function kitPromptingText(): Promise<string | null> {
-  if (!githubAppConfigFromEnv()) return null
-  try {
-    const { loadKitPrompting } = await import('@/lib/creative/kit-runtime')
-    return (await loadKitPrompting())?.text ?? null
-  } catch {
-    return null
-  }
 }

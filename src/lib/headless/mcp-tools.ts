@@ -56,7 +56,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'enhance_prompt',
     title: 'Enhance a generation prompt',
     description:
-      'Enhance a single image or video prompt using the Vesper Gen-AI prompting skill. Returns the enhanced prompt text and the substrate version used. A prompt filled by code from a Loop product skeleton, or one naming a Loop product, comes back unchanged with the reason: send those as they are.',
+      'Enhance a single image or video prompt with the Loop edition of the prompting skill, from the creative kit. Returns the enhanced prompt text and the skill version and source that ran. A prompt filled by code from a Loop product skeleton, or one naming a Loop product, comes back unchanged with the reason: send those as they are.',
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: 'object',
@@ -84,7 +84,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'iterate_prompt',
     title: 'Build an Andromeda-aware prompt slate',
     description:
-      'Produce a structured slate of variant prompts that preserve declared anchors while varying diversification axes.',
+      'Produce a structured slate of variant prompts that preserve declared anchors while varying diversification axes, written with the Loop edition of the prompting skill (the same source as enhance_prompt).',
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: 'object',
@@ -154,7 +154,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'generate_asset',
     title: 'Generate an image',
     description:
-      'Generate an image with a Vesper model. Answers inline when the draw finishes within about 50 seconds: a JPEG preview you can read for each image, a link to the full-resolution file, and the markdown image line to put in your reply so the person sees the picture (claude.ai draws it in your reply, not from the tool result). A slower draw, or async: true, returns a jobId to collect with get_generation_status. Every draw is saved in your Vesper project "Claude". Pass allowFallback: false to forbid silent Replicate routing.',
+      'Generate an image with a Vesper model: use it whenever the person asks for an image. Write the prompt with the Loop prompting skill first (get_creative_kit section prompting, once per conversation) or enhance_prompt; a code-filled product, CMF or packaging prompt goes as it is. Answers inline when the draw finishes within about 50 seconds: a JPEG preview you can read for each image, a link to the full-resolution file, and the markdown image line to put in your reply so the person sees the picture (claude.ai draws it in your reply, not from the tool result). A slower draw, or async: true, returns a jobId to collect with get_generation_status. Every draw is saved in your Vesper project "Claude". Pass allowFallback: false to forbid silent Replicate routing.',
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
@@ -187,7 +187,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'generate_video',
     title: 'Generate a video',
     description:
-      'Generate a short video with Veo, Kling, or Seedance 2.5. Defaults to async job queue — poll get_generation_status until completed.',
+      'Generate a short video with Veo, Kling, or Seedance 2.5: use it whenever the person asks for a video. Write the prompt with the Loop prompting skill first (get_creative_kit section prompting, once per conversation) or enhance_prompt. Defaults to async job queue — poll get_generation_status until completed.',
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
@@ -274,7 +274,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'get_creative_kit',
     title: 'Read the Loop creative kit',
     description:
-      "What Vesper is running on: the Loop Studio Design plugin's kit at its release tag. section 'summary' (the default) names the version, commit and products; 'products' lists them in full; 'prompting' returns the Loop edition of the prompting skill; 'feedback' the feedback targets and labels; 'rubric:<product>' a product's checks with their plain-language captions. Says when the kit is stale.",
+      "What Vesper is running on: the Loop Studio Design plugin's kit at its release tag. section 'summary' (the default) names the version, commit and products; 'products' lists them in full; 'prompting' returns the Loop edition of the prompting skill, to read before writing a prompt for generate_asset or generate_video; 'feedback' the feedback targets and labels; 'rubric:<product>' a product's checks with their plain-language captions. Says when the kit is stale.",
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: 'object',

@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test'
 import {
+  describePromptingSource,
+  getPromptingSkillForClaude,
   getPromptingSystemPrompt,
   setKitPromptingLoader,
   sha256Hex,
@@ -12,6 +14,8 @@ import {
   SKELETON_FINGERPRINTS,
 } from '../src/lib/prompts/product-prompt-guard'
 import { buildRequestContent, enhancePrompt, skillVersionFromSource } from '../src/lib/prompts/enhance'
+import { iteratePrompt, iterateSystemPrompt } from '../src/lib/prompts/iterate'
+import { ITERATION_SLATE_MODE_HEADING } from '../src/lib/prompts/iteration-slate-mode'
 
 /**
  * The prompt rewrite's system prompt comes from one place, in a fixed order,
@@ -78,6 +82,85 @@ test.describe('getPromptingSystemPrompt order', () => {
     expect(v.skillId).toBe('prompt-override:row-1')
     expect(v.hash).toHaveLength(12)
     expect(v.source).toBe('db')
+  })
+
+  test('what Claude reads skips the admin override: it is one model\'s rewrite instruction, not the skill', async () => {
+    const src = await getPromptingSkillForClaude({ bundled })
+    expect(src.source).toBe('bundled')
+    setKitPromptingLoader(async () => ({ text: 'LOOP EDITION', version: 'creative 0.5.0 (genai-prompting 1.0.2)' }))
+    const kit = await getPromptingSkillForClaude({ bundled })
+    expect(kit.source).toBe('kit')
+    expect(kit.text).toBe('LOOP EDITION')
+  })
+
+  test('each source is named in words; any but the kit tells Claude to say the kit is unavailable', () => {
+    const kit = describePromptingSource({ source: 'kit', version: 'creative 0.5.0 (genai-prompting 1.0.2)', id: null })
+    expect(kit).toContain('the Loop edition, creative 0.5.0 (genai-prompting 1.0.2)')
+    expect(kit).toContain('replaces any generic prompting skill')
+    for (const source of ['db', 'bundled', 'fallback'] as const) {
+      const line = describePromptingSource({ source, version: null, id: 'row-1' })
+      expect(line).toContain('the creative kit could not be read')
+      expect(line).toContain('Tell the person the kit is unavailable')
+      expect(line).not.toContain('replaces any generic prompting skill')
+    }
+    expect(describePromptingSource({ source: 'bundled', version: '2026-09-01T00:00:00.000Z', id: null })).toContain("Vesper's bundled copy")
+    expect(describePromptingSource({ source: 'fallback', version: null, id: null })).toContain('generic fallback')
+  })
+})
+
+/**
+ * iterate_prompt ran on the bundled skill file and reported its hash while
+ * enhance_prompt ran on the kit (until 2026-10-01). It now reads the same
+ * source as enhance, never the admin override, with the slate schema on top.
+ */
+test.describe('iterate_prompt runs on the kit', () => {
+  test.afterEach(() => setKitPromptingLoader(async () => null))
+
+  test('the kit comes first, and the slate schema is appended once', async () => {
+    setKitPromptingLoader(async () => ({ text: 'LOOP EDITION BODY', version: 'creative 0.5.0 (genai-prompting 1.0.2)' }))
+    const { systemPrompt, source } = await iterateSystemPrompt('gemini-nano-banana-pro', { bundled })
+    expect(source.source).toBe('kit')
+    expect(source.version).toBe('creative 0.5.0 (genai-prompting 1.0.2)')
+    expect(systemPrompt.startsWith('LOOP EDITION BODY')).toBe(true)
+    expect(systemPrompt.split(ITERATION_SLATE_MODE_HEADING)).toHaveLength(2)
+    expect(skillVersionFromSource(source).source).toBe('kit')
+  })
+
+  test('without the kit, the bundled skill, never the admin override', async () => {
+    const { systemPrompt, source } = await iterateSystemPrompt('gemini-nano-banana-pro', { bundled })
+    expect(source.source).toBe('bundled')
+    expect(systemPrompt.startsWith('BUNDLED SKILL')).toBe(true)
+    expect(systemPrompt).not.toContain('ADMIN OVERRIDE')
+  })
+
+  test('with nothing on disk, its own intro rather than the single-prompt fallback', async () => {
+    const { systemPrompt, source } = await iterateSystemPrompt('m', { bundled: () => null })
+    expect(source.source).toBe('fallback')
+    expect(systemPrompt).toContain('Meta-Andromeda-aware ad creative iteration')
+    expect(systemPrompt).not.toContain(FALLBACK_SYSTEM_PROMPT)
+    expect(systemPrompt).toContain(ITERATION_SLATE_MODE_HEADING)
+  })
+
+  test('the real bundled file is still there as the fallback', async () => {
+    const { source } = await iterateSystemPrompt('gemini-nano-banana-pro')
+    expect(source.source).toBe('bundled')
+    expect(source.text).toContain('Generative AI Prompt Engineering')
+  })
+
+  test('iteratePrompt still refuses without a key, before reading any skill', async () => {
+    const saved = process.env.ANTHROPIC_API_KEY
+    delete process.env.ANTHROPIC_API_KEY
+    let read = false
+    setKitPromptingLoader(async () => {
+      read = true
+      return null
+    })
+    try {
+      await expect(iteratePrompt({ prompt: 'x', modelId: 'gemini-nano-banana-pro' })).rejects.toThrow('ANTHROPIC_API_KEY')
+      expect(read).toBe(false)
+    } finally {
+      if (saved !== undefined) process.env.ANTHROPIC_API_KEY = saved
+    }
   })
 })
 
