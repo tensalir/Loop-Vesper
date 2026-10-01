@@ -116,9 +116,13 @@ function isVideoModelId(modelId: string): boolean {
  * typography". The creative kit's dated lesson `small-type-in-code` says otherwise: on packaging
  * round 1 (2026-09-24) every Pro draw at 2K redrew the small type (8 of 8, "Live music" as
  * "Oua music"), and check C6 failed on 14 of 14 draws across Pro and GPT Image 2.
+ *
+ * The rewrite gets that as a dated observation, not the lesson's instruction: the lesson is
+ * packaging's, where code places the type, and the web app and most MCP callers asking for a Pro
+ * prompt have no code that places type.
  */
 export const NANO_BANANA_PRO_SMALL_TYPE =
-  'Nano Banana Pro is not the model for small type: on Loop packaging round 1 (2026-09-24) it redrew the small type on every draw at 2K ("Live music" as "Oua music"), so small type is placed in code, never drawn by the model.'
+  'On Loop packaging round 1 (2026-09-24), Nano Banana Pro redrew small type at 2K ("Live music" came back as "Oua music").'
 
 export function buildRequestContent(args: {
   userPrompt: string

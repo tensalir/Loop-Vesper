@@ -410,8 +410,20 @@ test.describe('the standard text-to-image request', () => {
       expect(content).not.toMatch(/precise text\/layout rendering|precision for typography/)
     }
     const prompted = buildRequestContent({ userPrompt: 'give me a prompt for a poster', modelId: 'gemini-nano-banana-pro', hasReferenceImage: true })
-    expect(prompted).toContain(NANO_BANANA_PRO_SMALL_TYPE)
+    expect(prompted).toContain(`polished asset quality when relevant. ${NANO_BANANA_PRO_SMALL_TYPE}`)
+    const styled = buildRequestContent({ userPrompt: 'give me a prompt in this style for a poster', modelId: 'gemini-nano-banana-pro', hasReferenceImage: true })
+    expect(styled).toContain(`production-ready assets. ${NANO_BANANA_PRO_SMALL_TYPE}`)
     expect(NANO_BANANA_PRO_SMALL_TYPE).toContain('2026-09-24')
-    expect(NANO_BANANA_PRO_SMALL_TYPE).toContain('placed in code')
+  })
+
+  test('the small-type line is a dated observation: it never tells a web or MCP caller that type is placed in code', () => {
+    // The packaging lesson places small type in code; the web app has no code that places type.
+    for (const userPrompt of ['give me a prompt for a poster', 'give me a prompt in this style for a poster', 'make the sky pink']) {
+      for (const hasReferenceImage of [true, false]) {
+        const content = buildRequestContent({ userPrompt, modelId: 'gemini-nano-banana-pro', hasReferenceImage })
+        expect(content).not.toMatch(/placed in code|never drawn by the model/)
+      }
+    }
+    expect(NANO_BANANA_PRO_SMALL_TYPE).toMatch(/^On Loop packaging round 1 \(2026-09-24\), Nano Banana Pro redrew small type at 2K/)
   })
 })
