@@ -200,6 +200,36 @@ test.describe('products and references', () => {
     expect(structured.kit_version).toBe('0.2.1')
     expect(() => kitSection(loaded, 'secrets', () => true)).toThrow('Unknown section')
   })
+
+  test('the summary and the prompting section count and list only lessons that are held, and say how many are retired', () => {
+    const loaded = (k: typeof kit) => ({ kit: k, conformance: null as never, ref: 'studio-design-v0.2.0', commit: 'abc1234', blobSha: 'b', fetchedAt: new Date(), stale: false, staleReason: null })
+    const held = kit.prompting!.lessons.length
+    // As this kit was released: no retired rows, and the summary reads as it did.
+    expect(kitSection(loaded(kit), 'summary', () => true).text).toContain(`Loop edition, ${held} lessons.`)
+    // From studio-design 0.6.0 a retired lesson keeps its row, with held_by "retired": the two
+    // rows 0.6.0 retires are retired here, and their replacements added.
+    const withRetired = JSON.parse(JSON.stringify(kit)) as typeof kit
+    const lessons = withRetired.prompting!.lessons
+    for (const id of ['two-draws-then-switch', 'max-three-references']) {
+      const row = lessons.find((l) => l.id === id)!
+      row.held_by = 'retired'
+      row.lesson = `Retired 2026-10-01. It said: ${row.lesson}`
+    }
+    lessons.push(
+      { id: 'change-tool-before-words', lesson: 'l', evidence: 'e', held_by: 'the skill' },
+      { id: 'each-reference-earns-its-slot', lesson: 'l', evidence: 'e', held_by: 'the skill' }
+    )
+    const summary = kitSection(loaded(withRetired), 'summary', () => true).text
+    expect(summary).toContain(`Loop edition, ${held} lessons (2 retired, kept so their ids are never reused).`)
+    expect(summary).not.toContain(`${held + 2} lessons`)
+    const prompting = kitSection(loaded(withRetired), 'prompting', () => true).structured as { lessons: string[]; retired_lessons: number }
+    expect(prompting.lessons).toHaveLength(held)
+    expect(prompting.lessons).toContain('each-reference-earns-its-slot')
+    expect(prompting.lessons).not.toContain('max-three-references')
+    expect(prompting.lessons).not.toContain('two-draws-then-switch')
+    expect(prompting.lessons).toContain('render-first')
+    expect(prompting.retired_lessons).toBe(2)
+  })
 })
 
 test.describe('the creative tools in the registry', () => {

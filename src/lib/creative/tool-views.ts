@@ -95,6 +95,21 @@ export function rubricMarkdown(slug: string, product: KitProduct): string {
 
 export type KitSection = 'summary' | 'products' | 'prompting' | 'feedback' | `rubric:${string}`
 
+/**
+ * A lesson the kit keeps only so its id is never reused: `held_by: retired`, from studio-design
+ * 0.6.0. It is neither counted nor listed as a lesson.
+ */
+export function isRetiredLesson(lesson: { held_by: string }): boolean {
+  return lesson.held_by.trim().toLowerCase() === 'retired'
+}
+
+/** "35 lessons", or "35 lessons (2 retired, kept so their ids are never reused)". */
+export function lessonCount(lessons: ReadonlyArray<{ held_by: string }>): string {
+  const retired = lessons.filter(isRetiredLesson).length
+  const held = lessons.length - retired
+  return `${held} lesson${held === 1 ? '' : 's'}${retired ? ` (${retired} retired, kept so their ids are never reused)` : ''}`
+}
+
 export function kitSection(
   loaded: LoadedKit<AnyKit>,
   section: string,
@@ -108,7 +123,7 @@ export function kitSection(
     const text = [
       `${kit.plugin === 'product-design' ? 'Product kit (Loop Product Design)' : 'Creative kit'} ${kit.version} (${loaded.ref}, commit ${loaded.commit.slice(0, 7)})${loaded.stale ? ` — STALE: ${loaded.staleReason}` : ''}.`,
       `Products: ${products.map((p) => `${p.name} (${p.slug}, ${p.status}, rubric ${p.rubric ?? '?'})`).join('; ')}.`,
-      kit.prompting ? `Prompting: genai-prompting ${kit.prompting.version ?? '?'}, Loop edition, ${kit.prompting.lessons.length} lessons.` : 'Prompting: not in this kit.',
+      kit.prompting ? `Prompting: genai-prompting ${kit.prompting.version ?? '?'}, Loop edition, ${lessonCount(kit.prompting.lessons)}.` : 'Prompting: not in this kit.',
       `Judges: ${kitGraders(kit).surfaces.join(', ')}; Vesper's reads are labelled '${kitGraders(kit).vesper_surface}' and never pooled with another judge.`,
       kit.comment_line
         ? `Comment lines are written [${kit.comment_line.prefix} <product> <date>] and read under ${[kit.comment_line.prefix, ...kit.comment_line.reads_also].join(' or ')}.`
@@ -125,7 +140,14 @@ export function kitSection(
     const p = kit.prompting
     return {
       text: cap(p.skill_body),
-      structured: { ...header, version: p.version, sha256: p.sha256, lessons: p.lessons.map((l) => l.id), settings: p.settings },
+      structured: {
+        ...header,
+        version: p.version,
+        sha256: p.sha256,
+        lessons: p.lessons.filter((l) => !isRetiredLesson(l)).map((l) => l.id),
+        retired_lessons: p.lessons.filter(isRetiredLesson).length,
+        settings: p.settings,
+      },
     }
   }
   if (section === 'feedback') {

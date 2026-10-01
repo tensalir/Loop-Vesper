@@ -228,8 +228,8 @@ export const FREE_REFERENCE_CAP: ReferenceCap = {
 
 /**
  * The cap when product renders are attached: the creative kit's `generation.max_references` for
- * the product each render is of (the kit lesson `max-three-references`), the smallest when renders
- * of several products are attached. A render of a product the kit does not carry, or no kit,
+ * the product each render is of, that product's own ceiling, the smallest when renders of several
+ * products are attached. A render of a product the kit does not carry, or no kit,
  * keeps the free cap.
  */
 export function referenceCapFor(renderNames: readonly string[], kit: AnyKit | null): ReferenceCap {
