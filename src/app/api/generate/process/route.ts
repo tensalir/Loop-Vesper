@@ -265,8 +265,11 @@ async function processGenerationById(
     let effectiveModelId = generation.modelId
     
     if (supportsAutoRouting(generation.modelId)) {
-      await appendLog('routing:check', { modelId: generation.modelId })
-      const routeResult = await determineProviderRoute(generation.modelId)
+      // `allowFallback: false` in the generation's parameters keeps it on Google: read here,
+      // where the reroute happens, as the adapters already read it on their own fallback.
+      const allowFallback = (generation.parameters as any)?.allowFallback !== false
+      await appendLog('routing:check', { modelId: generation.modelId, allowFallback })
+      const routeResult = await determineProviderRoute(generation.modelId, { allowFallback })
       
       if ('error' in routeResult) {
         // Both providers are rate limited

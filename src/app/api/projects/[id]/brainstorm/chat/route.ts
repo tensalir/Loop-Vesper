@@ -5,6 +5,7 @@ import { streamText, type UIMessage } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 import { prisma } from '@/lib/prisma'
 import { loadSkill, combineSkills } from '@/lib/skills/registry'
+import { getPromptingSkillForClaude, promptingSkillForChat } from '@/lib/prompts/prompting-source'
 import { fetchStored } from '@/lib/storage/access'
 
 // Default model if env var not set - Sonnet 4.5 recommended per Anthropic docs
@@ -239,9 +240,10 @@ export async function POST(
       data: { updatedAt: new Date() },
     })
 
-    // Load skills for the system prompt
+    // Load skills for the system prompt; the prompting skill comes from the one source, the
+    // Loop edition from the creative kit first (src/lib/prompts/prompting-source.ts).
     const brainstormingSkill = loadSkill('brainstorming')
-    const genaiSkill = loadSkill('genai-prompting')
+    const genaiSkill = promptingSkillForChat(await getPromptingSkillForClaude())
     
     const skills = [brainstormingSkill, genaiSkill].filter(Boolean) as NonNullable<typeof brainstormingSkill>[]
     let systemPrompt = skills.length > 0 

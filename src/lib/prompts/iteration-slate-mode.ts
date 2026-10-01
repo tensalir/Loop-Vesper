@@ -2,8 +2,8 @@
  * The Iteration Slate Mode: the JSON shape `iterate_prompt` asks the model for.
  *
  * It used to live only in `src/lib/prompts/genai-prompting.skill.md`, an older
- * copy of the prompting skill that nothing loads (its loader looks under
- * `lib/prompts`, without `src`). The skill iterate does load, and the Loop
+ * copy of the prompting skill that nothing loaded (its loader looked under
+ * `lib/prompts`, without `src`); both were deleted on 2026-10-01. The skill iterate does load, and the Loop
  * edition from the creative kit, carry no schema, so iterate asked the model
  * to follow "the Iteration Slate Mode schema in your skill" that was not
  * there. It is appended here, whatever skill body iterate runs on, and only

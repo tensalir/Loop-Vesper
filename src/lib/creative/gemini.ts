@@ -2,7 +2,8 @@
  * Gemini, called the way the Eclipse scripts call it.
  *
  * `gradeJson` mirrors `qa._call_gemini`: the kit's grader models in order;
- * strict JSON at temperature 0; code fences stripped; a 404 moves to the next
+ * strict JSON at the kit's `grading.temperature` (0 when it names none; every
+ * kit so far says 0); code fences stripped; a 404 moves to the next
  * model; a 400 about the input image, or a rejected key, ends the read; 429,
  * 500 and 503 wait 6 s, 12 s, 18 s and try again. `drawImage` mirrors
  * `generate.gemini_image`: references in binding order, then the prompt;
@@ -81,20 +82,33 @@ function textOf(data: unknown): string {
   return candidates.flatMap((c) => c.content?.parts ?? []).map((p) => p.text ?? '').join('')
 }
 
+/** The temperature a grading read runs at: the kit's, else 0, as the Eclipse scripts read it. */
+export function gradingTemperature(fromKit: unknown): number {
+  return typeof fromKit === 'number' && Number.isFinite(fromKit) && fromKit >= 0 ? fromKit : 0
+}
+
 /**
  * One strict-JSON grading read. Returns the parsed JSON and the model that
  * answered, or throws a `GeminiError` naming the last failure.
  */
 export async function gradeJson(
   deps: GeminiDeps,
-  input: { models: readonly string[]; parts: GeminiPart[]; deadline: number; perCallMs: number; tries?: number }
+  input: {
+    models: readonly string[]
+    parts: GeminiPart[]
+    deadline: number
+    perCallMs: number
+    tries?: number
+    /** The kit's `grading.temperature`; 0 when the kit names none. Hard-coded 0 until 2026-10-01. */
+    temperature?: number
+  }
 ): Promise<{ json: unknown; model: string }> {
   const now = deps.now ?? Date.now
   const sleep = deps.sleep ?? realSleep
   const tries = input.tries ?? 3
   const body = {
     contents: [{ parts: input.parts }],
-    generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+    generationConfig: { responseMimeType: 'application/json', temperature: gradingTemperature(input.temperature) },
   }
   let last = 'no model answered'
   for (const model of input.models) {

@@ -10,7 +10,7 @@ import { aggregateReads, readAnswer, type ReadResult } from '../src/lib/creative
 import { verdictFromKit } from '../src/lib/creative/ladder'
 import { gradeCandidate, type GradeDeps } from '../src/lib/creative/grade'
 import { DrawError, executeDraws, manifestLine, planDraw } from '../src/lib/creative/draw'
-import { drawImage, gradeJson, imagePart, type GeminiPart } from '../src/lib/creative/gemini'
+import { drawImage, gradeJson, gradingTemperature, imagePart, type GeminiPart } from '../src/lib/creative/gemini'
 import { pinPart } from '../src/lib/creative/pin-parts'
 import { drawnAs, loadCandidate, CandidateError } from '../src/lib/creative/candidate'
 import { brusselsDate, verdictLine } from '../src/lib/creative/verdict-line'
@@ -378,6 +378,31 @@ test.describe('the Gemini client', () => {
     expect(calls[0].url).toContain('/gone-model:generateContent')
     expect(calls[2].body.generationConfig).toEqual({ responseMimeType: 'application/json', temperature: 0 })
     expect(slept).toEqual([6000])
+  })
+
+  test("a read runs at the kit's grading.temperature, and at 0 when the kit names none", async () => {
+    const read = async (temperature: unknown) => {
+      const { impl, calls } = fakeFetch([{ status: 200, body: answer('{"checks":{}}') }])
+      await gradeJson(
+        { apiKey: 'k', fetchImpl: impl, sleep: async () => {} },
+        { models: ['m'], parts: [{ text: 'x' }], deadline: Date.now() + 60_000, perCallMs: 10_000, temperature: temperature as number }
+      )
+      return calls[0].body.generationConfig.temperature
+    }
+    expect(eclipse.grading?.temperature).toBe(0)
+    expect(await read(eclipse.grading?.temperature)).toBe(0)
+    expect(await read(0.4)).toBe(0.4)
+    expect(await read(undefined)).toBe(0)
+    expect(gradingTemperature(-1)).toBe(0)
+    expect(gradingTemperature('0.4')).toBe(0)
+  })
+
+  test("every grader is handed the kit's grading block, not only its models", () => {
+    for (const file of ['src/lib/headless/tools/creative-grade.ts', 'src/lib/headless/tools/packaging.ts']) {
+      const src = readFileSync(join(__dirname, '..', file), 'utf8')
+      expect(src, file).toMatch(/gradeReader\(ctx\.env, product\.grading\)/)
+    }
+    expect(readFileSync(join(__dirname, '..', 'src/lib/creative/cmf/service.ts'), 'utf8')).toMatch(/deps\.grader\(env, inlineLimit, product\.grading\)/)
   })
 
   test('a refused image or a rejected key ends the read at once', async () => {

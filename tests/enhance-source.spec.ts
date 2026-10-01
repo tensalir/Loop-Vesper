@@ -1,4 +1,11 @@
 import { test, expect } from '@playwright/test'
+import { readFileSync } from 'fs'
+import { join } from 'path'
+import Anthropic from '@anthropic-ai/sdk'
+import { KitSchema, ProductKitSchema, type Kit, type KitProduct, type ProductKit } from '../src/lib/creative/kit-schema'
+import { fillSkeleton } from '../src/lib/creative/skeleton'
+import { REPLICATE_MODEL_CONFIGS, seedreamEnhancePrompt } from '../src/lib/models/replicate-utils'
+import { ReplicateAdapter, SEEDREAM_4_CONFIG } from '../src/lib/models/adapters/replicate'
 import {
   describePromptingSource,
   getPromptingSkillForClaude,
@@ -10,10 +17,14 @@ import {
 import {
   findLoopProductName,
   findSkeletonFingerprint,
+  guardVocabulary,
+  kitGuardWords,
+  loadGuardVocabulary,
   productPromptPassthrough,
+  setGuardWordsLoader,
   SKELETON_FINGERPRINTS,
 } from '../src/lib/prompts/product-prompt-guard'
-import { buildRequestContent, enhancePrompt, skillVersionFromSource } from '../src/lib/prompts/enhance'
+import { buildRequestContent, enhancePrompt, NANO_BANANA_PRO_SMALL_TYPE, skillVersionFromSource } from '../src/lib/prompts/enhance'
 import { iteratePrompt, iterateSystemPrompt } from '../src/lib/prompts/iterate'
 import { ITERATION_SLATE_MODE_HEADING } from '../src/lib/prompts/iteration-slate-mode'
 
@@ -183,7 +194,7 @@ test.describe('code-filled product prompts are not rewritten', () => {
 
   test('product names are only checked when asked (the MCP tool asks, the web button does not)', () => {
     const prompt = 'A Loop Eclipse sleep mask on a linen pillow'
-    expect(findLoopProductName(prompt)).toBe('Loop Eclipse')
+    expect(findLoopProductName(prompt)).toBe('Loop Eclipse sleep mask')
     expect(productPromptPassthrough(prompt)).toBeNull()
     expect(productPromptPassthrough(prompt, { checkProductNames: true })?.reason).toBe('product')
     expect(findLoopProductName('a solar eclipse over the sea')).toBeNull()
@@ -203,10 +214,204 @@ test.describe('code-filled product prompts are not rewritten', () => {
   })
 })
 
+/**
+ * The guard reads the kits' words and matches a fingerprint only where a code-filled prompt has
+ * it, at the start. Until 2026-10-01 it matched the short CMF sentence anywhere, so a free edit
+ * prompt containing "Use the attached image as the exact base." came back unenhanced and labelled
+ * a Loop skeleton, and the kit's own fingerprints were never read.
+ */
+test.describe('the guard reads the kits and matches how a code-filled prompt starts', () => {
+  const FIX = join(__dirname, 'fixtures')
+  const studio: Kit = KitSchema.parse(JSON.parse(readFileSync(join(FIX, 'creative', 'kit.v1.sample.json'), 'utf8')))
+  const product: ProductKit = ProductKitSchema.parse(JSON.parse(readFileSync(join(FIX, 'creative', 'product-kit.v1.sample.json'), 'utf8')))
+  const cmfFingerprint = (product.products.cmf as unknown as { template: { fingerprint: string } }).template.fingerprint
+  // The creative kit as released since CMF moved out (studio-design-v0.5.0): no CMF fingerprint.
+  const studioNow = JSON.parse(JSON.stringify(studio)) as Kit
+  studioNow.prompting!.never_enhance_fingerprints = studioNow.prompting!.never_enhance_fingerprints.filter((fp) => fp !== cmfFingerprint)
+  const fromKits = guardVocabulary(kitGuardWords(studioNow, product))
+  const fromCode = guardVocabulary()
+
+  // Real code-filled prompts: the Eclipse skeleton filled by code, the packaging finishing
+  // skeleton, and a CMF prompt the plugin repository's prompt_build.py wrote.
+  const eclipsePrompt = fillSkeleton(studio.products.eclipse as KitProduct, {
+    n_refs: 2,
+    colourway: 'Teal',
+    scene: 'on a linen pillow in a hotel room at dawn',
+    light: 'soft window light from the left',
+    format: '4:5',
+  })
+  const packagingPrompt = String(((studio.products.packaging.generation ?? {}) as { skeleton: { text: string } }).skeleton.text).replace('[format]', '16:9')
+  const cmfPrompt = JSON.parse(readFileSync(join(FIX, 'cmf', 'experience-2-cc--E--case-experience2--front.payload.json'), 'utf8')).prompt as string
+  const freeWithSentence = 'Turn the sofa dark green. Use the attached image as the exact base. Keep the rug as it is.'
+
+  const realCreate = Anthropic.Messages.prototype.create
+  let modelCalls = 0
+  let savedKey: string | undefined
+
+  test.beforeEach(() => {
+    modelCalls = 0
+    savedKey = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = 'test-key-not-sent'
+    Anthropic.Messages.prototype.create = async function () {
+      modelCalls++
+      return { content: [{ type: 'text', text: 'A REWRITTEN PROMPT' }] }
+    } as unknown as typeof realCreate
+  })
+
+  test.afterEach(() => {
+    Anthropic.Messages.prototype.create = realCreate
+    setGuardWordsLoader(null)
+    setKitPromptingLoader(async () => null)
+    if (savedKey === undefined) delete process.env.ANTHROPIC_API_KEY
+    else process.env.ANTHROPIC_API_KEY = savedKey
+  })
+
+  test("the kits' words are read: the creative kit's fingerprints and products, CMF's from the product kit", () => {
+    expect(fromKits.source).toEqual({ studio: 'kit', cmf: 'kit' })
+    expect(fromKits.fingerprints).toEqual(expect.arrayContaining([...studioNow.prompting!.never_enhance_fingerprints, cmfFingerprint]))
+    expect(fromKits.fingerprints).not.toContain(SKELETON_FINGERPRINTS[1])
+    expect(fromKits.products.map((p) => p.name).sort()).toEqual(['Eclipse', 'Packaging'])
+    // A kit that cannot be read leaves only its own part to the copies.
+    expect(guardVocabulary(kitGuardWords(studioNow, null)).source).toEqual({ studio: 'kit', cmf: 'code' })
+    expect(guardVocabulary(kitGuardWords(null, product)).source).toEqual({ studio: 'code', cmf: 'kit' })
+    expect(fromCode.source).toEqual({ studio: 'code', cmf: 'code' })
+    expect([...fromCode.fingerprints].sort()).toEqual([...SKELETON_FINGERPRINTS].sort())
+  })
+
+  test('the kits are read at run time, and a kit that fails leaves the copies', async () => {
+    setGuardWordsLoader(async () => kitGuardWords(studioNow, product))
+    expect((await loadGuardVocabulary()).source).toEqual({ studio: 'kit', cmf: 'kit' })
+    setGuardWordsLoader(async () => {
+      throw new Error('GitHub is down')
+    })
+    expect((await loadGuardVocabulary()).source).toEqual({ studio: 'code', cmf: 'code' })
+    setGuardWordsLoader(null)
+    expect((await loadGuardVocabulary()).source).toEqual({ studio: 'code', cmf: 'code' }) // no GitHub App in tests
+  })
+
+  test('a real Eclipse, packaging or CMF prompt still passes through unchanged', () => {
+    for (const vocabulary of [fromKits, fromCode]) {
+      for (const p of [eclipsePrompt, packagingPrompt, cmfPrompt]) {
+        expect(productPromptPassthrough(p, { vocabulary })?.reason, p.slice(0, 40)).toBe('skeleton')
+      }
+    }
+  })
+
+  test('a free prompt holding the CMF sentence mid-text is not a skeleton', () => {
+    for (const vocabulary of [fromKits, fromCode]) {
+      expect(productPromptPassthrough(freeWithSentence, { vocabulary })).toBeNull()
+      expect(productPromptPassthrough(`Edit: ${eclipsePrompt}`, { vocabulary })).toBeNull()
+    }
+    // With the kit's longer fingerprint, a free prompt may even open with the sentence.
+    expect(productPromptPassthrough('Use the attached image as the exact base. Make the sky pink.', { vocabulary: fromKits })).toBeNull()
+  })
+
+  test('enhancePrompt rewrites the free prompt and returns every skeleton unchanged without a model call', async () => {
+    setGuardWordsLoader(async () => kitGuardWords(studioNow, product))
+    const free = await enhancePrompt({ prompt: freeWithSentence, modelId: 'gemini-nano-banana-pro' })
+    expect(free.passthrough).toBeNull()
+    expect(free.enhancedPrompt).toBe('A REWRITTEN PROMPT')
+    expect(modelCalls).toBe(1)
+    for (const p of [eclipsePrompt, packagingPrompt, cmfPrompt]) {
+      const out = await enhancePrompt({ prompt: p, modelId: 'gemini-nano-banana-pro' })
+      expect(out.enhancedPrompt).toBe(p)
+      expect(out.enhancementModel).toBe('none')
+      expect(out.passthrough?.reason).toBe('skeleton')
+    }
+    expect(modelCalls).toBe(1)
+  })
+
+  test('a product name counts only beside the brand', () => {
+    for (const { products } of [fromKits, fromCode]) {
+      expect(findLoopProductName('An Eclipse sleep mask on a linen pillow', products)).toBeNull()
+      expect(findLoopProductName('Coachella packaging on a festival table', products)).toBeNull()
+      expect(findLoopProductName('a Coachella box at the gate', products)).toBeNull()
+      expect(findLoopProductName('a solar eclipse over the sea', products)).toBeNull()
+      expect(findLoopProductName('A Loop Eclipse sleep mask on a linen pillow', products)).toMatch(/^Loop Eclipse/)
+      expect(findLoopProductName("Loop's retail box on a shelf", products)).toBe("Loop's retail box")
+      expect(findLoopProductName('the Loop Coachella box at the gate', products)).toBe('Loop Coachella box')
+    }
+    // The kit's aliases are read, beside the brand: "the mask" reads "Loop mask".
+    expect(findLoopProductName('a Loop mask on the nightstand', fromKits.products)).toBe('Loop mask')
+    expect(findLoopProductName('a mask on the nightstand', fromKits.products)).toBeNull()
+  })
+
+  test("the note names the tool that draws the product, not a tool still to come", () => {
+    const eclipseNote = productPromptPassthrough('A Loop Eclipse on a pillow', { checkProductNames: true, vocabulary: fromKits })!
+    expect(eclipseNote.reason).toBe('product')
+    expect(eclipseNote.note).toContain('generate_product_image')
+    expect(eclipseNote.note).not.toContain('once it is connected')
+    const boxNote = productPromptPassthrough('The Loop Coachella box on a table', { checkProductNames: true, vocabulary: fromKits })!
+    expect(boxNote.note).toContain('packaging_mockup, then packaging_finish')
+  })
+})
+
+/** Seedream rewrote every prompt, the skeletons Vesper's own rewrite leaves alone included. */
+test.describe("Seedream's own rewrite", () => {
+  const product: ProductKit = ProductKitSchema.parse(
+    JSON.parse(readFileSync(join(__dirname, 'fixtures', 'creative', 'product-kit.v1.sample.json'), 'utf8'))
+  )
+  const cmfPrompt = JSON.parse(
+    readFileSync(join(__dirname, 'fixtures', 'cmf', 'experience-2-cc--E--case-experience2--front.payload.json'), 'utf8')
+  ).prompt as string
+  const vocabulary = guardVocabulary(kitGuardWords(null, product))
+  const realFetch = globalThis.fetch
+
+  test.afterEach(() => {
+    globalThis.fetch = realFetch
+    setGuardWordsLoader(null)
+  })
+
+  test('is off for a code-filled product prompt and on for every other prompt', () => {
+    expect(seedreamEnhancePrompt(cmfPrompt, vocabulary)).toBe(false)
+    expect(seedreamEnhancePrompt(cmfPrompt)).toBe(false)
+    expect(seedreamEnhancePrompt("Using the provided mockup of Loop's retail box (image 1) as the exact picture")).toBe(false)
+    expect(seedreamEnhancePrompt('a red chair in a white room', vocabulary)).toBe(true)
+    expect(seedreamEnhancePrompt('Turn the sofa green. Use the attached image as the exact base.', vocabulary)).toBe(true)
+    // A product name alone is not a code-filled prompt.
+    expect(seedreamEnhancePrompt('A Loop Eclipse sleep mask on a pillow', vocabulary)).toBe(true)
+  })
+
+  test('the webhook path sends the same', () => {
+    const build = REPLICATE_MODEL_CONFIGS['replicate-seedream-4'].buildInput
+    expect(build({ prompt: cmfPrompt, guardVocabulary: vocabulary }).enhance_prompt).toBe(false)
+    expect(build({ prompt: 'a red chair' }).enhance_prompt).toBe(true)
+  })
+
+  test('the adapter sends enhance_prompt false for a skeleton and true for a free prompt', async () => {
+    setGuardWordsLoader(async () => kitGuardWords(null, product))
+    const sent: Array<Record<string, unknown>> = []
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/models/')) return new Response(JSON.stringify({ latest_version: { id: 'v1' } }), { status: 200 })
+      sent.push(JSON.parse(String(init?.body ?? '{}')).input)
+      return new Response(JSON.stringify({ detail: 'stopped by the test' }), { status: 422 })
+    }) as unknown as typeof fetch
+    const adapter = new ReplicateAdapter(SEEDREAM_4_CONFIG)
+    ;(adapter as unknown as { apiKey: string }).apiKey = 'test-token-not-sent'
+    const skeleton = await adapter.generate({ prompt: cmfPrompt })
+    const free = await adapter.generate({ prompt: 'a red chair in a white room' })
+    expect(skeleton.status).toBe('failed')
+    expect(free.status).toBe('failed')
+    expect(sent.map((input) => input.enhance_prompt)).toEqual([false, true])
+    expect(sent[0].prompt).toBe(cmfPrompt)
+  })
+})
+
 test.describe('the standard text-to-image request', () => {
   test('no longer asks the model to add lighting, camera and framing', () => {
     const content = buildRequestContent({ userPrompt: 'a red chair', modelId: 'gemini-nano-banana-pro', hasReferenceImage: false })
     expect(content).not.toMatch(/lighting, camera, framing/)
     expect(content).toContain('Clarify ambiguous elements')
+  })
+
+  test("no longer tells the rewrite that Nano Banana Pro renders text precisely: the kit's small-type-in-code", () => {
+    for (const userPrompt of ['give me a prompt for a poster', 'give me a prompt in this style for a poster', 'make the sky pink']) {
+      const content = buildRequestContent({ userPrompt, modelId: 'gemini-nano-banana-pro', hasReferenceImage: true })
+      expect(content).not.toMatch(/precise text\/layout rendering|precision for typography/)
+    }
+    const prompted = buildRequestContent({ userPrompt: 'give me a prompt for a poster', modelId: 'gemini-nano-banana-pro', hasReferenceImage: true })
+    expect(prompted).toContain(NANO_BANANA_PRO_SMALL_TYPE)
+    expect(NANO_BANANA_PRO_SMALL_TYPE).toContain('2026-09-24')
+    expect(NANO_BANANA_PRO_SMALL_TYPE).toContain('placed in code')
   })
 })

@@ -150,7 +150,7 @@ export interface CmfServiceDeps {
     clownUrl(storagePath: string, env: NodeJS.ProcessEnv): Promise<string | null>
   }
   /** One CMF grade's reads: the candidate and the clown as parts, the model reads. */
-  grader(env: NodeJS.ProcessEnv, inlineLimit: number, models: readonly string[]): Pick<GradeDeps, 'candidatePart' | 'pinPart' | 'read'>
+  grader(env: NodeJS.ProcessEnv, inlineLimit: number, grading: { models?: readonly string[]; temperature?: number } | null | undefined): Pick<GradeDeps, 'candidatePart' | 'pinPart' | 'read'>
   /** The CMF team's records: the team project every render is saved in, and the supplier PDFs. */
   team: CmfTeamStore
 }
@@ -284,12 +284,12 @@ export const productionCmfServiceDeps: CmfServiceDeps = {
     size: (bytes) => imageSize(bytes),
     clownUrl: (storagePath, env) => anchorUrl(storagePath, env),
   },
-  grader(env, inlineLimit, models) {
+  grader(env, inlineLimit, grading) {
     const partDeps = pinPartDeps(env, inlineLimit)
     return {
       candidatePart: (c) => candidatePartFor(env, inlineLimit, c),
       pinPart: (row, spec) => pinPart(row, spec, partDeps),
-      read: gradeReader(env, models),
+      read: gradeReader(env, grading),
     }
   },
   team: prismaCmfTeamStore,
@@ -1135,7 +1135,7 @@ export async function runGrade(actor: CmfActor, ready: CmfGradeReady, env: NodeJ
   const inlineLimit = product.grading?.inline_limit_bytes ?? 3_500_000
   const outcome = await gradeCmfCandidate(
     { kit: loaded.kit, cmf, parts, candidate, spec: target.spec, column: target.column, key: target.key, runs: ready.runs },
-    { pinRows: rows, ...deps.grader(env, inlineLimit, product.grading?.models ?? []) }
+    { pinRows: rows, ...deps.grader(env, inlineLimit, product.grading) }
   )
   const header = kitHeader(loaded)
   const costUsd = GRADE_READ_USD * outcome.aggregate.reads

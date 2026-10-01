@@ -30,6 +30,9 @@ import { PHASE_1_MODEL_IDS } from './model-allowlists'
 import type { JobPayload } from './jobs'
 import { recordMcpGeneration, STREAM_SESSIONS, type McpStream } from './record-generation'
 import type { GenerationAnchor } from '@/lib/generation/anchor'
+import type { AnyKit } from '@/lib/creative/kit-schema'
+import { findProduct } from '@/lib/creative/products'
+import { servedView } from '@/lib/creative/kit-set'
 
 export { PHASE_1_MODEL_IDS, type Phase1ModelId } from './model-allowlists'
 
@@ -136,6 +139,8 @@ export interface ExecuteContext {
   jobId?: string | null
   /** Injected for tests. */
   record?: typeof recordMcpGeneration
+  /** Injected for tests: the creative kit the reference cap is read from (null: none). */
+  loadCreativeKit?: () => Promise<AnyKit | null>
 }
 
 const STORAGE_BUCKET = 'generated-images'
@@ -206,6 +211,73 @@ async function readImageBytes(source: string): Promise<{ buffer: Buffer; mimeTyp
   return { buffer: Buffer.from(await res.arrayBuffer()), mimeType }
 }
 
+/** A cap on the images a draw is sent, and the sentence that says where it comes from. */
+export interface ReferenceCap {
+  cap: number
+  why: string
+}
+
+/**
+ * A draw with no product render: 4 across referenceImage and productRenderIds. From 3bbf917
+ * (2026-05-05), no reason recorded; kept as it was.
+ */
+export const FREE_REFERENCE_CAP: ReferenceCap = {
+  cap: 4,
+  why: 'Cap is 4 across referenceImage + productRenderIds.',
+}
+
+/**
+ * The cap when product renders are attached: the creative kit's `generation.max_references` for
+ * the product each render is of (the kit lesson `max-three-references`), the smallest when renders
+ * of several products are attached. A render of a product the kit does not carry, or no kit,
+ * keeps the free cap.
+ */
+export function referenceCapFor(renderNames: readonly string[], kit: AnyKit | null): ReferenceCap {
+  let best: ReferenceCap | null = null
+  if (kit) {
+    for (const name of Array.from(new Set(renderNames))) {
+      const hit = findProduct(kit, name)
+      const max = (hit?.product.generation as { max_references?: unknown } | null | undefined)?.max_references
+      if (!hit || typeof max !== 'number' || !Number.isInteger(max) || max < 1) continue
+      if (!best || max < best.cap) {
+        best = {
+          cap: max,
+          why: `With a render of ${hit.product.name} attached, the cap is the creative kit's max_references for ${hit.product.name}: ${max}, the render included.`,
+        }
+      }
+    }
+  }
+  return best ?? FREE_REFERENCE_CAP
+}
+
+export function assertReferenceCount(count: number, cap: ReferenceCap): void {
+  if (count > cap.cap) throw new Error(`Too many reference images (${count}). ${cap.why}`)
+}
+
+/**
+ * The images in the order the model reads them: the product renders first, so the render is
+ * image 1 (the kit lesson `render-first`), then the caller's reference. Until 2026-10-01 the
+ * caller's reference went first and the render second.
+ */
+export function orderReferences(renders: readonly string[], callerReference: string | undefined, cap: ReferenceCap): string[] {
+  const refs = [...renders, ...(callerReference ? [callerReference] : [])]
+  assertReferenceCount(refs.length, cap)
+  return refs
+}
+
+/** The creative kit as Vesper serves it, or null when it cannot be read: the cap then stays the free one. */
+async function loadServedCreativeKit(): Promise<AnyKit | null> {
+  try {
+    const { githubAppConfigFromEnv } = await import('@/lib/github/app')
+    if (!githubAppConfigFromEnv()) return null
+    const { getCreativeKit } = await import('@/lib/creative/kit-runtime')
+    return servedView(await getCreativeKit()).kit
+  } catch (err) {
+    console.warn('[mcp/generate_asset] the creative kit could not be read; the reference cap stays 4:', (err as Error)?.message)
+    return null
+  }
+}
+
 export function parseGenerateAssetArgs(args: Record<string, unknown>): GenerateAssetArgs {
   const parsed = HeadlessGenerateAssetSchema.safeParse(args)
   if (!parsed.success) {
@@ -250,8 +322,14 @@ export async function executeGenerateAsset(
   // Product renders come from our own table, so their URLs are trusted.
   let anchor: GenerationAnchor | null = null
   const renderRefs: string[] = []
+  let cap: ReferenceCap = FREE_REFERENCE_CAP
   if (productRenderIds && productRenderIds.length > 0) {
     const rows = await resolveProductRenders(productRenderIds)
+    cap = referenceCapFor(
+      rows.map((row) => row.name),
+      await (ctx.loadCreativeKit ?? loadServedCreativeKit)()
+    )
+    assertReferenceCount(rows.length + (referenceImage ? 1 : 0), cap)
     const read = await Promise.all(rows.map((row) => readImageBytes(row.imageUrl)))
     read.forEach(({ buffer, mimeType }) => {
       renderRefs.push(`data:${mimeType};base64,${buffer.toString('base64')}`)
@@ -266,15 +344,8 @@ export async function executeGenerateAsset(
 
   // A caller-supplied reference goes through the fetch allowlist.
   const normalizedRef = referenceImage ? await referenceToDataUrl(referenceImage) : undefined
-  const allRefs: string[] = []
-  if (normalizedRef) allRefs.push(normalizedRef)
-  allRefs.push(...renderRefs)
-
-  if (allRefs.length > 4) {
-    throw new Error(
-      `Too many reference images (${allRefs.length}). Cap is 4 across referenceImage + productRenderIds.`
-    )
-  }
+  // The product render is image 1, the caller's reference after it.
+  const allRefs = orderReferences(renderRefs, normalizedRef, cap)
 
   const config = getModelConfig(modelId)
   const supportsMulti = !!config?.capabilities?.multiImageEditing

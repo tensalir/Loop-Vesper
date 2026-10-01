@@ -1,8 +1,10 @@
 import { BaseModelAdapter, ModelConfig, GenerationRequest, GenerationResponse } from '../base'
 import { recordApiCall } from '@/lib/rate-limits/usage'
 import { getScopeForModel } from '@/lib/rate-limits/config'
+import { loadGuardVocabulary } from '@/lib/prompts/product-prompt-guard'
 import {
   buildSeedanceInput,
+  seedreamEnhancePrompt,
   SEEDANCE_2_5_MODEL_PATH,
   SEEDANCE_MAX_REFERENCE_AUDIOS,
   SEEDANCE_MAX_REFERENCE_IMAGES,
@@ -415,7 +417,9 @@ export class ReplicateAdapter extends BaseModelAdapter {
         console.log(`[Seedream-4.5] Using resolution: ${size} (from ${resolution || 'default'})`)
         input.sequential_image_generation = numOutputs > 1 ? 'auto' : 'disabled'
         input.max_images = numOutputs
-        input.enhance_prompt = true // Enable prompt enhancement for better results
+        // Seedream's own rewrite, except for a code-filled Loop product prompt (replicate-utils).
+        input.enhance_prompt = seedreamEnhancePrompt(prompt, await loadGuardVocabulary())
+        if (!input.enhance_prompt) console.log('[Seedream-4.5] Code-filled product prompt: enhance_prompt off')
 
         // Debug: Log all possible reference image sources
         console.log('[Seedream-4.5] Debug - Reference image sources:')

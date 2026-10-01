@@ -16,9 +16,10 @@
  *
  * Every prompting text Claude meets goes through here: enhance_prompt,
  * iterate_prompt, the MCP prompts (vesper:generate, vesper:enhance,
- * vesper:iterate) and the vesper://skill/genai-prompting resource. None of
- * them reads a skill file itself, and `tests/prompting-guard.spec.ts` fails if
- * one does. Until 2026-10-01 iterate ran on the bundled file and the MCP
+ * vesper:iterate), the vesper://skill/genai-prompting resource, and since
+ * 2026-10-01 Vesper's own in-app assistant and brainstorm chat. None of them
+ * reads a prompting skill file itself, and `tests/prompting-guard.spec.ts`
+ * fails if one does. Until 2026-10-01 iterate ran on the bundled file and the MCP
  * prompts and resource fell back to `src/lib/skills/genai-prompting/SKILL.md`,
  * a generic copy, after the generic skill had been taken out of Loop's
  * Claude organisation.
@@ -26,7 +27,7 @@
 
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
-import { loadSkill } from '@/lib/skills/registry'
+import { loadSkill, type Skill } from '@/lib/skills/registry'
 import { githubAppConfigFromEnv } from '@/lib/github/app'
 import type { SkillVersion } from './skill-version'
 
@@ -180,6 +181,25 @@ export function getPromptingSkillForClaude(
   options: Pick<PromptingSourceOptions, 'bundled'> = {}
 ): Promise<PromptingSource> {
   return getPromptingSystemPrompt('', { ...options, allowDbOverride: false })
+}
+
+/**
+ * The prompting skill as a section of Vesper's own chats (the in-app assistant and the brainstorm
+ * chat), beside their own skill: from `getPromptingSkillForClaude`, so the Loop edition from the
+ * kit first. Until 2026-10-01 both chats read the bundled file. Null when only the generic
+ * fallback is left: that text is a rewrite instruction ("Return ONLY the prompt text") and would
+ * turn a chat into a prompt rewriter, so the chat runs on its own skill alone, as it did when the
+ * bundled file was missing.
+ */
+export function promptingSkillForChat(source: PromptingSource): Skill | null {
+  if (source.source === 'fallback' || !source.text) return null
+  return {
+    id: 'genai-prompting',
+    metadata: { name: 'genai-prompting' },
+    content: source.text,
+    path: `prompting-source:${source.source}`,
+    lastModified: new Date(0),
+  }
 }
 
 /** The skill version reported with every result, read from the source that actually ran. */

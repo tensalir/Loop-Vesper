@@ -31,6 +31,7 @@ import {
 import type { AnyKit, Kit, ProductKit } from './kit-schema'
 import type { KitSetLoaders } from './kit-set'
 import type { KitPrompting } from '@/lib/prompts/prompting-source'
+import { kitGuardWords, type KitGuardWords } from '@/lib/prompts/product-prompt-guard'
 
 export const DEFAULT_KIT_REPO = 'tensalir/loop-ai-studio'
 export const DEFAULT_PRODUCT_KIT_REPO = 'tensalir/loop-product-plugins'
@@ -146,4 +147,22 @@ export async function loadKitPrompting(env: NodeJS.ProcessEnv = process.env): Pr
     console.warn('[creative-kit] prompting from the kit is unavailable:', (err as Error).message)
     return null
   }
+}
+
+/**
+ * The words the prompt guard reads (`src/lib/prompts/product-prompt-guard.ts`): the creative
+ * kit's `never_enhance_fingerprints` and its products' names and aliases, and the product kit's
+ * CMF template fingerprint. A kit that cannot be read leaves its part null, so the guard uses its
+ * own copies for that part and never fails on a kit. Null when the App is not configured.
+ */
+export async function loadKitGuardWords(env: NodeJS.ProcessEnv = process.env): Promise<KitGuardWords | null> {
+  if (!githubAppConfigFromEnv(env) || !creativeToolsEnabled(env)) return null
+  const [studio, product] = await Promise.allSettled([getCreativeKit({ env }), getProductKit({ env })])
+  for (const [what, r] of [['creative kit', studio], ['product kit', product]] as const) {
+    if (r.status === 'rejected') console.warn(`[creative-kit] the prompt guard reads its own copy of the ${what}'s words:`, (r.reason as Error)?.message)
+  }
+  return kitGuardWords(
+    studio.status === 'fulfilled' ? studio.value.kit : null,
+    product.status === 'fulfilled' ? product.value.kit : null
+  )
 }

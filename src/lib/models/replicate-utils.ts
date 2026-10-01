@@ -5,8 +5,21 @@
  * This enables async generation without polling timeouts.
  */
 
+import { productPromptPassthrough, type GuardVocabulary } from '@/lib/prompts/product-prompt-guard'
+
 const REPLICATE_API_KEY = process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_API_KEY
 const REPLICATE_BASE_URL = 'https://api.replicate.com/v1'
+
+/**
+ * Seedream's own prompt rewrite (`enhance_prompt`). Off for a prompt filled by code from a Loop
+ * product skeleton or the CMF template, which no model rewrites (the kit lesson
+ * `no-model-rewrite`); on for every other prompt, as before. Until 2026-10-01 it was on for every
+ * prompt, so Seedream rewrote the skeletons Vesper's own rewrite leaves alone. The vocabulary is
+ * the guard's (`loadGuardVocabulary`); without one, the guard's own copies.
+ */
+export function seedreamEnhancePrompt(prompt: string, vocabulary?: GuardVocabulary): boolean {
+  return productPromptPassthrough(prompt, { vocabulary })?.reason !== 'skeleton'
+}
 
 export interface ReplicatePredictionInput {
   modelPath: string
@@ -312,7 +325,7 @@ export const REPLICATE_MODEL_CONFIGS: Record<string, {
         size: params.resolution === 4096 ? '4K' : '2K',
         sequential_image_generation: (params.numOutputs || 1) > 1 ? 'auto' : 'disabled',
         max_images: params.numOutputs || 1,
-        enhance_prompt: true,
+        enhance_prompt: seedreamEnhancePrompt(params.prompt, params.guardVocabulary),
       }
 
       // Add reference images if provided

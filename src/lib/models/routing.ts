@@ -80,12 +80,19 @@ function getScopeForModel(modelId: string): RateLimitScope {
 
 /**
  * Determine the best provider route for a given model
- * 
+ *
+ * `allowFallback: false` (a generation's parameter, as on the MCP tools) keeps the requested
+ * model on Google: when Google is rate limited the answer is an error to retry later, never the
+ * Replicate model. Until 2026-10-01 the web worker rerouted without reading the flag, so Nano
+ * Banana 2 could be drawn by Replicate's Nano Banana Pro, and Veo 3.1 by Kling 2.6, against it.
+ * Without the flag nothing changes.
+ *
  * @param modelId - The requested model ID (e.g., 'gemini-nano-banana-pro')
  * @returns Route decision or error if both providers are blocked
  */
 export async function determineProviderRoute(
-  modelId: string
+  modelId: string,
+  options: { allowFallback?: boolean } = {}
 ): Promise<ProviderRouteDecision | ProviderRouteError> {
   // Check if this model supports routing
   const fallbackMapping = FALLBACK_MAPPINGS[modelId]
@@ -121,6 +128,15 @@ export async function determineProviderRoute(
       billingModelId: modelId,
       isFallback: false,
       reason: 'Google provider available',
+    }
+  }
+
+  // The caller forbade the fallback: Google or nothing.
+  if (options.allowFallback === false) {
+    return {
+      error: true,
+      message: `Google is rate limited (${googleCheck.reason}) and allowFallback: false forbids the Replicate fallback (${fallbackMapping.replicateModelId})`,
+      retryAfterSeconds: googleBlocked ? getRemainingBlockTime(googleProvider, googleScope) : 60,
     }
   }
 

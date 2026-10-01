@@ -3,6 +3,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import Anthropic from '@anthropic-ai/sdk'
 import { loadSkill, combineSkills } from '@/lib/skills/registry'
+import { getPromptingSkillForClaude, promptingSkillForChat } from '@/lib/prompts/prompting-source'
 import { logMetric } from '@/lib/metrics'
 
 /**
@@ -111,10 +112,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Load the assistant skill
+    // Load the assistant skill; the prompting skill comes from the one source, the
+    // Loop edition from the creative kit first (src/lib/prompts/prompting-source.ts).
     const assistantSkill = loadSkill('assistant')
-    const genaiSkill = loadSkill('genai-prompting')
-    
+    const genaiSkill = promptingSkillForChat(await getPromptingSkillForClaude())
+
     // Combine skills if both available
     const skills = [assistantSkill, genaiSkill].filter(Boolean) as NonNullable<typeof assistantSkill>[]
     const systemPrompt = skills.length > 0 

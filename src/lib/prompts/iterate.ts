@@ -18,6 +18,10 @@ import {
   type PromptingSourceOptions,
 } from './prompting-source'
 
+// A setting, not a measured choice: the Sonnet 4.5 default of Vesper's other
+// Claude calls (1bd8b2d, 2026-01-21), copied here when iterate was added
+// (dd89092, 2026-05-04). No comparison with another model is recorded.
+// ANTHROPIC_PROMPT_ITERATE_MODEL overrides it.
 const DEFAULT_PROMPT_ITERATE_MODEL = 'claude-sonnet-4-5-20250929'
 
 const ITERATE_INTRO =

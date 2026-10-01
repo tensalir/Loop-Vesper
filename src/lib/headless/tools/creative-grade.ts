@@ -135,7 +135,9 @@ export function gradeText(x: Pick<GradeExecution, 'slug' | 'product' | 'outcome'
   if (x.cmf) {
     lines.push(
       `Read against ${x.cmf.tab} column ${x.cmf.column}${x.cmf.sku_name ? ` (${x.cmf.sku_name})` : ''}${x.cmf.import_id ? ` of upload ${x.cmf.import_id}, its row built by code from that workbook,` : ''} and its clown through the key ${x.cmf.key}, the clown attached second.`,
-      "Vesper measured nothing on the pixels; the repository's qa x3 measures leftover clown colour in code, so this read is the weaker of the two on that."
+      // The kit's lesson `measure-colour-in-code`: colour is measured in code against the
+      // product's band; the eye and the grader each judge one frame.
+      "Vesper measured nothing on the pixels; the repository's qa x3 measures leftover clown colour in code, so this read is the weaker of the two on that (the kit's lesson measure-colour-in-code)."
     )
     if (x.gradeId) lines.push(`grade_id ${x.gradeId}: record Damien's answer with record_verdict.`)
     return lines.join('\n')
@@ -231,7 +233,7 @@ async function executeGrade(ctx: ToolContext, loaded: LoadedKit, slug: string, p
       pinRows: rows,
       candidatePart: (c) => candidatePartFor(ctx.env, inlineLimit, c),
       pinPart: (row, spec) => pinPart(row, spec, partDeps),
-      read: gradeReader(ctx.env, product.grading?.models ?? []),
+      read: gradeReader(ctx.env, product.grading),
     }
   )
   const header = kitHeader(loaded)

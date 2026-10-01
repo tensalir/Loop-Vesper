@@ -172,6 +172,8 @@ export const HeadlessGenerateAssetSchema = z.object({
     .string()
     .max(HEADLESS_REFERENCE_IMAGE_MAX, 'referenceImage exceeds 6 MB cap')
     .optional(),
+  // The cap of 4: from 3bbf917 (2026-05-05), no reason recorded; kept. With renders attached,
+  // executeGenerateAsset applies the creative kit's max_references for their product on top.
   productRenderIds: z
     .array(z.string().uuid('productRenderIds must be UUIDs'))
     .max(4, 'productRenderIds is capped at 4')

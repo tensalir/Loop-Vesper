@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test'
 import fs from 'fs'
 import path from 'path'
 import Anthropic from '@anthropic-ai/sdk'
-import { setKitPromptingLoader } from '../src/lib/prompts/prompting-source'
+import { getPromptingSkillForClaude, promptingSkillForChat, setKitPromptingLoader } from '../src/lib/prompts/prompting-source'
+import { combineSkills } from '../src/lib/skills/registry'
 import { enhancePrompt } from '../src/lib/prompts/enhance'
 import { iteratePrompt } from '../src/lib/prompts/iterate'
 import { getGenAiSkillResourceText, getMcpPromptMessages, MCP_PROMPTS } from '../src/lib/headless/mcp-prompts'
@@ -28,8 +29,22 @@ const SCANNED_DIRS = ['src/lib/prompts', 'src/lib/headless', 'src/app/api/headle
 /** The one module allowed to read the bundled skill, as the fallback when the kit cannot be read. */
 const THE_SOURCE = 'src/lib/prompts/prompting-source.ts'
 
-/** Dead code nothing imports (its loader looks under `lib/prompts`, without `src`); the import ban below keeps it so. */
-const DEAD_LOADER = 'src/lib/prompts/loadSkill.ts'
+/**
+ * Dead code nothing loaded (the loader looked under `lib/prompts`, without `src`), deleted on
+ * 2026-10-01; the import ban below keeps it from coming back.
+ */
+const DELETED = [
+  'src/lib/prompts/loadSkill.ts',
+  'src/lib/prompts/genai-prompting.skill.md',
+  'src/lib/prompts/enhancement-system.md',
+]
+
+/**
+ * Vesper's own chats. Each loads its own skill from the registry (assistant, brainstorming), so
+ * the scan above does not cover them; their prompting skill comes from the one source. Until
+ * 2026-10-01 both read the bundled file with `loadSkill('genai-prompting')`.
+ */
+const CHATS = ['src/app/api/assistant/chat/route.ts', 'src/app/api/projects/[id]/brainstorm/chat/route.ts']
 
 function walk(dir: string): string[] {
   const abs = path.join(ROOT, dir)
@@ -58,7 +73,7 @@ const FORBIDDEN: Array<{ what: string; pattern: RegExp }> = [
 ]
 
 test.describe('no Claude-facing path reads a prompting skill file itself', () => {
-  const files = SCANNED_DIRS.flatMap(walk).filter((f) => f !== THE_SOURCE && f !== DEAD_LOADER)
+  const files = SCANNED_DIRS.flatMap(walk).filter((f) => f !== THE_SOURCE)
 
   test('the scan sees the files it guards', () => {
     for (const f of [
@@ -93,6 +108,39 @@ test.describe('no Claude-facing path reads a prompting skill file itself', () =>
     expect(fs.existsSync(path.join(ROOT, 'src/lib/skills/genai-prompting.skill.md'))).toBe(true)
     expect(fs.existsSync(path.join(ROOT, 'src/lib/skills/genai-prompting'))).toBe(false)
     expect(fs.existsSync(path.join(ROOT, 'public/skills/genai-prompting.skill'))).toBe(false)
+  })
+
+  test('the dead prompts loader and the two files only it could have read are gone', () => {
+    for (const f of DELETED) expect(fs.existsSync(path.join(ROOT, f)), f).toBe(false)
+  })
+})
+
+test.describe("Vesper's own chats read the prompting skill through the one source", () => {
+  for (const chat of CHATS) {
+    test(chat, () => {
+      const src = code(chat)
+      expect(src).toMatch(/promptingSkillForChat\(await getPromptingSkillForClaude\(\)\)/)
+      expect(src).not.toMatch(/loadSkill\(\s*['"]genai-prompting['"]\s*\)/)
+      expect(src).not.toMatch(/getSkillSystemPrompt\(\s*['"]genai-prompting['"]/)
+      expect(src).not.toMatch(/genai-prompting\.skill(\.md)?\b|skills\/genai-prompting\b/)
+      expect(src).not.toMatch(/\bloadKitPrompting\b/)
+    })
+  }
+
+  test('the chat section is the kit, or the bundled copy, and never the rewrite fallback', async () => {
+    setKitPromptingLoader(async () => ({ text: 'KIT-SENTINEL', version: 'creative 9.9.9 (genai-prompting 9.9.9)' }))
+    try {
+      const fromKit = promptingSkillForChat(await getPromptingSkillForClaude())
+      expect(fromKit?.content).toBe('KIT-SENTINEL')
+      expect(combineSkills([{ id: 'assistant', metadata: { name: 'assistant' }, content: 'ASSISTANT', path: '', lastModified: new Date(0) }, fromKit!])).toContain(
+        '## genai-prompting\n\nKIT-SENTINEL'
+      )
+    } finally {
+      setKitPromptingLoader(async () => null)
+    }
+    const bundled = promptingSkillForChat(await getPromptingSkillForClaude({ bundled: () => ({ text: 'BUNDLED', lastModified: new Date(0) }) }))
+    expect(bundled?.content).toBe('BUNDLED')
+    expect(promptingSkillForChat(await getPromptingSkillForClaude({ bundled: () => null }))).toBeNull()
   })
 })
 
