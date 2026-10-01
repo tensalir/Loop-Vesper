@@ -17,6 +17,7 @@ export const iteratePromptHandler: ToolHandler = {
         modelId: result.modelId,
         enhancementModel: result.enhancementModel,
         skill: result.skill,
+        promptingSource: result.promptingSource,
       },
     }
   },

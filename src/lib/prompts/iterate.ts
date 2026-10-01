@@ -7,13 +7,21 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
-import { getSkillSystemPrompt } from '@/lib/skills/registry'
 import { getModelConfig } from '@/lib/models/registry'
 import { referenceToDataUrl, splitDataUrl } from '@/lib/net/fetch-allowlisted'
-import { getSkillVersion, type SkillVersion } from './skill-version'
+import type { SkillVersion } from './skill-version'
 import { buildIterateSystemPrompt } from './iteration-slate-mode'
+import {
+  getPromptingSystemPrompt,
+  skillVersionFromSource,
+  type PromptingSource,
+  type PromptingSourceOptions,
+} from './prompting-source'
 
 const DEFAULT_PROMPT_ITERATE_MODEL = 'claude-sonnet-4-5-20250929'
+
+const ITERATE_INTRO =
+  'You are an expert AI prompt engineer specializing in Meta-Andromeda-aware ad creative iteration.'
 
 export interface IterateAnchors {
   product?: string
@@ -59,6 +67,24 @@ export interface IteratePromptResult {
   modelId: string
   enhancementModel: string
   skill: SkillVersion | null
+  /** Which prompting text the slate ran on: kit, bundled skill or fallback. */
+  promptingSource: Pick<PromptingSource, 'source' | 'sha256' | 'version'>
+}
+
+/**
+ * The system prompt iterate sends: the prompting skill from the same source
+ * as enhance_prompt (the Loop edition from the kit first), without the admin
+ * override, which is the Enhance flow's; then the slate schema. The generic
+ * fallback is a single-prompt rewrite instruction that contradicts a JSON
+ * slate, so with nothing better iterate keeps its own intro.
+ */
+export async function iterateSystemPrompt(
+  modelId: string,
+  options: Pick<PromptingSourceOptions, 'bundled'> = {}
+): Promise<{ systemPrompt: string; source: PromptingSource }> {
+  const source = await getPromptingSystemPrompt(modelId, { ...options, allowDbOverride: false })
+  const body = source.source === 'fallback' ? null : source.text
+  return { systemPrompt: buildIterateSystemPrompt(body, ITERATE_INTRO), source }
 }
 
 function safeJsonParse(text: string): unknown | null {
@@ -155,11 +181,8 @@ export async function iteratePrompt(
     /veo|video|replicate-video|fal-video|gemini-video/i.test(input.modelId)
 
   // The slate schema travels with iterate itself (./iteration-slate-mode.ts), so the
-  // skill body it runs on may be any edition of the prompting skill.
-  const systemPrompt = buildIterateSystemPrompt(
-    getSkillSystemPrompt('genai-prompting'),
-    'You are an expert AI prompt engineer specializing in Meta-Andromeda-aware ad creative iteration.'
-  )
+  // skill body it runs on may be any edition of the prompting skill: the kit's first.
+  const { systemPrompt, source } = await iterateSystemPrompt(input.modelId)
 
   const anchorLines: string[] = []
   if (input.anchors?.product) anchorLines.push(`- Product: ${input.anchors.product}`)
@@ -252,6 +275,7 @@ Hard requirements:
     variantCount: parsed.variants.length,
     modelId: input.modelId,
     enhancementModel,
-    skill: getSkillVersion('genai-prompting'),
+    skill: skillVersionFromSource(source),
+    promptingSource: { source: source.source, sha256: source.sha256, version: source.version },
   }
 }

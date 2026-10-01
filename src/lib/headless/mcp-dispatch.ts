@@ -33,21 +33,28 @@ export const SERVER_INFO = {
     'Vesper headless surface: Gen-AI prompting, Loop product renders, image and video generation — backed by the Loop Gen-AI prompting skill.',
 }
 
+/**
+ * What Claude reads first about Vesper. Clients cut long instructions short (Claude Code showed
+ * about the first 2,000 characters on 2026-10-01), so the image/video and prompting lines come
+ * first and the whole stays no longer than it was then, 3,355 characters; tests/headless-dispatch.spec.ts
+ * holds both. Detail a tool's own description carries is not repeated here.
+ */
 export const SERVER_INSTRUCTIONS =
-  'Use list_models or the vesper://models resource to discover models; enhance_prompt / iterate_prompt for prompt craft. ' +
-  'generate_asset answers inline when the draw finishes within about 50 seconds, with JPEG previews you can read and links to the full-resolution files. ' +
+  'Draw the images and videos the person asks for with generate_asset and generate_video. ' +
+  'Before you write a prompt for either, read the Loop edition of the prompting skill once per conversation (get_creative_kit, section prompting) or call enhance_prompt; it replaces any generic prompting skill. Prompts filled by code (a Loop product skeleton, cmf_prompt, packaging) go as they are. ' +
+  'list_models names your models; iterate_prompt builds a slate of ad variants. ' +
+  'generate_asset answers inline within about 50 seconds, with JPEG previews you can read and links to the full-resolution files. ' +
   'claude.ai shows the person a picture only when your reply carries it as a markdown image; every image result gives you the exact lines to put in your reply, one per picture. Always put them in. ' +
-  'Where a folder is connected (Cowork, Claude Code), also save each preview into it under the file name the result gives and then attach the saved file to your reply; that shows it as a file card with a preview panel, and naming the path alone shows nothing. Vesper cannot write to a disk, you do. ' +
+  'Where a folder is connected (Cowork, Claude Code), also save each preview there under the file name the result gives and attach the saved file to your reply: it shows as a file card, and naming the path alone shows nothing. Vesper cannot write to a disk, you do. ' +
   'a slower draw, or one called with async: true, returns a jobId to collect with get_generation_status. ' +
-  'Every draw is saved in the caller\'s Vesper project "Claude". Set allowFallback: false to forbid Replicate routing. ' +
-  'A prompt filled from a Loop product skeleton is sent as it is: enhance_prompt returns it unchanged. ' +
-  'Packaging looks (people with packaging access): packaging_list_looks, packaging_mockup (the composite built in code, no model), packaging_finish (the model adds paper, light, shadow and gloss; only its grain is kept, so geometry, artwork, type and colour stay the code\'s), and grade_image with product packaging and the cell (uncalibrated, every result says so). ' +
-  'CMF files (people with CMF access): cmf_list, cmf_prompt (the template filled by code, verbatim), cmf_render (the clown the only image), grade_image with product cmf and its tab, column and clown, cmf_check_pdf (every PDF value against its sheet cell; a PDF that is not clean does not go out), and cmf_pdf (the supplier PDF, built by code from a workbook upload and renders Damien said yes to). ' +
-  'For CMF, pass identifiers only (import_id, tab, sku_column or sku_columns, clown, output_ids), never a cell value: Vesper reads the values from the stored workbook. Supplier PDFs come from cmf_pdf. ' +
+  'Every draw is saved in the caller\'s Vesper project "Claude". ' +
+  'Packaging looks (people with packaging access): packaging_list_looks, packaging_mockup (the composite built in code, no model), packaging_finish (only the model\'s paper grain is kept; geometry, artwork, type and colour stay the code\'s), and grade_image with product packaging and the cell (uncalibrated). ' +
+  'CMF files (people with CMF access): cmf_list, cmf_prompt (the template filled by code, verbatim), cmf_render (the clown the only image), grade_image with product cmf and its tab, column and clown, cmf_check_pdf (a PDF that is not clean does not go out), and cmf_pdf (the supplier PDF, built by code from a workbook upload and renders Damien said yes to). ' +
+  'For CMF, pass identifiers only (import_id, tab, sku_column or sku_columns, clown, output_ids), never a cell value: Vesper reads the values from the stored workbook. ' +
   "CMF renders, grades, answers and supplier PDFs are the CMF team's: renders are saved in one team project, not in \"Claude\", and everyone with CMF access sees them in Claude and in the CMF Studio. " +
   'list_creative_products, get_creative_kit and get_product_references read the Loop creative kit: the products, their rubrics, and the pinned references a grade or a draw attaches. ' +
   'generate_product_image draws a Loop product from its skeleton, filled by code, with the product render first and no reference parameter; ' +
-  "grade_image reads a picture three times with the product's grader (judge <model> vesper x3, advisory, never pooled with your own read, which record_grade keeps apart); " +
+  "grade_image reads a picture three times with the product's grader (advisory, never pooled with your own read, which record_grade keeps apart); " +
   "record_verdict records the decider's answer and, for a Frontify asset, returns the comment line to post with the person's own Frontify connector. " +
   "Feedback on the Loop Studio Design plugin: list_feedback_targets, list_feedback to find the same remark, preview_feedback to show the exact issue, submit_feedback only after the colleague says yes; it is filed in the signed-in person's name. " +
   'Images and grading reads made through Claude count against a daily allowance per person, together with the CMF renders and grades that person makes in the CMF Studio; a refusal says how many were used and when the next one frees up, and nothing is paid for.'
@@ -227,7 +234,8 @@ export async function dispatch(
       if (!findMcpPrompt(parsed.data.name)) {
         return rpcError(id, ERROR_CODES.methodNotFound, `Unknown prompt: ${parsed.data.name}`)
       }
-      const rendered = getMcpPromptMessages(parsed.data.name, parsed.data.arguments)
+      // Async: every prompt carries the prompting skill, read from the kit.
+      const rendered = await getMcpPromptMessages(parsed.data.name, parsed.data.arguments)
       if (!rendered) {
         return rpcError(id, ERROR_CODES.internalError, 'Failed to render prompt')
       }

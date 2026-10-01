@@ -147,8 +147,9 @@ export type SurfaceInstruction = {
 }
 
 /**
- * A primary action on a surface card. Today this is used to offer the
- * `.skill` bundle as a download from the Skill bundle surface.
+ * A primary action on a surface card. It offered the generic `.skill` bundle
+ * as a download until 2026-10-01; the prompting skill now comes with the Loop
+ * Studio Design plugin, and no surface uses an action.
  */
 export type SurfaceAction = {
   label: string
@@ -305,22 +306,38 @@ export const surfaces: Surface[] = [
   {
     id: 'skill',
     icon: '✦',
-    name: 'Skill bundle',
-    verb: 'For Claude.ai and ChatGPT.',
-    who: 'The same Loop know-how, packaged so it drops directly into Claude.ai, ChatGPT, or any agent shell that understands the Anthropic Skills format.',
+    name: 'Prompting skill',
+    verb: 'In the Loop Studio Design plugin.',
+    who: 'The Loop edition of the prompting skill, the one Vesper itself writes prompts with, comes with the Loop Studio Design plugin. There is no separate download any more.',
     status: 'live',
-    badge: 'Download',
+    badge: 'Plugin',
     detail: {
-      title: 'Skill bundle',
-      meta: 'genai-prompting · v2026-05',
+      title: 'The prompting skill, in the plugin',
+      meta: 'studio-design · genai-prompting',
       body:
-        'The Loop gen-ai prompting know-how, packaged as a single .skill file. Inside Claude.ai it drops into Customize. In ChatGPT or any agent shell that supports Skills, it sits next to your other capabilities. Same source as the connector above.',
-      action: {
-        label: 'Download genai-prompting.skill',
-        href: '/skills/genai-prompting.skill',
-        filename: 'genai-prompting.skill',
-        hint: 'About 20 KB. Open Claude.ai, then drop it into Customize -> Skills.',
-      },
+        "The Loop edition of the prompting skill ships in the Loop Studio Design plugin (studio-design), from Loop Marketing's marketplace, loop-ai-studio. Vesper's connector writes and rewrites prompts with the same text, read from the plugin's release, so the two never drift apart. The genai-prompting.skill download that used to be here was a generic copy and is gone.",
+      fields: [
+        {
+          label: 'Skill',
+          value: '/studio-design:genai-prompting',
+          hint: 'Call it by name, or ask Claude for an image or video prompt.',
+        },
+        {
+          label: 'Plugin',
+          value: 'studio-design',
+          hint: 'Loop Studio Design, in the loop-ai-studio marketplace.',
+        },
+      ],
+      instructions: [
+        {
+          main: 'Install the Loop Studio Design plugin from the loop-ai-studio marketplace.',
+          detail: 'It carries the prompting skill, the Eclipse and packaging skills, and declares the Vesper connector.',
+        },
+        {
+          main: 'If you once uploaded genai-prompting.skill yourself, remove it.',
+          detail: 'In Claude, Customize, then Skills. Two prompting skills side by side and Claude may pick the old one.',
+        },
+      ],
     },
   },
 ]

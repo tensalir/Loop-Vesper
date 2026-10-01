@@ -1,34 +1,20 @@
 /**
- * Compute a stable content hash for a skill so callers can pin to a
- * specific revision of the Gen-AI prompting substrate. Returned with
- * every headless response so Damien (or any downstream tool) can tell
- * which version of the prompting craft produced an output.
+ * The version of the prompting skill a headless result ran on, returned with
+ * every enhance and iterate response so Damien (or any downstream tool) can
+ * tell which version of the prompting craft produced an output.
+ *
+ * It is built from the source that actually ran (`skillVersionFromSource` in
+ * `./prompting-source.ts`). The old `getSkillVersion` hashed the bundled file
+ * directly; iterate ran on that file and reported it while enhance ran on the
+ * kit. Both run on the kit now, and the helper is gone.
  */
-
-import crypto from 'crypto'
-import { loadSkill } from '@/lib/skills/registry'
 
 export interface SkillVersion {
   skillId: string
   /** Short content-hash used for cache-busting and audit. */
   hash: string
-  /** Last filesystem mtime of the skill file. */
+  /** The kit's version, the override's update time, or the bundled file's mtime. */
   lastModified: string
   /** Which source the text came from: kit, db (admin override), bundled or fallback. */
   source?: string
-}
-
-export function getSkillVersion(skillId: string): SkillVersion | null {
-  const skill = loadSkill(skillId)
-  if (!skill) return null
-  const hash = crypto
-    .createHash('sha256')
-    .update(skill.content)
-    .digest('hex')
-    .slice(0, 12)
-  return {
-    skillId,
-    hash,
-    lastModified: skill.lastModified.toISOString(),
-  }
 }
