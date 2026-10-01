@@ -220,6 +220,8 @@ mutated), Vesper's own reads (allowlist, reference download), and the fallback w
 The browser route asks for more than a sign-in. Accounts are not approved by anyone, so a new
 account could otherwise open any file whose path it knows. `src/lib/storage/media-access.ts`
 lets in a confirmed email on `MEDIA_ACCESS_DOMAINS` (default `loopearplugs.com`) or an admin; anyone
-else gets a 403. On 2026-09-30 Vesper had 58 accounts: 54 on loopearplugs.com, plus four others
-(none active in 60 days except the owner's own, which is an admin). To let a partner in, add their
-domain to `MEDIA_ACCESS_DOMAINS` in Vercel.
+else gets a 403. On 2026-09-30 Vesper had 58 accounts: 54 on loopearplugs.com, plus four others.
+One of those was a colleague on a gmail.com address who still generated daily, and the rule
+blocked every image of theirs the next morning. To let one person in, add their exact address to
+`MEDIA_ACCESS_EMAILS` in Vercel; to let a partner company in, add its domain to
+`MEDIA_ACCESS_DOMAINS`. Never add a public mail domain: anyone can make an account.

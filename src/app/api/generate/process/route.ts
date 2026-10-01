@@ -2,11 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { prisma } from '@/lib/prisma'
 import { getModel, getModelConfig } from '@/lib/models/registry'
-import { uploadBase64ToStorage, uploadUrlToStorage } from '@/lib/supabase/storage'
+import { deleteFromStorage, uploadBase64ToStorage, uploadUrlToStorage } from '@/lib/supabase/storage'
 import { logMetric } from '@/lib/metrics'
 import { downloadReferenceImageAsDataUrl } from '@/lib/reference-images'
 import { enhancePrompt } from '@/lib/prompts/enhance'
 import { composeAnchoredPrompt, resolveLineageAnchor } from '@/lib/generation/anchor'
+import {
+  generationOutputPath,
+  isSuperseded,
+  newRunTag,
+  publishOutputsOnce,
+  type PublishTx,
+} from '@/lib/generation/publish-once'
 import { Prisma } from '@prisma/client'
 import { classifyError } from '@/lib/errors/classification'
 import { 
@@ -240,6 +247,18 @@ async function processGenerationById(
     }
 
     console.log(`[${generationId}] Acquired processing lock at ${now}`)
+
+    // The lock is a key in `parameters`, and every write below spreads `generation.parameters`.
+    // Spreading the copy read before the lock erased it, so the page's own trigger took the lock
+    // too and drew the generation a second time (src/lib/generation/publish-once.ts). Read the
+    // parameters again so the copy carries the lock.
+    const lockedRow = await prisma.generation.findUnique({
+      where: { id: generationId },
+      select: { parameters: true },
+    })
+    if (lockedRow) generation.parameters = lockedRow.parameters
+    // Every file this run writes carries its tag, so it never overwrites another run's.
+    const runTag = newRunTag()
 
     // Determine provider route (Google vs Replicate fallback)
     let providerRoute: ProviderRouteDecision | null = null
@@ -664,6 +683,11 @@ async function processGenerationById(
         await appendLog('cancelled:skip-after-generate')
         return { id: generation.id, status: 'skipped' }
       }
+      // Another run of this generation already published: this draw is not shown, not stored.
+      if (latest && isSuperseded(latest.status)) {
+        console.warn(`[${generationId}] Another run already completed this generation; discarding this run's draw`)
+        return { id: generation.id, status: 'skipped' }
+      }
     } catch (_) {}
 
     if (result.status === 'completed' && result.outputs) {
@@ -676,6 +700,11 @@ async function processGenerationById(
 
       console.log(`[${generationId}] Uploading ${result.outputs.length} outputs in parallel (concurrency: ${GENERATION_UPLOAD_CONCURRENCY})`)
 
+      // Files this run stored, so a run that loses the race can take them back.
+      const storedByThisRun: Array<{ bucket: string; path: string }> = []
+      const outputPath = (i: number, extension: string) =>
+        generationOutputPath({ userId: generation.userId, generationId, index: i, extension, runTag })
+
       // Upload all outputs in parallel with limited concurrency
       const uploadResults = await Promise.allSettled(
         result.outputs.map((output, i) =>
@@ -685,21 +714,23 @@ async function processGenerationById(
             if (output.url.startsWith('data:')) {
               const extension = generation.session.type === 'video' ? 'mp4' : output.url.includes('image/png') ? 'png' : 'jpg'
               const bucket = generation.session.type === 'video' ? 'generated-videos' : 'generated-images'
-              const storagePath = `${generation.userId}/${generationId}/${i}.${extension}`
+              const storagePath = outputPath(i, extension)
 
               console.log(`[${generationId}] Uploading base64 ${generation.session.type} ${i} to storage`)
               finalUrl = await uploadBase64ToStorage(output.url, bucket, storagePath)
+              storedByThisRun.push({ bucket, path: storagePath })
               console.log(`[${generationId}] Uploaded ${i} to: ${finalUrl}`)
             } else if (output.url.startsWith('http')) {
               const extension = generation.session.type === 'video' ? 'mp4' : output.url.includes('.png') ? 'png' : 'jpg'
               const bucket = generation.session.type === 'video' ? 'generated-videos' : 'generated-images'
-              const storagePath = `${generation.userId}/${generationId}/${i}.${extension}`
+              const storagePath = outputPath(i, extension)
 
               console.log(`[${generationId}] Uploading external URL ${i} to storage`)
               try {
                 const isGeminiFile = output.url.includes('generativelanguage.googleapis.com')
                 const headers = isGeminiFile && process.env.GEMINI_API_KEY ? { 'x-goog-api-key': process.env.GEMINI_API_KEY as string } : undefined
                 finalUrl = await uploadUrlToStorage(output.url, bucket, storagePath, headers ? { headers } : undefined)
+                storedByThisRun.push({ bucket, path: storagePath })
                 console.log(`[${generationId}] Uploaded ${i} to: ${finalUrl}`)
               } catch (error) {
                 console.error(`[${generationId}] Failed to upload ${i} to storage, using original URL:`, error)
@@ -756,9 +787,71 @@ async function processGenerationById(
         }
       })
 
-      await prisma.output.createMany({
-        data: outputRecords,
+      // Calculate cost for this generation
+      // Use actual compute time from Replicate API when available for accurate billing
+      const { calculateGenerationCost } = await import('@/lib/cost/calculator')
+      const { seedanceUsesVideoInput } = await import('@/lib/models/replicate-utils')
+      const totalVideoDuration = outputRecords.reduce((sum, output) => {
+        return sum + (output.duration || 0)
+      }, 0)
+
+      // Extract actual predict time from model metrics if available
+      const actualPredictTime = result.metrics?.predictTime
+      if (actualPredictTime) {
+        console.log(`[${generationId}] Using actual predict time for cost: ${actualPredictTime.toFixed(2)}s`)
+      }
+
+      // Use billing model ID from routing decision if available (for accurate fallback billing)
+      const billingModelId = providerRoute?.billingModelId || generation.modelId
+      if (providerRoute?.isFallback) {
+        console.log(`[${generationId}] Using fallback billing model: ${billingModelId} (original: ${generation.modelId})`)
+      }
+
+      const costResult = calculateGenerationCost(billingModelId, {
+        outputCount: outputRecords.length,
+        videoDurationSeconds: totalVideoDuration > 0 ? totalVideoDuration : undefined,
+        computeTimeSeconds: actualPredictTime, // Pass actual time for accurate Replicate billing
+        resolution: (generation.parameters as any)?.resolution,
+        hasVideoInput: seedanceUsesVideoInput(generation.parameters as any),
       })
+
+      console.log(`[${generationId}] Cost calculated: $${costResult.cost.toFixed(6)} (${costResult.isActual ? 'actual' : 'estimated'})`)
+
+      // The outputs and the status change go in together, and only while no other run of this
+      // generation has published: one generation, one set of outputs.
+      const outcome = await publishOutputsOnce(
+        { transaction: (work) => prisma.$transaction((tx) => work(tx as unknown as PublishTx)) },
+        {
+          generationId: generation.id,
+          outputs: outputRecords,
+          completion: {
+            cost: costResult.cost,
+            // Store metrics in parameters for debugging
+            parameters: {
+              ...(generation.parameters as any),
+              costMetrics: {
+                predictTime: actualPredictTime,
+                isActual: costResult.isActual,
+                unit: costResult.unit,
+                billingModelId, // Track which model was used for billing
+                wasFallback: providerRoute?.isFallback || false,
+              },
+            },
+          },
+        }
+      )
+
+      if (outcome === 'superseded') {
+        console.warn(`[${generationId}] Another run published first; removing this run's ${storedByThisRun.length} file(s)`)
+        await Promise.all(
+          storedByThisRun.map((f) =>
+            deleteFromStorage(f.bucket, f.path).catch((err: unknown) =>
+              console.warn(`[${generationId}] Could not remove ${f.bucket}/${f.path}:`, (err as Error)?.message)
+            )
+          )
+        )
+        return { id: generation.id, status: 'skipped' }
+      }
 
       // Enqueue semantic analysis for the new outputs (best-effort)
       try {
@@ -784,55 +877,6 @@ async function processGenerationById(
         console.warn(`[${generationId}] Failed to enqueue analysis:`, analysisError.message)
       }
 
-      // Calculate cost for this generation
-      // Use actual compute time from Replicate API when available for accurate billing
-      const { calculateGenerationCost } = await import('@/lib/cost/calculator')
-      const { seedanceUsesVideoInput } = await import('@/lib/models/replicate-utils')
-      const totalVideoDuration = outputRecords.reduce((sum, output) => {
-        return sum + (output.duration || 0)
-      }, 0)
-      
-      // Extract actual predict time from model metrics if available
-      const actualPredictTime = result.metrics?.predictTime
-      if (actualPredictTime) {
-        console.log(`[${generationId}] Using actual predict time for cost: ${actualPredictTime.toFixed(2)}s`)
-      }
-      
-      // Use billing model ID from routing decision if available (for accurate fallback billing)
-      const billingModelId = providerRoute?.billingModelId || generation.modelId
-      if (providerRoute?.isFallback) {
-        console.log(`[${generationId}] Using fallback billing model: ${billingModelId} (original: ${generation.modelId})`)
-      }
-      
-      const costResult = calculateGenerationCost(billingModelId, {
-        outputCount: outputRecords.length,
-        videoDurationSeconds: totalVideoDuration > 0 ? totalVideoDuration : undefined,
-        computeTimeSeconds: actualPredictTime, // Pass actual time for accurate Replicate billing
-        resolution: (generation.parameters as any)?.resolution,
-        hasVideoInput: seedanceUsesVideoInput(generation.parameters as any),
-      })
-      
-      console.log(`[${generationId}] Cost calculated: $${costResult.cost.toFixed(6)} (${costResult.isActual ? 'actual' : 'estimated'})`)
-
-      await prisma.generation.update({
-        where: { id: generation.id },
-        data: {
-          status: 'completed',
-          cost: costResult.cost,
-          // Store metrics in parameters for debugging
-          parameters: {
-            ...(generation.parameters as any),
-            costMetrics: {
-              predictTime: actualPredictTime,
-              isActual: costResult.isActual,
-              unit: costResult.unit,
-              billingModelId, // Track which model was used for billing
-              wasFallback: providerRoute?.isFallback || false,
-            },
-          },
-        },
-      })
-
       console.log(`[${generationId}] Generation completed successfully`)
       await appendLog('process:completed', { outputCount: outputRecords.length })
 
@@ -857,8 +901,9 @@ async function processGenerationById(
         userId: generation.userId,
       }
       
-      await prisma.generation.update({
-        where: { id: generation.id },
+      // A failing run never undoes a sibling run that already published (publish-once.ts).
+      await prisma.generation.updateMany({
+        where: { id: generation.id, status: { notIn: ['completed', 'cancelled'] } },
         data: {
           status: 'failed',
           parameters: {
@@ -910,8 +955,9 @@ async function processGenerationById(
           userId: generation.userId,
         }
         
-        await prisma.generation.update({
-          where: { id: generationId },
+        // A failing run never undoes a sibling run that already published (publish-once.ts).
+        await prisma.generation.updateMany({
+          where: { id: generationId, status: { notIn: ['completed', 'cancelled'] } },
           data: {
             status: 'failed',
             parameters: {
