@@ -151,7 +151,7 @@ export async function loadKitPrompting(env: NodeJS.ProcessEnv = process.env): Pr
 
 /**
  * The words the prompt guard reads (`src/lib/prompts/product-prompt-guard.ts`): the creative
- * kit's `never_enhance_fingerprints` and its products' names and aliases, and the product kit's
+ * kit's `never_enhance_fingerprints` and its products' own names, and the product kit's
  * CMF template fingerprint. A kit that cannot be read leaves its part null, so the guard uses its
  * own copies for that part and never fails on a kit. Null when the App is not configured.
  */

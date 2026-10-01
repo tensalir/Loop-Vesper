@@ -194,7 +194,7 @@ test.describe('code-filled product prompts are not rewritten', () => {
 
   test('product names are only checked when asked (the MCP tool asks, the web button does not)', () => {
     const prompt = 'A Loop Eclipse sleep mask on a linen pillow'
-    expect(findLoopProductName(prompt)).toBe('Loop Eclipse sleep mask')
+    expect(findLoopProductName(prompt)).toBe('Loop Eclipse')
     expect(productPromptPassthrough(prompt)).toBeNull()
     expect(productPromptPassthrough(prompt, { checkProductNames: true })?.reason).toBe('product')
     expect(findLoopProductName('a solar eclipse over the sea')).toBeNull()
@@ -321,19 +321,38 @@ test.describe('the guard reads the kits and matches how a code-filled prompt sta
     expect(modelCalls).toBe(1)
   })
 
-  test('a product name counts only beside the brand', () => {
+  // The name check counts full product names only, as main did: the kit product's own name beside
+  // the brand, and the names main matched. A generic word (box, mask, packaging) never counts.
+  const genericLoopPrompts = ['Loop packaging on a shelf', 'Loop box', 'a Loop mask', 'Loop sleep mask on a pillow']
+
+  test('only a full product name counts, as on main; a generic word beside the brand does not', () => {
     for (const { products } of [fromKits, fromCode]) {
-      expect(findLoopProductName('An Eclipse sleep mask on a linen pillow', products)).toBeNull()
-      expect(findLoopProductName('Coachella packaging on a festival table', products)).toBeNull()
-      expect(findLoopProductName('a Coachella box at the gate', products)).toBeNull()
-      expect(findLoopProductName('a solar eclipse over the sea', products)).toBeNull()
-      expect(findLoopProductName('A Loop Eclipse sleep mask on a linen pillow', products)).toMatch(/^Loop Eclipse/)
+      expect(findLoopProductName('Loop Eclipse on a pillow', products)).toBe('Loop Eclipse')
+      expect(findLoopProductName('A Loop Eclipse sleep mask on a linen pillow', products)).toBe('Loop Eclipse')
+      expect(findLoopProductName('Eclipse sleep mask', products)).toBe('Eclipse sleep mask')
+      expect(findLoopProductName('Coachella packaging on a festival table', products)).toBe('Coachella packaging')
+      expect(findLoopProductName('a Coachella box at the gate', products)).toBe('Coachella box')
       expect(findLoopProductName("Loop's retail box on a shelf", products)).toBe("Loop's retail box")
-      expect(findLoopProductName('the Loop Coachella box at the gate', products)).toBe('Loop Coachella box')
+      expect(findLoopProductName('a solar eclipse over the sea', products)).toBeNull()
+      expect(findLoopProductName('a mask on the nightstand', products)).toBeNull()
+      for (const p of genericLoopPrompts) expect(findLoopProductName(p, products), p).toBeNull()
     }
-    // The kit's aliases are read, beside the brand: "the mask" reads "Loop mask".
-    expect(findLoopProductName('a Loop mask on the nightstand', fromKits.products)).toBe('Loop mask')
-    expect(findLoopProductName('a mask on the nightstand', fromKits.products)).toBeNull()
+  })
+
+  test('on the MCP surface, a generic Loop prompt is enhanced and a full product name passes through', async () => {
+    setGuardWordsLoader(async () => kitGuardWords(studioNow, product))
+    for (const p of genericLoopPrompts) {
+      const out = await enhancePrompt({ prompt: p, modelId: 'gemini-nano-banana-pro', guardProductNames: true })
+      expect(out.passthrough, p).toBeNull()
+      expect(out.enhancedPrompt, p).toBe('A REWRITTEN PROMPT')
+    }
+    expect(modelCalls).toBe(genericLoopPrompts.length)
+    for (const p of ['Loop Eclipse on a pillow', 'Eclipse sleep mask']) {
+      const out = await enhancePrompt({ prompt: p, modelId: 'gemini-nano-banana-pro', guardProductNames: true })
+      expect(out.passthrough?.reason, p).toBe('product')
+      expect(out.enhancedPrompt, p).toBe(p)
+    }
+    expect(modelCalls).toBe(genericLoopPrompts.length)
   })
 
   test("the note names the tool that draws the product, not a tool still to come", () => {
