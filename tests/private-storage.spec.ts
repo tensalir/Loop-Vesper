@@ -17,7 +17,7 @@ import {
   type StorageSigner,
 } from '../src/lib/storage/access'
 import { handleStorageRequest, REDIRECT_MAX_AGE_SECONDS } from '../src/lib/storage/browser-route'
-import { mediaAccessProblem, mediaAccessDomains } from '../src/lib/storage/media-access'
+import { mediaAccessProblem, mediaAccessDomains, mediaAccessEmails } from '../src/lib/storage/media-access'
 import { storageImageLoader } from '../src/lib/storage/image-loader'
 import { fetchAllowlisted, allowedHostPatterns } from '../src/lib/net/fetch-allowlisted'
 import { downloadReferenceImageAsDataUrl } from '../src/lib/reference-images'
@@ -346,5 +346,15 @@ test.describe('who may open stored media, beyond being signed in', () => {
     expect(mediaAccessProblem({ email: 'x@partner.com', email_confirmed_at: CONFIRMED }, 'user', env('loopearplugs.com, partner.com'))).toBeNull()
     expect(mediaAccessProblem({ email: 'x@anything.io', email_confirmed_at: null }, 'user', env('*'))).toBeNull()
     expect(mediaAccessDomains(env(''))).toEqual(['loopearplugs.com'])
+  })
+
+  test('MEDIA_ACCESS_EMAILS lets one confirmed address in, and no one else on its domain', () => {
+    const e = { MEDIA_ACCESS_EMAILS: ' Named.Person@Gmail.com , other@x.io' } as unknown as NodeJS.ProcessEnv
+    expect(mediaAccessEmails(e)).toEqual(['named.person@gmail.com', 'other@x.io'])
+    expect(mediaAccessProblem({ email: 'named.person@gmail.com', email_confirmed_at: CONFIRMED }, 'user', e)).toBeNull()
+    expect(mediaAccessProblem({ email: 'someone.else@gmail.com', email_confirmed_at: CONFIRMED }, 'user', e)).toBe('Stored media is open to Loop accounts only')
+    expect(mediaAccessProblem({ email: 'named.person@gmail.com', email_confirmed_at: null }, 'user', e)).toBe('Stored media needs a confirmed email address')
+    expect(mediaAccessProblem({ email: 'someone@loopearplugs.com', email_confirmed_at: CONFIRMED }, 'user', e)).toBeNull()
+    expect(mediaAccessEmails(env())).toEqual([])
   })
 })
