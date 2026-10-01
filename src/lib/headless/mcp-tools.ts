@@ -169,10 +169,13 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           description:
             'Optional style/composition anchor as data URL or https URL (e.g. a prior Vesper output).',
         },
+        // maxItems 4: from 3bbf917 (2026-05-05), no reason recorded; kept.
         productRenderIds: {
           type: 'array',
           items: { type: 'string', format: 'uuid' },
           maxItems: 4,
+          description:
+            "Loop product renders from list_product_renders. They are sent first, so the render is image 1, and referenceImage after them. With a render attached, the creative kit's max_references for that product caps the images, the render included.",
         },
         numOutputs: { type: 'integer', minimum: 1, maximum: 4, default: 1 },
         seed: { type: 'integer' },
@@ -633,7 +636,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'packaging_mockup',
     title: 'Build the mockup of a packaging cell, in code',
     description:
-      "Builds the cell's composite with the plugin repository's own mockup code on the creative worker: the look's artwork warped onto the white render's marked panels, the render's shading kept, no model involved. Round 2 kept four of four pictures built this way. The composite is the cell's control and the ground truth for placement and colour; it is saved under Claude / Packaging. Run it before packaging_finish. Needs packaging access.",
+      "Builds the cell's composite with the plugin repository's own mockup code on the creative worker: the look's artwork warped onto the white render's marked panels, the render's shading kept, no model involved. Round 2 (2026-09-24) kept four of four pictures built this way. The composite is the cell's control and the ground truth for placement and colour; it is saved under Claude / Packaging. Run it before packaging_finish. Needs packaging access.",
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',

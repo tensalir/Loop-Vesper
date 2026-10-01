@@ -333,6 +333,36 @@ test.describe('grading a CMF render', () => {
     expect(out.aggregate.verdict).toBe('PASS')
   })
 
+  // The kit says which image a CMF draw is sent and in which order a grade reads its parts; the
+  // code fixes both (render.ts, grading.ts) rather than reading them. This holds the two together,
+  // so a kit that changes either fails here before Vesper draws or grades against it.
+  test("what the code sends is what the kit says: only_image 'clown', parts_order candidate then clown", async () => {
+    const gen = cmf.product.generation as { only_image?: string }
+    expect(gen.only_image).toBe('clown')
+    const plan = planCmfRender(cmf, cmf.payloads[PAYLOAD_E], payloadBytes, {})
+    const clownPart = { file_data: { mime_type: 'image/png', file_uri: `files/${plan.clown.sha256.slice(0, 10)}` } }
+    const sent = cmfDrawRequest(plan, clownPart)
+    expect(sent.references).toHaveLength(1)
+    expect(sent.references[0]).toBe(clownPart)
+    expect(plan.clown.id).toBe(cmf.keys[plan.key].clown!.id)
+    expect(refusal(() => planCmfRender(cmf, cmf.payloads[PAYLOAD_E], payloadWith((p) => (p.image.count = 2)), {}))).toContain('sends the clown and nothing else')
+
+    const order = (cmf.product.grading as { parts_order?: string[] }).parts_order
+    expect(order).toEqual(['candidate', 'clown'])
+    const deps = gradeDeps(cmfRows())
+    await gradeCmfCandidate({ kit, cmf, parts, candidate, spec: 'experience-2-cc', column: 'E', key: 'case-experience2--front' }, deps)
+    const clownSha = cmf.keys['case-experience2--front'].clown!.sha256
+    const partFor: Record<string, GeminiPart> = {
+      candidate: { inline_data: { mime_type: 'image/png', data: candidate.bytes.toString('base64') } },
+      clown: { file_data: { mime_type: 'image/png', file_uri: `files/${clownSha.slice(0, 10)}` } },
+    }
+    for (const call of deps.calls) {
+      expect(call.slice(0, order!.length)).toEqual(order!.map((name) => partFor[name]))
+      expect(call).toHaveLength(order!.length + 1)
+      expect('text' in call[call.length - 1]).toBe(true)
+    }
+  })
+
   test('never without its clown, never the clown itself, never a column out of scope', async () => {
     const req = { kit, cmf, parts, candidate, spec: 'experience-2-cc', column: 'E', key: 'case-experience2--front' }
     const notPinned = await refusalOf(gradeCmfCandidate(req, gradeDeps(cmfRows({ status: 'pending' }))))

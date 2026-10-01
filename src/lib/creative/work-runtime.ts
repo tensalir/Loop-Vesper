@@ -89,10 +89,13 @@ export async function candidatePartFor(
   })
 }
 
-export function gradeReader(env: NodeJS.ProcessEnv, models: readonly string[]) {
+/** A grading read at the kit's models and temperature (`grading.models`, `grading.temperature`). */
+export function gradeReader(env: NodeJS.ProcessEnv, grading: { models?: readonly string[]; temperature?: number } | null | undefined) {
   const deps = geminiDeps(env)
+  const models = grading?.models ?? []
+  const temperature = grading?.temperature
   return (parts: GeminiPart[], opts: { deadline: number; perCallMs: number }) =>
-    gradeJson(deps, { models, parts, deadline: opts.deadline, perCallMs: opts.perCallMs })
+    gradeJson(deps, { models, parts, deadline: opts.deadline, perCallMs: opts.perCallMs, temperature })
 }
 
 export const productionCandidateDeps = (env: NodeJS.ProcessEnv = process.env): CandidateDeps => ({

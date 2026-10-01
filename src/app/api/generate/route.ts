@@ -12,6 +12,7 @@ import {
   supportsWebhook, 
   REPLICATE_MODEL_CONFIGS 
 } from '@/lib/models/replicate-utils'
+import { loadGuardVocabulary } from '@/lib/prompts/product-prompt-guard'
 import { validateBody, GenerateRequestSchema } from '@/lib/api/validation'
 import { generateLimiter } from '@/lib/api/rate-limit'
 import { appendDebugLog } from '@/lib/api/debug-log'
@@ -263,6 +264,8 @@ export async function POST(request: NextRequest) {
             prompt,
             negativePrompt,
             ...generationParameters,
+            // Seedream's own rewrite stays off for a code-filled product prompt (replicate-utils).
+            ...(modelId === 'replicate-seedream-4' ? { guardVocabulary: await loadGuardVocabulary() } : {}),
           })
           
           console.log(`[${generation.id}] Submitting to Replicate with webhook: ${webhookUrl}`)

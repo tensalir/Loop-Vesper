@@ -695,7 +695,7 @@ export async function executePackagingGrade(
       pinRows: rows,
       candidatePart: (c) => candidatePartFor(ctx.env, inlineLimit, c),
       pinPart: (row, spec) => pinPart(row, spec, partDeps),
-      read: gradeReader(ctx.env, product.grading?.models ?? []),
+      read: gradeReader(ctx.env, product.grading),
     }
   )
   const header = kitHeader(loaded)

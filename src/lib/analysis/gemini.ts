@@ -8,7 +8,9 @@ import { fetchStored } from '@/lib/storage/access'
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta'
 
-// Models for captioning
+// Models for captioning. Settings, not measured choices: hard-coded when the
+// analysis pipeline was added (d0b259d, 2026-01-07). No comparison with another
+// model is recorded, and no env var overrides them.
 const IMAGE_CAPTION_MODEL = 'gemini-2.0-flash' // Fast, good at image understanding
 const VIDEO_CAPTION_MODEL = 'gemini-2.0-flash' // Also supports video
 

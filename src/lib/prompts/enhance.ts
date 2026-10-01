@@ -11,11 +11,14 @@ import Anthropic from '@anthropic-ai/sdk'
 import { getModelConfig } from '@/lib/models/registry'
 import { referenceToDataUrl, splitDataUrl } from '@/lib/net/fetch-allowlisted'
 import { getPromptingSystemPrompt, skillVersionFromSource, type PromptingSource } from './prompting-source'
-import { productPromptPassthrough, type PromptPassthrough } from './product-prompt-guard'
+import { loadGuardVocabulary, productPromptPassthrough, type PromptPassthrough } from './product-prompt-guard'
 import type { SkillVersion } from './skill-version'
 
 export { skillVersionFromSource }
 
+// A setting, not a measured choice: set when Vesper's Claude calls moved to
+// Sonnet 4.5 (1bd8b2d, 2026-01-21). No comparison with another model is
+// recorded. ANTHROPIC_PROMPT_ENHANCE_MODEL overrides it.
 const DEFAULT_PROMPT_ENHANCE_MODEL = 'claude-sonnet-4-5-20250929'
 
 export type EnhancePromptMode = 'standard' | 'iteration-edit'
@@ -107,6 +110,20 @@ function isVideoModelId(modelId: string): boolean {
   )
 }
 
+/**
+ * What the rewrite is told about Nano Banana Pro and small type. Until 2026-10-01 it said Pro was
+ * "optimized for ... precise text/layout rendering" and asked for "stronger precision for
+ * typography". The creative kit's dated lesson `small-type-in-code` says otherwise: on packaging
+ * round 1 (2026-09-24) every Pro draw at 2K redrew the small type (8 of 8, "Live music" as
+ * "Oua music"), and check C6 failed on 14 of 14 draws across Pro and GPT Image 2.
+ *
+ * The rewrite gets that as a dated observation, not the lesson's instruction: the lesson is
+ * packaging's, where code places the type, and the web app and most MCP callers asking for a Pro
+ * prompt have no code that places type.
+ */
+export const NANO_BANANA_PRO_SMALL_TYPE =
+  'On Loop packaging round 1 (2026-09-24), Nano Banana Pro redrew small type at 2K ("Live music" came back as "Oua music").'
+
 export function buildRequestContent(args: {
   userPrompt: string
   modelId: string
@@ -136,6 +153,9 @@ Enhance this as an image-to-video / motion prompt (aligned with our motion promp
 Return ONLY the enhanced motion prompt text.`
     }
 
+    // "Do NOT introduce literal bananas" (the three Nano Banana requests below):
+    // added in e7c47fb, 2026-01-10, whose only reason is "clarify Nano Banana is
+    // a model nickname, not fruit". Kept as it was.
     if (isNanoBananaModel) {
       let requiredPrefix: string
       if (wantsStyleOnly) {
@@ -179,7 +199,7 @@ REQUIRED PROMPT STRUCTURE:
 
 Model context:
 - Selected model: ${modelId}
-- ${isNanoBananaPro ? 'Nano Banana Pro is optimized for higher-fidelity, production-ready assets and precise text/layout rendering.' : 'Nano Banana 2 is optimized for faster iteration and broad, high-volume ideation workflows.'}
+- ${isNanoBananaPro ? `Nano Banana Pro is optimized for higher-fidelity, production-ready assets. ${NANO_BANANA_PRO_SMALL_TYPE}` : 'Nano Banana 2 is optimized for faster iteration and broad, high-volume ideation workflows.'}
 
 Terminology:
 - "Nano Banana" is Gemini's model nickname. Do NOT introduce literal bananas unless the user explicitly requested bananas.
@@ -199,7 +219,7 @@ CRITICAL REQUIREMENTS:
 
 Model context:
 - Selected model: ${modelId}
-- ${isNanoBananaPro ? 'Favor stronger precision for typography, composition, and polished asset quality when relevant.' : 'Favor concise, flexible phrasing suited for rapid multi-turn iteration and experimentation.'}
+- ${isNanoBananaPro ? `Favor stronger precision for composition and polished asset quality when relevant. ${NANO_BANANA_PRO_SMALL_TYPE}` : 'Favor concise, flexible phrasing suited for rapid multi-turn iteration and experimentation.'}
 
 Terminology:
 - "Nano Banana" is Gemini's model nickname. Do NOT introduce literal bananas unless the user explicitly requested bananas in the image.
@@ -349,9 +369,11 @@ export async function enhancePrompt(
     throw new Error('prompt is required')
   }
 
-  // Code-filled product prompts are never rewritten by a model.
+  // Code-filled product prompts are never rewritten by a model. The guard's
+  // words come from the kits, or its own copies when a kit cannot be read.
   const passthrough = productPromptPassthrough(userPrompt, {
     checkProductNames: input.guardProductNames === true,
+    vocabulary: await loadGuardVocabulary(),
   })
   if (passthrough) {
     return {
