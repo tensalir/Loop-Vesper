@@ -49,6 +49,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toViewUrl } from '@/lib/storage/refs'
+import { RENDER_TYPES, RENDER_TYPE_LABELS } from '@/lib/product-renders/types'
 
 interface ProductRender {
   id: string
@@ -96,11 +97,7 @@ const ANGLE_OPTIONS = [
 ]
 
 // Render type options
-const RENDER_TYPE_OPTIONS = [
-  { value: 'single', label: 'Single' },
-  { value: 'pair', label: 'Pair' },
-  { value: 'case', label: 'Case' },
-]
+const RENDER_TYPE_OPTIONS = RENDER_TYPES.map((value) => ({ value, label: RENDER_TYPE_LABELS[value] }))
 
 export function RendersManagementSettings() {
   const [renders, setRenders] = useState<ProductRender[]>([])

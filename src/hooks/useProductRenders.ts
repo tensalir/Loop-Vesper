@@ -153,8 +153,13 @@ const DEPRECATED_PRODUCTS = [
 const SENSEWEAR_PRODUCTS = ['Hebe', 'Aphrodite', 'Boreas', 'Eclipse']
 const EARPLUG_PRODUCTS = [
   'Dream', 'Dream Lilac', 'Dream Peach',
-  'Engage 2', 'Experience 2', 'Quiet 2', 'Switch 2'
+  'Engage 2', 'Experience 2', 'Quiet 2', 'Switch 2', 'Live Pro'
 ]
+
+// Products whose pictures are not split into single, pair and case: the browser
+// shows every picture of one at once (Live Pro's are photographs of the case, the
+// packaging and the product in the ear).
+const ALL_TYPES_PRODUCTS = [...SENSEWEAR_PRODUCTS, 'Live Pro']
 
 /**
  * Check if a product is deprecated
@@ -229,4 +234,4 @@ export function useOrganizedProductNames(productNames: string[]) {
   }, [productNames])
 }
 
-export { SENSEWEAR_PRODUCTS, EARPLUG_PRODUCTS, DEPRECATED_PRODUCTS }
+export { SENSEWEAR_PRODUCTS, EARPLUG_PRODUCTS, DEPRECATED_PRODUCTS, ALL_TYPES_PRODUCTS }

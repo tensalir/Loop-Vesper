@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { RENDER_TYPES } from '@/lib/product-renders/types'
 import { NextResponse } from 'next/server'
 
 /**
@@ -222,9 +223,9 @@ export const HeadlessEstimateCostSchema = z.object({
 
 // Discovery for the `list_product_renders` MCP tool. All filters are
 // optional and case-insensitive partial matches except renderType, which
-// is matched exactly so callers can pre-filter to single/pair/case.
+// is matched exactly so callers can pre-filter to one kind of picture.
 export const HeadlessListProductRendersSchema = z.object({
   name: z.string().max(128).optional(),
   colorway: z.string().max(128).optional(),
-  renderType: z.enum(['single', 'pair', 'case']).optional(),
+  renderType: z.enum(RENDER_TYPES).optional(),
 })

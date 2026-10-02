@@ -20,7 +20,7 @@ export const MCP_RESOURCE_CATALOG: McpResourceDefinition[] = [
     uri: 'vesper://product-renders',
     name: 'Loop product renders',
     description:
-      'Catalog of Switch, Engage, Quiet, Experience, Dream, Eclipse, Aphrodite and other Loop product renders. Use ids in generate_asset.productRenderIds.',
+      'Catalog of Switch, Engage, Quiet, Experience, Dream, Eclipse, Live Pro (codename Aphrodite) and other Loop product renders and photographs (packaging, in-ear). Use ids in generate_asset.productRenderIds.',
     mimeType: 'application/json',
   },
   {

@@ -4,6 +4,7 @@
 
 import type { HeadlessTool } from './tool-registry'
 import { PHASE_1_MODEL_IDS, VIDEO_MODEL_IDS } from './model-allowlists'
+import { RENDER_TYPES } from '@/lib/product-renders/types'
 
 export interface McpToolAnnotations {
   title?: string
@@ -254,7 +255,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'list_product_renders',
     title: 'List Loop product renders',
     description:
-      'Discover Loop product render library entries. Pass ids to generate_asset.productRenderIds.',
+      "Discover Loop product render library entries: studio renders (single, pair, case) and photographs "
+      + "(packaging, in-ear), by product, colourway and type. A product is found by the name colleagues use: "
+      + "'Live Pro', 'Loop Live Pro' and its codename 'Aphrodite' are one product. Pass ids to generate_asset.productRenderIds.",
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: 'object',
@@ -262,7 +265,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         name: { type: 'string', maxLength: 128 },
         colorway: { type: 'string', maxLength: 128 },
-        renderType: { type: 'string', enum: ['single', 'pair', 'case'] },
+        renderType: { type: 'string', enum: [...RENDER_TYPES] },
       },
     },
     outputSchema: {
