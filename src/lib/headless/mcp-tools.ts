@@ -263,7 +263,13 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: 'object',
       additionalProperties: false,
       properties: {
-        name: { type: 'string', maxLength: 128 },
+        name: {
+          type: 'string',
+          maxLength: 128,
+          description:
+            "The product as a colleague says it, a whole phrase if need be: 'Live Pro', 'Aphrodite', 'Loop Live Pro in the ear', "
+            + "'the Live Pro box in black'. A colourway or kind of picture named in it narrows the list.",
+        },
         colorway: { type: 'string', maxLength: 128 },
         renderType: { type: 'string', enum: [...RENDER_TYPES] },
       },

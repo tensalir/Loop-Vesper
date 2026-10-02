@@ -19,7 +19,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { canonicalProductName } from '@/lib/product-renders/types'
+import { interpretRenderQuery, type RenderQuery } from '@/lib/product-renders/query'
 
 /**
  * Loop product names that are no longer surfaced in the web app's render
@@ -55,30 +55,63 @@ export interface ListProductRendersInput {
   renderType?: string
 }
 
+function whereOf(name?: string, colorway?: string, renderType?: string): Record<string, unknown> {
+  const where: Record<string, unknown> = {}
+  if (name) where.name = { contains: name, mode: 'insensitive' }
+  if (colorway) where.colorway = { contains: colorway, mode: 'insensitive' }
+  if (renderType) where.renderType = renderType
+  return where
+}
+
 /**
  * List product renders from the Supabase `product_renders` table.
  *
  * All filters are case-insensitive partial matches except `renderType`,
  * which is an enum-ish field and gets matched exactly so callers can
  * pre-filter to one kind of picture (`RENDER_TYPES`) without worrying about
- * unintended substring hits. A name is searched as the product's own name:
- * "Loop Live Pro" and the codename "Aphrodite" both find "Live Pro".
+ * unintended substring hits.
  */
 export async function listProductRenders(
   input: ListProductRendersInput = {}
 ): Promise<ProductRenderForMcp[]> {
-  const where: Record<string, unknown> = {}
+  return (await searchProductRenders(input)).renders
+}
 
+/**
+ * The renders a request asks for, read the way a colleague says it. `name` may be a whole phrase
+ * ("Aphrodite in the ear", "the Loop Live Pro box in black"): the product is found inside it, and a
+ * colourway or kind of picture named beside it narrows the list unless the caller passed one. When
+ * those extra words narrow it to nothing, the product's whole list comes back instead.
+ */
+export async function searchProductRenders(
+  input: ListProductRendersInput = {}
+): Promise<{ renders: ProductRenderForMcp[]; read: RenderQuery | null; widened: boolean }> {
+  let read: RenderQuery | null = null
+  let name = input.name
+  let colorway = input.colorway
+  let renderType = input.renderType
   if (input.name) {
-    where.name = { contains: canonicalProductName(input.name), mode: 'insensitive' }
+    const catalog = await prisma.productRender.findMany({
+      distinct: ['name', 'colorway'],
+      select: { name: true, colorway: true },
+    })
+    read = interpretRenderQuery(input.name, catalog)
+    name = read.name
+    if (read.recognised) {
+      colorway = colorway ?? read.colorway
+      renderType = renderType ?? read.renderType
+    }
   }
-  if (input.colorway) {
-    where.colorway = { contains: input.colorway, mode: 'insensitive' }
+  let renders = await findRenders(whereOf(name, colorway, renderType))
+  let widened = false
+  if (renders.length === 0 && read?.recognised && (colorway !== input.colorway || renderType !== input.renderType)) {
+    renders = await findRenders(whereOf(name, input.colorway, input.renderType))
+    widened = true
   }
-  if (input.renderType) {
-    where.renderType = input.renderType
-  }
+  return { renders, read, widened }
+}
 
+async function findRenders(where: Record<string, unknown>): Promise<ProductRenderForMcp[]> {
   const rows = await prisma.productRender.findMany({
     where,
     orderBy: [
