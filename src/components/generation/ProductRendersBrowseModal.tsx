@@ -23,17 +23,16 @@ import {
   useOrganizedProductNames,
   usePrefetchProductRenders,
   isDeprecatedProduct,
-  SENSEWEAR_PRODUCTS,
+  ALL_TYPES_PRODUCTS,
   type ProductRender,
 } from '@/hooks/useProductRenders'
 import { toViewUrl } from '@/lib/storage/refs'
+import { RENDER_TYPES, RENDER_TYPE_LABELS } from '@/lib/product-renders/types'
 
 // Available render type filters
 const RENDER_TYPE_OPTIONS = [
   { value: 'all', label: 'All' },
-  { value: 'single', label: 'Single' },
-  { value: 'pair', label: 'Pair' },
-  { value: 'case', label: 'Case' },
+  ...RENDER_TYPES.map((value) => ({ value, label: RENDER_TYPE_LABELS[value] })),
 ] as const
 
 interface ProductRendersBrowseModalProps {
@@ -53,10 +52,10 @@ export function ProductRendersBrowseModal({
   const [selectedType, setSelectedType] = useState<string>('single') // Default to Single - most commonly used
 
   // Check if selected product is a Sensewear product (View Type filter doesn't apply to Sensewear)
-  const isSensewearSelected = selectedProduct ? SENSEWEAR_PRODUCTS.includes(selectedProduct) : false
+  const showsAllTypes = selectedProduct ? ALL_TYPES_PRODUCTS.includes(selectedProduct) : false
   
   // Don't apply type filter for Sensewear products
-  const effectiveType = isSensewearSelected ? undefined : selectedType
+  const effectiveType = showsAllTypes ? undefined : selectedType
 
   // React Query hooks for data fetching with caching
   const {
@@ -106,13 +105,13 @@ export function ProductRendersBrowseModal({
   // Handle product chip click with prefetch on hover
   const handleProductHover = (productName: string) => {
     // Don't apply type filter for Sensewear products
-    const typeForProduct = SENSEWEAR_PRODUCTS.includes(productName) ? undefined : selectedType
+    const typeForProduct = ALL_TYPES_PRODUCTS.includes(productName) ? undefined : selectedType
     prefetch({ name: productName, type: typeForProduct })
   }
 
   // Handle type change with prefetch on hover (only for non-Sensewear products)
   const handleTypeHover = (type: string) => {
-    if (!isSensewearSelected) {
+    if (!showsAllTypes) {
       prefetch({ name: selectedProduct || undefined, type })
     }
   }
@@ -227,7 +226,7 @@ export function ProductRendersBrowseModal({
           )}
 
           {/* Type Filter Row - Only show for Earplugs (not Sensewear) */}
-          {!isSensewearSelected && (
+          {!showsAllTypes && (
             <div className="flex items-center gap-3 pt-3 mt-1 border-t border-border/30">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground w-20">View Type:</span>
               <Tabs value={selectedType} onValueChange={setSelectedType} className="w-auto">

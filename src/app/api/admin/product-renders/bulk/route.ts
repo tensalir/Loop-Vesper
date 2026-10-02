@@ -11,7 +11,7 @@ interface BulkUploadImage {
   base64: string // data URL
   colorway: string
   angle?: string
-  renderType?: string // 'single', 'pair', or 'case'
+  renderType?: string // one of RENDER_TYPES in '@/lib/product-renders/types'
   sortOrder?: number
 }
 

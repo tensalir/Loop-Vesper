@@ -1,0 +1,50 @@
+{
+  "product": "Live Pro",
+  "note": "Loop Live Pro (codename Aphrodite), adaptive live music earplugs with active noise cancelling. Photographs of pre-production samples, not final, from Drive 03_Projects/03_Inku/01_Training Data/Loop Live Pro (Assets 2026-10-02.zip). The colourway names are read from the pictures; the backs of the boxes still carry a placeholder noise reduction rating (XX). Filed 2026-10-02.",
+  "crop": { "renderTypes": ["case", "packaging"], "margin": 0.15 },
+  "updates": [
+    { "where": { "name": "Aphrodite" }, "set": { "name": "Live Pro", "renderType": "pair" } }
+  ],
+  "items": [
+    { "file": "NEW PRODUCT/DSC04920.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "closed, lying flat" },
+    { "file": "NEW PRODUCT/DSC04921.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "closed, lid towards camera" },
+    { "file": "NEW PRODUCT/DSC04923.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "closed, standing, logo front" },
+    { "file": "NEW PRODUCT/DSC04929.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "closed, standing, ports front" },
+    { "file": "NEW PRODUCT/DSC04931.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "closed, standing, close-up" },
+    { "file": "NEW PRODUCT/DSC04933.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "closed, lying, lid end" },
+    { "file": "NEW PRODUCT/DSC04935.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "closed, lying, lid close-up" },
+    { "file": "NEW PRODUCT/DSC04936.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "open, buds seated, from above" },
+    { "file": "NEW PRODUCT/DSC04939.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "open, buds seated, front" },
+    { "file": "NEW PRODUCT/DSC04944.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "open, buds seated, from behind" },
+    { "file": "NEW PRODUCT/DSC04973.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "open, buds seated, close-up" },
+    { "file": "NEW PRODUCT/DSC04948.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "open, one bud out" },
+    { "file": "NEW PRODUCT/DSC04951.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "open, one bud out, close" },
+    { "file": "NEW PRODUCT/DSC04954.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "open, both buds out" },
+    { "file": "NEW PRODUCT/DSC04956.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "open, both buds out, close" },
+    { "file": "NEW PRODUCT/DSC04963.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "open, buds out, tips showing" },
+    { "file": "NEW PRODUCT/DSC04968.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "open, buds out, one tip showing" },
+    { "file": "NEW PRODUCT/DSC04969.jpg", "colorway": "Iridescent", "renderType": "case", "angle": "closed, buds beside" },
+
+    { "file": "NEW PRODUCT/IN EAR/DSC05015.jpg", "colorway": "Iridescent", "renderType": "in-ear", "angle": "worn, right ear" },
+    { "file": "NEW PRODUCT/IN EAR/DSC05018.jpg", "colorway": "Iridescent", "renderType": "in-ear", "angle": "worn, right ear, close" },
+    { "file": "NEW PRODUCT/IN EAR/DSC05020.jpg", "colorway": "Iridescent", "renderType": "in-ear", "angle": "worn, left ear" },
+
+    { "file": "NEW PRODUCT/DSC04977.jpg", "colorway": "Black", "renderType": "packaging", "angle": "box, front, 3/4" },
+    { "file": "NEW PRODUCT/DSC04980.jpg", "colorway": "Black", "renderType": "packaging", "angle": "box, front, close-up" },
+    { "file": "NEW PRODUCT/DSC04981.jpg", "colorway": "Black", "renderType": "packaging", "angle": "box, front, 3/4 left" },
+    { "file": "NEW PRODUCT/DSC04986.jpg", "colorway": "Black", "renderType": "packaging", "angle": "box, lying, front and side" },
+    { "file": "NEW PRODUCT/DSC04988.jpg", "colorway": "Black", "renderType": "packaging", "angle": "box, lying, from above" },
+    { "file": "NEW PRODUCT/DSC04989.jpg", "colorway": "Iridescent", "renderType": "packaging", "angle": "box, front" },
+    { "file": "NEW PRODUCT/DSC04990.jpg", "colorway": "Iridescent", "renderType": "packaging", "angle": "box, front, 3/4" },
+    { "file": "NEW PRODUCT/DSC04991.jpg", "colorway": "Iridescent", "renderType": "packaging", "angle": "box, side, close-up" },
+    { "file": "NEW PRODUCT/DSC04993.jpg", "colorway": "Iridescent", "renderType": "packaging", "angle": "box, back (not final: rating reads XX)" },
+    { "file": "NEW PRODUCT/DSC04996.jpg", "colorway": "Iridescent", "renderType": "packaging", "angle": "box, lying, front and side" },
+    { "file": "NEW PRODUCT/DSC04999.jpg", "colorway": "Holographic Blue Satin", "renderType": "packaging", "angle": "box, front" },
+    { "file": "NEW PRODUCT/DSC05002.jpg", "colorway": "Holographic Blue Satin", "renderType": "packaging", "angle": "box, front, 3/4" },
+    { "file": "NEW PRODUCT/DSC05004.jpg", "colorway": "Holographic Blue Satin", "renderType": "packaging", "angle": "box, back (not final: rating reads XX)" },
+    { "file": "NEW PRODUCT/DSC05006.jpg", "colorway": "Holographic Blue Satin", "renderType": "packaging", "angle": "box, lying, front and side" },
+    { "file": "NEW PRODUCT/DSC05008.jpg", "colorway": "All colourways", "renderType": "packaging", "angle": "three boxes, side by side" },
+    { "file": "NEW PRODUCT/DSC05012.jpg", "colorway": "All colourways", "renderType": "packaging", "angle": "three boxes, side by side, close" },
+    { "file": "NEW PRODUCT/DSC05013.jpg", "colorway": "All colourways", "renderType": "packaging", "angle": "three boxes, stacked" }
+  ]
+}

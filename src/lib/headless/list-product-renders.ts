@@ -19,6 +19,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { canonicalProductName } from '@/lib/product-renders/types'
 
 /**
  * Loop product names that are no longer surfaced in the web app's render
@@ -59,8 +60,9 @@ export interface ListProductRendersInput {
  *
  * All filters are case-insensitive partial matches except `renderType`,
  * which is an enum-ish field and gets matched exactly so callers can
- * pre-filter to "single", "pair", or "case" without worrying about
- * unintended substring hits.
+ * pre-filter to one kind of picture (`RENDER_TYPES`) without worrying about
+ * unintended substring hits. A name is searched as the product's own name:
+ * "Loop Live Pro" and the codename "Aphrodite" both find "Live Pro".
  */
 export async function listProductRenders(
   input: ListProductRendersInput = {}
@@ -68,7 +70,7 @@ export async function listProductRenders(
   const where: Record<string, unknown> = {}
 
   if (input.name) {
-    where.name = { contains: input.name, mode: 'insensitive' }
+    where.name = { contains: canonicalProductName(input.name), mode: 'insensitive' }
   }
   if (input.colorway) {
     where.colorway = { contains: input.colorway, mode: 'insensitive' }

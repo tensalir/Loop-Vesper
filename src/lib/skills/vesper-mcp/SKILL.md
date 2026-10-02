@@ -43,7 +43,7 @@ For Cursor with header auth:
 
 1. `list_models` or read `vesper://models`
 2. Before the first prompt, read the Loop edition of the prompting skill once (`get_creative_kit` section `prompting`) or call `enhance_prompt`; it replaces any generic prompting skill
-3. `list_product_renders` when the brief needs real Loop product shots
+3. `list_product_renders` when the brief needs real Loop product shots: studio renders, and photographs of the packaging and of the product in the ear. Search by the name colleagues use; "Live Pro", "Loop Live Pro" and "Aphrodite" are one product
 4. `generate_asset` — images return inline by default
 5. Pass a prior Storage URL as `referenceImage` for iteration
 6. If the client times out (~60s), use `async: true` and poll `get_generation_status`

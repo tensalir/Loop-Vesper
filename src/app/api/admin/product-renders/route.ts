@@ -14,7 +14,7 @@ const PRODUCT_RENDERS_BUCKET = 'product-renders'
  * Body:
  *   - name: Product name (required)
  *   - colorway: Colorway/variant (optional)
- *   - renderType: Render type - 'single', 'pair', or 'case' (optional)
+ *   - renderType: Render type, one of RENDER_TYPES in '@/lib/product-renders/types' (optional)
  *   - image: Base64 data URL of the image (required for local uploads)
  *   - imageUrl: External URL (optional, for Frontify synced items)
  *   - frontifyId: Frontify asset ID (optional)

@@ -60,7 +60,7 @@ async function getCachedFrontifyAssets(
  *   - search: Search by product name
  *   - source: Filter by source ('local', 'frontify', 'all')
  *   - name: Filter by exact product name
- *   - type: Filter by render type ('single', 'pair', 'case', 'all')
+ *   - type: Filter by render type (one of RENDER_TYPES in '@/lib/product-renders/types', or 'all')
  */
 export async function GET(request: NextRequest) {
   try {
