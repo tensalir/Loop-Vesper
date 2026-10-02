@@ -1,3 +1,4 @@
+import { canonicalProductName } from '@/lib/product-renders/types'
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
     
     if (search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
+        { name: { contains: canonicalProductName(search), mode: 'insensitive' } },
         { colorway: { contains: search, mode: 'insensitive' } },
       ]
     }
