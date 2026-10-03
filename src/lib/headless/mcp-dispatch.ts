@@ -56,7 +56,7 @@ export const SERVER_INSTRUCTIONS =
   'generate_product_image draws a Loop product from its skeleton, filled by code, with the product render first and no reference parameter; ' +
   "grade_image reads a picture three times with the product's grader (advisory, never pooled with your own read, which record_grade keeps apart); " +
   "record_verdict records the decider's answer and, for a Frontify asset, returns the comment line to post with the person's own Frontify connector. " +
-  "Feedback on the Loop Studio Design plugin: list_feedback_targets, list_feedback to find the same remark, preview_feedback to show the exact issue, submit_feedback only after the colleague says yes; it is filed in the signed-in person's name. " +
+  'Feedback on a Loop skill or plugin goes through /skill-feedback, which the ai-intelligence-configuration plugin carries: point the colleague there. ' +
   'Images and grading reads made through Claude count against a daily allowance per person, together with the CMF renders and grades that person makes in the CMF Studio; a refusal says how many were used and when the next one frees up, and nothing is paid for.'
 
 interface JsonRpcRequest {

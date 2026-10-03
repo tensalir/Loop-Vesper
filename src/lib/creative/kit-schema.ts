@@ -1,12 +1,16 @@
 /**
  * The Loop kits, schema 1, as Vesper reads them.
  *
- * Two plugins publish a kit in the same shape:
- *   - `studio-design` (Loop Studio Design, `tensalir/loop-ai-studio`): Eclipse, packaging and the
- *     prompting skill; mirrors `plugins/studio-design/kit.schema.json` there (contract `docs/kit.md`).
- *   - `product-design` (Loop Product Design, `tensalir/loop-product-plugins`): CMF, the only kit
- *     Vesper reads CMF from since 2026-09-29. It carries no prompting skill, no Frontify comment
- *     line and no feedback block: those three are null.
+ * Two plugins publish a kit in the same shape, each under two names while Loop renames them
+ * (the current name first; a kit says which one in `plugin`, and its `tag` starts with that name):
+ *   - `ai-studio-design`, until the rename `studio-design` (Loop AI Studio Design,
+ *     `tensalir/loop-ai-studio`): Eclipse, packaging and the prompting skill; mirrors
+ *     `plugins/<name>/kit.schema.json` there (contract `docs/kit.md`).
+ *   - `ai-product-design`, until the rename `product-design` (Loop AI Product Design,
+ *     `tensalir/loop-ai-product`, until the rename `tensalir/loop-product-plugins`): CMF, the only
+ *     kit Vesper reads CMF from since 2026-09-29. It carries no prompting skill, no Frontify
+ *     comment line and no feedback block: those three are null.
+ * The Frontify comment line keeps its `studio-design` prefix under either name: it is not renamed.
  *
  * Strict on what Vesper acts on (the schema number, the plugin and its tag, the result rule,
  * severities, verdicts, statuses, checks, pins, the prompting body); open on the rest, so a field
@@ -14,13 +18,25 @@
  * refused: the shape changed and this code has not.
  *
  * The two kits name three things differently, and each kit is held to its own names:
- *   studio-design    `ladder`    `judges`    `rubric.reporting_only` (true while no check blocks)
- *   product-design   `results`   `graders`   `rubric.blocking` (false while no check blocks)
+ *   (ai-)studio-design    `ladder`    `judges`    `rubric.reporting_only` (true while no check blocks)
+ *   (ai-)product-design   `results`   `graders`   `rubric.blocking` (false while no check blocks)
  * Code that serves either kit reads them through `kitResults`, `kitGraders` and `reportsOnly`.
  */
 
 import { z } from 'zod'
 import { SEVERITIES, VERDICTS, type KitLadder } from './ladder'
+
+/** The names Loop AI Studio Design's plugin is published under, the current one first. */
+export const STUDIO_PLUGINS = ['ai-studio-design', 'studio-design'] as const
+/** The names Loop AI Product Design's plugin is published under, the current one first. */
+export const PRODUCT_PLUGINS = ['ai-product-design', 'product-design'] as const
+export type StudioPlugin = (typeof STUDIO_PLUGINS)[number]
+export type ProductPlugin = (typeof PRODUCT_PLUGINS)[number]
+
+/** Whether a plugin name is one of Loop AI Product Design's (the product kit's), old or new. */
+export function isProductPlugin(plugin: string): plugin is ProductPlugin {
+  return (PRODUCT_PLUGINS as readonly string[]).includes(plugin)
+}
 
 const sha256 = z.string().regex(/^[0-9a-f]{64}$/, 'a sha256 in lower-case hex')
 const severity = z.enum(SEVERITIES)
@@ -237,32 +253,45 @@ function sayWhetherChecksBlock(flag: BlockFlag, other: BlockFlag) {
   }
 }
 
-/** Loop Studio Design's kit: the one Vesper has read since 2026-09-24. */
+/**
+ * A kit's tag is its own plugin name's: an `ai-studio-design` kit is tagged `ai-studio-design-v*`,
+ * a `studio-design` kit `studio-design-v*`, never the other name's.
+ */
+function tagNamesItsPlugin(kit: { plugin: string; tag: string }, ctx: z.RefinementCtx) {
+  const name = kit.tag.replace(/-v\d+\.\d+\.\d+$/, '')
+  if (name !== kit.plugin) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['tag'], message: `the kit is ${kit.plugin}, so its tag is ${kit.plugin}-v<version>, not ${kit.tag}` })
+  }
+}
+
+/** Loop AI Studio Design's kit: the one Vesper has read since 2026-09-24, under either of its names. */
 export const KitSchema = z
   .object({
     ...kitShape,
-    plugin: z.literal('studio-design'),
-    tag: z.string().regex(/^studio-design-v\d+\.\d+\.\d+$/),
+    plugin: z.enum(STUDIO_PLUGINS),
+    tag: z.string().regex(/^(?:ai-)?studio-design-v\d+\.\d+\.\d+$/),
     ladder: KitLadderSchema,
     judges: KitJudgesSchema,
     comment_line: KitCommentLineSchema,
     feedback: KitFeedbackSchema,
   })
   .passthrough()
+  .superRefine(tagNamesItsPlugin)
   .superRefine(sayWhetherChecksBlock('reporting_only', 'blocking'))
 
-/** Loop Product Design's kit: CMF. No comment line and no feedback block of its own. */
+/** Loop AI Product Design's kit: CMF, under either of its names. No comment line and no feedback block of its own. */
 export const ProductKitSchema = z
   .object({
     ...kitShape,
-    plugin: z.literal('product-design'),
-    tag: z.string().regex(/^product-design-v\d+\.\d+\.\d+$/),
+    plugin: z.enum(PRODUCT_PLUGINS),
+    tag: z.string().regex(/^(?:ai-)?product-design-v\d+\.\d+\.\d+$/),
     results: KitResultsSchema,
     graders: KitGradersSchema,
     comment_line: z.null().optional(),
     feedback: z.null().optional(),
   })
   .passthrough()
+  .superRefine(tagNamesItsPlugin)
   .superRefine(sayWhetherChecksBlock('blocking', 'reporting_only'))
 
 export type Kit = z.infer<typeof KitSchema>
@@ -273,14 +302,19 @@ export type KitProduct = z.infer<typeof KitProductSchema>
 export type KitPin = z.infer<typeof KitPinSchema>
 export type KitGraders = z.infer<typeof KitGradersSchema>
 
+/** Whether a kit is the product kit (Loop AI Product Design, CMF), under either of its plugin's names. */
+export function isProductKit(kit: AnyKit): kit is ProductKit {
+  return isProductPlugin(kit.plugin)
+}
+
 /** How failed checks become a result, in either kit: the product kit's `results`, the studio kit's `ladder`. */
 export function kitResults(kit: AnyKit): KitLadder {
-  return kit.plugin === 'product-design' ? kit.results : kit.ladder
+  return isProductKit(kit) ? kit.results : kit.ladder
 }
 
 /** The surfaces a grade is read on, in either kit: the product kit's `graders`, the studio kit's `judges`. */
 export function kitGraders(kit: AnyKit): KitGraders {
-  return kit.plugin === 'product-design' ? kit.graders : kit.judges
+  return isProductKit(kit) ? kit.graders : kit.judges
 }
 
 /**

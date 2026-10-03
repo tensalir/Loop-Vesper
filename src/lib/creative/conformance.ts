@@ -12,7 +12,7 @@
 
 import { formatLine, parseLine, type LineFields } from './grammar'
 import { verdictFromKit } from './ladder'
-import { kitResults, type AnyKit, type Conformance } from './kit-schema'
+import { isProductKit, kitResults, type AnyKit, type Conformance } from './kit-schema'
 
 export function runConformance(kit: AnyKit, conformance: Conformance): string[] {
   const problems: string[] = []
@@ -29,7 +29,7 @@ export function runConformance(kit: AnyKit, conformance: Conformance): string[] 
       continue
     }
     // The product kit's vectors are `results`, the studio kit's `ladder`: each kit its own name.
-    const name = kit.plugin === 'product-design' ? 'results' : 'ladder'
+    const name = isProductKit(kit) ? 'results' : 'ladder'
     const list = vectors[name]
     if (!list) {
       problems.push(`conformance.json has no ${name} vectors for ${slug}`)

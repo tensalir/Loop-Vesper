@@ -3,8 +3,9 @@
  *
  * Order, first available wins:
  *   1. the creative kit (the Loop edition of the prompting skill, released
- *      from the plugin repository at its studio-design-v* tag; null when Vesper's
- *      GitHub App is not configured or no kit can be read);
+ *      from the plugin repository at its newest ai-studio-design-v* or
+ *      studio-design-v* tag; null when Vesper's GitHub App is not configured
+ *      or no kit can be read);
  *   2. an active `prompt_enhancement_prompts` row for the model (the admin
  *      hot-patch, as before);
  *   3. the bundled skill file `src/lib/skills/genai-prompting.skill.md`;

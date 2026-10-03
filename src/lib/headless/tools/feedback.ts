@@ -1,5 +1,5 @@
 /**
- * The feedback tools: a colleague's remark about the Loop Studio Design plugin,
+ * The feedback tools: a colleague's remark about the Loop AI Studio Design plugin,
  * filed as an issue in the plugin's repository through Vesper's GitHub App,
  * in the colleague's own name, after they saw the exact text and said yes.
  *

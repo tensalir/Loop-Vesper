@@ -4,7 +4,7 @@
  * `src/lib/headless/tools/creative-read.ts` are thin wrappers around these.
  */
 
-import { kitGraders, reportsOnly, type AnyKit, type KitProduct } from './kit-schema'
+import { isProductKit, kitGraders, reportsOnly, type AnyKit, type KitProduct } from './kit-schema'
 import type { LoadedKit } from './kit'
 import { kitPins, usablePin, type PinRow, type PinSpec } from './pins'
 import { servedProducts, resolveProduct } from './products'
@@ -121,7 +121,7 @@ export function kitSection(
   if (section === 'summary') {
     const products = listProducts(kit, available, opts).map((p) => ({ slug: p.slug, name: p.name, kind: p.kind, status: p.status, rubric: p.rubric_version }))
     const text = [
-      `${kit.plugin === 'product-design' ? 'Product kit (Loop Product Design)' : 'Creative kit'} ${kit.version} (${loaded.ref}, commit ${loaded.commit.slice(0, 7)})${loaded.stale ? ` — STALE: ${loaded.staleReason}` : ''}.`,
+      `${isProductKit(kit) ? 'Product kit (Loop AI Product Design)' : 'Creative kit'} ${kit.version} (${loaded.ref}, commit ${loaded.commit.slice(0, 7)})${loaded.stale ? ` — STALE: ${loaded.staleReason}` : ''}.`,
       `Products: ${products.map((p) => `${p.name} (${p.slug}, ${p.status}, rubric ${p.rubric ?? '?'})`).join('; ')}.`,
       kit.prompting ? `Prompting: genai-prompting ${kit.prompting.version ?? '?'}, Loop edition, ${lessonCount(kit.prompting.lessons)}.` : 'Prompting: not in this kit.',
       `Judges: ${kitGraders(kit).surfaces.join(', ')}; Vesper's reads are labelled '${kitGraders(kit).vesper_surface}' and never pooled with another judge.`,

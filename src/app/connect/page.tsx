@@ -128,7 +128,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: { ar
       <ul className="mb-5 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
         <li>write and improve prompts, and generate images and video with your Vesper account</li>
         <li>grade images against Loop&apos;s product rubrics and record your answers</li>
-        <li>file feedback on the Loop Studio Design plugin in your name</li>
+        <li>file feedback on the Loop AI Studio Design plugin in your name</li>
       </ul>
       <p className="mb-4 text-xs text-muted-foreground">
         What it makes is saved in your project &ldquo;Claude&rdquo;. You can disconnect it at any time in Settings,

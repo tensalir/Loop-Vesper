@@ -1,9 +1,10 @@
 /**
  * Two kits, one list of Loop products.
  *
- * Since 2026-09-29 CMF is Loop Product Design's (`tensalir/loop-product-plugins`, the product kit)
- * and everything else is Loop Studio Design's (`tensalir/loop-ai-studio`, the creative kit). A tool
- * that takes a product by name finds it here, in the kit that serves it:
+ * Since 2026-09-29 CMF is Loop AI Product Design's (`tensalir/loop-ai-product`, until its rename
+ * `tensalir/loop-product-plugins`; the product kit) and everything else is Loop AI Studio Design's
+ * (`tensalir/loop-ai-studio`, the creative kit), each under its plugin's new name or its old one. A
+ * tool that takes a product by name finds it here, in the kit that serves it:
  *
  *   the creative kit   every product but CMF; a CMF entry it still carries (studio-design 0.3.x)
  *                      is never served
@@ -18,7 +19,7 @@
  */
 
 import type { LoadedKit } from './kit'
-import type { AnyKit, Kit, KitProduct, ProductKit } from './kit-schema'
+import { isProductPlugin, type AnyKit, type Kit, type KitProduct, type ProductKit } from './kit-schema'
 import { findProduct, namesProduct, resolveProduct, servedProducts } from './products'
 import { kitPins, type PinSpec } from './pins'
 
@@ -33,7 +34,7 @@ export type KitHit =
 
 /** Whether Vesper serves this product from this kit: CMF from the product kit, the rest from the creative kit. */
 export function servesFrom(kit: Pick<AnyKit, 'plugin'>, product: Pick<KitProduct, 'kind'>): boolean {
-  return kit.plugin === 'product-design' ? product.kind === 'cmf' : product.kind !== 'cmf'
+  return isProductPlugin(kit.plugin) ? product.kind === 'cmf' : product.kind !== 'cmf'
 }
 
 /** The kit as Vesper serves it: only the products it serves from that kit. */
@@ -78,7 +79,7 @@ export async function resolveInKits(loaders: KitSetLoaders, query: string, opts:
     .join(', ')
   throw new Error(
     `No Loop product called '${query}' in Vesper's kits. They carry: ${names || 'nothing yet'}.` +
-      (productRaw.error ? ` (Loop Product Design's kit, which holds CMF, could not be read: ${productRaw.error.message})` : '')
+      (productRaw.error ? ` (Loop AI Product Design's kit, which holds CMF, could not be read: ${productRaw.error.message})` : '')
   )
 }
 

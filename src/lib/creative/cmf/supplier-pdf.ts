@@ -1,7 +1,8 @@
 /**
  * The supplier CMF PDF, built by code from one parse of one workbook upload (Damien's issue 1).
  * Every value on it is the cell it came from, printed as the cell holds it, to the product
- * repository's contract `plugins/product-design/skills/cmf-review/references/spec-fields.md`. No
+ * repository's contract `plugins/ai-product-design/skills/cmf-review/references/spec-fields.md`
+ * (`plugins/product-design/` before the rename). No
  * model sits between a cell and this file.
  *
  * Layout: the retired CMF skill's `document-template.md` (A4 portrait, the 3×3 header, one

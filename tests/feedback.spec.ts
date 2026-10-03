@@ -162,6 +162,12 @@ test.describe('the issue Vesper files', () => {
     expect(blockOf(r.body)).toEqual(r.block)
   })
 
+  test('the issue names the plugin the kit carries, under its old name or its new one', () => {
+    expect(renderFeedback(kit, remark, reporter, PINNED).body).toContain('- Plugin: studio-design 0.2.0 (kit ')
+    const renamed: Kit = { ...kit, plugin: 'ai-studio-design', tag: 'ai-studio-design-v0.2.1' }
+    expect(renderFeedback(renamed, remark, reporter, PINNED).body).toContain('- Plugin: ai-studio-design 0.2.0 (kit ')
+  })
+
   test('a colleague\'s text cannot mention, link, plant a marker, add a heading or open a fence', () => {
     const n = neutralise('@dev #42 <!-- x --> \n### Fake section\n```\ncode\u0007')
     expect(n).not.toMatch(/@dev/)

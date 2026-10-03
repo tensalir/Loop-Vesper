@@ -2,39 +2,43 @@
  * The Loop kits in production: GitHub through Vesper's GitHub App, kept in the
  * database. Everything that serves a kit to a tool goes through here.
  *
- *   the creative kit   Loop Studio Design: Eclipse, packaging, prompting
- *   the product kit    Loop Product Design: CMF, and only CMF is read from it
+ *   the creative kit   Loop AI Studio Design: Eclipse, packaging, prompting
+ *   the product kit    Loop AI Product Design: CMF, and only CMF is read from it
  *
  * Env: GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_B64, GITHUB_APP_INSTALLATION_ID
  * (the App, installed on both repositories), CREATIVE_KIT_REPO (default
  * tensalir/loop-ai-studio), CREATIVE_KIT_REF (a tag, branch or commit;
- * default: the newest studio-design-v* tag), PRODUCT_KIT_REPO (default
- * tensalir/loop-product-plugins), PRODUCT_KIT_REF (default: the newest
- * product-design-v* tag), CREATIVE_TOOLS_ENABLED=0 (hide every creative tool,
- * CMF's included).
+ * default: the newest ai-studio-design-v* or studio-design-v* tag),
+ * PRODUCT_KIT_REPO (default: tensalir/loop-ai-product, and while that name does
+ * not answer, tensalir/loop-product-plugins), PRODUCT_KIT_REF (default: the
+ * newest ai-product-design-v* or product-design-v* tag), CREATIVE_TOOLS_ENABLED=0
+ * (hide every creative tool, CMF's included).
  */
 
 import { githubAppConfigFromEnv, missingGithubAppEnv, repositoryInstallationTokens, sharedInstallationTokens } from '@/lib/github/app'
 import { githubClient } from '@/lib/github/rest'
-import { githubKitSource } from './kit-github'
+import { firstReachableKitSource, githubKitSource, tagsWording } from './kit-github'
 import { prismaKitStore } from './kit-store'
 import {
   clearKitMemory,
   getKitFile,
-  kitPaths,
   loadCreativeKit,
   PRODUCT_KIT,
   STUDIO_KIT,
+  tagPrefixes,
   type KitLoaderDeps,
   type LoadedKit,
 } from './kit'
-import type { AnyKit, Kit, ProductKit } from './kit-schema'
+import { isProductKit, type AnyKit, type Kit, type ProductKit } from './kit-schema'
 import type { KitSetLoaders } from './kit-set'
 import type { KitPrompting } from '@/lib/prompts/prompting-source'
 import { kitGuardWords, type KitGuardWords } from '@/lib/prompts/product-prompt-guard'
 
 export const DEFAULT_KIT_REPO = 'tensalir/loop-ai-studio'
-export const DEFAULT_PRODUCT_KIT_REPO = 'tensalir/loop-product-plugins'
+/** The product kit's repository, by its new name. */
+export const DEFAULT_PRODUCT_KIT_REPO = 'tensalir/loop-ai-product'
+/** Its name until the rename: asked when the new name does not answer (no such repository, or not in the App's installation). */
+export const LEGACY_PRODUCT_KIT_REPO = 'tensalir/loop-product-plugins'
 
 export class CreativeKitUnavailable extends Error {
   constructor(message: string) {
@@ -51,8 +55,15 @@ export function kitRepo(env: NodeJS.ProcessEnv = process.env): string {
   return (env.CREATIVE_KIT_REPO || DEFAULT_KIT_REPO).trim()
 }
 
-export function productKitRepo(env: NodeJS.ProcessEnv = process.env): string {
-  return (env.PRODUCT_KIT_REPO || DEFAULT_PRODUCT_KIT_REPO).trim()
+/** The product kit's repository names, in the order they are asked: `PRODUCT_KIT_REPO` alone when set. */
+export function productKitRepos(env: NodeJS.ProcessEnv = process.env): string[] {
+  const set = env.PRODUCT_KIT_REPO?.trim()
+  return set ? [set] : [DEFAULT_PRODUCT_KIT_REPO, LEGACY_PRODUCT_KIT_REPO]
+}
+
+/** `tensalir/loop-ai-product (or tensalir/loop-product-plugins)`, as a message names where CMF is read from. */
+function reposWording(repos: readonly string[]): string {
+  return repos.length > 1 ? `${repos[0]} (or ${repos.slice(1).join(', ')})` : repos[0]
 }
 
 function appMissing(env: NodeJS.ProcessEnv, what: string): CreativeKitUnavailable {
@@ -65,19 +76,25 @@ export function productionKitDeps(env: NodeJS.ProcessEnv = process.env): KitLoad
   const tokens = sharedInstallationTokens(env)
   if (!tokens) throw appMissing(env, 'creative kit')
   return {
-    source: githubKitSource(githubClient({ tokens }), kitRepo(env)),
+    source: githubKitSource(githubClient({ tokens }), kitRepo(env), tagPrefixes(STUDIO_KIT)),
     store: prismaKitStore,
     ref: env.CREATIVE_KIT_REF?.trim() || null,
     kit: STUDIO_KIT,
   }
 }
 
+/**
+ * The product kit, read from its repository under each of its names in turn (one token per name:
+ * GitHub refuses a token for a name the installation does not have, and the next name is asked).
+ */
 export function productionProductKitDeps(env: NodeJS.ProcessEnv = process.env): KitLoaderDeps<ProductKit> {
-  const repo = productKitRepo(env)
-  const tokens = repositoryInstallationTokens(env, repo)
-  if (!tokens) throw appMissing(env, 'product kit')
+  const candidates = productKitRepos(env).map((repo) => {
+    const tokens = repositoryInstallationTokens(env, repo)
+    if (!tokens) throw appMissing(env, 'product kit')
+    return { repo, source: githubKitSource(githubClient({ tokens }), repo, tagPrefixes(PRODUCT_KIT)) }
+  })
   return {
-    source: githubKitSource(githubClient({ tokens }), repo, kitPaths(PRODUCT_KIT.plugin).tagPrefix),
+    source: candidates.length === 1 ? candidates[0].source : firstReachableKitSource(candidates),
     store: prismaKitStore,
     ref: env.PRODUCT_KIT_REF?.trim() || null,
     kit: PRODUCT_KIT,
@@ -90,28 +107,28 @@ function assertEnabled(env: NodeJS.ProcessEnv): void {
   }
 }
 
-/** The creative kit (Loop Studio Design) to use now, or a readable error. */
+/** The creative kit (Loop AI Studio Design) to use now, or a readable error. */
 export async function getCreativeKit(opts: { force?: boolean; env?: NodeJS.ProcessEnv } = {}): Promise<LoadedKit> {
   const env = opts.env ?? process.env
   assertEnabled(env)
-  if (opts.force) clearKitMemory(STUDIO_KIT.plugin)
+  if (opts.force) clearKitMemory(STUDIO_KIT.id)
   return loadCreativeKit(productionKitDeps(env), { force: opts.force })
 }
 
 /**
- * The product kit (Loop Product Design, CMF) to use now, or a readable error naming where it is
+ * The product kit (Loop AI Product Design, CMF) to use now, or a readable error naming where it is
  * read from. There is no CMF without it: Vesper never falls back to a CMF the creative kit still
  * carries.
  */
 export async function getProductKit(opts: { force?: boolean; env?: NodeJS.ProcessEnv } = {}): Promise<LoadedKit<ProductKit>> {
   const env = opts.env ?? process.env
   assertEnabled(env)
-  if (opts.force) clearKitMemory(PRODUCT_KIT.plugin)
-  const where = `${productKitRepo(env)} at ${env.PRODUCT_KIT_REF?.trim() || `its newest ${kitPaths(PRODUCT_KIT.plugin).tagPrefix}* tag`} (PRODUCT_KIT_REPO, PRODUCT_KIT_REF)`
+  if (opts.force) clearKitMemory(PRODUCT_KIT.id)
+  const where = `${reposWording(productKitRepos(env))} at ${env.PRODUCT_KIT_REF?.trim() || `its newest ${tagsWording(tagPrefixes(PRODUCT_KIT))} tag`} (PRODUCT_KIT_REPO, PRODUCT_KIT_REF)`
   try {
     return await loadCreativeKit(productionProductKitDeps(env), { force: opts.force })
   } catch (err) {
-    throw new CreativeKitUnavailable(`CMF is read from Loop Product Design's kit, ${where}, and none can be read: ${(err as Error).message}`)
+    throw new CreativeKitUnavailable(`CMF is read from Loop AI Product Design's kit, ${where}, and none can be read: ${(err as Error).message}`)
   }
 }
 
@@ -122,7 +139,7 @@ export function productionKitSet(env: NodeJS.ProcessEnv = process.env): KitSetLo
 
 /** A file a kit names, verified, read from that kit's own repository. */
 export async function readKitFile(loaded: LoadedKit<AnyKit>, file: { path: string; sha256: string }): Promise<Buffer> {
-  const deps = loaded.kit.plugin === PRODUCT_KIT.plugin ? productionProductKitDeps() : productionKitDeps()
+  const deps = isProductKit(loaded.kit) ? productionProductKitDeps() : productionKitDeps()
   return getKitFile(loaded, file, deps)
 }
 

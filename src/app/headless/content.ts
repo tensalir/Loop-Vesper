@@ -149,7 +149,7 @@ export type SurfaceInstruction = {
 /**
  * A primary action on a surface card. It offered the generic `.skill` bundle
  * as a download until 2026-10-01; the prompting skill now comes with the Loop
- * Studio Design plugin, and no surface uses an action.
+ * AI Studio Design plugin, and no surface uses an action.
  */
 export type SurfaceAction = {
   label: string
@@ -307,30 +307,30 @@ export const surfaces: Surface[] = [
     id: 'skill',
     icon: '✦',
     name: 'Prompting skill',
-    verb: 'In the Loop Studio Design plugin.',
-    who: 'The Loop edition of the prompting skill, the one Vesper itself writes prompts with, comes with the Loop Studio Design plugin. There is no separate download any more.',
+    verb: 'In the Loop AI Studio Design plugin.',
+    who: 'The Loop edition of the prompting skill, the one Vesper itself writes prompts with, comes with the Loop AI Studio Design plugin. There is no separate download any more.',
     status: 'live',
     badge: 'Plugin',
     detail: {
       title: 'The prompting skill, in the plugin',
-      meta: 'studio-design · genai-prompting',
+      meta: 'ai-studio-design · genai-prompting',
       body:
-        "The Loop edition of the prompting skill ships in the Loop Studio Design plugin (studio-design), from Loop Marketing's marketplace, loop-ai-studio. Vesper's connector writes and rewrites prompts with the same text, read from the plugin's release, so the two never drift apart. The genai-prompting.skill download that used to be here was a generic copy and is gone.",
+        "The Loop edition of the prompting skill ships in the Loop AI Studio Design plugin (ai-studio-design, once called studio-design), from Loop Marketing's marketplace, loop-ai-studio. Vesper's connector writes and rewrites prompts with the same text, read from the plugin's release, so the two never drift apart. The genai-prompting.skill download that used to be here was a generic copy and is gone.",
       fields: [
         {
           label: 'Skill',
-          value: '/studio-design:genai-prompting',
+          value: '/ai-studio-design:genai-prompting',
           hint: 'Call it by name, or ask Claude for an image or video prompt.',
         },
         {
           label: 'Plugin',
-          value: 'studio-design',
-          hint: 'Loop Studio Design, in the loop-ai-studio marketplace.',
+          value: 'ai-studio-design',
+          hint: 'Loop AI Studio Design, in the loop-ai-studio marketplace.',
         },
       ],
       instructions: [
         {
-          main: 'Install the Loop Studio Design plugin from the loop-ai-studio marketplace.',
+          main: 'Install the Loop AI Studio Design plugin from the loop-ai-studio marketplace.',
           detail: 'It carries the prompting skill, the Eclipse and packaging skills, and declares the Vesper connector.',
         },
         {

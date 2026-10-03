@@ -3,12 +3,14 @@
  *
  * The App ("Vesper Loop") has Contents: read and Metadata: read, and nothing else:
  * feedback no longer goes through Vesper (2026-09-29), so it files no issues. It is
- * installed on `tensalir/loop-ai-studio` (the studio kit) and
- * `tensalir/loop-product-plugins` (the product kit, read through
- * `repositoryInstallationTokens`). Each token is asked for with exactly those permissions
- * and one repository, so a token that leaks can do nothing else; tokens are cached until
- * five minutes before GitHub expires them (an hour after issue). Asking for a permission
- * the App lacks makes GitHub refuse the whole token (422), which stops every kit read.
+ * installed on `tensalir/loop-ai-studio` (the studio kit) and the product kit's repository,
+ * `tensalir/loop-ai-product` (until its rename `tensalir/loop-product-plugins`; read through
+ * `repositoryInstallationTokens`, one cache per name). Each token is asked for with exactly
+ * those permissions and one repository, so a token that leaks can do nothing else; tokens are
+ * cached until five minutes before GitHub expires them (an hour after issue). Asking for a
+ * permission the App lacks, or for a repository name the installation does not have, makes
+ * GitHub refuse the whole token (422, `InstallationTokenRefused`): the first stops every kit
+ * read, the second only that name, and the product kit then asks under its other name.
  *
  * Env: GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_B64 (the PEM, base64 on one line),
  * GITHUB_APP_INSTALLATION_ID. None of them is read at import time.
@@ -34,6 +36,14 @@ export interface GithubAppConfig {
   repositories: string[]
   /** The permissions asked for; `INSTALLATION_PERMISSIONS` when not given. */
   permissions?: Readonly<Record<string, string>>
+}
+
+/** GitHub would not issue an installation token: `status` is its answer (422 for a repository the installation lacks). */
+export class InstallationTokenRefused extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message)
+    this.name = 'InstallationTokenRefused'
+  }
 }
 
 export class GithubAppNotConfigured extends Error {
@@ -129,7 +139,7 @@ export class InstallationTokenCache {
     )
     if (!res.ok) {
       const text = await res.text().catch(() => '')
-      throw new Error(`GitHub refused an installation token (${res.status}): ${text.slice(0, 200)}`)
+      throw new InstallationTokenRefused(res.status, `GitHub refused an installation token (${res.status}): ${text.slice(0, 200)}`)
     }
     const body = (await res.json()) as { token?: string; expires_at?: string }
     if (!body.token || !body.expires_at) {
@@ -157,9 +167,9 @@ const perRepository = new Map<string, InstallationTokenCache>()
 
 /**
  * A token cache for one more repository the App is installed on, read-only unless other permissions
- * are named: the product kit's repository (`PRODUCT_KIT_REPO`). Kept apart from the shared cache,
- * so an installation that does not include that repository yet refuses only this token, never the
- * creative kit's. Null when the App is not configured.
+ * are named: the product kit's repository (`PRODUCT_KIT_REPO`, or each of its names). Kept apart
+ * from the shared cache, so an installation that does not include that repository (or that name)
+ * refuses only this token, never the creative kit's. Null when the App is not configured.
  */
 export function repositoryInstallationTokens(
   env: NodeJS.ProcessEnv,

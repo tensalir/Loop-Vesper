@@ -181,7 +181,7 @@ export async function runCmfPdf(cmf: CmfKit, args: CmfPdfArgs, deps: CmfPdfDeps)
   const deciders = deciderEmails(cmf)
   if (!deciders.length) {
     throw new CmfError(
-      "the product kit names no CMF decider's email, so no render can be shown to carry Damien's yes. The kit's CMF deciders gain an `email` (workstreams/cmf/workstream.json), and a new product-design kit is released."
+      "the product kit names no CMF decider's email, so no render can be shown to carry Damien's yes. The kit's CMF deciders gain an `email` (workstreams/cmf/workstream.json), and a new product kit is released."
     )
   }
   const renders = new Map<string, RecordedRender & { decidedBy: string; decidedAt: Date }>()

@@ -221,11 +221,12 @@ test.describe('/headless points to the plugin, not a download', () => {
     }
   })
 
-  test('the skill surface names the Studio Design plugin, its skill and the marketplace', () => {
+  test('the skill surface names the AI Studio Design plugin, its skill and the marketplace', () => {
     const skill = surfaces.find((s) => s.id === 'skill')!
     const text = JSON.stringify(skill)
-    expect(text).toContain('/studio-design:genai-prompting')
-    expect(text).toContain('Loop Studio Design')
+    expect(text).toContain('/ai-studio-design:genai-prompting')
+    expect(text).toContain('Loop AI Studio Design')
     expect(text).toContain('loop-ai-studio')
+    expect(text).not.toContain('/studio-design:')
   })
 })
