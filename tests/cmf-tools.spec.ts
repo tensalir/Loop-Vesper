@@ -450,7 +450,7 @@ test.describe('the CMF tools', () => {
 
   test("in production the tools read CMF from Loop Product Design's kit, and say where when it cannot be read", async () => {
     const err = await refusalOf(productionCmfDeps.loadKit({} as unknown as NodeJS.ProcessEnv))
-    expect(err.message).toContain("CMF is read from Loop Product Design's kit, tensalir/loop-product-plugins at its newest product-design-v* tag (PRODUCT_KIT_REPO, PRODUCT_KIT_REF)")
+    expect(err.message).toContain("CMF is read from Loop AI Product Design's kit, tensalir/loop-ai-product (or tensalir/loop-product-plugins) at its newest ai-product-design-v* or product-design-v* tag (PRODUCT_KIT_REPO, PRODUCT_KIT_REF)")
     expect(err.message).toContain('GITHUB_APP_ID')
     const pinned = await refusalOf(productionCmfDeps.loadKit({ PRODUCT_KIT_REF: 'product-design-v0.2.0', PRODUCT_KIT_REPO: 'o/r' } as unknown as NodeJS.ProcessEnv))
     expect(pinned.message).toContain('o/r at product-design-v0.2.0')

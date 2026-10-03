@@ -5,7 +5,7 @@
  * one is shown to admins, who are the ones building it. `retired` is never served.
  */
 
-import type { AnyKit, KitProduct } from './kit-schema'
+import { isProductKit, type AnyKit, type KitProduct } from './kit-schema'
 
 export const SERVED_STATUSES = ['pilot', 'live'] as const
 
@@ -44,7 +44,7 @@ export function resolveProduct(kit: AnyKit, query: string, opts: { isAdmin?: boo
     throw new Error(`${unserved[1].name} is ${unserved[1].status} in the kit, so Vesper does not serve it yet.`)
   }
   const names = served.map(({ slug, product }) => `${product.name} (${slug})`).join(', ')
-  throw new Error(`No Loop product called '${query}' in the ${kit.plugin === 'product-design' ? 'product' : 'creative'} kit. It carries: ${names || 'nothing yet'}.`)
+  throw new Error(`No Loop product called '${query}' in the ${isProductKit(kit) ? 'product' : 'creative'} kit. It carries: ${names || 'nothing yet'}.`)
 }
 
 /** A served product by slug, skill name, name or alias, case and punctuation ignored; null when none. */

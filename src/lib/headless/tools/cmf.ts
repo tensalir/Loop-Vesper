@@ -26,8 +26,8 @@
  * calls too; this file is Claude's door onto it: it parses the arguments, runs a long call as a
  * job, and writes the answer Claude reads. All of them need CMF access (the profile's
  * `cmf_access`, or an admin): the registry gates them (`needs: 'cmf'`) and the service checks
- * again, because a static token carries its tool list as issued. The product kit (Loop Product
- * Design, `tensalir/loop-product-plugins`) supplies everything; Vesper holds no CMF wording or rule
+ * again, because a static token carries its tool list as issued. The product kit (Loop AI Product
+ * Design, `tensalir/loop-ai-product`) supplies everything; Vesper holds no CMF wording or rule
  * of its own, and reads CMF from no other kit.
  */
 

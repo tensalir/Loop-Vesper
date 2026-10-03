@@ -87,7 +87,7 @@ export const TOOL_META: Record<HeadlessTool, ToolMeta> = {
   record_verdict: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
   // The plugin repository's nightly read-back: only on a static credential an admin issues for it.
   export_creative_records: { group: 'creative', oauth: false, selfIssued: false, org: false, adminIssuable: true },
-  // Feedback on the Loop Studio Design plugin, filed as issues in its repository in the caller's own
+  // Feedback on the Loop AI Studio Design plugin, filed as issues in its repository in the caller's own
   // name. Off the org token: an issue needs to know who is filing it.
   list_feedback_targets: { group: 'feedback', oauth: true, selfIssued: true, org: false, adminIssuable: true },
   list_feedback: { group: 'feedback', oauth: true, selfIssued: true, org: false, adminIssuable: true },

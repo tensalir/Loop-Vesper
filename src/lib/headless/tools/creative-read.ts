@@ -3,8 +3,8 @@
  * serves, and which pinned references a grade or a draw attaches.
  *
  * Two kits serve the products (`src/lib/creative/kit-set.ts`): CMF comes from
- * the product kit (Loop Product Design), everything else from the creative kit
- * (Loop Studio Design). Every result carries the version, tag and commit of the
+ * the product kit (Loop AI Product Design), everything else from the creative kit
+ * (Loop AI Studio Design). Every result carries the version, tag and commit of the
  * kit it read, and says when that kit is stale (the newest could not be read or
  * was refused, and this is the last good one).
  */
@@ -69,7 +69,7 @@ function otherKitNote(set: KitSetState): { text: string; structured: Record<stri
   const structured: Record<string, unknown> = { product_kit: set.product ? kitHeader(set.product) : null }
   if (set.product) {
     notes.push(
-      `CMF comes from Loop Product Design's kit ${set.product.kit.version} (${set.product.ref}, commit ${set.product.commit.slice(0, 7)})${set.product.stale ? ` — STALE: ${set.product.staleReason}` : ''}.`
+      `CMF comes from Loop AI Product Design's kit ${set.product.kit.version} (${set.product.ref}, commit ${set.product.commit.slice(0, 7)})${set.product.stale ? ` — STALE: ${set.product.staleReason}` : ''}.`
     )
   } else if (set.productError) {
     notes.push(`CMF is unavailable: ${set.productError.message}`)

@@ -11,7 +11,7 @@
  * The words come from the kits, at their release tags:
  *   - the creative kit's `prompting.never_enhance_fingerprints` (Eclipse, packaging);
  *   - the product kit's `products.cmf.template.fingerprint` (CMF, read from Loop
- *     Product Design since 2026-09-29; the creative kit stopped carrying it);
+ *     AI Product Design since 2026-09-29; the creative kit stopped carrying it);
  *   - the creative kit's products, by their own `name`, for the MCP name check.
  * A kit that cannot be read leaves its part to the copies in this file, so the
  * guard never fails on a kit.
@@ -38,8 +38,9 @@ import type { AnyKit } from '@/lib/creative/kit-schema'
  * The copies, used when a kit cannot be read, in the order Eclipse, CMF,
  * packaging:
  *   - products/eclipse/skill/references/generation.md, skeleton v3
- *   - the CMF template, `skills/cmf-review/references/prompt-template.md` in Loop Product
- *     Design (tensalir/loop-product-plugins; in Loop Studio Design until 2026-09-29)
+ *   - the CMF template, `skills/cmf-review/references/prompt-template.md` in Loop AI Product
+ *     Design (tensalir/loop-ai-product, until its rename tensalir/loop-product-plugins; in Loop
+ *     Studio Design until 2026-09-29)
  *   - products/packaging/skill/references/finishing.md, skeleton v2
  */
 export const SKELETON_FINGERPRINTS: readonly string[] = [

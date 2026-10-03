@@ -10,10 +10,12 @@ import {
   kitPaths,
   loadCreativeKit,
   newestTag,
+  pluginOfTag,
   PRODUCT_KIT,
   repoPathOf,
   sha256Hex,
   STUDIO_KIT,
+  tagPrefixes,
   type KitSource,
   type KitStore,
   type LoadedKit,
@@ -25,10 +27,10 @@ import { findSkeletonFingerprint } from '../src/lib/prompts/product-prompt-guard
 import { runConformance } from '../src/lib/creative/conformance'
 import { verdictFromKit } from '../src/lib/creative/ladder'
 import { formatLine, isOurs, parseLine, GrammarError, type LineFields } from '../src/lib/creative/grammar'
-import { githubKitSource } from '../src/lib/creative/kit-github'
-import { appJwt, InstallationTokenCache, READ_PERMISSIONS, TOKEN_REFRESH_MARGIN_MS } from '../src/lib/github/app'
-import type { Gh, GhResponse } from '../src/lib/github/rest'
-import { getProductKit, loadKitPrompting } from '../src/lib/creative/kit-runtime'
+import { clearRepoChoice, firstReachableKitSource, githubKitSource, isRepoMiss, KitNotInRepo, REPO_CHOICE_TTL_MS } from '../src/lib/creative/kit-github'
+import { appJwt, InstallationTokenCache, InstallationTokenRefused, READ_PERMISSIONS, TOKEN_REFRESH_MARGIN_MS } from '../src/lib/github/app'
+import { githubClient, GithubError, type Gh, type GhResponse } from '../src/lib/github/rest'
+import { getProductKit, loadKitPrompting, productKitRepos } from '../src/lib/creative/kit-runtime'
 
 /**
  * The creative kit is the plugin repository's word, and Vesper must read it
@@ -144,9 +146,11 @@ function memoryStore(seed: StoredKit[] = []): KitStore & { kits: StoredKit[]; fi
       return kits.find((k) => k.blobSha === blobSha) ?? null
     },
     async latestValid(plugin) {
+      // One name, or a plugin's old and new names.
+      const names = plugin === undefined ? null : ([] as string[]).concat(plugin)
       return (
         [...kits]
-          .filter((k) => k.valid && (!plugin || k.kit?.plugin === plugin))
+          .filter((k) => k.valid && (!names || names.includes(k.kit?.plugin ?? '')))
           .sort((a, b) => b.fetchedAt.getTime() - a.fetchedAt.getTime())[0] ?? null
       )
     },
@@ -543,9 +547,9 @@ test.describe('the product kit', () => {
     await expect(getKitFile({ commit: 'c0ffee' }, file, { source, store })).rejects.toThrow('plugins/studio-design/skills/cmf-review')
   })
 
-  test('without the App, CMF says where it is read from', async () => {
+  test('without the App, CMF says where it is read from, under the repository\'s new name and its old one', async () => {
     await expect(getProductKit({ env: {} as NodeJS.ProcessEnv })).rejects.toThrow(
-      "CMF is read from Loop Product Design's kit, tensalir/loop-product-plugins at its newest product-design-v* tag (PRODUCT_KIT_REPO, PRODUCT_KIT_REF)"
+      "CMF is read from Loop AI Product Design's kit, tensalir/loop-ai-product (or tensalir/loop-product-plugins) at its newest ai-product-design-v* or product-design-v* tag (PRODUCT_KIT_REPO, PRODUCT_KIT_REF)"
     )
   })
 
@@ -699,5 +703,393 @@ test.describe('two kits, one list of products', () => {
     expect(onlyStudio.productError?.message).toBe('down')
     expect(kitSetPins(onlyStudio).some((p) => p.product === 'cmf')).toBe(false)
     await expect(loadKitSet(loaders({ studio: new Error('a'), product: new Error('b') }))).rejects.toThrow('a')
+  })
+})
+
+// ------------------------------------------------------------------ the rename: both names are read
+
+/**
+ * Loop renames both plugins (studio-design to ai-studio-design, product-design to
+ * ai-product-design) and the product kit's repository (tensalir/loop-product-plugins to
+ * tensalir/loop-ai-product). Vesper reads both names, so the old-named releases production serves
+ * today keep being served unchanged, the first new-named tag takes over, and neither half of the
+ * rename can freeze or break a tool. The releases here are the sample kits re-versioned and, for
+ * the new names, renamed: `plugin`, `tag`, the commands, plugin.json and the conformance file's
+ * version. Their comment lines keep the `studio-design` prefix: the Frontify comment line is not
+ * renamed.
+ */
+
+type Files = Record<string, Buffer>
+
+function studioRelease(plugin: 'ai-studio-design' | 'studio-design', version: string, extra: Files = {}): Files {
+  const conf = JSON.parse(CONF_BYTES.toString('utf8'))
+  conf.version = version
+  const confBytes = Buffer.from(JSON.stringify(conf))
+  const kitBytes = withKit((k) => {
+    k.plugin = plugin
+    k.tag = `${plugin}-v${version}`
+    k.version = version
+    k.conformance.sha256 = sha256Hex(confBytes)
+    for (const p of Object.values(k.products) as any[]) p.command = String(p.command).replace(/^\/studio-design:/, `/${plugin}:`)
+  })
+  const pluginBytes = Buffer.from(JSON.stringify({ ...JSON.parse(PLUGIN_BYTES.toString('utf8')), name: plugin, version }))
+  const paths = kitPaths(plugin)
+  return { [paths.kit]: kitBytes, [paths.pluginJson]: pluginBytes, [paths.conformance]: confBytes, ...extra }
+}
+
+function productRelease(plugin: 'ai-product-design' | 'product-design', version: string, extra: Files = {}): Files {
+  const conf = JSON.parse(P_CONF_BYTES.toString('utf8'))
+  conf.version = version
+  const confBytes = Buffer.from(JSON.stringify(conf))
+  const kitBytes = withProductKit((k) => {
+    k.plugin = plugin
+    k.tag = `${plugin}-v${version}`
+    k.version = version
+    k.conformance.sha256 = sha256Hex(confBytes)
+    for (const p of Object.values(k.products) as any[]) p.command = String(p.command).replace(/^\/product-design:/, `/${plugin}:`)
+  })
+  const pluginBytes = Buffer.from(JSON.stringify({ ...JSON.parse(P_PLUGIN_BYTES.toString('utf8')), name: plugin, version }))
+  const paths = kitPaths(plugin)
+  return { [paths.kit]: kitBytes, [paths.pluginJson]: pluginBytes, [paths.conformance]: confBytes, ...extra }
+}
+
+/**
+ * A repository as GitHub's REST API shows it to `githubKitSource`: refs by name, each a commit with
+ * its files. A ref named `<name>-vX.Y.Z` is a tag, any other a branch. Every path asked is in `calls`.
+ */
+function fakeRepo(repo: string, refs: Record<string, Files>): Gh & { calls: string[] } {
+  const calls: string[] = []
+  const commitOf = (ref: string) => sha256Hex(`${repo}@${ref}`).slice(0, 40)
+  const respond = (status: number, body?: unknown): GhResponse => {
+    const bytes = Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body ?? {}))
+    return {
+      status,
+      etag: null,
+      bytes,
+      json<T>() {
+        return JSON.parse(bytes.toString('utf8')) as T
+      },
+    }
+  }
+  const gh: Gh = async (path, req = {}) => {
+    calls.push(path)
+    const base = `/repos/${repo}`
+    if (!path.startsWith(`${base}/`)) return respond(404)
+    const rest = path.slice(base.length)
+    const tags = /^\/git\/matching-refs\/tags\/(.+)$/.exec(rest)
+    if (tags) {
+      const names = Object.keys(refs).filter((r) => r.startsWith(tags[1]) && /-v\d+\.\d+\.\d+$/.test(r))
+      return respond(200, names.map((r) => ({ ref: `refs/tags/${r}`, object: { sha: commitOf(r), type: 'commit' } })))
+    }
+    const commit = /^\/commits\/(.+)$/.exec(rest)
+    if (commit) {
+      const ref = decodeURIComponent(commit[1])
+      return refs[ref] ? respond(200, { sha: commitOf(ref) }) : respond(404)
+    }
+    const contents = /^\/contents\/(.+)\?ref=(.+)$/.exec(rest)
+    if (contents) {
+      const file = decodeURIComponent(contents[1])
+      const ref = Object.keys(refs).find((r) => commitOf(r) === contents[2])
+      const bytes = ref ? refs[ref][file] : undefined
+      if (!bytes) return respond(404)
+      if (req.accept === 'application/vnd.github.raw') return respond(200, bytes)
+      return respond(200, { type: 'file', sha: `blob-${sha256Hex(bytes).slice(0, 12)}`, size: bytes.length, content: bytes.toString('base64'), encoding: 'base64' })
+    }
+    return respond(404)
+  }
+  return Object.assign(gh, { calls })
+}
+
+/** The kit.json files a repository was asked for, in order. */
+function kitReads(gh: { calls: string[] }): string[] {
+  return gh.calls.filter((c) => c.includes('/kit.json?')).map((c) => c.split('/contents/')[1].split('?')[0])
+}
+
+test.describe('the rename: the creative kit under both names', () => {
+  test.beforeEach(() => clearKitMemory())
+
+  test('the first ai-studio-design tag takes over from the last studio-design one, read from its own folder', async () => {
+    const skill = Buffer.from('# eclipse, under the new name\n')
+    const gh = fakeRepo('o/r', {
+      'studio-design-v0.6.1': studioRelease('studio-design', '0.6.1'),
+      'ai-studio-design-v0.7.0': studioRelease('ai-studio-design', '0.7.0', { 'plugins/ai-studio-design/skills/eclipse/SKILL.md': skill }),
+    })
+    const source = githubKitSource(gh, 'o/r')
+    const store = memoryStore()
+    const loaded = await loadCreativeKit({ source, store })
+    expect(loaded.stale).toBe(false)
+    expect([loaded.ref, loaded.kit.plugin, loaded.kit.version]).toEqual(['ai-studio-design-v0.7.0', 'ai-studio-design', '0.7.0'])
+    // Both names' tags are listed; only the new name's folder is read.
+    expect(gh.calls).toContain('/repos/o/r/git/matching-refs/tags/ai-studio-design-v')
+    expect(gh.calls).toContain('/repos/o/r/git/matching-refs/tags/studio-design-v')
+    expect(gh.calls.filter((c) => c.includes('/contents/plugins/studio-design/'))).toEqual([])
+    // The files it names are read inside its own folder, and its comment lines keep the studio-design prefix.
+    expect(await getKitFile(loaded, { path: 'skills/eclipse/SKILL.md', sha256: sha256Hex(skill) }, { source, store })).toEqual(skill)
+    expect(loaded.kit.comment_line.prefix).toBe('studio-design')
+    expect(loaded.kit.products.eclipse.command).toBe('/ai-studio-design:eclipse')
+  })
+
+  test('with only studio-design tags the old kit is served as before, and the new folder is never asked for', async () => {
+    const gh = fakeRepo('o/r', {
+      'studio-design-v0.6.0': studioRelease('studio-design', '0.6.0'),
+      'studio-design-v0.6.1': studioRelease('studio-design', '0.6.1'),
+    })
+    const loaded = await loadCreativeKit({ source: githubKitSource(gh, 'o/r'), store: memoryStore() })
+    expect(loaded.stale).toBe(false)
+    expect([loaded.ref, loaded.kit.plugin, loaded.kit.version]).toEqual(['studio-design-v0.6.1', 'studio-design', '0.6.1'])
+    expect(kitReads(gh)).toEqual(['plugins/studio-design/kit.json'])
+  })
+
+  test('the newest tag is the highest version under either name, the new name on a tie', () => {
+    expect(newestTag(['refs/tags/studio-design-v0.6.1', 'refs/tags/ai-studio-design-v0.7.0'])).toBe('ai-studio-design-v0.7.0')
+    expect(newestTag(['refs/tags/studio-design-v0.8.0', 'refs/tags/ai-studio-design-v0.7.0'])).toBe('studio-design-v0.8.0')
+    expect(newestTag(['refs/tags/studio-design-v0.7.0', 'refs/tags/ai-studio-design-v0.7.0'])).toBe('ai-studio-design-v0.7.0')
+    expect(newestTag(['refs/tags/ai-studio-design-v0.7.0'], 'studio-design-v')).toBeNull()
+    expect(
+      newestTag(['refs/tags/product-design-v0.2.3', 'refs/tags/ai-product-design-v0.3.0', 'refs/tags/ai-studio-design-v9.0.0'], tagPrefixes(PRODUCT_KIT))
+    ).toBe('ai-product-design-v0.3.0')
+    expect(pluginOfTag('ai-studio-design-v0.7.0', STUDIO_KIT.plugins)).toBe('ai-studio-design')
+    expect(pluginOfTag('refs/tags/studio-design-v0.6.1', STUDIO_KIT.plugins)).toBe('studio-design')
+    expect(pluginOfTag('main', STUDIO_KIT.plugins)).toBeNull()
+    expect(pluginOfTag('product-design-v0.2.3', STUDIO_KIT.plugins)).toBeNull()
+  })
+
+  test('a refused ai-studio-design release keeps the last good studio-design kit, stale', async () => {
+    const store = memoryStore()
+    const today = { 'studio-design-v0.6.1': studioRelease('studio-design', '0.6.1') }
+    await loadCreativeKit({ source: githubKitSource(fakeRepo('o/r', today), 'o/r'), store }, { force: true })
+    const broken = studioRelease('ai-studio-design', '0.7.0')
+    broken['plugins/ai-studio-design/.claude-plugin/plugin.json'] = Buffer.from(JSON.stringify({ name: 'ai-studio-design', version: '0.6.9' }))
+    const gh = fakeRepo('o/r', { ...today, 'ai-studio-design-v0.7.0': broken })
+    const loaded = await loadCreativeKit({ source: githubKitSource(gh, 'o/r'), store }, { force: true })
+    expect(loaded.stale).toBe(true)
+    expect([loaded.kit.plugin, loaded.kit.version]).toEqual(['studio-design', '0.6.1'])
+    expect(loaded.staleReason).toContain('the kit at ai-studio-design-v0.7.0 was refused: plugin.json says 0.6.9, kit.json says 0.7.0')
+  })
+
+  test('a ref the env names is read from the new folder, and from the old one when the ref has only that', async () => {
+    const gh = fakeRepo('o/r', {
+      'preview-old': studioRelease('studio-design', '0.6.2'),
+      'preview-both': { ...studioRelease('studio-design', '0.6.2'), ...studioRelease('ai-studio-design', '0.7.0') },
+      'preview-none': { 'README.md': Buffer.from('no kit here\n') },
+      'studio-design-v0.6.1': studioRelease('studio-design', '0.6.1'),
+      'ai-studio-design-v0.7.0': studioRelease('ai-studio-design', '0.7.0'),
+    })
+    const store = memoryStore()
+    const at = (ref: string) => loadCreativeKit({ source: githubKitSource(gh, 'o/r'), store, ref }, { force: true })
+
+    const old = await at('preview-old')
+    expect([old.stale, old.ref, old.kit.plugin, old.kit.version]).toEqual([false, 'preview-old', 'studio-design', '0.6.2'])
+    expect(kitReads(gh)).toEqual(['plugins/ai-studio-design/kit.json', 'plugins/studio-design/kit.json'])
+    expect((await at('preview-both')).kit.plugin).toBe('ai-studio-design')
+    // A rollback to an old-named tag reads its old folder, though the repository has a newer new-named tag.
+    const rollback = await at('studio-design-v0.6.1')
+    expect([rollback.stale, rollback.kit.plugin, rollback.kit.version]).toEqual([false, 'studio-design', '0.6.1'])
+    // A ref with neither folder is refused: the last good kit stays, stale; with none, a readable error.
+    const none = await at('preview-none')
+    expect(none.stale).toBe(true)
+    expect(none.staleReason).toContain('preview-none has no plugins/ai-studio-design/kit.json or plugins/studio-design/kit.json')
+    await expect(loadCreativeKit({ source: githubKitSource(gh, 'o/r'), store: memoryStore(), ref: 'preview-none' }, { force: true })).rejects.toThrow(
+      'No creative kit is available'
+    )
+  })
+
+  test("a release tag is read from its own name's folder, and a kit must be its folder's plugin", async () => {
+    // An ai-studio-design tag at a commit that has only the old folder is refused, not read from the old folder.
+    const gh = fakeRepo('o/r', { 'ai-studio-design-v0.7.0': studioRelease('studio-design', '0.6.1') })
+    await expect(loadCreativeKit({ source: githubKitSource(gh, 'o/r'), store: memoryStore() }, { force: true })).rejects.toThrow(
+      'ai-studio-design-v0.7.0 has no plugins/ai-studio-design/kit.json'
+    )
+    // A kit in the new folder that still calls itself studio-design is refused.
+    const f = studioRelease('studio-design', '0.6.1')
+    const misplaced = checkKit(f['plugins/studio-design/kit.json'], f['plugins/studio-design/.claude-plugin/plugin.json'], f['plugins/studio-design/kit/conformance.json'], STUDIO_KIT, 'ai-studio-design')
+    expect(misplaced.ok).toBe(false)
+    expect(misplaced.problems.join()).toContain('kit.json at plugins/ai-studio-design/kit.json names the plugin studio-design')
+  })
+
+  test("a kit whose tag is not its own plugin name's is refused, under either name, in either kit", () => {
+    const renamed = studioRelease('ai-studio-design', '0.7.0')
+    const good = checkKit(
+      renamed['plugins/ai-studio-design/kit.json'],
+      renamed['plugins/ai-studio-design/.claude-plugin/plugin.json'],
+      renamed['plugins/ai-studio-design/kit/conformance.json'],
+      STUDIO_KIT,
+      'ai-studio-design'
+    )
+    expect(good.problems).toEqual([])
+    const newNameOldTag = checkKit(withKit((k) => (k.plugin = 'ai-studio-design')), PLUGIN_BYTES, CONF_BYTES)
+    expect(newNameOldTag.ok).toBe(false)
+    expect(newNameOldTag.problems.join()).toContain('kit.json tag: the kit is ai-studio-design, so its tag is ai-studio-design-v<version>, not studio-design-v0.2.1')
+    const oldNameNewTag = checkKit(withKit((k) => (k.tag = 'ai-studio-design-v0.2.1')), PLUGIN_BYTES, CONF_BYTES)
+    expect(oldNameNewTag.ok).toBe(false)
+    expect(oldNameNewTag.problems.join()).toContain('kit.json tag: the kit is studio-design')
+    const productNewNameOldTag = checkKit(withProductKit((k) => (k.plugin = 'ai-product-design')), P_PLUGIN_BYTES, P_CONF_BYTES, PRODUCT_KIT)
+    expect(productNewNameOldTag.ok).toBe(false)
+    expect(productNewNameOldTag.problems.join()).toContain('kit.json tag: the kit is ai-product-design')
+    const productOldNameNewTag = checkKit(withProductKit((k) => (k.tag = 'ai-product-design-v0.2.0')), P_PLUGIN_BYTES, P_CONF_BYTES, PRODUCT_KIT)
+    expect(productOldNameNewTag.ok).toBe(false)
+    expect(productOldNameNewTag.problems.join()).toContain('kit.json tag: the kit is product-design')
+    // Each kit still refuses the other's names, old or new.
+    const studioAsProduct = checkKit(
+      withKit((k) => {
+        k.plugin = 'ai-product-design'
+        k.tag = 'ai-product-design-v0.2.1'
+      }),
+      PLUGIN_BYTES,
+      CONF_BYTES
+    )
+    expect(studioAsProduct.ok).toBe(false)
+    expect(studioAsProduct.problems.join()).toContain('kit.json plugin')
+  })
+
+  test('the kit is kept in memory as the creative kit, whatever its plugin is called', async () => {
+    const store = memoryStore()
+    const today = { 'studio-design-v0.6.1': studioRelease('studio-design', '0.6.1') }
+    await loadCreativeKit({ source: githubKitSource(fakeRepo('o/r', today), 'o/r'), store })
+    const renamed = githubKitSource(fakeRepo('o/r', { ...today, 'ai-studio-design-v0.7.0': studioRelease('ai-studio-design', '0.7.0') }), 'o/r')
+    // Within the minute a new release does not split the memory in two: the same kit is served.
+    expect((await loadCreativeKit({ source: renamed, store })).kit.plugin).toBe('studio-design')
+    clearKitMemory('product')
+    expect((await loadCreativeKit({ source: renamed, store })).kit.plugin).toBe('studio-design')
+    clearKitMemory('studio')
+    expect((await loadCreativeKit({ source: renamed, store })).kit.plugin).toBe('ai-studio-design')
+  })
+
+  test('renamed kits are told apart as before: CMF only from the product kit, the rest from the creative kit', async () => {
+    const s = studioRelease('ai-studio-design', '0.7.0')
+    const studio = loadedOf(KitSchema.parse(JSON.parse(s['plugins/ai-studio-design/kit.json'].toString('utf8'))), 'ai-studio-design-v0.7.0')
+    const p = productRelease('ai-product-design', '0.3.0')
+    const product = loadedOf(ProductKitSchema.parse(JSON.parse(p['plugins/ai-product-design/kit.json'].toString('utf8'))), 'ai-product-design-v0.3.0')
+    expect(Object.keys(servedView(studio).kit.products).sort()).toEqual(['eclipse', 'packaging'])
+    expect(servedView(product)).toBe(product)
+    expect(kitResults(studio.kit)).toBe(studio.kit.ladder)
+    expect(kitResults(product.kit)).toBe(product.kit.results)
+    expect(kitGraders(product.kit)).toBe(product.kit.graders)
+    const set = { studio: async () => studio, product: async () => product }
+    const cmf = await resolveInKits(set, 'cmf')
+    expect([cmf.source, cmf.product.command]).toEqual(['product', '/ai-product-design:cmf-review'])
+    expect((await resolveInKits(set, 'eclipse')).source).toBe('studio')
+  })
+})
+
+test.describe('the rename: the product kit under both repository names', () => {
+  test.beforeEach(() => {
+    clearKitMemory()
+    clearRepoChoice()
+  })
+
+  const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 })
+  const pem = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString()
+
+  /** The App's installation, holding only the repository names given: a token for any other name is refused with 422, as GitHub does. */
+  function installation(names: readonly string[], minted: string[]) {
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      const { repositories } = JSON.parse(String(init.body)) as { repositories: string[] }
+      minted.push(repositories.join(','))
+      if (!repositories.every((r) => names.includes(r))) {
+        return new Response(
+          JSON.stringify({ message: 'There is at least one repository that does not exist or is not accessible to the parent installation.' }),
+          { status: 422 }
+        )
+      }
+      return new Response(JSON.stringify({ token: 't', expires_at: new Date(Date.now() + 3600_000).toISOString() }), { status: 201 })
+    }) as unknown as typeof fetch
+    return (repo: string) =>
+      new InstallationTokenCache(
+        { appId: '1', privateKeyPem: pem, installationId: '99', repositories: [repo.split('/')[1]], permissions: READ_PERMISSIONS },
+        { fetchImpl }
+      )
+  }
+
+  /** GitHub's REST API over fake repositories, by full name; any other name is a 404, and `status` answers every call. */
+  function api(repos: Record<string, Gh>, status?: number): typeof fetch {
+    return (async (url: string, init: RequestInit) => {
+      if (status) return new Response('{}', { status })
+      const path = url.replace('https://api.github.com', '')
+      const gh = repos[path.split('/').slice(2, 4).join('/')]
+      if (!gh) return new Response('{"message":"Not Found"}', { status: 404 })
+      const res = await gh(path, { accept: (init.headers as Record<string, string>).Accept })
+      return new Response(new Uint8Array(res.bytes), { status: res.status })
+    }) as unknown as typeof fetch
+  }
+
+  /** The product kit's source as production builds it: each default repository name, with its own token. */
+  function productSource(
+    installed: readonly string[],
+    repos: Record<string, Gh>,
+    opts: { minted?: string[]; status?: Record<string, number>; now?: () => number } = {}
+  ): KitSource {
+    const tokens = installation(installed, opts.minted ?? [])
+    return firstReachableKitSource(
+      productKitRepos({} as NodeJS.ProcessEnv).map((repo) => ({
+        repo,
+        source: githubKitSource(
+          githubClient({ tokens: tokens(repo), fetchImpl: api(repos, opts.status?.[repo]), sleep: async () => {} }),
+          repo,
+          tagPrefixes(PRODUCT_KIT)
+        ),
+      })),
+      { now: opts.now }
+    )
+  }
+
+  test('before the rename: tensalir/loop-ai-product is refused, and tensalir/loop-product-plugins serves product-design', async () => {
+    expect(productKitRepos({} as NodeJS.ProcessEnv)).toEqual(['tensalir/loop-ai-product', 'tensalir/loop-product-plugins'])
+    expect(productKitRepos({ PRODUCT_KIT_REPO: ' o/r ' } as unknown as NodeJS.ProcessEnv)).toEqual(['o/r'])
+
+    const pantone = Buffer.from('{"table":[]}\n')
+    const before = fakeRepo('tensalir/loop-product-plugins', {
+      'product-design-v0.2.3': productRelease('product-design', '0.2.3', { 'plugins/product-design/skills/cmf-review/references/pantone.json': pantone }),
+    })
+    const minted: string[] = []
+    let clock = Date.UTC(2026, 9, 3, 12, 0, 0)
+    const source = productSource(['loop-product-plugins'], { 'tensalir/loop-product-plugins': before }, { minted, now: () => clock })
+    const store = memoryStore()
+    const loaded = await loadCreativeKit({ source, store, kit: PRODUCT_KIT })
+    expect([loaded.stale, loaded.ref, loaded.kit.plugin, loaded.kit.version]).toEqual([false, 'product-design-v0.2.3', 'product-design', '0.2.3'])
+    expect(minted[0]).toBe('loop-ai-product') // the new name is asked first, and refused
+    const file = { path: 'skills/cmf-review/references/pantone.json', sha256: sha256Hex(pantone) }
+    expect(await getKitFile(loaded, file, { source, store })).toEqual(pantone)
+    // The name that answered is asked first from then on, so a read does not ask the missing name every time ...
+    expect(minted.filter((m) => m === 'loop-ai-product')).toHaveLength(1)
+    // ... for ten minutes; then the new name is asked first again.
+    clock += REPO_CHOICE_TTL_MS
+    expect(await getKitFile(loaded, file, { source, store })).toEqual(pantone)
+    expect(minted.filter((m) => m === 'loop-ai-product')).toHaveLength(2)
+  })
+
+  test('after the rename: tensalir/loop-ai-product answers, and its first ai-product-design tag takes over', async () => {
+    const after = fakeRepo('tensalir/loop-ai-product', {
+      'product-design-v0.2.3': productRelease('product-design', '0.2.3'),
+      'ai-product-design-v0.3.0': productRelease('ai-product-design', '0.3.0'),
+    })
+    const minted: string[] = []
+    const loaded = await loadCreativeKit({ source: productSource(['loop-ai-product'], { 'tensalir/loop-ai-product': after }, { minted }), store: memoryStore(), kit: PRODUCT_KIT })
+    expect([loaded.stale, loaded.ref, loaded.kit.plugin, loaded.kit.version]).toEqual([false, 'ai-product-design-v0.3.0', 'ai-product-design', '0.3.0'])
+    expect(new Set(minted)).toEqual(new Set(['loop-ai-product'])) // the old name is never asked
+    expect(kitReads(after)).toEqual(['plugins/ai-product-design/kit.json'])
+  })
+
+  test('a GitHub outage on the new name is not a reason to read the old one', async () => {
+    const before = fakeRepo('tensalir/loop-product-plugins', { 'product-design-v0.2.3': productRelease('product-design', '0.2.3') })
+    const source = productSource(['loop-ai-product', 'loop-product-plugins'], { 'tensalir/loop-product-plugins': before }, { status: { 'tensalir/loop-ai-product': 502 } })
+    await expect(loadCreativeKit({ source, store: memoryStore(), kit: PRODUCT_KIT }, { force: true })).rejects.toThrow('No product kit is available')
+    expect(before.calls).toEqual([])
+    expect(isRepoMiss(new GithubError('x', 502))).toBe(false)
+    expect(isRepoMiss(new GithubError('x', 0))).toBe(false)
+    expect(isRepoMiss(new GithubError('x', 422))).toBe(true)
+    expect(isRepoMiss(new InstallationTokenRefused(422, 'x'))).toBe(true)
+    expect(isRepoMiss(new KitNotInRepo('x'))).toBe(true)
+  })
+
+  test('when neither name answers, the error names both', async () => {
+    await expect(productSource([], {}).resolve(null, tagPrefixes(PRODUCT_KIT))).rejects.toThrow(
+      /none of tensalir\/loop-ai-product, tensalir\/loop-product-plugins has it \(.*refused an installation token \(422\)/
+    )
+    // A repository that answers but has no kit tag yet is a miss too: the next name is asked.
+    const empty = fakeRepo('tensalir/loop-ai-product', { main: { 'README.md': Buffer.from('new home\n') } })
+    const before = fakeRepo('tensalir/loop-product-plugins', { 'product-design-v0.2.3': productRelease('product-design', '0.2.3') })
+    const both = productSource(['loop-ai-product', 'loop-product-plugins'], { 'tensalir/loop-ai-product': empty, 'tensalir/loop-product-plugins': before })
+    expect((await both.resolve(null, tagPrefixes(PRODUCT_KIT))).ref).toBe('product-design-v0.2.3')
   })
 })

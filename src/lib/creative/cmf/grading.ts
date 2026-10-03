@@ -1,6 +1,6 @@
 /**
  * Vesper's read of a CMF render against its sheet row and its clown: the CMF grader's words from
- * the product kit (Loop Product Design), THE ROW and THE KEY that the repository's CMF script built
+ * the product kit (Loop AI Product Design), THE ROW and THE KEY that the repository's CMF script built
  * for that tab, column and key (`kit/cmf-grading.json`), the candidate first and the clown second,
  * three reads, that kit's ladder. A port of `assemble_cmf_grading_prompt` in the plugin
  * repository's kit builder, held to every CMF fixture in the kit's conformance file.
