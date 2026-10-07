@@ -7,14 +7,18 @@
  * them were wrong by the same factor.
  *
  * Keys are the long edge in pixels as the app passes it (`resolution`);
- * 512 is Google's "0.5K" tier.
+ * 512 is Google's "0.5K" tier, which only Nano Banana 2 has.
  */
 
 export const GEMINI_IMAGE_PRICES_USD: Record<string, Record<number, number>> = {
   // gemini-3-pro-image: $0.134 per 1K/2K image, $0.24 per 4K image.
   'gemini-nano-banana-pro': { 1024: 0.134, 2048: 0.134, 4096: 0.24 },
-  // gemini-3.1-flash-image: $0.045 (0.5K), $0.067 (1K), $0.101 (2K), $0.151 (4K).
-  'gemini-nano-banana-2': { 512: 0.045, 1024: 0.067, 2048: 0.101, 4096: 0.151 },
+  // Resolves to gemini-nano-banana-2.1 since 2026-10-07 (read that day): $0.0336 (1K),
+  // $0.0504 (2K), $0.113 (4K). No 0.5K tier on 2.1.
+  'gemini-nano-banana-2': { 1024: 0.0336, 2048: 0.0504, 4096: 0.113 },
+  // gemini-3.1-flash-image (Nano Banana 2), for a kit that still names it:
+  // $0.045 (0.5K), $0.067 (1K), $0.101 (2K), $0.151 (4K).
+  'gemini-3.1-flash-image': { 512: 0.045, 1024: 0.067, 2048: 0.101, 4096: 0.151 },
 }
 
 /** Resolutions are sent as numbers (1024) or labels ('2K'); read both. */

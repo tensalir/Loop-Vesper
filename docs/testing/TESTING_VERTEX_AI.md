@@ -56,21 +56,21 @@ Then it's falling back to the Gemini API - check your environment variables.
 1. Go to your app
 2. Create or open a project
 3. Switch to a **Video Session** (or create one)
-4. Select **"Veo 3.1"** as the model
+4. Select **"Gemini Omni Flash"** as the model (Veo 3.1 until 2026-10-07)
 5. Enter a prompt like: `A cat playing with a ball of yarn`
 6. Click **Generate**
 
 ### What to Look For:
 
 **In the browser console or server logs:**
-- You'll see: `[Veo 3.1] Starting video generation...`
-- It uses the Gemini API endpoint: `/models/veo-3.1-generate-preview:predictLongRunning`
+- You'll see: `[Omni Flash] Starting video generation...`
+- It uses the Gemini API Interactions endpoint: `/interactions` with model `gemini-omni-1.1-flash` (Omni is not confirmed on Vertex AI)
 - This is normal and expected
 
 **Expected behavior:**
 - Video generation request is submitted
-- Operation polling begins (checking every 10 seconds)
-- Video is generated (takes 1-6 minutes typically)
+- The video comes back in the response (inline under 4 MB); 1080p and 4K come back as a file, polled every 10 seconds
+- Video is generated
 - Video downloads and displays when ready
 
 ---

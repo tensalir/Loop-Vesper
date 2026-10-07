@@ -31,6 +31,9 @@ export const ANCHOR_URL_SECONDS = 365 * 24 * 60 * 60
 /** The kit's model names (the Gemini API's and OpenAI's) → Vesper's registry ids, for allowlists and prices. */
 export const KIT_MODEL_TO_VESPER: Record<string, string> = {
   'gemini-3-pro-image': 'gemini-nano-banana-pro',
+  // Vesper's 'gemini-nano-banana-2' draws with Nano Banana 2.1 since 2026-10-07; a kit
+  // that still names gemini-3.1-flash-image draws that model, at its own price.
+  'gemini-nano-banana-2.1': 'gemini-nano-banana-2',
   'gemini-3.1-flash-image': 'gemini-nano-banana-2',
   'gpt-image-2': 'openai-gpt-image-2',
 }
@@ -46,12 +49,12 @@ export function vesperModelId(kitModel: string): string {
 
 export function drawPriceUsd(kitModel: string, imageSize: string): number | null {
   if (kitModel === 'gpt-image-2') return GPT_IMAGE_2_HIGH_USD
-  return geminiImagePriceUsd(vesperModelId(kitModel), imageSize)
+  return geminiImagePriceUsd(kitModel, imageSize) ?? geminiImagePriceUsd(vesperModelId(kitModel), imageSize)
 }
 
 /** The daily cap's preflight, before the kit is read: the lane's usual model. */
 export function laneEstimateUsd(lane: Lane | undefined, n: number, imageSize?: string): number {
-  const model = lane === 'second' ? 'gemini-3-pro-image' : lane === 'draft' ? 'gemini-3.1-flash-image' : 'gpt-image-2'
+  const model = lane === 'second' ? 'gemini-3-pro-image' : lane === 'draft' ? 'gemini-nano-banana-2.1' : 'gpt-image-2'
   return (drawPriceUsd(model, imageSize ?? '2K') ?? 0.2) * Math.max(1, n)
 }
 

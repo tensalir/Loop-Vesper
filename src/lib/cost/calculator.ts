@@ -3,7 +3,8 @@
  * 
  * Pricing sources:
  * - Gemini: https://ai.google.dev/gemini-api/docs/pricing (Nano Banana Pro $0.134 at 1K/2K and $0.24 at 4K,
- *   Nano Banana 2 $0.067-$0.151 by resolution, read 2026-09-24, see src/lib/models/pricing.ts; Veo 3.1: ~$0.05/second)
+ *   read 2026-09-24; Nano Banana 2.1 $0.0336-$0.113 by resolution and Gemini Omni Flash ~$0.10/second
+ *   at 720p, read 2026-10-07; see src/lib/models/pricing.ts)
  * - Replicate: https://replicate.com/pricing (compute time based, varies by hardware)
  *   - Pricing is per-second based on actual predict_time from API response
  *   - Different models run on different hardware with different rates
@@ -74,12 +75,12 @@ export function calculateGeminiCost(
     }
   }
 
-  // Gemini Veo 3.1 - Video generation
+  // gemini-veo-3.1 - Video generation, drawn by Gemini Omni Flash since 2026-10-07
   if (modelId === 'gemini-veo-3.1' || modelId.includes('veo')) {
-    // ~$0.05 per second of video
+    // ~$0.10 per second of video at 720p (Veo 3.1 was priced here at $0.05)
     const duration = videoDurationSeconds || 8 // Default to 8 seconds if not specified
     return {
-      cost: 0.05 * duration * outputCount,
+      cost: 0.1 * duration * outputCount,
       unit: `per second (${duration}s × ${outputCount} video${outputCount > 1 ? 's' : ''})`,
       isActual: false,
     }

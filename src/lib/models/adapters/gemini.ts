@@ -6,7 +6,7 @@ import { checkGoogleRateLimit } from '@/lib/rate-limits/trackedFetch'
 
 /**
  * Google Gemini/Vertex AI Adapter
- * Supports Gemini 3 Pro Image (Nano banana pro) and Veo 3.1
+ * Supports Gemini 3 Pro Image (Nano Banana Pro), Nano Banana 2.1 and Gemini Omni Flash (video)
  * 
  * Fallback chain for image generation:
  * 1. Vertex AI SDK (best rate limits, requires service account)
@@ -160,8 +160,8 @@ const parseGeminiContentBlock = (data: any): string | null => {
  * Select the FINAL rendered image from a Gemini image-generation response.
  *
  * Gemini 3 image models are *thinking* image models. Nano Banana Pro
- * (gemini-3-pro-image-preview) always thinks and cannot be disabled; Nano
- * Banana 2 (gemini-3.1-flash-image-preview) thinks by default. While thinking,
+ * (gemini-3-pro-image) always thinks and cannot be disabled; Nano Banana 2.1
+ * (gemini-nano-banana-2.1) thinks at `thinking_level` medium by default. While thinking,
  * the model emits up to two interim "thought images" — low-fidelity composition
  * drafts that look like a hazy/foggy version of the result — BEFORE the final,
  * fully-rendered image. Every draft and the final arrive as inlineData image
@@ -202,77 +202,6 @@ const selectFinalImagePart = (parts: any[] | undefined | null): any | null => {
 
   // 3. Safety net: the last image in the array is the final one.
   return imageParts[imageParts.length - 1]
-}
-
-const VEO_SUPPORT_CODE_CATEGORIES: Record<string, string> = {
-  '58061214': 'child safety',
-  '17301594': 'child safety',
-  '29310472': 'celebrity likeness',
-  '15236754': 'celebrity likeness',
-  '90789179': 'sexual content',
-  '43188360': 'sexual content',
-  '61493863': 'violence',
-  '56562880': 'violence',
-  '62263041': 'dangerous content',
-  '57734940': 'hate speech',
-  '22137204': 'hate speech',
-  '78610348': 'toxic content',
-  '32635315': 'vulgar content',
-  '64151117': 'video safety violation',
-  '42237218': 'video safety violation',
-  '89371032': 'prohibited content',
-  '49114662': 'prohibited content',
-  '63429089': 'prohibited content',
-  '72817394': 'prohibited content',
-  '60599140': 'prohibited content',
-  '74803281': 'safety policy',
-  '29578790': 'safety policy',
-  '42876398': 'safety policy',
-  '35561574': 'third-party content',
-  '35561575': 'third-party content',
-}
-
-const parseVeoSafetyBlock = (videoResponse: any, statusError: any): string | null => {
-  if (statusError) {
-    const msg = statusError.message || statusError.code || JSON.stringify(statusError)
-    return `Video generation failed: ${msg}`
-  }
-
-  const filteredCount = videoResponse?.raiMediaFilteredCount
-  const reasons: string[] = videoResponse?.raiMediaFilteredReasons || []
-
-  if (!filteredCount && reasons.length === 0) return null
-
-  const isAudioFilter = reasons.some((r: string) =>
-    r.toLowerCase().includes('audio') || r.toLowerCase().includes('audio for your prompt')
-  )
-
-  const supportCodes = reasons.flatMap((r: string) => {
-    const match = r.match(/Support codes?:\s*([\d,\s]+)/i)
-    return match ? match[1].split(',').map((c: string) => c.trim()).filter(Boolean) : []
-  })
-
-  const categories = Array.from(new Set(
-    supportCodes
-      .map((code: string) => VEO_SUPPORT_CODE_CATEGORIES[code])
-      .filter(Boolean)
-  ))
-
-  if (isAudioFilter) {
-    return 'Video blocked by content safety filter (audio). This is often a false positive — try generating again with the same prompt.'
-  }
-
-  if (categories.length > 0) {
-    const categoryList = categories.join(', ')
-    return `Video blocked by content safety filter (${categoryList}). The input image or prompt may contain restricted content. Try a different image or rephrase your prompt.`
-  }
-
-  if (reasons.length > 0) {
-    const cleanReason = reasons[0].replace(/\s*Support codes?:.*$/i, '').trim()
-    return `Video blocked by content safety filter: ${cleanReason}. Try a different image or rephrase your prompt.`
-  }
-
-  return `Video blocked by content safety filter. Try a different image or rephrase your prompt.`
 }
 
 const redactLargeStrings = (value: any, maxLen = 256) => {
@@ -390,7 +319,10 @@ if (typeof window === 'undefined') {
         })
         
         console.log(`[Vertex AI] ✓ Successfully initialized for project: ${projectId}, location: ${location}`)
-        console.log(`[Vertex AI]   Note: gemini-3-pro-image-preview is currently only available in us-central1`)
+        // The us-central1-only note was about gemini-3-pro-image-preview (shut down 2026-06-25).
+        // Whether Vertex serves the GA ids (gemini-3-pro-image, gemini-nano-banana-2.1) in this
+        // region is not confirmed; a 404 falls back to the Gemini API below.
+        console.log(`[Vertex AI]   Note: GA image ids on Vertex are unconfirmed; a 404 falls back to the Gemini API`)
         if (credentials) {
           console.log(`[Vertex AI]   Using service account: ${credentials.client_email || 'unknown'}`)
         }
@@ -438,7 +370,7 @@ export class GeminiAdapter extends BaseModelAdapter {
 
   /** Resolve the Gemini API model name from the internal config id */
   private get apiModelName(): string {
-    return GEMINI_API_MODEL_MAP[this.config.id] || 'gemini-3-pro-image-preview'
+    return GEMINI_API_MODEL_MAP[this.config.id] || 'gemini-3-pro-image'
   }
 
   private get modelLabel(): string {
@@ -702,11 +634,16 @@ export class GeminiAdapter extends BaseModelAdapter {
       },
     }
 
+    // Nano Banana 2.1 drops Nano Banana 2's extreme ratios (1:4, 4:1, 1:8, 8:1).
+    if (request.aspectRatio && this.config.supportedAspectRatios && !this.config.supportedAspectRatios.includes(request.aspectRatio)) {
+      throw new Error(`${this.modelLabel} does not support aspect ratio ${request.aspectRatio}. Use one of: ${this.config.supportedAspectRatios.join(', ')}.`)
+    }
+
     if (request.aspectRatio || request.resolution) {
+      // No mapped model has a 0.5K tier since Nano Banana 2 → 2.1 (2026-10-07): 512 asks for 1K.
       const resolutionToSize = (res: number): string => {
         if (res === 4096) return '4K'
         if (res === 2048) return '2K'
-        if (res === 512) return '512px'
         return '1K'
       }
       payload.generationConfig.imageConfig = {
@@ -1252,24 +1189,26 @@ export class GeminiAdapter extends BaseModelAdapter {
   }
 
   private async generateVideo(request: GenerationRequest): Promise<GenerationResponse> {
-    console.log(`[Veo 3.1] Starting video generation for prompt: ${request.prompt.substring(0, 50)}...`)
-    
+    console.log(`[Omni Flash] Starting video generation for prompt: ${request.prompt.substring(0, 50)}...`)
+
     const duration = request.duration || 8
     const resolution = request.resolution || 720
     const aspectRatio = request.aspectRatio || '16:9'
-    
+
     // Calculate dimensions based on aspect ratio and resolution
-    // Veo 3.1 supports 720p, 1080p, and 4K (2160)
+    // Omni Flash supports 360p, 720p, 1080p and 4K (2160), in 16:9 or 9:16
     const getDimensions = (aspectRatio: string, resolution: number) => {
       const [widthRatio, heightRatio] = aspectRatio.split(':').map(Number)
       if (aspectRatio === '16:9') {
         if (resolution === 2160) return { width: 3840, height: 2160 }
         if (resolution === 1080) return { width: 1920, height: 1080 }
+        if (resolution === 360) return { width: 640, height: 360 }
         return { width: 1280, height: 720 }
       }
       if (aspectRatio === '9:16') {
         if (resolution === 2160) return { width: 2160, height: 3840 }
         if (resolution === 1080) return { width: 1080, height: 1920 }
+        if (resolution === 360) return { width: 360, height: 640 }
         return { width: 720, height: 1280 }
       }
       if (aspectRatio === '1:1') {
@@ -1283,9 +1222,9 @@ export class GeminiAdapter extends BaseModelAdapter {
         return { width: Math.round(resolution * ratio), height: resolution }
       }
     }
-    
+
     const { width, height } = getDimensions(aspectRatio, resolution)
-    
+
     // Use Vertex AI if available, otherwise fall back to Gemini API REST
     if (this.useGenAI && vertexAiClient) {
       return await this.generateVideoVertexAI(request, { width, height, duration, resolution, aspectRatio })
@@ -1293,68 +1232,55 @@ export class GeminiAdapter extends BaseModelAdapter {
       return await this.generateVideoGeminiAPI(request, { width, height, duration, resolution, aspectRatio })
     }
   }
-  
+
   private async generateVideoVertexAI(
     request: GenerationRequest,
     options: { width: number; height: number; duration: number; resolution: number; aspectRatio: string }
   ): Promise<GenerationResponse> {
-    console.log(`[Veo 3.1] Vertex AI available, but video generation methods not yet in SDK`)
-    console.log(`[Veo 3.1] Falling back to Gemini API REST (works great, maintains functionality)`)
-    
-    if (!vertexAiClient) {
-      throw new Error('Vertex AI client not initialized')
+    // TODO(omni-vertex): Gemini Omni Flash is documented on the Gemini API's Interactions
+    // endpoint only; whether Vertex AI serves gemini-omni-1.1-flash is not confirmed
+    // (2026-10-07). Video always went through the Gemini API key path, and still does.
+    console.log(`[Omni Flash] Vertex AI configured, but Omni Flash is Gemini API (Interactions) only`)
+
+    if (!this.apiKey) {
+      throw new Error('Gemini Omni Flash needs GEMINI_API_KEY: it is not available through Vertex AI here.')
     }
-    
-    // Note: The Vertex AI SDK JavaScript version may not have video generation methods yet
-    // When the SDK adds video support, this method will be updated to use SDK methods
-    // For now, we maintain the working Gemini API REST implementation
-    // This ensures videos continue to work while we wait for SDK video support
-    
-    try {
-      // TODO: When Vertex AI SDK adds video generation support, implement here:
-      // const model = vertexAiClient.preview.getGenerativeModel({ model: 'veo-3.1-generate-preview' })
-      // const operation = await model.generateVideos({ ... })
-      // Then poll and return result
-      
-      // For now, use the proven Gemini API REST implementation
-      return await this.generateVideoGeminiAPI(request, options)
-      
-    } catch (error: any) {
-      console.error('[Veo 3.1] Vertex AI error:', error)
-      // Fallback to Gemini API REST if Vertex AI fails
-      if (this.apiKey) {
-        console.log('Falling back to Gemini API REST due to Vertex AI error')
-        return await this.generateVideoGeminiAPI(request, options)
-      }
-      throw error
-    }
+
+    return await this.generateVideoGeminiAPI(request, options)
   }
-  
+
+  /**
+   * Gemini Omni Flash (gemini-omni-1.1-flash) through the Interactions API, ported from Veo 3.1's
+   * predictLongRunning (veo-3.1-generate-preview shuts down 2026-10-22).
+   *
+   * - Images then text: two images are the first and last frame; one is the start frame.
+   * - There is no duration parameter (Veo's durationSeconds no longer exists): the length is
+   *   said in the prompt, and Omni makes about 3 to 10 seconds.
+   * - No negative prompt, seed, audio toggle or multiple videos per request. Veo's path sent
+   *   none of them, so nothing is folded in.
+   * - The video comes back inline as base64 when under 4 MB; 1080p and 4K ask for a Files URI
+   *   instead, polled until ACTIVE and fetched later with the API key (provider-fetch.ts).
+   *
+   * UNVERIFIED by a live call: the request and response shapes follow Google's Omni page
+   * (read 2026-10-07), including output_video and delivery: 'uri'.
+   */
   private async generateVideoGeminiAPI(
     request: GenerationRequest,
     options: { width: number; height: number; duration: number; resolution: number; aspectRatio: string }
   ): Promise<GenerationResponse> {
-    console.log(`[Veo 3.1] Using Gemini API REST (fallback)`)
-    
+    console.log(`[Omni Flash] Using Gemini API Interactions`)
+
     // Track API call for rate limiting
     try {
       await recordApiCall('gemini', 'gemini-veo-3.1', 1)
     } catch (trackErr) {
-      console.warn('[GeminiAdapter] Failed to track Veo API call:', trackErr)
+      console.warn('[GeminiAdapter] Failed to track Omni Flash API call:', trackErr)
     }
-    
-    // Using Veo 3.1 official API endpoint
-    const modelId = 'veo-3.1-generate-preview'
-    const endpoint = `${this.baseUrl}/models/${modelId}:predictLongRunning`
-    
+
+    const modelId = 'gemini-omni-1.1-flash'
+    const endpoint = `${this.baseUrl}/interactions`
+
     const { width, height, duration } = options
-    
-    // Build request payload according to Veo 3.1 API
-    // Veo 3.1 supports image-to-video: https://ai.google.dev/gemini-api/docs/video
-    // Images must be uploaded via Google Files API first
-    const instance: any = {
-      prompt: request.prompt,
-    }
 
     // Helper to parse image from base64 data URL or HTTP URL
     const parseImageInput = async (
@@ -1364,11 +1290,11 @@ export class GeminiAdapter extends BaseModelAdapter {
     ): Promise<{ bytes: Buffer; contentType: string } | null> => {
       // Handle base64 data URL directly
       if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
-        console.log(`[Veo 3.1] Using ${label} from base64 data URL`)
+        console.log(`[Omni Flash] Using ${label} from base64 data URL`)
         // Use indexOf/slice instead of regex to avoid stack overflow on large strings
         const commaIndex = dataUrl.indexOf(',')
         if (commaIndex === -1) {
-          console.warn(`[Veo 3.1] Invalid base64 format for ${label}, ignoring`)
+          console.warn(`[Omni Flash] Invalid base64 format for ${label}, ignoring`)
           return null
         }
         const metaSection = dataUrl.slice(5, commaIndex) // Skip "data:"
@@ -1377,10 +1303,10 @@ export class GeminiAdapter extends BaseModelAdapter {
         const contentType = mimeMatch ? mimeMatch[1] : 'image/jpeg'
         return { bytes: Buffer.from(base64Data, 'base64'), contentType }
       }
-      
+
       // Handle URL - download first
       if (httpUrl && typeof httpUrl === 'string' && httpUrl.startsWith('http')) {
-        console.log(`[Veo 3.1] Downloading ${label} from URL: ${httpUrl.slice(0, 50)}...`)
+        console.log(`[Omni Flash] Downloading ${label} from URL: ${httpUrl.slice(0, 50)}...`)
         try {
           const imageResponse = await fetch(httpUrl)
           if (!imageResponse.ok) {
@@ -1390,93 +1316,70 @@ export class GeminiAdapter extends BaseModelAdapter {
           const contentType = imageResponse.headers.get('content-type') || 'image/jpeg'
           return { bytes: Buffer.from(imageBuffer), contentType }
         } catch (error: any) {
-          console.error(`[Veo 3.1] Failed to download ${label}:`, error)
+          console.error(`[Omni Flash] Failed to download ${label}:`, error)
           return null
         }
       }
-      
+
       return null
     }
 
-    // Check for start frame (reference image) - can be base64 (referenceImage) or URL (referenceImageUrl)
-    // Veo 3.1 requires inline base64 data, not fileUri
+    // Start frame (reference image) - can be base64 (referenceImage) or URL (referenceImageUrl)
     const startFrame = await parseImageInput(
       request.referenceImage,
       (request as any).referenceImageUrl,
       'start frame'
     )
-    
+
     if (!startFrame) {
-      console.log(`[Veo 3.1] No start frame provided, generating text-to-video`)
+      console.log(`[Omni Flash] No start frame provided, generating text-to-video`)
     }
-    
-    // Check for end frame (for frame interpolation)
-    // Veo 3.1 uses 'lastFrame' parameter for the ending frame
+
+    // End frame: with a start frame, two images then text is first/last frame interpolation
     const endFrame = await parseImageInput(
       (request.parameters as any)?.endFrameImage,
       (request.parameters as any)?.endFrameImageUrl,
-      'end frame (lastFrame)'
+      'end frame'
     )
-    
-    // Helper to build image object in the correct schema format
-    // Veo predictLongRunning uses bytesBase64Encoded, NOT inlineData
-    type ImageSchema = 'bytesBase64Encoded' | 'inlineData'
-    const buildImageObject = (base64Data: string, mimeType: string, schema: ImageSchema) => {
-      if (schema === 'bytesBase64Encoded') {
-        return { bytesBase64Encoded: base64Data, mimeType }
-      } else {
-        return { inlineData: { mimeType, data: base64Data } }
-      }
+    if (endFrame && !startFrame) {
+      // One image alone would read as a start frame or a subject reference, not an end frame.
+      console.warn('[Omni Flash] End frame given without a start frame, ignoring it')
     }
-    
-    // Helper to build the full payload with a given image schema
-    const buildPayload = (schema: ImageSchema) => {
-      // Build instance object according to Veo 3.1 API docs
-      // https://ai.google.dev/gemini-api/docs/video
-      const cleanInstance: any = {
-        prompt: instance.prompt,
-      }
-      
-      // For image-to-video, use 'image' parameter directly (not referenceImages)
-      // referenceImages is for style/content guidance with up to 3 images
-      if (startFrame) {
-        const base64Image = startFrame.bytes.toString('base64')
-        // Image-to-video uses direct 'image' field in instance
-        cleanInstance.image = buildImageObject(base64Image, startFrame.contentType, schema)
-        console.log(`[Veo 3.1] Added starting frame image (${base64Image.length} chars, ${startFrame.contentType}, schema: ${schema})`)
-      }
 
-      // Add end frame (lastFrame) for frame interpolation if provided.
-      // lastFrame lives in the instance alongside prompt/image — NOT in parameters.
-      // Putting it in parameters makes the API reject it as an unsupported field.
-      if (endFrame) {
-        const base64EndImage = endFrame.bytes.toString('base64')
-        cleanInstance.lastFrame = buildImageObject(base64EndImage, endFrame.contentType, schema)
-        console.log(`[Veo 3.1] Added ending frame (lastFrame) for interpolation (${base64EndImage.length} chars, ${endFrame.contentType}, schema: ${schema})`)
-      }
+    // No duration parameter on Omni: say the length in the prompt.
+    const prompt = `${request.prompt.trim()}\n\nLength: about ${duration} seconds.`
 
-      // Build payload with separate 'parameters' object (per REST API docs)
-      const payload: any = {
-        instances: [cleanInstance],
-        parameters: {
-          aspectRatio: options.aspectRatio,
-          // Resolution must be "720p", "1080p", or "4k" (string)
-          // Per Veo 3.1 docs: 1080p/4k require 8 seconds duration
-          resolution: options.resolution === 2160 ? '4k' : options.resolution === 1080 ? '1080p' : '720p',
-          // Duration in seconds as number (not string!)
-          durationSeconds: duration,
-        },
-      }
+    const images = startFrame ? [startFrame, ...(endFrame ? [endFrame] : [])] : []
+    const input: any = images.length === 0
+      ? prompt
+      : [
+          ...images.map((img) => ({ type: 'image', data: img.bytes.toString('base64'), mime_type: img.contentType })),
+          { type: 'text', text: prompt },
+        ]
 
-      return payload
+    const resolutionLabel =
+      options.resolution === 2160 ? '4k' : options.resolution === 1080 ? '1080p' : options.resolution === 360 ? '360p' : '720p'
+    // Inline output is capped at 4 MB; 1080p and 4K ask for a file instead.
+    const deliverByUri = options.resolution >= 1080
+
+    const payload: any = {
+      model: modelId,
+      input,
+      response_format: {
+        type: 'video',
+        aspect_ratio: options.aspectRatio,
+        resolution: resolutionLabel,
+        ...(deliverByUri ? { delivery: 'uri' } : {}),
+      },
     }
-    
-    // Helper to make the API request
-    const makeRequest = async (payload: any): Promise<Response> => {
-      console.log(`[Veo 3.1] Calling API with ${duration}s video, ${options.resolution}p, ${options.aspectRatio}`)
-      console.log(`[Veo 3.1] Payload (redacted):`, JSON.stringify(redactLargeStrings(payload), null, 2))
-      
-      return fetch(endpoint, {
+
+    try {
+      console.log(`[Omni Flash] Calling Interactions with ~${duration}s video, ${resolutionLabel}, ${options.aspectRatio}`, {
+        mode: startFrame && endFrame ? 'frame-interpolation' : startFrame ? 'image-to-video' : 'text-to-video',
+      })
+      console.log(`[Omni Flash] Payload (redacted):`, JSON.stringify(redactLargeStrings(payload), null, 2))
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'x-goog-api-key': this.apiKey,
@@ -1484,147 +1387,90 @@ export class GeminiAdapter extends BaseModelAdapter {
         },
         body: JSON.stringify(payload),
       })
-    }
-    
-    // Check if error is a schema-related error that warrants a retry with alternative schema
-    const isSchemaError = (errorMessage: string): ImageSchema | null => {
-      const msg = errorMessage.toLowerCase()
-      if (msg.includes('inlinedata') && (msg.includes("isn't supported") || msg.includes('not supported') || msg.includes('unknown field'))) {
-        // Error mentions inlineData not supported -> try bytesBase64Encoded
-        return 'bytesBase64Encoded'
-      }
-      if (msg.includes('bytesbase64encoded') && (msg.includes("isn't supported") || msg.includes('not supported') || msg.includes('unknown field'))) {
-        // Error mentions bytesBase64Encoded not supported -> try inlineData
-        return 'inlineData'
-      }
-      return null
-    }
-    
-    try {
-      // Primary attempt: use bytesBase64Encoded schema (per Veo predictLongRunning API docs)
-      let currentSchema: ImageSchema = 'bytesBase64Encoded'
-      let payload = buildPayload(currentSchema)
-      let response = await makeRequest(payload)
 
-      // If the request failed, check if it's a schema error and retry with alternative
       if (!response.ok) {
-        const errorData = await response.json()
-        const errorMessage = errorData.error?.message || 'Video generation request failed'
-        
-        const alternativeSchema = isSchemaError(errorMessage)
-        if (alternativeSchema && alternativeSchema !== currentSchema) {
-          console.log(`[Veo 3.1] Schema error detected, retrying with ${alternativeSchema} format...`)
-          currentSchema = alternativeSchema
-          payload = buildPayload(currentSchema)
-          response = await makeRequest(payload)
-          
-          if (!response.ok) {
-            const retryErrorData = await response.json()
-            throw new Error(retryErrorData.error?.message || 'Video generation request failed after schema retry')
-          }
-        } else {
-          throw new Error(errorMessage)
-        }
+        const errorData = await response.json().catch(() => ({}))
+        checkGoogleRateLimit(errorData, 'gemini', 'gemini-veo-3.1')
+        throw new Error(errorData.error?.message || `Video generation request failed (${response.status})`)
       }
 
-      const operation = await response.json()
-      const operationName = operation.name
-      
-      console.log('[Veo 3.1] Generation started', {
-        operation: operationName,
+      const interaction = await response.json()
+      const interactionId = interaction.id ?? interaction.name ?? null
+      const video = interaction.output_video ?? interaction.outputVideo
+
+      let url: string | null = null
+      if (video?.data) {
+        url = `data:${video.mime_type || video.mimeType || 'video/mp4'};base64,${video.data}`
+      } else if (video?.uri) {
+        url = await this.waitForGeminiFile(video.uri)
+      }
+
+      if (!url) {
+        console.error('[Omni Flash] Response has no video:', JSON.stringify(redactLargeStrings(interaction), null, 2))
+        throw new Error('No video in response. The generation may have been blocked by Google content safety, or returned no output. Try again or rephrase.')
+      }
+
+      console.log('[Omni Flash] Video ready', {
+        interactionId,
+        delivery: video?.data ? 'inline' : 'uri',
         startFrameAttached: Boolean(startFrame),
-        endFrameAttached: Boolean(endFrame),
-        mode: startFrame && endFrame ? 'frame-interpolation' : startFrame ? 'image-to-video' : 'text-to-video',
+        endFrameAttached: Boolean(startFrame && endFrame),
       })
-      
-      // Poll operation until complete (max 5 minutes)
-      const maxAttempts = 30 // 5 minutes at 10s intervals
-      let attempts = 0
-      let operationComplete = false
-      
-      while (!operationComplete && attempts < maxAttempts) {
-        attempts++
-        await new Promise(resolve => setTimeout(resolve, 10000)) // Wait 10s
-        
-        const statusResponse = await fetch(`${this.baseUrl}/${operationName}`, {
-          headers: {
-            'x-goog-api-key': this.apiKey,
+
+      // A data URL is stored by the processor; a Files URI is downloaded by it with the API key.
+      return {
+        id: `gen-${Date.now()}`,
+        status: 'completed',
+        outputs: [
+          {
+            url,
+            width,
+            height,
+            duration,
           },
-        })
-        if (!statusResponse.ok) {
-          throw new Error('Failed to check operation status')
-        }
-        
-        const status = await statusResponse.json()
-        operationComplete = status.done
-        
-        if (operationComplete) {
-          const videoResponse = status.response?.generateVideoResponse
-          const generatedVideo = videoResponse?.generatedSamples?.[0]
-          if (!generatedVideo) {
-            const safetyError = parseVeoSafetyBlock(videoResponse, status.error)
-            if (safetyError) {
-              console.warn('[Veo 3.1] Content safety block:', {
-                raiMediaFilteredCount: videoResponse?.raiMediaFilteredCount,
-                raiMediaFilteredReasons: videoResponse?.raiMediaFilteredReasons,
-                statusError: status.error,
-              })
-              throw new Error(safetyError)
-            }
-            throw new Error('No video in response — the generation completed but returned no output. Try again.')
-          }
-          
-          const videoUri = generatedVideo.video.uri
-          console.log('[Veo 3.1] Video ready', {
-            videoUri,
-            operation: operationName,
-            startFrameAttached: Boolean(startFrame),
-            endFrameAttached: Boolean(endFrame),
-          })
-          
-          // Return the video URI - it will be downloaded by the background processor
-          return {
-            id: `gen-${Date.now()}`,
-            status: 'completed',
-            outputs: [
-              {
-                url: videoUri,
-                width,
-                height,
-                duration,
-              },
-            ],
-            metadata: {
-              model: this.config.id,
-              prompt: request.prompt,
-              operationName,
-            },
-          }
-        }
+        ],
+        metadata: {
+          model: this.config.id,
+          prompt: request.prompt,
+          apiModel: modelId,
+          interactionId,
+        },
       }
-      
-      if (!operationComplete) {
-        throw new Error('Video generation timeout - please try again or contact support')
-      }
-      
-      // This shouldn't be reached, but satisfy TypeScript
-      throw new Error('Unexpected end of generation loop')
-      
     } catch (error: any) {
-      console.error('[Veo 3.1] Generation error:', error)
+      console.error('[Omni Flash] Generation error:', error)
       throw new Error(error.message || 'Video generation failed')
     }
+  }
+
+  /** Poll a Gemini Files URI until the file is ACTIVE (max 5 minutes), and return its download URL. */
+  private async waitForGeminiFile(uri: string): Promise<string> {
+    const match = uri.match(/files\/[^/:?]+/)
+    if (!match) return uri
+    const fileName = match[0]
+    const maxAttempts = 30 // 5 minutes at 10s intervals
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const res = await fetch(`${this.baseUrl}/${fileName}`, { headers: { 'x-goog-api-key': this.apiKey } })
+      if (!res.ok) throw new Error(`Failed to check video file status (${res.status})`)
+      const file = await res.json()
+      if (file.state === 'ACTIVE') {
+        return file.downloadUri || `${this.baseUrl}/${fileName}:download?alt=media`
+      }
+      if (file.state === 'FAILED') throw new Error('Video file processing failed on Google\'s side. Try again.')
+      await new Promise(resolve => setTimeout(resolve, 10000))
+    }
+    throw new Error('Video generation timeout - please try again or contact support')
   }
 }
 
 /**
  * Maps internal model IDs to the Gemini API model name used in endpoints.
- * Nano Banana Pro → gemini-3-pro-image-preview
- * Nano Banana 2  → gemini-3.1-flash-image-preview
+ * Nano Banana Pro → gemini-3-pro-image (GA; the -preview id shut down 2026-06-25)
+ * 'gemini-nano-banana-2' → gemini-nano-banana-2.1 (since 2026-10-07; the internal id is a
+ *   stored key on generations and settings, so it keeps its name)
  */
 const GEMINI_API_MODEL_MAP: Record<string, string> = {
-  'gemini-nano-banana-pro': 'gemini-3-pro-image-preview',
-  'gemini-nano-banana-2': 'gemini-3.1-flash-image-preview',
+  'gemini-nano-banana-pro': 'gemini-3-pro-image',
+  'gemini-nano-banana-2': 'gemini-nano-banana-2.1',
 }
 
 // Model configurations based on official Gemini API docs
@@ -1676,20 +1522,21 @@ export const NANO_BANANA_CONFIG: ModelConfig = {
 
 export const NANO_BANANA_2_CONFIG: ModelConfig = {
   id: 'gemini-nano-banana-2',
-  name: 'Nano Banana 2',
+  name: 'Nano Banana 2.1',
   provider: 'Google',
   type: 'image',
-  description: 'Gemini 3.1 Flash Image - Fast, high-efficiency image generation optimized for speed',
+  description: 'Nano Banana 2.1 - Fast, high-efficiency image generation, Google\'s successor to Nano Banana 2',
   maxResolution: 4096,
   defaultAspectRatio: '1:1',
-  supportedAspectRatios: ['1:1', '1:4', '1:8', '2:3', '3:2', '3:4', '4:1', '4:3', '4:5', '5:4', '8:1', '9:16', '16:9', '21:9'],
+  // 2.1 lists no 1:4, 4:1, 1:8 or 8:1 (Nano Banana 2 had them).
+  supportedAspectRatios: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
   capabilities: {
     editing: true,
     'text-2-image': true,
     multiImageEditing: true,
     maxReferenceImages: 14,
   },
-  // Google's price, see src/lib/models/pricing.ts (was $0.01).
+  // Google's price for 2.1, see src/lib/models/pricing.ts.
   pricing: {
     perImage: GEMINI_IMAGE_PRICES_USD['gemini-nano-banana-2'][1024],
     perImageByResolution: GEMINI_IMAGE_PRICES_USD['gemini-nano-banana-2'],
@@ -1711,7 +1558,6 @@ export const NANO_BANANA_2_CONFIG: ModelConfig = {
       label: 'Resolution',
       default: 1024,
       options: [
-        { label: '0.5K', value: 512 },
         { label: '1K', value: 1024 },
         { label: '2K', value: 2048 },
         { label: '4K', value: 4096 },
@@ -1720,17 +1566,18 @@ export const NANO_BANANA_2_CONFIG: ModelConfig = {
   ],
 }
 
-// Veo 3.1 configuration based on official API docs
-// https://ai.google.dev/gemini-api/docs/video
-// https://cloud.google.com/vertex-ai/generative-ai/docs/video/generate-videos-from-first-and-last-frames
+// Gemini Omni Flash (gemini-omni-1.1-flash) since 2026-10-07, replacing Veo 3.1 preview
+// (shut down 2026-10-22). The id and the export keep Veo's name: 'gemini-veo-3.1' is a stored
+// key on generations, settings and rate-limit rows.
+// https://ai.google.dev/gemini-api/docs/omni
 export const VEO_3_1_CONFIG: ModelConfig = {
   id: 'gemini-veo-3.1',
-  name: 'Veo 3.1',
+  name: 'Gemini Omni Flash',
   provider: 'Google',
   type: 'video',
-  description: 'State-of-the-art video generation with native audio and natively generated sound',
+  description: 'Gemini Omni Flash - video from text, a start frame, or first and last frames',
   defaultAspectRatio: '16:9',
-  // Veo 3.1 officially supports: 16:9 and 9:16 only (per docs)
+  // Omni Flash supports 16:9 and 9:16 only
   supportedAspectRatios: ['16:9', '9:16'],
   maxResolution: 2160, // 4K support
   capabilities: {
@@ -1738,8 +1585,9 @@ export const VEO_3_1_CONFIG: ModelConfig = {
     'image-2-video': true,
     'frame-interpolation': true, // Supports first + last frame interpolation
   },
+  // About $0.10 a second at 720p (Google's pricing page, read 2026-10-07)
   pricing: {
-    perSecond: 0.05,
+    perSecond: 0.1,
     currency: 'USD',
   },
   parameters: [
@@ -1749,12 +1597,14 @@ export const VEO_3_1_CONFIG: ModelConfig = {
       label: 'Resolution',
       default: 720,
       options: [
+        { label: '360p', value: 360 },
         { label: '720p', value: 720 },
         { label: '1080p', value: 1080 },
         { label: '4K', value: 2160 },
       ],
     },
     {
+      // Not an API parameter on Omni: said in the prompt (about 3 to 10 seconds)
       name: 'duration',
       type: 'select',
       label: 'Duration',

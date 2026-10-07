@@ -301,7 +301,7 @@ export function GeminiRateLimitTracker({ isAdmin }: GeminiRateLimitTrackerProps)
                 />
                 
                 <ScopeUsageDisplay 
-                  label="Veo 3.1" 
+                  label="Gemini Omni Flash" 
                   usage={data.gemini.veo}
                   showFallback
                 />
@@ -361,10 +361,10 @@ export function GeminiRateLimitTracker({ isAdmin }: GeminiRateLimitTrackerProps)
                   <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
                     <p className="text-xs text-amber-600 dark:text-amber-400">
                       {data.gemini.nanoBanana.fallbackActive && data.gemini.veo.fallbackActive
-                        ? 'Both Nano Banana and Veo are routing to Replicate fallbacks.'
+                        ? 'Both Nano Banana and Omni Flash are routing to Replicate fallbacks.'
                         : data.gemini.nanoBanana.fallbackActive
                         ? 'Nano Banana Pro is routing to Replicate fallback.'
-                        : 'Veo 3.1 is routing to Kling 2.6 fallback.'}
+                        : 'Gemini Omni Flash is routing to Kling 2.6 fallback.'}
                     </p>
                   </div>
                 </>

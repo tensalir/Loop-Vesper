@@ -556,7 +556,7 @@ export function GenerationInterface({
       if (!supportsReferenceImages) {
         toast({
           title: 'Model doesn\'t support reference images',
-          description: `${modelConfig?.name || 'This model'} doesn't support image input. Try Nano Banana, Seedream, Veo, or Kling.`,
+          description: `${modelConfig?.name || 'This model'} doesn't support image input. Try Nano Banana, Seedream, Gemini Omni Flash, or Kling.`,
           variant: 'default',
         })
         return

@@ -18,7 +18,7 @@ Vesper is the response. Software for a team of ten, not a platform for the indus
 
 - Project- and session-scoped generation workspace with infinite-scroll gallery and Supabase Realtime updates.
 - Prompt enhancement powered by Claude with model-specific strategies and reference image analysis. Linked to the Loop product catalogue so prompts stay on-brand without manual copy-paste.
-- Multi-model generation: Gemini Flash Image, Veo 3.1, Replicate Seedream, and Kling are wired into the active runtime through a shared adapter interface. Additional adapters (FAL.ai) exist in code but are not registered in the active runtime yet.
+- Multi-model generation: Gemini image models (Nano Banana Pro and 2.1), Gemini Omni Flash, Replicate Seedream, and Kling are wired into the active runtime through a shared adapter interface. Additional adapters (FAL.ai) exist in code but are not registered in the active runtime yet.
 - Animate-still popup that takes a generated image to video without leaving the page.
 - PDF image extraction so reference assets from briefing documents do not require manual copy-out.
 - Role-managed admin panel and project access control.

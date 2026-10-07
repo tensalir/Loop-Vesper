@@ -191,7 +191,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'generate_video',
     title: 'Generate a video',
     description:
-      'Generate a short video with Veo, Kling, or Seedance 2.5: use it whenever the person asks for a video. Write the prompt with the Loop prompting skill first (get_creative_kit section prompting, once per conversation) or enhance_prompt. Defaults to async job queue — poll get_generation_status until completed.',
+      'Generate a short video with Gemini Omni Flash, Kling, or Seedance 2.5: use it whenever the person asks for a video. Write the prompt with the Loop prompting skill first (get_creative_kit section prompting, once per conversation) or enhance_prompt. Defaults to async job queue — poll get_generation_status until completed.',
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
@@ -583,7 +583,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         sku_column: { type: 'string', description: 'with import_id: the SKU column letter' },
         column: { type: 'string', description: "without import_id: the SKU column letter of the kit's pre-built payload" },
         clown: { type: 'string' },
-        lane: { type: 'string', enum: ['final', 'draft'], default: 'final', description: "final: Nano Banana Pro; draft: Nano Banana 2 (the kit's CMF models)" },
+        lane: { type: 'string', enum: ['final', 'draft'], default: 'final', description: "final: Nano Banana Pro; draft: Nano Banana 2.1, or 2 where the kit still names it (the kit's CMF models)" },
         n: { type: 'integer', minimum: 1, maximum: 4, default: 1 },
         image_size: { type: 'string', enum: ['1K', '2K', '4K'], default: '2K' },
         async: { type: 'boolean', default: false, description: 'return a job id at once; collect with get_generation_status' },

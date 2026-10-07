@@ -51,7 +51,7 @@ const DEFAULT_GEMINI_MONTHLY = 50000
 const DEFAULT_NANO_BANANA_RPM = 500
 const DEFAULT_NANO_BANANA_MONTHLY = 30000
 
-// Veo 3.1 (Video generation) - Tier 3 limits
+// Veo 3.1 (Video generation) - Tier 3 limits; the 'gemini-veo-3.1' scope is Gemini Omni Flash since 2026-10-07
 // Video models have lower RPM due to compute requirements
 const DEFAULT_VEO_RPM = 100
 const DEFAULT_VEO_MONTHLY = 5000

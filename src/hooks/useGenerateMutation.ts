@@ -26,7 +26,7 @@ interface GenerateParams {
     referenceImages?: string[]
     /** Links this video generation to a source image output (for animate-still) */
     sourceOutputId?: string
-    /** End frame image base64 for video interpolation (Kling 2.6, Veo 3.1) */
+    /** End frame image base64 for video interpolation (Kling 2.6, Gemini Omni Flash) */
     endFrameImage?: string
     /** End frame pre-uploaded HTTP URL (preferred over base64) */
     endFrameImageUrl?: string

@@ -384,7 +384,7 @@ async function runPlannedRender(ctx: ToolContext, request: Record<string, unknow
 export const cmfRenderHandler: ToolHandler = {
   estimateCostUsd(args) {
     const n = typeof args.n === 'number' ? args.n : 1
-    const model = args.lane === 'draft' ? 'gemini-3.1-flash-image' : 'gemini-3-pro-image'
+    const model = args.lane === 'draft' ? 'gemini-nano-banana-2.1' : 'gemini-3-pro-image'
     return (drawPriceUsd(model, typeof args.image_size === 'string' ? args.image_size : '2K') ?? 0.134) * Math.max(1, n)
   },
   async run(args, ctx) {

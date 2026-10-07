@@ -243,7 +243,7 @@ export const surfaces: Surface[] = [
         },
         {
           main: 'Ask in plain words, and name Vesper.',
-          detail: '"With Vesper, make one 1:1 image of a lemon on a white table with Nano Banana 2."',
+          detail: '"With Vesper, make one 1:1 image of a lemon on a white table with Nano Banana 2.1."',
         },
       ],
     },
