@@ -18,7 +18,7 @@ const STEPS: Array<{ lead: string; rest: string }> = [
   },
   {
     lead: 'Ask in plain words, and name Vesper.',
-    rest: '"With Vesper, make one 1:1 image of a lemon on a white table with Nano Banana 2."',
+    rest: '"With Vesper, make one 1:1 image of a lemon on a white table with Nano Banana 2.1."',
   },
 ]
 

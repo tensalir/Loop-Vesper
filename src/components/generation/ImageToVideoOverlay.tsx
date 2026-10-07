@@ -892,7 +892,7 @@ export function ImageToVideoOverlay({
  */
 function formatModelName(modelId: string): string {
   const modelNames: Record<string, string> = {
-    'gemini-veo-3.1': 'Veo 3.1',
+    'gemini-veo-3.1': 'Gemini Omni Flash',
     'kling-official': 'Kling 2.6',
     'replicate-kling-2.6': 'Kling 2.6 (Replicate)',
     'replicate-seedance-2.5': 'Seedance 2.5',

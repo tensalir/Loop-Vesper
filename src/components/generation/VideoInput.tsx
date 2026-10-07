@@ -194,7 +194,7 @@ export function VideoInput({
   const supportsImageToVideo = modelConfig?.capabilities?.['image-2-video'] === true
   
   // Check if model supports frame interpolation (start + end frames)
-  // Only kling-official and gemini-veo-3.1 support this
+  // Only kling-official and gemini-veo-3.1 (Gemini Omni Flash) support this
   const supportsFrameInterpolation = modelConfig?.capabilities?.['frame-interpolation'] === true
   const showEndFrameControl = !hideEndFrame && supportsFrameInterpolation
 
@@ -259,14 +259,9 @@ export function VideoInput({
   const durationOptions = durationParam?.options || []
   const hasDuration = durationOptions.length > 0
   
-  // Veo 3.1 constraint: 1080p and 4K require 8 seconds duration
-  const isVeoModel = selectedModel === 'gemini-veo-3.1'
-  const veoRequires8Seconds = isVeoModel && (parameters.resolution === 1080 || parameters.resolution === 2160)
-  
-  // Filter duration options based on Veo constraints
-  const availableDurationOptions = veoRequires8Seconds
-    ? durationOptions.filter((opt: any) => opt.value === 8)
-    : durationOptions
+  // Veo 3.1's rule that 1080p and 4K need 8 seconds went with Veo (gemini-veo-3.1 draws with
+  // Gemini Omni Flash since 2026-10-07, which takes no duration parameter).
+  const availableDurationOptions = durationOptions
   
   // Update parameters when model changes if current values aren't supported
   useEffect(() => {
@@ -292,14 +287,6 @@ export function VideoInput({
         const currentDuration = parameters.duration
         if (!currentDuration || !allowedDurations.includes(currentDuration)) {
           updates.duration = durationParam?.default ?? allowedDurations[0]
-        }
-      }
-      
-      // Veo 3.1 constraint: 1080p and 4K require 8 seconds duration
-      const effectiveResolution = updates.resolution ?? parameters.resolution
-      if (selectedModel === 'gemini-veo-3.1' && (effectiveResolution === 1080 || effectiveResolution === 2160)) {
-        if (parameters.duration !== 8) {
-          updates.duration = 8
         }
       }
       
@@ -334,16 +321,6 @@ export function VideoInput({
       }
     }
   }, [modelConfig, supportsFrameInterpolation, hideEndFrame, endFrameImage, endFramePreviewUrl, uploadedEndFrameUrl])
-
-  // Veo 3.1: Enforce 8 seconds duration when resolution is 1080p or 4K
-  useEffect(() => {
-    if (selectedModel === 'gemini-veo-3.1' && (parameters.resolution === 1080 || parameters.resolution === 2160)) {
-      if (parameters.duration !== 8) {
-        console.log('[VideoInput] Veo 3.1: Forcing duration to 8s for 1080p/4K')
-        onParametersChange({ ...parameters, duration: 8 })
-      }
-    }
-  }, [selectedModel, parameters.resolution])
 
   // Detect aspect ratio from start image for Kling "auto" mode
   useEffect(() => {
@@ -1529,13 +1506,10 @@ export function VideoInput({
           <Select
             value={String(parameters.duration || 8)}
             onValueChange={(value) => onParametersChange({ ...parameters, duration: parseInt(value) })}
-            disabled={generating || veoRequires8Seconds}
+            disabled={generating}
           >
             <SelectTrigger 
-              className={`h-8 text-xs px-3 rounded-lg bg-white/5 border-white/10 hover:bg-white/10 transition-colors w-auto min-w-[100px] ${
-                veoRequires8Seconds ? 'opacity-70' : ''
-              }`}
-              title={veoRequires8Seconds ? 'Veo 3.1: 1080p/4K requires 8 seconds' : undefined}
+              className="h-8 text-xs px-3 rounded-lg bg-white/5 border-white/10 hover:bg-white/10 transition-colors w-auto min-w-[100px]"
             >
               <Clock className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
               <SelectValue />

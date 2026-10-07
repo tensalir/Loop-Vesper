@@ -199,7 +199,7 @@ REQUIRED PROMPT STRUCTURE:
 
 Model context:
 - Selected model: ${modelId}
-- ${isNanoBananaPro ? `Nano Banana Pro is optimized for higher-fidelity, production-ready assets. ${NANO_BANANA_PRO_SMALL_TYPE}` : 'Nano Banana 2 is optimized for faster iteration and broad, high-volume ideation workflows.'}
+- ${isNanoBananaPro ? `Nano Banana Pro is optimized for higher-fidelity, production-ready assets. ${NANO_BANANA_PRO_SMALL_TYPE}` : 'Nano Banana 2.1 is optimized for faster iteration and broad, high-volume ideation workflows.'}
 
 Terminology:
 - "Nano Banana" is Gemini's model nickname. Do NOT introduce literal bananas unless the user explicitly requested bananas.

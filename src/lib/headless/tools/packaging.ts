@@ -452,7 +452,7 @@ interface FinishExecution {
   costUsd: number | null
 }
 
-const LANE_MODEL_ESTIMATE: Record<PackagingLane, string> = { pro: 'gemini-3-pro-image', nb2: 'gemini-3.1-flash-image', gpt: 'gpt-image-2' }
+const LANE_MODEL_ESTIMATE: Record<PackagingLane, string> = { pro: 'gemini-3-pro-image', nb2: 'gemini-nano-banana-2.1', gpt: 'gpt-image-2' }
 
 function finishSummary(x: FinishExecution): string {
   const r = x.result

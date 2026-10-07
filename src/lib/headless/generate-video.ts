@@ -1,5 +1,5 @@
 /**
- * `generate_video`: the work itself (Veo, Kling, Seedance), separate from the
+ * `generate_video`: the work itself (Gemini Omni Flash, Kling, Seedance), separate from the
  * MCP entry in `./tools/generate-video.ts`. A job runs this directly, so it
  * can never queue itself again. Videos are recorded in the caller's "Claude"
  * project, session "Video".
