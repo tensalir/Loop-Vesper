@@ -117,7 +117,7 @@ export function assertFrameReadable(name: string, value: string | undefined): vo
   const shown = value.length > 60 ? `${value.slice(0, 60)}…` : value
   throw new Error(
     `${name} must be an https URL or a data URL (data:image/png;base64,...). "${shown}" looks like a file on your side, ` +
-      'which Vesper cannot open: pass the URL of an image already in Vesper (a generate_asset output, a product render), or the picture itself as a data URL.'
+      'which Vesper cannot open. Upload it first: create_upload_urls gives an upload URL to PUT the file to, and the url to pass here. An image already in Vesper (a generate_asset output, a product render) can be passed by its URL.'
   )
 }
 

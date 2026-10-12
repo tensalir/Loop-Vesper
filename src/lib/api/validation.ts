@@ -218,6 +218,19 @@ export const HeadlessGenerateVideoSchema = z.object({
   async: z.boolean().optional().default(true),
 })
 
+// Upload URLs for files on the caller's side (a frame, a reference): names and types only, never bytes.
+export const HeadlessCreateUploadUrlsSchema = z.object({
+  files: z
+    .array(
+      z.object({
+        name: z.string().min(1, 'name is required').max(200),
+        contentType: z.string().max(40).optional(),
+      })
+    )
+    .min(1, 'name at least one file')
+    .max(20, 'at most 20 files per call'),
+})
+
 export const HeadlessGetGenerationStatusSchema = z.object({
   jobId: z.string().uuid('jobId must be a UUID'),
 })

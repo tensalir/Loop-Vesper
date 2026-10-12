@@ -13,6 +13,7 @@ import { listProductRendersHandler } from './list-product-renders'
 import { getGenerationStatusHandler } from './get-generation-status'
 import { generateVideoHandler } from './generate-video'
 import { estimateGenerationCostHandler } from './estimate-generation-cost'
+import { createUploadUrlsHandler } from './create-upload-urls'
 import { getCreativeKitHandler, listCreativeProductsHandler, getProductReferencesHandler } from './creative-read'
 import { generateProductImageHandler } from './creative-draw'
 import { gradeImageHandler, recordGradeHandler } from './creative-grade'
@@ -31,6 +32,7 @@ export const TOOL_HANDLERS: Record<HeadlessTool, ToolHandler> = {
   get_generation_status: getGenerationStatusHandler,
   generate_video: generateVideoHandler,
   estimate_generation_cost: estimateGenerationCostHandler,
+  create_upload_urls: createUploadUrlsHandler,
   get_creative_kit: getCreativeKitHandler,
   list_creative_products: listCreativeProductsHandler,
   get_product_references: getProductReferencesHandler,
