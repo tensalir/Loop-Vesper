@@ -40,6 +40,7 @@ interface RateLimitData {
   replicate: {
     kling: ScopeUsage
     /** Optional so an older API response cannot break the tracker. */
+    kling3?: ScopeUsage
     seedance?: ScopeUsage
     nanoBanana: ScopeUsage
     overall: 'ok' | 'limited' | 'blocked'
@@ -325,6 +326,13 @@ export function GeminiRateLimitTracker({ isAdmin }: GeminiRateLimitTrackerProps)
                   label="Kling 2.6 (Video)" 
                   usage={data.replicate.kling}
                 />
+                
+                {data.replicate.kling3 && (
+                  <ScopeUsageDisplay 
+                    label="Kling 3.0 (Video)" 
+                    usage={data.replicate.kling3}
+                  />
+                )}
                 
                 {data.replicate.seedance && (
                   <ScopeUsageDisplay 

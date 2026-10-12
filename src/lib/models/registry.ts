@@ -11,6 +11,7 @@ import {
   SEEDREAM_4_CONFIG,
   REVE_CONFIG,
   KLING_2_6_CONFIG,
+  KLING_3_CONFIG,
   SEEDANCE_2_5_CONFIG,
   NANO_BANANA_BACKUP_CONFIG,
 } from './adapters/replicate'
@@ -46,6 +47,7 @@ class ModelRegistry {
     this.register(SEEDREAM_4_CONFIG, ReplicateAdapter)
     this.register(REVE_CONFIG, ReplicateAdapter)
     this.register(KLING_2_6_CONFIG, ReplicateAdapter)
+    this.register(KLING_3_CONFIG, ReplicateAdapter) // 10s+ at 1080p/4K from a start and an end frame
     this.register(SEEDANCE_2_5_CONFIG, ReplicateAdapter)
     this.register(NANO_BANANA_BACKUP_CONFIG, ReplicateAdapter) // Backup for when Google API has issues
     

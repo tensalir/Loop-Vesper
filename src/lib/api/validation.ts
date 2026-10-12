@@ -202,6 +202,13 @@ export const HeadlessGenerateVideoSchema = z.object({
     .string()
     .max(HEADLESS_REFERENCE_IMAGE_MAX, 'referenceImage exceeds 6 MB cap')
     .optional(),
+  // The last frame, for a model with start and end frame control; needs referenceImage as the first.
+  endFrameImage: z
+    .string()
+    .max(HEADLESS_REFERENCE_IMAGE_MAX, 'endFrameImage exceeds 6 MB cap')
+    .optional(),
+  // Off renders silently (Kling 3.0 prices it a third lower); on by default, as in the web app.
+  generateAudio: z.boolean().optional(),
   // Seedance multimodal reference sets. URLs only — the provider fetches them,
   // so inline data would be both huge and useless here.
   referenceImageUrls: z.array(z.string().url().max(2048)).max(30).optional(),

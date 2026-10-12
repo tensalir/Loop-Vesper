@@ -191,7 +191,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'generate_video',
     title: 'Generate a video',
     description:
-      'Generate a short video with Veo, Kling, or Seedance 2.5: use it whenever the person asks for a video. Write the prompt with the Loop prompting skill first (get_creative_kit section prompting, once per conversation) or enhance_prompt. Defaults to async job queue — poll get_generation_status until completed.',
+      'Generate a short video with Veo, Kling, or Seedance 2.5: use it whenever the person asks for a video. Write the prompt with the Loop prompting skill first (get_creative_kit section prompting, once per conversation) or enhance_prompt. For 10 s or more at 1080p or 4K from a start and an end frame, replicate-kling-3 (Kling 3.0: 3 to 15 s, resolution 720, 1080 or 2160, prompt up to 2500 characters). Veo 3.1 renders up to 8 s, Seedance 2.5 up to 720p. Defaults to async job queue — poll get_generation_status until completed; a long render takes several minutes and several polls.',
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
@@ -202,8 +202,24 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         modelId: { type: 'string', enum: [...VIDEO_MODEL_IDS] },
         aspectRatio: { type: 'string', maxLength: 16 },
         duration: { type: 'integer', minimum: 4, maximum: 30 },
-        resolution: { type: 'integer' },
-        referenceImage: { type: 'string' },
+        resolution: {
+          type: 'integer',
+          description: 'Lines: 720, 1080 or 2160 (4K) for Kling 3.0 and Veo 3.1; 480 or 720 for Seedance 2.5.',
+        },
+        referenceImage: {
+          type: 'string',
+          description:
+            'The start frame: an https URL of an image in Vesper (a generate_asset output, a product render) or the picture as a data URL. A file path on your side cannot be read.',
+        },
+        endFrameImage: {
+          type: 'string',
+          description:
+            'The end frame, same forms as referenceImage, which it needs as the start frame. replicate-kling-3, kling-official, replicate-seedance-2.5 and gemini-veo-3.1.',
+        },
+        generateAudio: {
+          type: 'boolean',
+          description: 'Native audio, on by default. Off renders a silent video, for Kling 3.0 a third cheaper.',
+        },
         referenceImageUrls: {
           type: 'array',
           items: { type: 'string' },

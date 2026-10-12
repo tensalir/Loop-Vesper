@@ -816,6 +816,7 @@ async function processGenerationById(
         computeTimeSeconds: actualPredictTime, // Pass actual time for accurate Replicate billing
         resolution: (generation.parameters as any)?.resolution,
         hasVideoInput: seedanceUsesVideoInput(generation.parameters as any),
+        generateAudio: (generation.parameters as any)?.generateAudio,
       })
 
       console.log(`[${generationId}] Cost calculated: $${costResult.cost.toFixed(6)} (${costResult.isActual ? 'actual' : 'estimated'})`)

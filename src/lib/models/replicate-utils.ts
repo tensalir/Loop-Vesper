@@ -6,6 +6,7 @@
  */
 
 import { productPromptPassthrough, type GuardVocabulary } from '@/lib/prompts/product-prompt-guard'
+import { kling3Mode } from './pricing'
 
 const REPLICATE_API_KEY = process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_API_KEY
 const REPLICATE_BASE_URL = 'https://api.replicate.com/v1'
@@ -312,6 +313,86 @@ export function seedanceUsesVideoInput(params: Record<string, any> | null | unde
 /**
  * Model configurations for webhook-based submission
  */
+/** Replicate model path for Kling 3.0. */
+export const KLING_3_MODEL_PATH = 'kwaivgi/kling-v3-video'
+
+/** Kling 3.0's duration range in seconds (any whole number in it), and its prompt cap. */
+export const KLING_3_MIN_DURATION = 3
+export const KLING_3_MAX_DURATION = 15
+export const KLING_3_PROMPT_MAX = 2500
+
+const KLING_3_ASPECT_RATIOS = new Set(['16:9', '9:16', '1:1'])
+
+/**
+ * The Kling 3.0 input, for the polling adapter, the webhook path and the MCP handoff alike.
+ *
+ * The start frame is read the way the polling adapter always read it (`referenceImage`, then
+ * `referenceImageUrl`, then the first of `referenceImages`); the end frame is
+ * `endFrameImageUrl`, sent only with a start frame, which Kling requires. The resolution picks
+ * the mode. A prompt over Kling's 2500 characters is refused here, in words, rather than by
+ * Replicate after the submit.
+ */
+export function buildKling3Input(params: Record<string, any>): Record<string, any> {
+  const prompt = typeof params.prompt === 'string' ? params.prompt : ''
+  if (prompt.length > KLING_3_PROMPT_MAX) {
+    throw new Error(
+      `Kling 3.0 takes a prompt of at most ${KLING_3_PROMPT_MAX} characters; this one has ${prompt.length}. Shorten it and try again.`
+    )
+  }
+
+  const rawDuration = Number(params.duration)
+  const duration = Number.isFinite(rawDuration)
+    ? Math.min(KLING_3_MAX_DURATION, Math.max(KLING_3_MIN_DURATION, Math.round(rawDuration)))
+    : 5
+
+  const input: Record<string, any> = {
+    prompt,
+    duration,
+    mode: kling3Mode(params.resolution),
+    aspect_ratio: KLING_3_ASPECT_RATIOS.has(params.aspectRatio) ? params.aspectRatio : '16:9',
+    generate_audio: params.generateAudio !== false,
+  }
+
+  if (typeof params.negativePrompt === 'string' && params.negativePrompt.length > 0) {
+    input.negative_prompt = params.negativePrompt.slice(0, KLING_3_PROMPT_MAX)
+  }
+
+  const referenceImages = Array.isArray(params.referenceImages) ? params.referenceImages : []
+  const startImage =
+    (typeof params.referenceImage === 'string' && params.referenceImage.length > 0 && params.referenceImage) ||
+    (typeof params.referenceImageUrl === 'string' && params.referenceImageUrl.length > 0 && params.referenceImageUrl) ||
+    (typeof referenceImages[0] === 'string' && referenceImages[0]) ||
+    null
+
+  if (startImage) {
+    input.start_image = startImage
+    if (typeof params.endFrameImageUrl === 'string' && params.endFrameImageUrl.length > 0) {
+      input.end_image = params.endFrameImageUrl
+    }
+  }
+
+  return input
+}
+
+/**
+ * The size a Replicate video is recorded at when its file's header cannot be read: the short
+ * edge of the tier asked for (Seedance 480p or 720p, Kling 3.0 by mode, 720 otherwise) on the
+ * chosen ratio.
+ */
+export function nominalVideoDimensions(
+  input: Record<string, any>,
+  aspectRatio: string
+): { width: number; height: number } {
+  let shortEdge = 720
+  if (input.resolution === '480p') shortEdge = 480
+  if (input.mode === 'pro') shortEdge = 1080
+  if (input.mode === '4k') shortEdge = 2160
+  const isPortrait = aspectRatio === '9:16' || aspectRatio === '3:4'
+  const isSquare = aspectRatio === '1:1'
+  const longEdge = isSquare ? shortEdge : Math.round(shortEdge * (16 / 9))
+  return isPortrait ? { width: shortEdge, height: longEdge } : { width: longEdge, height: shortEdge }
+}
+
 export const REPLICATE_MODEL_CONFIGS: Record<string, {
   modelPath: string
   buildInput: (params: any) => Record<string, any>
@@ -404,6 +485,10 @@ export const REPLICATE_MODEL_CONFIGS: Record<string, {
   'replicate-seedance-2.5': {
     modelPath: SEEDANCE_2_5_MODEL_PATH,
     buildInput: buildSeedanceInput,
+  },
+  'replicate-kling-3': {
+    modelPath: KLING_3_MODEL_PATH,
+    buildInput: buildKling3Input,
   },
 }
 

@@ -895,6 +895,7 @@ function formatModelName(modelId: string): string {
     'gemini-veo-3.1': 'Veo 3.1',
     'kling-official': 'Kling 2.6',
     'replicate-kling-2.6': 'Kling 2.6 (Replicate)',
+    'replicate-kling-3': 'Kling 3.0',
     'replicate-seedance-2.5': 'Seedance 2.5',
     'minimax-video-01': 'MiniMax',
   }

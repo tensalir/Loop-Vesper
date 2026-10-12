@@ -13,7 +13,9 @@ export const generateVideoHandler: ToolHandler = {
   estimateCostUsd(args) {
     const modelId = typeof args.modelId === 'string' ? args.modelId : ''
     const durationSeconds = typeof args.duration === 'number' ? args.duration : undefined
-    return modelId ? estimateGenerationCostUsd({ modelId, durationSeconds }) : null
+    const resolution = typeof args.resolution === 'number' ? args.resolution : undefined
+    const generateAudio = typeof args.generateAudio === 'boolean' ? args.generateAudio : undefined
+    return modelId ? estimateGenerationCostUsd({ modelId, durationSeconds, resolution, generateAudio }) : null
   },
 
   async run(args, ctx) {
@@ -34,6 +36,8 @@ export const generateVideoHandler: ToolHandler = {
           ownerId: ctx.principal.ownerId,
           progress: ctx.progress,
           jobId,
+          // A Replicate video keeps its prediction on the job and is collected, not waited on.
+          jobStore: ctx.jobs.store,
         }),
       toPayload: generateVideoPayload,
       toWire: async (exec) => {

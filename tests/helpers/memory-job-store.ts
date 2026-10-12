@@ -1,4 +1,12 @@
-import type { JobPayload, JobRecord, JobStore } from '../../src/lib/headless/jobs'
+import {
+  PENDING_MAX_MS,
+  PENDING_STALE_MESSAGE,
+  pendingOf,
+  type JobPayload,
+  type JobRecord,
+  type JobStore,
+  type PendingHandle,
+} from '../../src/lib/headless/jobs'
 
 /** An in-memory `JobStore` for tests: same contract as the Prisma store, no database. */
 export class MemoryJobStore implements JobStore {
@@ -79,12 +87,44 @@ export class MemoryJobStore implements JobStore {
     let n = 0
     for (const row of Array.from(this.rows.values())) {
       const since = row.startedAt ?? row.updatedAt
-      if (row.status === 'processing' && since < olderThan) {
+      if (row.status !== 'processing' || since >= olderThan) continue
+      const pending = pendingOf(row)
+      if (!pending) {
         await this.fail(row.id, message)
+        n++
+      } else if (Date.parse(pending.submittedAt) < Date.now() - PENDING_MAX_MS) {
+        await this.fail(row.id, PENDING_STALE_MESSAGE)
         n++
       }
     }
     return n
+  }
+
+  async setPending(id: string, pending: PendingHandle) {
+    const row = this.rows.get(id)!
+    this.rows.set(id, { ...row, result: { pending }, updatedAt: new Date() })
+  }
+
+  async leasePending(id: string, until: Date) {
+    const row = this.rows.get(id)
+    const pending = row ? pendingOf(row) : null
+    if (!row || !pending) return false
+    if (pending.leaseUntil && Date.parse(pending.leaseUntil) >= Date.now()) return false
+    this.rows.set(id, { ...row, result: { pending: { ...pending, leaseUntil: until.toISOString() } } })
+    return true
+  }
+
+  async releasePending(id: string) {
+    const row = this.rows.get(id)
+    const pending = row ? pendingOf(row) : null
+    if (!row || !pending) return
+    this.rows.set(id, { ...row, result: { pending: { ...pending, leaseUntil: null } } })
+  }
+
+  async listPending(limit: number) {
+    return Array.from(this.rows.values())
+      .filter((r) => pendingOf(r) !== null)
+      .slice(0, limit)
   }
 
   async listQueued(olderThan: Date, limit: number) {

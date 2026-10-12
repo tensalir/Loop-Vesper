@@ -268,6 +268,7 @@ export async function POST(request: NextRequest) {
         videoDurationSeconds: videoDuration,
         resolution: isVideo ? params?.resolution : undefined,
         hasVideoInput: seedanceUsesVideoInput(params),
+        generateAudio: params?.generateAudio,
       })
       
       console.log(`[Replicate Webhook] Cost calculated: $${costResult.cost.toFixed(6)} (${costResult.isActual ? 'actual' : 'estimated'})`)

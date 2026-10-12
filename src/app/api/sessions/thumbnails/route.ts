@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
         WHERE g.session_id = s.id
           AND g.status = 'completed'
           AND o.file_type = 'image'
-          AND g.model_id NOT IN ('snapshot-capture', 'kling-official', 'replicate-kling-2.6', 'replicate-seedance-2.5', 'gemini-veo-3.1')
+          AND g.model_id NOT IN ('snapshot-capture', 'kling-official', 'replicate-kling-2.6', 'replicate-kling-3', 'replicate-seedance-2.5', 'gemini-veo-3.1')
         ORDER BY g.created_at DESC, o.created_at DESC
         LIMIT 1
       ) thumb ON TRUE

@@ -1,11 +1,22 @@
 import { HeadlessGetGenerationStatusSchema } from '@/lib/api/validation'
-import { asJobPayload, isStale, STALE_MESSAGE, type JobRecord } from '../jobs'
+import { asJobPayload, isStale, pendingOf, staleMessageFor, type JobRecord } from '../jobs'
 import type { McpContent } from '../generate-asset'
+import { advanceVideoJob, type AdvanceVideoDeps } from '../generate-video'
+import { STREAM_SESSIONS } from '../record-generation'
 import { contentForPayload, executeQueuedJob } from './job-runner'
 import { invalidArguments, type ToolContext, type ToolHandler } from './types'
 
+/** How long one poll waits on a video still rendering at its provider, checking every 5 s. */
+const DEFAULT_STATUS_WAIT_MS = 40_000
+const STATUS_CHECK_EVERY_MS = 5_000
+
 function inlineWanted(job: JobRecord): boolean {
   return job.request.inlineBase64 !== false
+}
+
+function statusWaitMs(env: NodeJS.ProcessEnv): number {
+  const raw = Number(env.MCP_STATUS_WAIT_MS)
+  return Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_STATUS_WAIT_MS
 }
 
 export const getGenerationStatusHandler: ToolHandler = {
@@ -27,12 +38,46 @@ export const getGenerationStatusHandler: ToolHandler = {
       })
     }
 
+    // A video still rendering at its provider: check it, and finish it here once it is done.
+    // One poll waits a while, so a render of several minutes takes a few polls, not dozens.
+    if (pendingOf(job)) {
+      const deps: AdvanceVideoDeps = {
+        store,
+        recordUsage: (j, entry) =>
+          ctx.recordBackgroundUsage({ ...entry, metadata: { ...entry.metadata, jobId: j.id } }),
+      }
+      const deadline = Date.now() + statusWaitMs(ctx.env)
+      job = await advanceVideoJob(job, deps)
+      while (pendingOf(job) && Date.now() + STATUS_CHECK_EVERY_MS <= deadline) {
+        await new Promise((resolve) => setTimeout(resolve, STATUS_CHECK_EVERY_MS))
+        job = await advanceVideoJob(job, deps)
+      }
+    }
+
     if (isStale(job)) {
-      await store.fail(job.id, STALE_MESSAGE)
-      job = { ...job, status: 'failed', error: STALE_MESSAGE }
+      const message = staleMessageFor(job)
+      await store.fail(job.id, message)
+      job = { ...job, status: 'failed', error: message }
     }
 
     const base = { jobId: job.id, status: job.status, toolName: job.toolName, modelId: job.modelId }
+
+    if (pendingOf(job)) {
+      const since = Math.round((Date.now() - (job.startedAt ?? job.createdAt).getTime()) / 1000)
+      return {
+        content: [
+          {
+            type: 'text',
+            text:
+              `The provider is still rendering job ${job.id} (${since} s so far). Call get_generation_status again; ` +
+              `a video of 10 s or more at 1080p can take several minutes. When it is done it is saved in Vesper under ` +
+              `Claude / ${STREAM_SESSIONS.video.name}, even if you stop asking.`,
+          },
+        ],
+        structuredContent: base,
+        costUsd: null,
+      }
+    }
 
     if (job.status === 'processing' || job.status === 'queued') {
       const since = Math.round((Date.now() - (job.startedAt ?? job.createdAt).getTime()) / 1000)

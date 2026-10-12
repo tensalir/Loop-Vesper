@@ -20,20 +20,22 @@ import {
   parseGenerateVideoArgs,
   videoResultContent,
 } from '../generate-video'
-import { stripAsync, type JobPayload, type JobRecord, type JobStore } from '../jobs'
+import { isHandedOff, stripAsync, type HandedOff, type JobPayload, type JobRecord, type JobStore } from '../jobs'
 import type { McpContent } from '../generate-asset'
 import type { UsageEntry } from './types'
 
 type Executor = (
   request: Record<string, unknown>,
-  ctx: { allowedModels: string[]; credentialId: string; ownerId: string; jobId: string }
-) => Promise<JobPayload>
+  ctx: { allowedModels: string[]; credentialId: string; ownerId: string; jobId: string; store: JobStore }
+) => Promise<JobPayload | HandedOff>
 
 export const JOB_EXECUTORS: Record<string, Executor> = {
   generate_asset: async (request, ctx) =>
     generateAssetPayload(await executeGenerateAsset(parseGenerateAssetArgs(request), ctx)),
-  generate_video: async (request, ctx) =>
-    generateVideoPayload(await executeGenerateVideo(parseGenerateVideoArgs(request), ctx)),
+  generate_video: async (request, ctx) => {
+    const exec = await executeGenerateVideo(parseGenerateVideoArgs(request), { ...ctx, jobStore: ctx.store })
+    return isHandedOff(exec) ? exec : generateVideoPayload(exec)
+  },
 }
 
 export interface QueuedJobDeps {
@@ -68,7 +70,10 @@ export async function executeQueuedJob(job: JobRecord, deps: QueuedJobDeps): Pro
       credentialId: job.credentialId,
       ownerId: job.ownerId,
       jobId: job.id,
+      store: deps.store,
     })
+    // Handed to the provider: the job keeps its handle and is finished by `advanceVideoJob`.
+    if (isHandedOff(payload)) return (await deps.store.get(job.id, job.ownerId)) ?? job
     await deps.store.complete(job.id, payload)
     await deps
       .recordUsage(job, {
