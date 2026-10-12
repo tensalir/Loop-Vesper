@@ -24,6 +24,7 @@ export const HEADLESS_TOOLS = [
   'get_generation_status',
   'generate_video',
   'estimate_generation_cost',
+  'create_upload_urls',
   'get_creative_kit',
   'list_creative_products',
   'get_product_references',
@@ -76,6 +77,8 @@ export const TOOL_META: Record<HeadlessTool, ToolMeta> = {
   get_generation_status: { group: 'core', oauth: true, selfIssued: true, org: false, adminIssuable: true },
   generate_video: { group: 'core', oauth: true, selfIssued: true, org: false, adminIssuable: true },
   estimate_generation_cost: { group: 'core', oauth: true, selfIssued: true, org: false, adminIssuable: true },
+  // Signed upload URLs for files on the caller's side (Cowork's frames); free, off the org token like the video tools.
+  create_upload_urls: { group: 'core', oauth: true, selfIssued: true, org: false, adminIssuable: true },
   // The creative kit, read-only. Hidden everywhere while CREATIVE_TOOLS_ENABLED=0.
   get_creative_kit: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },
   list_creative_products: { group: 'creative', oauth: true, selfIssued: true, org: false, adminIssuable: true },

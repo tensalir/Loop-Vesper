@@ -16,6 +16,7 @@ test.describe('MCP_TOOLS catalog', () => {
       'cmf_pdf',
       'cmf_prompt',
       'cmf_render',
+      'create_upload_urls',
       'enhance_prompt',
       'estimate_generation_cost',
       'export_creative_records',

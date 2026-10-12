@@ -209,7 +209,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         referenceImage: {
           type: 'string',
           description:
-            'The start frame: an https URL of an image in Vesper (a generate_asset output, a product render) or the picture as a data URL. A file path on your side cannot be read.',
+            'The start frame: an https URL of an image in Vesper (a generate_asset output, a product render, an upload from create_upload_urls) or a small picture as a data URL. A file on your side goes up with create_upload_urls first; its path cannot be read.',
         },
         endFrameImage: {
           type: 'string',
@@ -243,6 +243,34 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
     },
     outputSchema: generateAssetOutputSchema,
+  },
+  {
+    name: 'create_upload_urls',
+    title: 'Upload files from your side',
+    description:
+      "For a file on your side (a start or end frame, a reference picture): Vesper cannot read a path of yours, and a tool call cannot carry a large file. This returns, per file, an uploadUrl to PUT the file to (curl -X PUT -H 'Content-Type: image/png' --data-binary @frame.png '<uploadUrl>', within two hours) and the url to pass on: referenceImage or endFrameImage on generate_video, image_url on grade_image. PNG, JPEG or WebP, up to 20 per call. Free.",
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['files'],
+      properties: {
+        files: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 20,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['name'],
+            properties: {
+              name: { type: 'string', maxLength: 200, description: 'the file name, e.g. pair-01-start.png' },
+              contentType: { type: 'string', enum: ['image/png', 'image/jpeg', 'image/webp'], description: 'when the name has no image extension' },
+            },
+          },
+        },
+      },
+    },
   },
   {
     name: 'get_generation_status',

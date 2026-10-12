@@ -191,7 +191,7 @@ function box(type: string, ...payload: Uint8Array[]): Uint8Array {
   const length = 8 + payload.reduce((n, p) => n + p.length, 0)
   const out = new Uint8Array(length)
   new DataView(out.buffer).setUint32(0, length)
-  out.set([...type].map((c) => c.charCodeAt(0)), 4)
+  out.set(Array.from(type, (c) => c.charCodeAt(0)), 4)
   let at = 8
   for (const p of payload) {
     out.set(p, at)
@@ -251,7 +251,7 @@ test.describe('a video file reports its own size', () => {
     let calls = 0
     const fetchImpl = (async () => {
       calls++
-      return new Response(file, { status: 200 })
+      return new Response(file.slice().buffer as ArrayBuffer, { status: 200 })
     }) as unknown as typeof fetch
     expect(await readMp4Dimensions(httpRangeReader('https://cdn.example/v.mp4', fetchImpl))).toBeNull()
     expect(calls).toBe(1)
