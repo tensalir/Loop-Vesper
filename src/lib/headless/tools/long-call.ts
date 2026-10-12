@@ -9,7 +9,7 @@
  */
 
 import { canPollJobs } from '../tool-registry'
-import { runWithBudget, syncBudgetMs, type JobPayload } from '../jobs'
+import { isHandedOff, runWithBudget, syncBudgetMs, type HandedOff, type JobPayload } from '../jobs'
 import type { ToolContext, ToolResult } from './types'
 
 export interface LongCallInput<T> {
@@ -18,7 +18,8 @@ export interface LongCallInput<T> {
   modelId: string
   request: Record<string, unknown>
   runAsync: boolean
-  execute: (jobId: string | null) => Promise<T>
+  /** May hand the work to its provider, but only when given a job to keep the handle on. */
+  execute: (jobId: string | null) => Promise<T | HandedOff>
   toPayload: (result: T) => JobPayload
   toWire: (result: T) => Promise<ToolResult>
   what: string
@@ -29,6 +30,7 @@ export async function runLongCall<T>(input: LongCallInput<T>): Promise<ToolResul
 
   if (!canPollJobs(ctx.principal.allowedTools)) {
     const result = await input.execute(null)
+    if (isHandedOff(result)) throw new Error(`${input.toolName} handed off without a job to collect it from.`)
     const wire = await input.toWire(result)
     const note = input.runAsync
       ? [{ type: 'text' as const, text: 'This connection cannot call get_generation_status, so the call ran to the end instead of returning a job.' }]

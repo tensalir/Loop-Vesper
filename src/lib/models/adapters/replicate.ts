@@ -3,13 +3,18 @@ import { recordApiCall } from '@/lib/rate-limits/usage'
 import { getScopeForModel } from '@/lib/rate-limits/config'
 import { loadGuardVocabulary } from '@/lib/prompts/product-prompt-guard'
 import {
+  buildKling3Input,
   buildSeedanceInput,
   seedreamEnhancePrompt,
+  KLING_3_MODEL_PATH,
+  nominalVideoDimensions,
   SEEDANCE_2_5_MODEL_PATH,
   SEEDANCE_MAX_REFERENCE_AUDIOS,
   SEEDANCE_MAX_REFERENCE_IMAGES,
   SEEDANCE_MAX_REFERENCE_VIDEOS,
 } from '../replicate-utils'
+import { KLING_3_PRICES_USD } from '../pricing'
+import { videoDimensionsOr } from '@/lib/video/mp4-dimensions'
 
 // Support both REPLICATE_API_TOKEN (official) and REPLICATE_API_KEY (legacy)
 // Only check env vars on server side (they're not available in browser)
@@ -245,13 +250,99 @@ export const KLING_2_6_CONFIG: ModelConfig = {
 }
 
 /**
+ * Kling 3.0 Model Configuration
+ * Kuaishou's Kling Video 3.0 via Replicate
+ * Documentation: https://replicate.com/kwaivgi/kling-v3-video
+ *
+ * The one video model here that renders 10 seconds and more at 1080p or 4K from a start and an
+ * end frame: 3 to 15 seconds, `mode` standard (720p), pro (1080p) or 4k, `start_image` and
+ * `end_image` (the end frame needs the start frame). Schema read 2026-10-12. The resolution
+ * select maps to the mode (`kling3Mode`); prices are in `../pricing`.
+ */
+export const KLING_3_CONFIG: ModelConfig = {
+  id: 'replicate-kling-3',
+  name: 'Kling 3.0',
+  provider: 'Kuaishou (Replicate)',
+  type: 'video',
+  description: 'Kling Video 3.0: 3 to 15 seconds at 720p, 1080p or 4K, with start and end frame control and native audio',
+  // Ignored by Kling when a start frame is given: the video takes the frame's proportions.
+  supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  defaultAspectRatio: '16:9',
+  maxResolution: 2160,
+  capabilities: {
+    'text-2-video': true,
+    'image-2-video': true,
+    'frame-interpolation': true,
+    audioGeneration: true,
+  },
+  pricing: {
+    // 1080p without audio; the estimate prices the chosen resolution and audio (`kling3PricePerSecondUsd`).
+    perSecond: KLING_3_PRICES_USD.pro.silent,
+    currency: 'USD',
+  },
+  parameters: [
+    {
+      name: 'aspectRatio',
+      type: 'select',
+      label: 'Aspect Ratio',
+      options: [
+        { label: '16:9 (Landscape)', value: '16:9' },
+        { label: '9:16 (Portrait)', value: '9:16' },
+        { label: '1:1 (Square)', value: '1:1' },
+      ],
+    },
+    {
+      name: 'resolution',
+      type: 'select',
+      label: 'Resolution',
+      default: 1080,
+      options: [
+        { label: '720p', value: 720 },
+        { label: '1080p', value: 1080 },
+        { label: '4K', value: 2160 },
+      ],
+    },
+    {
+      name: 'duration',
+      type: 'select',
+      label: 'Duration',
+      default: 10,
+      options: [
+        { label: '5 seconds', value: 5 },
+        { label: '10 seconds', value: 10 },
+        { label: '15 seconds', value: 15 },
+      ],
+    },
+    {
+      name: 'generateAudio',
+      type: 'boolean',
+      label: 'Generate Audio',
+      default: true,
+    },
+    {
+      name: 'numOutputs',
+      type: 'number',
+      label: 'Number of outputs',
+      min: 1,
+      max: 1,
+      default: 1,
+      options: [
+        { label: '1', value: 1 },
+      ],
+    },
+  ],
+}
+
+/**
  * Seedance 2.5 Model Configuration
  * ByteDance's flagship multimodal video model via Replicate
  * Documentation: https://replicate.com/bytedance/seedance-2.5
  *
  * Notable vs Kling 2.6: native 30-second generation in a single pass, native
- * synchronized audio, and first/last-frame keyframe control. Resolution tops
- * out at 720p — there is no 1080p tier.
+ * synchronized audio, and first/last-frame keyframe control. On Replicate the
+ * resolution tops out at 720p (480p and 720p, schema read again 2026-10-12);
+ * ByteDance's 1080p tier is sold elsewhere, not there. For 1080p from a start
+ * and an end frame, Kling 3.0.
  */
 export const SEEDANCE_2_5_CONFIG: ModelConfig = {
   id: 'replicate-seedance-2.5',
@@ -657,6 +748,7 @@ export class ReplicateAdapter extends BaseModelAdapter {
 
     try {
       const isSeedance = this.config.id === 'replicate-seedance-2.5'
+      const isKling3 = this.config.id === 'replicate-kling-3'
 
       // Determine which Replicate video model to use
       let modelPath: string
@@ -664,11 +756,13 @@ export class ReplicateAdapter extends BaseModelAdapter {
         modelPath = 'kwaivgi/kling-v2.6'
       } else if (isSeedance) {
         modelPath = SEEDANCE_2_5_MODEL_PATH
+      } else if (isKling3) {
+        modelPath = KLING_3_MODEL_PATH
       } else {
         throw new Error(`Unknown Replicate video model: ${this.config.id}`)
       }
 
-      const logTag = isSeedance ? 'Seedance-2.5' : 'Kling-2.6'
+      const logTag = isSeedance ? 'Seedance-2.5' : isKling3 ? 'Kling-3' : 'Kling-2.6'
 
       // Get parameters with safe fallbacks
       const aspectRatio = parameters?.aspectRatio || request.aspectRatio || '16:9'
@@ -736,6 +830,20 @@ export class ReplicateAdapter extends BaseModelAdapter {
         if (negativePrompt) {
           console.log(`[${logTag}] ⚠️ Negative prompt ignored - Seedance 2.5 has no negative_prompt input`)
         }
+      } else if (isKling3) {
+        // Shared with the webhook path and the MCP handoff, so all three send the same input.
+        input = buildKling3Input({
+          prompt,
+          negativePrompt,
+          aspectRatio,
+          duration: parameters?.duration ?? request.duration,
+          resolution: parameters?.resolution ?? request.resolution,
+          generateAudio,
+          referenceImage: startImage,
+          endFrameImageUrl,
+        })
+        const mode = input.end_image ? 'Start/end-frame mode' : input.start_image ? 'Image-to-video mode' : 'Text-to-video mode'
+        console.log(`[${logTag}] ${mode} @ ${input.mode}, ${input.duration}s, audio ${input.generate_audio ? 'on' : 'off'}`)
       } else {
         // Prepare model-specific input for Kling 2.6
         input = {
@@ -888,19 +996,16 @@ export class ReplicateAdapter extends BaseModelAdapter {
             console.log(`[${logTag}] Video generated in ${predictTime.toFixed(2)}s`)
           }
 
-          // Nominal dimensions for the gallery. Seedance caps at 720p and can
-          // return an adaptive ratio, so scale the short edge to its tier.
-          const shortEdge = isSeedance && input.resolution === '480p' ? 480 : 720
-          const isPortrait = aspectRatio === '9:16' || aspectRatio === '3:4'
-          const longEdge = Math.round(shortEdge * (16 / 9))
+          // The file's own size; the nominal one only when the header cannot be read.
+          const dimensions = await videoDimensionsOr(outputUrl, nominalVideoDimensions(input, aspectRatio))
 
           return {
             id: `replicate-video-${Date.now()}`,
             status: 'completed',
             outputs: [{
               url: outputUrl,
-              width: isPortrait ? shortEdge : longEdge,
-              height: isPortrait ? longEdge : shortEdge,
+              width: dimensions.width,
+              height: dimensions.height,
               duration: duration,
             }],
             metadata: {

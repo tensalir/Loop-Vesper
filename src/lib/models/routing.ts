@@ -74,6 +74,7 @@ function getScopeForModel(modelId: string): RateLimitScope {
   if (modelId === 'gemini-veo-3.1') return 'gemini-veo-3.1'
   if (modelId === 'replicate-kling-2.6') return 'replicate-kling-2.6'
   if (modelId === 'replicate-seedance-2.5') return 'replicate-seedance-2.5'
+  if (modelId === 'replicate-kling-3') return 'replicate-kling-3'
   if (modelId === 'replicate-nano-banana-pro') return 'replicate-nano-banana'
   return 'global'
 }

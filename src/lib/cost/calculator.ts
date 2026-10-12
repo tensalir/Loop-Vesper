@@ -13,7 +13,7 @@
  * - FAL.ai: Pay-per-use, typically similar to Replicate
  */
 
-import { geminiImagePriceUsd } from '@/lib/models/pricing'
+import { geminiImagePriceUsd, kling3Mode, kling3PricePerSecondUsd } from '@/lib/models/pricing'
 
 export interface CostCalculationResult {
   cost: number // Cost in USD
@@ -192,6 +192,27 @@ export function calculateSeedanceCost(
 }
 
 /**
+ * Kling 3.0 on Replicate: per second of output video, by mode (the resolution) and audio.
+ * Prices in `src/lib/models/pricing.ts`, read 2026-10-12. Audio is on unless the generation
+ * turned it off, as in the adapter.
+ */
+export function calculateKling3Cost(
+  videoDurationSeconds?: number,
+  options: { resolution?: number | string; generateAudio?: boolean } = {}
+): CostCalculationResult {
+  const audio = options.generateAudio !== false
+  const pricePerSecond = kling3PricePerSecondUsd(options.resolution, audio)
+  const requested = Number(videoDurationSeconds)
+  // Kling 3.0 renders 3 to 15 seconds; a missing value is priced at its 5-second default.
+  const duration = Number.isFinite(requested) && requested >= 3 ? Math.min(15, requested) : 5
+  return {
+    cost: pricePerSecond * duration,
+    unit: `${duration}s @ $${pricePerSecond.toFixed(3)}/s (${kling3Mode(options.resolution)}${audio ? ', audio' : ''})`,
+    isActual: Number.isFinite(requested) && requested >= 3,
+  }
+}
+
+/**
  * Calculate cost for Kling Official API
  * Pricing based on video duration and quality mode
  */
@@ -310,13 +331,20 @@ export function calculateGenerationCost(
     resolution?: number | string
     /** True when reference videos were supplied (Seedance editing/extension). */
     hasVideoInput?: boolean
+    /** False when the video was rendered without audio (Kling 3.0 prices it lower). */
+    generateAudio?: boolean
   } = {}
 ): CostCalculationResult {
-  const { outputCount = 1, videoDurationSeconds, computeTimeSeconds, resolution, hasVideoInput } = options
+  const { outputCount = 1, videoDurationSeconds, computeTimeSeconds, resolution, hasVideoInput, generateAudio } = options
 
   // Seedance is billed per second of output video, not by compute time.
   if (modelId === 'replicate-seedance-2.5') {
     return calculateSeedanceCost(videoDurationSeconds, { resolution, hasVideoInput })
+  }
+
+  // Kling 3.0 is an official Replicate model too: per second of output, by mode and audio.
+  if (modelId === 'replicate-kling-3') {
+    return calculateKling3Cost(videoDurationSeconds, { resolution, generateAudio })
   }
 
   if ((modelId === 'gemini-nano-banana-pro' || modelId === 'gemini-nano-banana-2') && computeTimeSeconds) {

@@ -8,7 +8,15 @@
 
 import { randomUUID } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
-import type { JobPayload, JobRecord, JobStatus, JobStore } from './jobs'
+import {
+  PENDING_MAX_MS,
+  PENDING_STALE_MESSAGE,
+  pendingOf,
+  type JobPayload,
+  type JobRecord,
+  type JobStatus,
+  type JobStore,
+} from './jobs'
 
 type JobRow = {
   id: string
@@ -100,7 +108,7 @@ export const prismaJobStore: JobStore = {
   },
 
   async failStale(olderThan: Date, message: string) {
-    const updated = await prisma.headlessMcpJob.updateMany({
+    const candidates = await prisma.headlessMcpJob.findMany({
       where: {
         status: 'processing',
         OR: [
@@ -108,9 +116,33 @@ export const prismaJobStore: JobStore = {
           { startedAt: null, updatedAt: { lt: olderThan } },
         ],
       },
-      data: { status: 'failed', error: message, completedAt: new Date() },
+      select: { id: true, status: true, result: true },
     })
-    return updated.count
+    // A job waiting on its provider has no worker to lose; it fails only past PENDING_MAX_MS.
+    const lost: string[] = []
+    const overdue: string[] = []
+    const pendingCutoff = Date.now() - PENDING_MAX_MS
+    for (const row of candidates) {
+      const pending = pendingOf({ status: row.status as JobStatus, result: row.result })
+      if (!pending) lost.push(row.id)
+      else if (Date.parse(pending.submittedAt) < pendingCutoff) overdue.push(row.id)
+    }
+    let count = 0
+    if (lost.length > 0) {
+      const updated = await prisma.headlessMcpJob.updateMany({
+        where: { id: { in: lost }, status: 'processing' },
+        data: { status: 'failed', error: message, completedAt: new Date() },
+      })
+      count += updated.count
+    }
+    if (overdue.length > 0) {
+      const updated = await prisma.headlessMcpJob.updateMany({
+        where: { id: { in: overdue }, status: 'processing' },
+        data: { status: 'failed', error: PENDING_STALE_MESSAGE, completedAt: new Date() },
+      })
+      count += updated.count
+    }
+    return count
   },
 
   async listQueued(olderThan: Date, limit: number) {
@@ -120,5 +152,48 @@ export const prismaJobStore: JobStore = {
       take: limit,
     })
     return rows.map((row) => mapJob(row as JobRow))
+  },
+
+  async setPending(id, pending) {
+    await prisma.headlessMcpJob.update({
+      where: { id },
+      data: { result: { pending } as never },
+    })
+  },
+
+  // One conditional UPDATE, so two callers can never both take it.
+  async leasePending(id, until) {
+    const taken = await prisma.$executeRaw`
+      UPDATE headless_mcp_jobs
+      SET result = jsonb_set(result, '{pending,leaseUntil}', to_jsonb(${until.toISOString()}::text), true),
+          updated_at = now()
+      WHERE id = ${id}::uuid
+        AND status = 'processing'
+        AND result -> 'pending' IS NOT NULL
+        AND (
+          result -> 'pending' ->> 'leaseUntil' IS NULL
+          OR (result -> 'pending' ->> 'leaseUntil')::timestamptz < now()
+        )`
+    return taken > 0
+  },
+
+  async releasePending(id) {
+    await prisma.$executeRaw`
+      UPDATE headless_mcp_jobs
+      SET result = jsonb_set(result, '{pending,leaseUntil}', 'null'::jsonb, true), updated_at = now()
+      WHERE id = ${id}::uuid AND status = 'processing' AND result -> 'pending' IS NOT NULL`
+  },
+
+  async listPending(limit) {
+    // Processing video jobs are few; the handle is read from the row rather than queried in JSON.
+    const rows = await prisma.headlessMcpJob.findMany({
+      where: { status: 'processing', toolName: 'generate_video' },
+      orderBy: { updatedAt: 'asc' },
+      take: Math.max(limit * 4, 20),
+    })
+    return rows
+      .map((row) => mapJob(row as JobRow))
+      .filter((job) => pendingOf(job) !== null)
+      .slice(0, limit)
   },
 }

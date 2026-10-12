@@ -45,3 +45,35 @@ export function geminiImagePriceUsd(modelId: string, resolution?: unknown): numb
   const next = tiers.find((t) => t >= res) ?? tiers[tiers.length - 1]
   return table[next]
 }
+
+/**
+ * Kling 3.0 on Replicate (kwaivgi/kling-v3-video), USD per second of output video.
+ *
+ * Source: https://replicate.com/kwaivgi/kling-v3-video, read 2026-10-12. An official Replicate
+ * model, billed per second of output by mode and audio, never by compute time. The mode is the
+ * resolution: 'standard' renders 720p, 'pro' 1080p, '4k' 4K; 4K costs the same with audio.
+ */
+export const KLING_3_PRICES_USD = {
+  standard: { silent: 0.168, audio: 0.252 },
+  pro: { silent: 0.224, audio: 0.336 },
+  '4k': { silent: 0.42, audio: 0.42 },
+} as const
+
+export type Kling3Mode = keyof typeof KLING_3_PRICES_USD
+
+/** The Kling 3.0 mode for a resolution: 720 and below standard, 2160 and above 4K, else 1080p (pro). */
+export function kling3Mode(resolution: unknown): Kling3Mode {
+  const lines = typeof resolution === 'string'
+    ? resolution.trim().toLowerCase() === '4k' ? 2160 : parseInt(resolution, 10)
+    : typeof resolution === 'number' ? resolution : NaN
+  if (!Number.isFinite(lines)) return 'pro'
+  if (lines <= 720) return 'standard'
+  if (lines >= 2160) return '4k'
+  return 'pro'
+}
+
+/** Kling 3.0's price for one second of output at a resolution, with or without audio. */
+export function kling3PricePerSecondUsd(resolution: unknown, generateAudio: boolean): number {
+  const prices = KLING_3_PRICES_USD[kling3Mode(resolution)]
+  return generateAudio ? prices.audio : prices.silent
+}

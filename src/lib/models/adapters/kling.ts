@@ -1,5 +1,6 @@
 import { BaseModelAdapter, ModelConfig, GenerationRequest, GenerationResponse } from '../base'
 import { recordApiCall } from '@/lib/rate-limits/usage'
+import { videoDimensionsOr } from '@/lib/video/mp4-dimensions'
 import * as jwt from 'jsonwebtoken'
 
 // Kling API credentials from environment
@@ -549,13 +550,20 @@ export class KlingOfficialAdapter extends BaseModelAdapter {
 
         console.log(`[Kling-Official] ✅ Video generated successfully`)
 
+        // The file's own size. Kling follows the start frame's proportions and renders pro at
+        // about 1080p (1072x1928 measured), so the old fixed 1280x720 read a 1080p video as 720p.
+        const dimensions = await videoDimensionsOr(videoUrl, {
+          width: aspectRatio === '9:16' ? 720 : 1280,
+          height: aspectRatio === '9:16' ? 1280 : 720,
+        })
+
         return {
           id: `kling-${Date.now()}`,
           status: 'completed',
           outputs: [{
             url: videoUrl,
-            width: aspectRatio === '9:16' ? 720 : 1280,
-            height: aspectRatio === '9:16' ? 1280 : 720,
+            width: dimensions.width,
+            height: dimensions.height,
             duration: videoDuration,
           }],
           metadata: {

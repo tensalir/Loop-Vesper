@@ -194,7 +194,7 @@ export function VideoInput({
   const supportsImageToVideo = modelConfig?.capabilities?.['image-2-video'] === true
   
   // Check if model supports frame interpolation (start + end frames)
-  // Only kling-official and gemini-veo-3.1 support this
+  // Kling 2.6 (official), Kling 3.0, Seedance 2.5 and Veo 3.1 advertise it
   const supportsFrameInterpolation = modelConfig?.capabilities?.['frame-interpolation'] === true
   const showEndFrameControl = !hideEndFrame && supportsFrameInterpolation
 
